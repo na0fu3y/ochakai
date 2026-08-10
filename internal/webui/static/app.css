@@ -1,0 +1,448 @@
+:root {
+  /* The page follows the OS theme through the media query below, but the
+     controls the UA draws itself — a date input's calendar popup, its
+     picker icon, a select's dropdown, scrollbars — never see those
+     variables. color-scheme is what tells the UA which way to paint
+     them, so a date field stops arriving as a white box on a dark page. */
+  color-scheme: light dark;
+  --bg: #f6f8f6;
+  --surface: #ffffff;
+  --border: #e2e7e2;
+  --text: #1d2721;
+  --muted: #66736b;
+  --accent: #2e7d5b;
+  --accent-strong: #226548;
+  --accent-weak: #e7f3ec;
+  --code-bg: #f3f5f3;
+  --shadow: 0 1px 2px rgba(29, 39, 33, .05);
+  --shadow-hover: 0 2px 8px rgba(29, 39, 33, .10);
+  --draft-fg: #8a6116; --draft-bg: #fdf4dd; --draft-bd: #e5c877;
+  --verified-fg: #1e6b43; --verified-bg: #e3f4e9; --verified-bd: #7cc39a;
+  --deprecated-fg: #9a4e12; --deprecated-bg: #fcebdd; --deprecated-bd: #e3a370;
+  --rejected-fg: #a03434; --rejected-bg: #fbe7e7; --rejected-bd: #dd9494;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141815;
+    --surface: #1c211d;
+    --border: #313832;
+    --text: #e4e9e5;
+    --muted: #98a49c;
+    --accent: #5cb388;
+    --accent-strong: #7cc7a0;
+    --accent-weak: #24352b;
+    --code-bg: #242a25;
+    --shadow: none;
+    --shadow-hover: none;
+    --draft-fg: #e0bb64; --draft-bg: #37301c; --draft-bd: #6d5c2c;
+    --verified-fg: #82d2a5; --verified-bg: #1e3327; --verified-bd: #35624a;
+    --deprecated-fg: #e8a465; --deprecated-bg: #382a1d; --deprecated-bd: #6d4d2e;
+    --rejected-fg: #e08e8e; --rejected-bg: #382020; --rejected-bd: #6d3535;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+a { color: var(--accent-strong); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+pre {
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: .7rem .9rem; overflow-x: auto; font-size: .86em; line-height: 1.5; margin: .6rem 0;
+}
+code { background: var(--code-bg); border-radius: 4px; padding: .1em .35em; font-size: .88em; }
+pre code { background: none; padding: 0; }
+
+/* ---- top bar ---- */
+.topbar {
+  display: flex; align-items: center; gap: 1.2rem;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  padding: 0 1.2rem; height: 3.3rem; position: sticky; top: 0; z-index: 10;
+}
+.brand { font-weight: 700; font-size: 1.08rem; color: var(--text); display: flex; align-items: center; gap: .45rem; white-space: nowrap; }
+.brand:hover { text-decoration: none; }
+.topnav { display: flex; gap: .2rem; align-self: stretch; }
+.topnav a {
+  display: flex; align-items: center; padding: 0 .8rem; color: var(--muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 500; white-space: nowrap;
+}
+.topnav a:hover { color: var(--text); text-decoration: none; }
+.topnav a.active { color: var(--accent-strong); border-bottom-color: var(--accent); }
+/* How much is waiting, on the tab that leads to it (design doc 0049).
+   Absent rather than zero when there is nothing: a badge that is always
+   there is scenery, and the point is to be noticed. */
+.topnav .waiting {
+  margin-left: .4rem; border-radius: 999px; padding: .02rem .42rem;
+  font-size: .72rem; font-weight: 700;
+  background: var(--accent-weak); color: var(--accent-strong);
+}
+/* Narrow screens: brand + actions on the first row, nav tabs on their own row. */
+@media (max-width: 800px) {
+  .topbar { flex-wrap: wrap; height: auto; padding-top: .55rem; gap: .5rem .8rem; }
+  .topnav { order: 10; flex-basis: 100%; align-self: auto; overflow-x: auto; }
+  .topnav a { padding: .1rem .8rem .5rem; }
+}
+.topbar .spacer { flex: 1; }
+
+/* ---- layout: persistent tree sidebar + content pane ---- */
+.shell { display: grid; grid-template-columns: 17rem minmax(0, 1fr); }
+/* The topbar toggle collapses the sidebar for reading room; the choice
+   persists per browser. Narrow screens have their own disclosure, so
+   the toggle is desktop-only. */
+.shell.side-collapsed { grid-template-columns: minmax(0, 1fr); }
+.shell.side-collapsed .sidebar { display: none; }
+#side-toggle {
+  font: inherit; background: none; border: none; cursor: pointer;
+  color: var(--muted); padding: .2rem .45rem; border-radius: 6px; font-size: 1.05rem; line-height: 1;
+}
+#side-toggle:hover { color: var(--text); background: var(--code-bg); }
+@media (max-width: 800px) { #side-toggle { display: none; } }
+.sidebar {
+  background: var(--surface); border-right: 1px solid var(--border);
+  position: sticky; top: 3.3rem; height: calc(100vh - 3.3rem); overflow-y: auto;
+  padding: .8rem .7rem 2rem; font-size: .9rem;
+}
+/* Like the filter rail, the sidebar is a disclosure only on narrow
+   screens: always open (summary hidden) on desktop, collapsed by
+   default on mobile so content isn't pushed below a page of tree. */
+.sidebar summary {
+  cursor: pointer; font-weight: 600; font-size: .9rem; padding: .3rem 0;
+  color: var(--muted); list-style: none; display: none;
+}
+.sidebar summary::before { content: '▸ '; }
+.sidebar details[open] > summary::before { content: '▾ '; }
+.side-head { display: flex; align-items: center; gap: .4rem; margin-bottom: .5rem; }
+.side-head .lbl {
+  font-size: .72rem; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--muted); font-weight: 600; flex: 1;
+}
+@media (max-width: 800px) {
+  .shell { display: block; }
+  .sidebar {
+    position: static; height: auto; border-right: none;
+    border-bottom: 1px solid var(--border); padding: .6rem 1.2rem;
+  }
+  .sidebar summary { display: block; }
+  /* The summary already says Knowledge; keep just the buttons. */
+  .side-head .lbl { display: none; }
+  .side-head { justify-content: flex-end; }
+}
+main { max-width: 62rem; margin: 0 auto; width: 100%; padding: 1.4rem 1.2rem 4rem; }
+/* Filters ride in a horizontal chip bar under the search box — the tree
+   sidebar is already a rail, and a second vertical rail read as a
+   doubled sidebar. A disclosure only on narrow screens: open (summary
+   hidden) on desktop, collapsed by default on mobile so the search box
+   — the primary action — sits at the top. */
+.filterbar { margin-bottom: 1rem; }
+.filterbar summary {
+  cursor: pointer; font-weight: 600; font-size: .9rem; padding: .3rem 0;
+  color: var(--muted); list-style: none; display: none;
+}
+.filterbar summary::before { content: '▸ '; }
+.filterbar[open] > summary::before { content: '▾ '; }
+@media (max-width: 760px) { .filterbar summary { display: block; } }
+.fb-row { display: flex; flex-wrap: wrap; gap: .35rem .4rem; align-items: center; }
+.fb-row .fb-sep { width: 1px; height: 1.2rem; background: var(--border); margin: 0 .3rem; }
+.fb-row input[type=text] { width: 8rem; font-size: .84rem; padding: .22rem .55rem; border-radius: 999px; }
+.chip {
+  display: inline-flex; align-items: center; gap: .3rem; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  padding: .16rem .65rem; font-size: .86rem; color: var(--muted); white-space: nowrap;
+}
+.chip:hover { border-color: var(--accent); color: var(--text); }
+.chip input { display: none; }
+.chip:has(input:checked) { background: var(--accent-weak); border-color: var(--accent); color: var(--accent-strong); }
+label.check { display: flex; align-items: center; gap: .45rem; cursor: pointer; font-size: .9rem; }
+input[type=checkbox] { accent-color: var(--accent); }
+.count { color: var(--muted); font-size: .8rem; margin-left: auto; }
+
+/* ---- inputs & buttons ---- */
+/* type=date belongs in this list like any other field: left out, it kept
+   the UA's own font, padding and intrinsic width, which is what made the
+   stale_after field read as something bolted on. Every date input in the
+   form (stale_after, a source's last_modified, the usage window) is
+   styled by this one rule. */
+input[type=text], input[type=number], input[type=date], select, textarea {
+  font: inherit; color: inherit; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px; padding: .45rem .65rem; width: 100%;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent-weak); border-color: var(--accent); }
+input:disabled, select:disabled, textarea:disabled {
+  background: var(--code-bg); color: var(--muted); cursor: not-allowed;
+}
+textarea { resize: vertical; }
+/* An empty date input is all separators ("年/月/日"), which reads as
+   noise beside filled fields; the muted tone keeps it as the hint it is
+   until the field carries a date. */
+input[type=date]:not(:focus):invalid, input[type=date]:not(:focus):placeholder-shown { color: var(--muted); }
+/* 16px inputs on touch-sized screens so iOS Safari doesn't zoom on focus. */
+@media (max-width: 800px) {
+  input[type=text], input[type=number], input[type=date], select, textarea { font-size: 16px; }
+}
+.btn {
+  font: inherit; font-weight: 500; cursor: pointer; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  padding: .42rem .85rem; display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap;
+}
+/* Buttons that are anchors must not pick up the global link underline —
+   an underlined ＋ reads as a plus-minus toggle. */
+.btn:hover { border-color: var(--accent); color: var(--accent-strong); text-decoration: none; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover { background: var(--accent-strong); color: #fff; }
+.btn.danger:hover { border-color: var(--rejected-bd); color: var(--rejected-fg); }
+.btn.small { padding: .22rem .6rem; font-size: .84rem; }
+
+.searchbox { display: flex; gap: .6rem; margin-bottom: 1rem; }
+.searchbox input { font-size: 1rem; padding: .55rem .8rem; }
+
+/* ---- cards ---- */
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: .85rem 1.1rem; margin: 0 0 .7rem; box-shadow: var(--shadow);
+}
+.card:hover { box-shadow: var(--shadow-hover); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.card[data-href] { cursor: pointer; }
+.card .thumbs { display: flex; gap: .5rem; margin-top: .55rem; flex-wrap: wrap; }
+.card .thumbs img {
+  height: 4.5rem; max-width: 11rem; object-fit: cover;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--code-bg);
+}
+.card .head { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+.card .head a.title { font-weight: 600; font-size: 1.02rem; color: var(--text); }
+.card .head a.title:hover { color: var(--accent-strong); }
+.type-ico { font-size: 1rem; }
+.card .meta { color: var(--muted); font-size: .8rem; margin-top: .15rem; overflow-wrap: anywhere; }
+.card .desc { margin-top: .3rem; font-size: .92rem; }
+/* The passage that matched, as plain text: it is cut from the body
+   mid-sentence, so it is quoted rather than rendered as markdown. */
+.card .snippet { color: var(--muted); font-size: .88rem; }
+.card pre { margin-bottom: 0; }
+
+.badge {
+  border-radius: 999px; padding: .06rem .6rem; font-size: .74rem; font-weight: 600;
+  border: 1px solid var(--border); color: var(--muted); white-space: nowrap;
+}
+.badge.draft { color: var(--draft-fg); background: var(--draft-bg); border-color: var(--draft-bd); }
+.badge.stable { color: var(--verified-fg); background: var(--verified-bg); border-color: var(--verified-bd); }
+/* Confirmation is not a status, so it gets its own chip beside the
+   lifecycle badge rather than replacing it (design doc 0043 §3.2). */
+.badge.verified-mark { color: var(--verified-fg); background: var(--verified-bg); border-color: var(--verified-bd); }
+.badge.rejected-mark { color: var(--rejected-fg); background: var(--rejected-bg); border-color: var(--rejected-bd); }
+.badge.deprecated { color: var(--deprecated-fg); background: var(--deprecated-bg); border-color: var(--deprecated-bd); }
+/* The status badge doubles as its own picker: one control shows the
+   status and changes it, where four transition buttons used to sit.
+   The select sits transparent over the label so the pill hugs the
+   current status instead of the widest option ("deprecated"). */
+.badge.status-pick { position: relative; display: inline-flex; align-items: center; gap: .3rem; cursor: pointer; }
+.badge.status-pick::after { content: '▾'; font-size: .65rem; opacity: .7; }
+.badge.status-pick select {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; cursor: pointer; appearance: none; -webkit-appearance: none; border: 0; padding: 0;
+}
+.badge.status-pick:focus-within { outline: 2px solid var(--accent-weak); }
+.tag {
+  border-radius: 999px; padding: .04rem .55rem; font-size: .76rem;
+  background: var(--accent-weak); color: var(--accent-strong);
+}
+.empty { color: var(--muted); text-align: center; padding: 2.5rem 0; }
+.weak-matches > summary {
+  cursor: pointer; color: var(--muted); font-size: .88rem; padding: .6rem 0;
+}
+.weak-matches .card { opacity: .75; }
+.truncation-note { color: var(--muted); font-size: .86rem; text-align: center; padding: .8rem 0; }
+.feed-banner {
+  background: var(--accent-weak); border: 1px solid var(--border); border-radius: 8px;
+  padding: .55rem .9rem; margin-bottom: 1rem; font-size: .92rem; color: var(--accent-strong);
+}
+.error-banner {
+  background: var(--rejected-bg); border: 1px solid var(--rejected-bd); color: var(--rejected-fg);
+  border-radius: 8px; padding: .6rem .9rem; margin: .8rem 0; white-space: pre-wrap; word-break: break-word;
+}
+
+/* ---- detail ---- */
+.crumbs { color: var(--muted); font-size: .84rem; margin-bottom: .5rem; }
+.crumbs a { color: var(--muted); }
+.detail-head { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
+.detail-head h1 { font-size: 1.45rem; margin: 0; }
+.detail-head .actions { margin-left: auto; display: flex; gap: .45rem; flex-wrap: wrap; }
+/* Edit stays a button; the rarer Move / Delete live behind ⋯. */
+.menu { position: relative; }
+.menu > summary { list-style: none; }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu-body {
+  position: absolute; right: 0; top: calc(100% + .3rem); z-index: 30; min-width: 9rem;
+  display: flex; flex-direction: column; padding: .25rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-hover);
+}
+.menu-body button {
+  font: inherit; text-align: left; cursor: pointer; background: none; border: 0;
+  border-radius: 6px; padding: .35rem .55rem; color: var(--text); white-space: nowrap;
+}
+.menu-body button:hover { background: var(--accent-weak); color: var(--accent-strong); }
+.menu-body button.danger:hover { background: var(--rejected-bg); color: var(--rejected-fg); }
+.provenance { color: var(--muted); font-size: .84rem; margin: .45rem 0 0; }
+.status-note {
+  margin-top: .7rem; border-left: 3px solid var(--border); padding: .1rem .8rem;
+  color: var(--muted); font-size: .9rem;
+}
+.tabs { display: flex; gap: .2rem; border-bottom: 1px solid var(--border); margin: 1.1rem 0 1rem; overflow-x: auto; }
+.tabs button {
+  font: inherit; font-weight: 500; background: none; border: none; cursor: pointer;
+  color: var(--muted); padding: .45rem .8rem; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  white-space: nowrap;
+}
+.tabs button:hover { color: var(--text); }
+.tabs button.active { color: var(--accent-strong); border-bottom-color: var(--accent); }
+table.kv { border-collapse: collapse; width: 100%; }
+table.kv td { border-bottom: 1px solid var(--border); padding: .45rem .6rem .45rem 0; vertical-align: top; }
+table.kv td.k { color: var(--muted); width: 11rem; white-space: nowrap; }
+/* Narrow screens: stack key over value so wide values (SQL) get the full width. */
+@media (max-width: 640px) {
+  table.kv, table.kv tbody, table.kv tr, table.kv td { display: block; width: auto; }
+  table.kv td { border-bottom: none; padding: .1rem 0; }
+  table.kv td.k { padding-top: .55rem; }
+  table.kv tr { border-bottom: 1px solid var(--border); padding-bottom: .45rem; }
+}
+.stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .8rem; max-width: 42rem; }
+.stat-tiles .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1rem; }
+.tile .num { font-size: 1.7rem; font-weight: 700; }
+.tile .lbl { color: var(--muted); font-size: .82rem; }
+
+/* ---- markdown body ---- */
+.md h1, .md h2, .md h3 { line-height: 1.3; margin: 1.1em 0 .4em; }
+.md h1 { font-size: 1.3rem; } .md h2 { font-size: 1.15rem; } .md h3 { font-size: 1rem; }
+.md p { margin: .5em 0; }
+.md ul, .md ol { margin: .4em 0; padding-left: 1.5em; }
+.md img { max-width: 100%; border: 1px solid var(--border); border-radius: 8px; display: block; margin: .6rem 0; }
+.md table { border-collapse: collapse; margin: .6em 0; max-width: 100%; }
+.md th, .md td { border: 1px solid var(--border); padding: .35rem .6rem; }
+.md th { background: var(--code-bg); font-weight: 600; text-align: left; }
+/* A description is markdown too (see descHTML), so it carries the
+   rules above. What it must not do is out-shout what it describes: on
+   a card it sits under the title, so a description opening with
+   "## Overview" keeps body-sized headings, and it neither leads nor
+   trails with a margin of its own. */
+.desc.md > :first-child { margin-top: 0; }
+.desc.md > :last-child { margin-bottom: 0; }
+.card .desc h1, .card .desc h2, .card .desc h3 { font-size: .95rem; margin: .6em 0 .2em; }
+.desc.lead { font-size: 1.02rem; }
+
+/* ---- browse tree ---- */
+.browse details.node > summary {
+  cursor: pointer; display: flex; gap: .5rem; align-items: baseline;
+  padding: .25rem .45rem; border-radius: 6px; list-style-position: outside;
+}
+.browse details.node > summary:hover { background: var(--code-bg); }
+.browse details.node > .children {
+  margin-left: .85rem; padding-left: .7rem; border-left: 1px solid var(--border);
+}
+.browse .dir-name { overflow-wrap: anywhere; }
+/* The directory name links to its index page but reads as a tree row,
+   not a link; the row highlights when its index page is the current
+   route, like .tree-entry.active. */
+.browse a.dir-name { color: inherit; }
+.browse a.dir-name:hover { color: var(--accent-strong); }
+.browse details.node > summary.active { background: var(--accent-weak); }
+.browse .count { color: var(--muted); font-size: .78rem; }
+/* “New entry here” on a directory row — revealed on hover so the tree
+   stays quiet; the router prefills the editor's ID with the prefix. */
+.browse .node-new {
+  margin-left: auto; visibility: hidden; color: var(--muted);
+  padding: 0 .3rem; border-radius: 4px; line-height: 1.2; align-self: center;
+}
+.browse details.node > summary:hover .node-new { visibility: visible; }
+.browse .node-new:hover { color: var(--accent-strong); background: var(--accent-weak); text-decoration: none; }
+.browse .tree-entry {
+  display: flex; gap: .45rem; align-items: baseline;
+  padding: .22rem .45rem; border-radius: 6px; color: inherit; text-decoration: none;
+}
+.browse .tree-entry:hover { background: var(--code-bg); text-decoration: none; }
+/* Title + a short status hint: the title is the row (the id is in the
+   tooltip and the URL), and only non-stable states get a colored dot
+   — stable is the norm and needs no flag. */
+.browse .tree-entry .entry-title {
+  color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.browse .tree-entry.active { background: var(--accent-weak); }
+.status-dot {
+  width: .5rem; height: .5rem; border-radius: 50%; flex-shrink: 0; align-self: center;
+}
+.status-dot.draft { background: var(--draft-fg); }
+.status-dot.deprecated { background: var(--deprecated-fg); }
+/* Drag-and-drop move targets (directories and the root). */
+.browse details.node > summary.drop-hover, #tree.drop-hover { background: var(--accent-weak); border-radius: 6px; }
+
+/* ---- files ---- */
+.att-card { display: flex; gap: 1rem; align-items: flex-start; }
+.att-card a.thumb { flex-shrink: 0; }
+.att-card img {
+  max-width: 13rem; max-height: 9rem; object-fit: contain; display: block;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--code-bg);
+}
+.att-card a.thumb-file {
+  display: flex; align-items: center; justify-content: center;
+  width: 6rem; height: 6rem; font-weight: 600; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 6px; background: var(--code-bg);
+  text-decoration: none;
+}
+.att-card .att-meta { min-width: 0; display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; }
+.att-card .att-meta .mono { overflow-wrap: anywhere; }
+@media (max-width: 620px) { .att-card { flex-direction: column; } }
+
+/* ---- forms ---- */
+.form { max-width: 46rem; }
+.form .row { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+@media (max-width: 620px) { .form .row { grid-template-columns: 1fr; } }
+.form .field { margin-bottom: .9rem; }
+.form label.top { display: block; font-size: .84rem; font-weight: 600; margin-bottom: .25rem; }
+.form .hint { color: var(--muted); font-size: .78rem; margin-top: .2rem; }
+.form .req { color: var(--accent-strong); font-weight: 400; }
+
+/* Repeatable rows (sources, an Attested Computation's parameters). Each
+   row is a bordered card so a list of them reads as a list rather than a
+   wall of inputs, and every row collapses to one column with .form .row. */
+.fieldset { border: 1px solid var(--border); border-radius: 10px; padding: .9rem; margin-bottom: .9rem; }
+.fieldset > .legend { font-size: .84rem; font-weight: 600; margin-bottom: .5rem; }
+.rows { display: flex; flex-direction: column; gap: .7rem; }
+.rows:empty { display: none; }
+.row-card { border: 1px solid var(--border); border-radius: 8px; padding: .7rem; background: var(--code-bg); }
+.row-card .field:last-child { margin-bottom: 0; }
+.row-card .row-head { display: flex; align-items: center; gap: .5rem; margin-bottom: .5rem; }
+.row-card .row-head .n { color: var(--muted); font-size: .8rem; }
+.row-card .row-head .btn { margin-left: auto; }
+.row-trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .6rem; }
+@media (max-width: 620px) { .row-trio { grid-template-columns: 1fr; } }
+
+.section-title { font-size: 1.25rem; font-weight: 700; margin: .2rem 0 1rem; }
+.toolbar { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.toolbar .grow { flex: 1; }
+
+#toast {
+  position: fixed; bottom: 1.2rem; left: 50%; transform: translateX(-50%);
+  background: var(--text); color: var(--bg); border-radius: 8px; padding: .5rem 1rem;
+  font-size: .9rem; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 100;
+}
+#toast.show { opacity: .95; }
+
+/* Read-only deployments (design doc 0040): the server refuses every
+   change, so the page stops offering them. Hidden rather than disabled
+   — a greyed-out Verify invites a click and explains nothing. */
+body.read-only .write-only { display: none !important; }
+.read-only-note { display: none; }
+body.read-only .read-only-note {
+  display: block; background: var(--accent-weak); border: 1px solid var(--border);
+  border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;
+  font-size: .92rem; color: var(--muted);
+}
+/* A sandbox is writable, so nothing is hidden — what it needs is to
+   say what it is (design doc 0087). It is the one banner that stays on
+   every page, because the thing it warns about (your writing is going
+   to be erased) applies to every page. */
+.sandbox-note { display: none; }
+body.sandbox .sandbox-note {
+  display: block; background: var(--accent-weak); border: 1px solid var(--border);
+  border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;
+  font-size: .92rem;
+}

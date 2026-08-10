@@ -4,7 +4,8 @@ Status: Accepted(2026-08-03)。**Web UI の現行ドキュメント。**
 [0006](0006-web-ui-serving.md) を Superseded にし、
 [0044](0044-web-ui-edits-documents.md) を Superseded にする。
 **二つが決めたことは何一つ変えない**(§0)。ブラウザの利用者が誰として
-記録されるかは [0065](0065-identity-and-provenance.md) §5 が持つ
+記録されるかは [0065](0065-identity-and-provenance.md) §5 が持つ。
+ページが一枚ではなく一式の ES モジュールになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)(§1 を改訂 — ビルドなし・フレームワークなし・CDN なしはそのまま)。
 Date: 2026-08-03
 
 ## 0. この記録が決めたこと

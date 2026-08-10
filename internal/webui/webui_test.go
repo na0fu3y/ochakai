@@ -1,6 +1,9 @@
 package webui
 
 import (
+	"io/fs"
+	"path"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -8,26 +11,82 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
-// The page is plain JavaScript with no build step and no test runner, so
-// the few invariants worth pinning are pinned by reading the source.
+// What is left for Go now that the page is modules.
 //
-// Provenance rendering is one of them: an entry written by a person
-// through an embedded application carries the delegating caller in
-// actor.via (design doc 0027), and dropping it here would make that write
-// indistinguishable from one the person made directly — on the very
-// surface where a human decides whether to trust it.
-func TestActorRenderingKeepsDelegation(t *testing.T) {
-	page := string(Index)
-	i := strings.Index(page, "function actorStr(")
-	if i < 0 {
-		t.Fatal("actorStr is gone; provenance rendering moved without updating this guard")
+// The rules the modules can state themselves are stated in
+// internal/webui/jstest, which runs them: `node --test` imports the pure
+// ones — the renderer, the formatters, the document edits — and asserts
+// on what they return rather than on how they are written. What stays
+// here is what a module cannot check about itself: an invariant shared
+// with Go (the type vocabulary), and the page-wide rules that are true
+// only across several modules at once. Those are still read from the
+// source, because there is nothing else to read them from.
+
+// asset is one embedded file, by the path the browser asks for.
+func asset(t *testing.T, name string) string {
+	t.Helper()
+	b, err := fs.ReadFile(Files, name)
+	if err != nil {
+		t.Fatalf("%s is not embedded: %v", name, err)
 	}
-	body := page[i:]
-	if end := strings.Index(body, "\n}"); end >= 0 {
-		body = body[:end]
+	return string(b)
+}
+
+// wholePage is every embedded file at once, for the guards that are about
+// the page rather than about one module — "nowhere does this any more" is
+// a claim about all of it.
+func wholePage(t *testing.T) string {
+	t.Helper()
+	var b strings.Builder
+	if err := fs.WalkDir(Files, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		c, err := fs.ReadFile(Files, p)
+		b.Write(c)
+		return err
+	}); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(body, "a.via") {
-		t.Errorf("actorStr drops the delegating caller:\n%s", body)
+	return b.String()
+}
+
+// The browser fetches what is embedded, so a module that exists in the
+// tree and not in the binary is a blank panel at runtime and nothing at
+// build time. Every import the modules name has to resolve to a file that
+// shipped.
+func TestEveryModuleThePageImportsIsEmbedded(t *testing.T) {
+	index := asset(t, "index.html")
+	if !strings.Contains(index, `<script type="module" src="js/main.js">`) {
+		t.Error("index.html no longer boots js/main.js")
+	}
+	if !strings.Contains(index, `<link rel="stylesheet" href="app.css">`) {
+		t.Error("index.html no longer links app.css")
+	}
+	imports := regexp.MustCompile(`from '([^']+)'`)
+	seen := 0
+	err := fs.WalkDir(Files, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(p, ".js") {
+			return err
+		}
+		seen++
+		src, err := fs.ReadFile(Files, p)
+		if err != nil {
+			return err
+		}
+		for _, m := range imports.FindAllStringSubmatch(string(src), -1) {
+			target := path.Join(path.Dir(p), m[1])
+			if _, err := fs.Stat(Files, target); err != nil {
+				t.Errorf("%s imports %s, which is not embedded", p, m[1])
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seen < 10 {
+		t.Errorf("only %d modules embedded; the split collapsed back into one file", seen)
 	}
 }
 
@@ -37,7 +96,7 @@ func TestActorRenderingKeepsDelegation(t *testing.T) {
 // now, and the review queue links them; a rename that drops the routes
 // would quietly hide the queues again.
 func TestFeedsAreLinkableFromTheReviewLoop(t *testing.T) {
-	page := string(Index)
+	page := wholePage(t)
 	for _, want := range []string{
 		"'reported-wrong'",               // the route the links point at
 		"'verification-age'",             // its verification-age sibling
@@ -65,7 +124,7 @@ func TestFeedsAreLinkableFromTheReviewLoop(t *testing.T) {
 // the contract and the body as well. The fix is that it rebuilds nothing:
 // it reads the document, changes the status line, and writes it back.
 func TestAStatusChangeEditsTheDocumentRatherThanRebuildingIt(t *testing.T) {
-	page := string(Index)
+	page := wholePage(t)
 	if !strings.Contains(page, "function withStatus(doc, status)") {
 		t.Fatal("the status change no longer goes through a document edit")
 	}
@@ -102,7 +161,7 @@ func TestAStatusChangeEditsTheDocumentRatherThanRebuildingIt(t *testing.T) {
 // renamed to match its own label; reintroducing the old name would put
 // two unrelated queues behind one word again.
 func TestFeedNamesDoNotCollideOnStale(t *testing.T) {
-	page := string(Index)
+	page := wholePage(t)
 	if strings.Contains(page, "staleFeed") {
 		t.Error("staleFeed is back; the verification-age feed is ageFeed, and stale_after's is expiredFeed")
 	}
@@ -125,7 +184,7 @@ func TestFeedNamesDoNotCollideOnStale(t *testing.T) {
 // §2.2). A reviewer who does not know that will verify entries and watch
 // the queue stay full, so the page has to say it.
 func TestStaleFeedSaysVerifyingDoesNotClearIt(t *testing.T) {
-	page := string(Index)
+	page := wholePage(t)
 	// The page is Japanese (C8), so the sentence is checked in the
 	// language a reader meets it in — what is pinned is that the banner
 	// still says verifying does not empty this queue, not which words
@@ -146,7 +205,7 @@ func TestStaleFeedSaysVerifyingDoesNotClearIt(t *testing.T) {
 // otherwise go on being recommended by the UI forever (design doc 0038
 // §4.4).
 func TestTypeVocabularyMatchesDomain(t *testing.T) {
-	page := string(Index)
+	page := asset(t, "js/vocab.js")
 	icons := section(t, page, "const TYPE_ICONS = {", "};")
 	if !strings.Contains(page, "const KNOWN_TYPES = Object.keys(TYPE_ICONS);") {
 		t.Error("KNOWN_TYPES no longer derives from TYPE_ICONS; the page has a second copy of the vocabulary again")
@@ -173,7 +232,7 @@ func TestTypeVocabularyMatchesDomain(t *testing.T) {
 // What the gate has to ask is whether the document is still the one the
 // dropdown seeded — that is the question the flag was standing in for.
 func TestTheTypeDropdownAsksTheDocumentNotTheDirtyFlag(t *testing.T) {
-	page := string(Index)
+	page := asset(t, "js/views/editor.js")
 	body := section(t, page, "typeSel.addEventListener('change'", "\n    });")
 	if strings.Contains(body, "dirty") {
 		t.Errorf("the type change is gated on the form's dirty flag again, which the select's own `input` raises before this runs:\n%s", body)
@@ -182,42 +241,6 @@ func TestTheTypeDropdownAsksTheDocumentNotTheDirtyFlag(t *testing.T) {
 		if !strings.Contains(body, want) {
 			t.Errorf("the type change no longer does %q:\n%s", want, body)
 		}
-	}
-}
-
-// Setting the type on a document somebody is already writing has to carry
-// the keys that type is refused without, or the dropdown hands back a
-// document the server rejects — which is worse than the nothing it used
-// to do, because it looks like it worked. Only Attested Computation has
-// one: runtime is the single place the write path holds a type to a
-// schema (design doc 0036 §5), and internal/service is where that is
-// enforced.
-//
-// The illustrative half must stay out of it. A sample `year` parameter
-// pasted into a half-written document is the page putting words in its
-// writer's mouth.
-func TestATypeChangeCarriesWhatTheTypeIsRefusedWithout(t *testing.T) {
-	page := string(Index)
-	required := section(t, page, "const TYPE_REQUIRED = {", "\n};")
-	if !strings.Contains(required, "'Attested Computation': 'runtime:") {
-		t.Errorf("an Attested Computation no longer requires a runtime here, but the write path still does:\n%s", required)
-	}
-	if strings.Contains(required, "parameters:") || strings.Contains(required, "resource:") {
-		t.Errorf("TYPE_REQUIRED carries illustrative keys, which a type change would paste into a written document:\n%s", required)
-	}
-	// The seed half is what only ever opens an empty document.
-	seed := section(t, page, "const TYPE_SEED = {", "\n};")
-	if !strings.Contains(seed, "parameters:") || !strings.Contains(seed, "resource:") {
-		t.Errorf("the seed templates no longer show the shape of a type:\n%s", seed)
-	}
-	// A key the writer already named is theirs. Overwriting it would be
-	// the dropdown deciding a runtime somebody chose was wrong.
-	fn := section(t, page, "function withType(doc, type)", "\n}")
-	if !strings.Contains(fn, "TYPE_REQUIRED[type]") {
-		t.Errorf("withType does not add the keys the type requires:\n%s", fn)
-	}
-	if !strings.Contains(fn, "if (!new RegExp('^' + key + ':', 'm').test(out))") {
-		t.Errorf("withType no longer checks whether the document already names the key:\n%s", fn)
 	}
 }
 
@@ -234,7 +257,7 @@ func TestATypeChangeCarriesWhatTheTypeIsRefusedWithout(t *testing.T) {
 // This is that check: every affordance below writes through /api/v1, so
 // every one of them has to be gated.
 func TestWriteAffordancesAreHiddenOnAReadOnlyDeployment(t *testing.T) {
-	page := string(Index)
+	page := wholePage(t)
 	// The rule and the state that drives it. Renaming either without
 	// renaming the class everywhere would unhide the lot.
 	for _, want := range []string{
@@ -309,7 +332,7 @@ func TestWriteAffordancesAreHiddenOnAReadOnlyDeployment(t *testing.T) {
 // browser had already taken the first. Nothing about that reads as wrong
 // in a diff, and it silences any guard written in terms of the class.
 func TestNoTagDeclaresClassTwice(t *testing.T) {
-	page := string(Index)
+	page := wholePage(t)
 	seen := map[int]bool{}
 	for _, i := range indexesOf(page, "class=") {
 		start, tag := tagAt(t, page, i)
@@ -392,33 +415,6 @@ func section(t *testing.T, page, open, close string) string {
 	return rest[:end]
 }
 
-// Since design doc 0013 a bundle file may be any type, not only an image, and
-// a plain link is the only notation that can reference a non-image one —
-// the files tab prints exactly that form for authors to paste. The
-// link renderer used to consult only the entry resolver, which returns
-// null for anything that is not a *.md, so those references rendered as
-// raw markdown: the page told people to write a reference it would not
-// draw. Both notations resolve through the same file resolver now.
-func TestBodyLinksToFilesResolve(t *testing.T) {
-	page := string(Index)
-	i := strings.Index(page, "const link = (m, text, ref)")
-	if i < 0 {
-		t.Fatal("the markdown link renderer moved without updating this guard")
-	}
-	body := page[i:]
-	if end := strings.Index(body, "\n  };"); end >= 0 {
-		body = body[:end]
-	}
-	if !strings.Contains(body, "resolveFile") {
-		t.Errorf("a body link no longer falls back to the entry's files:\n%s", body)
-	}
-	// The image notation shares the resolver; a rename that split them
-	// again would take one of the two back to literal text.
-	if !strings.Contains(page, "const img = (m, alt, ref)") || !strings.Contains(page, "resolveFile && resolveFile(ref)") {
-		t.Error("the image renderer no longer shares the file resolver")
-	}
-}
-
 // A description keeps its line structure through the store — OKF writes
 // a multi-line one as a `description: |-` block — and the page used to
 // drop that on the floor, putting the text in an element where HTML
@@ -428,7 +424,7 @@ func TestBodyLinksToFilesResolve(t *testing.T) {
 // body does, so the guard is that no call site escapes the text into an
 // element by hand again.
 func TestADescriptionIsRenderedAsTheMarkdownItIs(t *testing.T) {
-	page := string(Index)
+	page := wholePage(t)
 	body := section(t, page, "function descHTML(", "\n}")
 	if !strings.Contains(body, "md(text)") {
 		t.Errorf("descHTML no longer renders the description as markdown:\n%s", body)
@@ -453,7 +449,7 @@ func TestADescriptionIsRenderedAsTheMarkdownItIs(t *testing.T) {
 // the opposite of the truth, and it is the reading a reader would take
 // from a zero.
 func TestLoopStatsDistinguishNotRecordedFromZero(t *testing.T) {
-	page := string(Index)
+	page := asset(t, "js/views/review.js")
 	if !strings.Contains(page, "/api/v1/stats") {
 		t.Fatal("the review page no longer reads the instance stats")
 	}
@@ -477,7 +473,7 @@ func TestLoopStatsDistinguishNotRecordedFromZero(t *testing.T) {
 // actually say — a branch on a code with a typo in it is a branch that
 // never runs, and nothing else would notice.
 func TestThePageBranchesOnErrorCodesRatherThanProse(t *testing.T) {
-	page := string(Index)
+	page := wholePage(t)
 
 	body := section(t, page, "async function api(", "\n}")
 	if !strings.Contains(body, "err.code = code") {
@@ -529,9 +525,8 @@ func TestThePageBranchesOnErrorCodesRatherThanProse(t *testing.T) {
 // page that reassembled the validator out of it would be a second
 // opinion about quoting that nothing checks.
 func TestTheEditorSavesAgainstTheVersionItOpened(t *testing.T) {
-	page := string(Index)
-
-	body := section(t, page, "async function api(", "\n}")
+	// Two modules: the call shape carries the validator, the editor uses it.
+	body := section(t, asset(t, "js/api.js"), "async function api(", "\n}")
 	if !strings.Contains(body, "If-Match") {
 		t.Errorf("api() cannot send a precondition:\n%s", body)
 	}
@@ -540,6 +535,7 @@ func TestTheEditorSavesAgainstTheVersionItOpened(t *testing.T) {
 		t.Errorf("api() drops the version each read saw:\n%s", body)
 	}
 
+	page := asset(t, "js/views/editor.js")
 	editor := section(t, page, "async function viewEditor(", "\n}")
 	if !strings.Contains(editor, "v.etag") {
 		t.Error("the editor does not read the version it is editing against")
