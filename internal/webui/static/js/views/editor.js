@@ -41,7 +41,7 @@ export async function viewEditor(id, prefix = '') {
       entryID = v.id;
       version = v.etag || '';
     } catch (e) {
-      view.innerHTML = `<div class="error-banner">${esc(id)} を読み込めませんでした: ${esc(e.message)}</div>`;
+      view.innerHTML = `<div class="error-banner" role="alert">${esc(id)} を読み込めませんでした: ${esc(e.message)}</div>`;
       return;
     }
   }
@@ -123,7 +123,7 @@ export async function viewEditor(id, prefix = '') {
     errBox.innerHTML = '';
     const entryId = editing ? entryID : $('#e-id').value.trim().replace(/^\/+|\/+$/g, '');
     if (!entryId) {
-      errBox.innerHTML = '<div class="error-banner">ID は必須です。</div>';
+      errBox.innerHTML = '<div class="error-banner" role="alert">ID は必須です。</div>';
       return;
     }
     const document_ = $('#e-doc').value;
@@ -131,7 +131,7 @@ export async function viewEditor(id, prefix = '') {
     // stays the only judge of a document; this just saves a round trip on
     // the mistake a text editor makes most (design doc 0044 §2.3).
     if (!/^---\r?\n[\s\S]*?\r?\n---/.test(document_.trim())) {
-      errBox.innerHTML = '<div class="error-banner">ドキュメントには YAML frontmatter が要ります: <code>---</code> の行、キー、そして閉じる <code>---</code> の行。</div>';
+      errBox.innerHTML = '<div class="error-banner" role="alert">ドキュメントには YAML frontmatter が要ります: <code>---</code> の行、キー、そして閉じる <code>---</code> の行。</div>';
       return;
     }
     try {
@@ -160,13 +160,13 @@ export async function viewEditor(id, prefix = '') {
       // they wrote, because the text in this box is now the older of two
       // edits and only the person holding it knows which parts survive.
       if (editing && e.code === 'precondition_failed') {
-        errBox.innerHTML = `<div class="error-banner">この concept は、この画面を開いてから誰かが保存しました。
+        errBox.innerHTML = `<div class="error-banner" role="alert">この concept は、この画面を開いてから誰かが保存しました。
           上書きを避けるため保存していません — 書いたものはこの欄に残っています。
           <a href="#/k/${idPath(entryId)}" target="_blank" rel="noopener">新しい版を別タブで開いて</a>、
           残すべきところを移してから、もう一度この画面を開いてください。</div>`;
         return;
       }
-      errBox.innerHTML = `<div class="error-banner">${editing ? 'Save' : 'Create'} failed: ${esc(e.message)}${dupLink}</div>`;
+      errBox.innerHTML = `<div class="error-banner" role="alert">${editing ? 'Save' : 'Create'} failed: ${esc(e.message)}${dupLink}</div>`;
     }
   });
 }

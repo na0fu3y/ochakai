@@ -21,6 +21,27 @@ last entry.
 
 ### Added
 
+- **The web UI is served under a Content-Security-Policy, and the page a
+  screen reader meets is no longer a lesser one.** The policy became
+  writable when the page stopped carrying an inline script: `script-src
+  'self'` with nothing inline is most of what CSP is for, and one inline
+  script forecloses it. Tightening the policy in a browser produces
+  violations for inline *style* only and none for script — the browser's
+  own confirmation that the half that matters is satisfied.
+  `frame-ancestors 'none'` keeps the surface where human rulings happen
+  out of somebody else's frame; embedding is what REST is for.
+  `style-src` keeps `'unsafe-inline'` for the page's literal style
+  attributes and says so rather than hiding the gap.
+
+  Four accessibility gaps go with it, chosen as what makes the page
+  unusable rather than as an audit: what the page announces — a save, a
+  refusal, a failure — is announced to everyone, focus follows a
+  navigation into the main region instead of staying in content that
+  left, the current tab says so with `aria-current` and not only with
+  colour, and error banners are alerts
+  ([#536](https://github.com/na0fu3y/ochakai/issues/536), design doc
+  0094).
+
 - **The best match is no longer withheld behind a second round trip.** A
   concept larger than the whole budget became an outline row even at rank
   1 — so at the MCP default of 12,000 bytes the single most relevant

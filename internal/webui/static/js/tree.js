@@ -41,7 +41,7 @@ export async function refreshTree() {
     else if (dm) revealInTree(dm[1].split('/').map(decodeURIComponent).join('/').replace(/\/*$/, '/'));
     else markTreeSelection();
   } catch (e) {
-    tree.innerHTML = `<div class="error-banner">Tree failed: ${esc(e.message)}</div>`;
+    tree.innerHTML = `<div class="error-banner" role="alert">Tree failed: ${esc(e.message)}</div>`;
   }
 }
 $('#tree-refresh').addEventListener('click', refreshTree);
@@ -113,7 +113,7 @@ export function loadNode(d) {
       markTreeSelection();
     } catch (e) {
       d._load = null; // reopen retries
-      box.innerHTML = `<div class="error-banner">Load failed: ${esc(e.message)}</div>`;
+      box.innerHTML = `<div class="error-banner" role="alert">Load failed: ${esc(e.message)}</div>`;
     }
   })();
   return d._load;

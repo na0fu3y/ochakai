@@ -59,9 +59,49 @@ func assets(files fs.FS) http.Handler {
 		}
 		w.Header().Set("ETag", assetTag())
 		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
+		w.Header().Set("X-Content-Type-Options", "nosniff")
 		srv.ServeHTTP(w, r)
 	})
 }
+
+// contentSecurityPolicy is what the page is allowed to do. It became
+// writable when the page stopped carrying an inline script (design doc
+// 0092): `script-src 'self'` with nothing inline is the whole point —
+// an injection that reaches the DOM cannot become code.
+//
+// The page renders a concept's body, which is somebody else's text, and
+// every value it interpolates goes through one escape function. This is
+// the second wall behind that one.
+//
+//   - default-src 'none' — nothing is allowed that is not named below.
+//   - script-src 'self' — the modules under js/, and nothing inline.
+//   - style-src keeps 'unsafe-inline'. The page carries about forty
+//     literal style attributes, and converting them would trade a real
+//     stylesheet for three dozen utility classes for a small gain: the
+//     danger CSP is here for is script, and no attacker-controlled value
+//     reaches a style attribute (the one computed style, a table's
+//     alignment, is one of four constants). Dropping it is a tidy-up
+//     somebody can do later; the strict half is the half that matters.
+//   - img-src allows https: because a body may legitimately show a
+//     picture that lives elsewhere, and silently blanking those while
+//     shipping a header would be breaking documents to look secure.
+//     data: and http: are not allowed.
+//   - connect-src 'self' — the API is same-origin through the proxy in
+//     front (design doc 0006), so there is nowhere else to reach.
+//   - frame-ancestors 'none' keeps the curation surface out of somebody
+//     else's frame, and form-action 'none' means the editor's form
+//     cannot navigate even if its submit handler ever stops running.
+//
+// No Referrer-Policy. It would be a fourteenth counted header
+// (docs/surface.md) to improve on a browser default that already sends
+// only the origin cross-site — and the page's own path is "/", since a
+// route lives in the fragment and a fragment is never sent. A header
+// that buys that little does not get counted for.
+const contentSecurityPolicy = "default-src 'none'; " +
+	"script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+	"img-src 'self' https:; connect-src 'self'; font-src 'self'; " +
+	"base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // assetTag is one tag for the whole UI: the hash of every embedded file,
 // so any edit to any of them invalidates all of them. One tag rather

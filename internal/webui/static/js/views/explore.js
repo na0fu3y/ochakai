@@ -237,6 +237,6 @@ export async function runSearch(append = false) {
     $('#feed-more')?.addEventListener('click', e => { e.preventDefault(); runSearch(true); });
   } catch (e) {
     if (my !== runSearch._seq || out !== $('#results')) return;
-    out.innerHTML = `<div class="error-banner">Search failed: ${esc(e.message)}</div>`;
+    out.innerHTML = `<div class="error-banner" role="alert">Search failed: ${esc(e.message)}</div>`;
   }
 }

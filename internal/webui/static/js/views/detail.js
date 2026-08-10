@@ -43,7 +43,7 @@ export async function viewDetail(id) {
     observed = v.observed || {};
     document_ = v.document || '';
   } catch (e) {
-    view.innerHTML = `<div class="error-banner">${esc(id)} を読み込めませんでした: ${esc(e.message)}</div>`;
+    view.innerHTML = `<div class="error-banner" role="alert">${esc(id)} を読み込めませんでした: ${esc(e.message)}</div>`;
     return;
   }
   // The body, cut from the document at the closing delimiter. Cutting on
@@ -330,7 +330,7 @@ export async function viewDetail(id) {
         if (document.querySelector('#tabs button.active')?.dataset.tab === name) body.innerHTML = tabs[name]();
       } catch (e) {
         if (document.querySelector('#tabs button.active')?.dataset.tab === name) {
-          body.innerHTML = `<div class="error-banner">Could not load ${esc(name)}: ${esc(e.message)}</div>`;
+          body.innerHTML = `<div class="error-banner" role="alert">Could not load ${esc(name)}: ${esc(e.message)}</div>`;
         }
       }
     }

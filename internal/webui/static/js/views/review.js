@@ -147,7 +147,7 @@ export async function runReview(append = false) {
     wireReviewActions(out);
   } catch (e) {
     if (my !== runReview._seq || out !== $('#review-results')) return;
-    out.innerHTML = `<div class="error-banner">レビューキューを読み込めませんでした: ${esc(e.message)}</div>`;
+    out.innerHTML = `<div class="error-banner" role="alert">レビューキューを読み込めませんでした: ${esc(e.message)}</div>`;
   }
 }
 
