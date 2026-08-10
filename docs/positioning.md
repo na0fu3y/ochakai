@@ -32,6 +32,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 | 自分の文書に対する RAG | 他の理由で書かれた文書からの断片 | 単位としてのレビュー済みの主張、provenance、著者の向き | 両立 |
 | AI アナリスト製品に内蔵された検証済みクエリストア(Cortex Analyst の VQR、Genie) | 問い + 検証済み SQL、一つのベンダーのチャットの中で | 他のクライアント、出口 | 重なる、そしてロックインする |
 | FDE 型オントロジー([Palantir Foundry Ontology](https://www.palantir.com/docs/foundry/ontology/overview)) | 組織のデジタルツイン — オブジェクトとリンク、Action と write-back、ライブデータへの接続、プラットフォーム内のガバナンス | 出口(オントロジーはプラットフォームのもの)、FDE 無しの立ち上げ、テナントごとの安価なセルフホスト | 約束は同じ、買い方を拒む — 下記参照 |
+| OSS の「Palantir 代替」([semantica](https://github.com/semantica-agi/semantica)) | 数十ソースの取り込みと自動抽出、ポリグロットなグラフ・ベクトルストア、OWL/SHACL、PROV-O、エージェントの決定の因果記録、セルフホスト | 人の裁定が中核であること(decision の記録は verify ではない)、secret-zero、単一形式の往復、キュレーションが買う小ささ | 約束の語彙は重なる、軸が違う — 下記参照 |
 | グラフ DB ネイティブのオントロジー基盤([NebulaGraph](https://nebula-graph.io/posts/ontology-and-graph-databases-enterprise-ai-from-theory-to-production-reality)、Neo4j + GraphRAG) | 型システムと書き込み時のスキーマ強制、型間のリレーション制約、数十億ノードへのスケール、多段トラバーサルとグラフアルゴリズム | 検証のループが中核であること(あちらでは成熟モデルの最終段)、markdown での出口、キュレーションされた規模が買う単純さ | 規模が前提から違う — 下記参照 |
 | **MCP サーバー付きの markdown vault(Obsidian、Logseq、ノートの git リポジトリ)** | markdown + frontmatter、リンク、ローカルな所有、エージェントが読めること | 生きた状態としての検証、ループ、複数書き手の identity、一台のマシンを越える到達 | 両立 — 下記参照 |
 
@@ -132,7 +133,38 @@ Action の実行基盤が要る、オペレーショナルな write-back が要�
 kinetic の三つ目の要素 — 誰が実行してよいかの Role — や concept 単位の
 権限が要る([0065](design/0065-identity-and-provenance.md) §1)、
 Google Cloud の外で動かす([0003](design/0003-gcp-only.md)) — どれか
-一つでも真なら、FDE 型を買う理由はまだそこにある。
+一つでも真なら、FDE 型を買う理由はまだそこにある。買い方だけを外した
+OSS が同じ約束を名乗る場合は、この節の答えが効かないので次の節が扱う。
+
+### OSS の「Palantir 代替」
+
+*約束の語彙は重なる、軸が違う。* このカテゴリ(代表は
+[semantica](https://github.com/semantica-agi/semantica)、自称 "The Open
+Source Palantir for AI Agents")は上の節の二つの支払いを両方とも外して
+くる — OSS でセルフホスト、FDE の代わりに取り込みと自動抽出のパイプ
+ラインが意味を書き起こす。だから「買い方を拒む」はここでは答えに
+ならず、残る違いは軸そのものである: **あちらは収集し、こちらは検証する。**
+
+あちらは数十ソースを取り込み、プロセス内の ML(NER・関係抽出)で
+グラフを機械が建て、衝突検出や SHACL で後から統治する。ochakai は
+コネクタも取り込みも持たない
+([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1)。
+どちらも「中核に LLM 不要」を名乗るが意味が逆で、あちらは抽出まで機械が
+やるための ML を中に持ち、こちらは LLM(エージェント)が外にいる前提で
+抽出の実装を一行も持たない — 読む・割る・書き起こすのはエージェントの
+仕事で、ochakai は draft を受けて人の裁定を待つ。あちらの Decision
+Intelligence が記録するのはエージェントの決定の因果であり、C7 の中核で
+ある人の verify / reject と trust tier に相当する段は、グラフ DB 節と
+同じく成熟の先にある。姿勢も同じ向きに割れる: ポリグロットなストレージ
+と環境変数に並ぶ資格情報に対して、Google Cloud 一択の secret-zero
+(C2)と OKF 一枚の往復(C3)である。
+
+なお表面を数字で比べるなら、MCP だけは本数で語らないこと — ツール数は
+あちらが多いのに、実測の常駐バイトはツールが書き方を教えるこちらの方が
+重い([0076](design/0076-two-tools-leave-mcp.md) が「代金は本数ではなく
+バイト」と言った当のトレードオフである)。断片化した生データから
+統治されたグラフを機械で建てたいならあちらを使う。人が確かめた少数の
+ナレッジをエージェントに小さな契約で配りたいなら、それがこの枠である。
 
 ### グラフ DB ネイティブのオントロジー基盤
 
