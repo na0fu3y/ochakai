@@ -514,3 +514,47 @@ func TestThePageBranchesOnErrorCodesRatherThanProse(t *testing.T) {
 		}
 	}
 }
+
+// A save from this page is conditional on the version it was opened at.
+//
+// It was not, and that is the failure this guards: the form PUT the
+// document with no precondition, so two curators on the same concept —
+// or one who left a tab open over lunch — silently produced one winner
+// and lost the other's prose. The REST API has had If-Match since design
+// doc 0030 and the CLI sends it; the web UI was the one client that did
+// not, on the surface this product says only a person can operate.
+//
+// The version is the ETag the server sent, carried up by api(). Not the
+// content hash rebuilt from the body — that field is on the wire, but a
+// page that reassembled the validator out of it would be a second
+// opinion about quoting that nothing checks.
+func TestTheEditorSavesAgainstTheVersionItOpened(t *testing.T) {
+	page := string(Index)
+
+	body := section(t, page, "async function api(", "\n}")
+	if !strings.Contains(body, "If-Match") {
+		t.Errorf("api() cannot send a precondition:\n%s", body)
+	}
+
+	if !strings.Contains(body, "Object.defineProperty(data, 'etag'") {
+		t.Errorf("api() drops the version each read saw:\n%s", body)
+	}
+
+	editor := section(t, page, "async function viewEditor(", "\n}")
+	if !strings.Contains(editor, "v.etag") {
+		t.Error("the editor does not read the version it is editing against")
+	}
+
+	// The save call itself. Reading the hash and never sending it would
+	// pass the two checks above and change nothing.
+	if !strings.Contains(page, "ifMatch: version") {
+		t.Error("the save does not carry the version the editor read")
+	}
+
+	// And the refusal is told apart by its code, not by the server's
+	// sentence — 412 answers two conditions here, and the other one
+	// (already_exists, on create) wants a different message.
+	if !strings.Contains(page, "e.code === 'precondition_failed'") {
+		t.Error("a save refused by the precondition is not distinguished from any other failure")
+	}
+}

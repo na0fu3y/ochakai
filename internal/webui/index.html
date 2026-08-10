@@ -832,6 +832,11 @@ async function api(path, opts = {}) {
   if (opts.onlyIfAbsent) {
     init.headers['If-None-Match'] = '*';
   }
+  // The version the caller read, echoed back so the write refuses rather
+  // than overwrites when the concept moved under it (design doc 0030).
+  if (opts.ifMatch) {
+    init.headers['If-Match'] = opts.ifMatch;
+  }
   const res = await fetch(BASE + path, init);
   // A read-only deployment says so on every response (design doc 0040).
   // The page learns it from whatever request it made first and hides the
@@ -856,7 +861,20 @@ async function api(path, opts = {}) {
     err.code = code;
     throw err;
   }
-  return res.status === 204 ? null : res.json();
+  if (res.status === 204) return null;
+  const data = await res.json();
+  // The version this read saw, for a later conditional write. It is the
+  // ETag the server sent rather than the content hash rebuilt out of the
+  // body: the header is the validator, and a page that reassembled it
+  // would be a second opinion about quoting that nothing checks.
+  //
+  // Non-enumerable, so it does not appear in JSON.stringify, in for..in,
+  // or in anything this page sends back.
+  const etag = res.headers.get('ETag');
+  if (etag && data && typeof data === 'object') {
+    Object.defineProperty(data, 'etag', { value: etag });
+  }
+  return data;
 }
 
 function toast(msg) {
@@ -2361,11 +2379,22 @@ async function viewEditor(id, prefix = '') {
   const editing = id !== null;
   let doc = templateDocument('Insight', '');
   let entryID = prefix;
+  // The version this edit is against: the ETag of the read that filled
+  // the textarea, echoed back when it is saved.
+  //
+  // Without it this form was a blind overwrite. Two curators on the same
+  // concept, or one who left a tab open over lunch, and the later save
+  // silently won — losing prose a person wrote, on the surface this
+  // product says only a person can operate. The REST API has had the
+  // precondition since design doc 0030 and the CLI sends it; this page
+  // was the one client that did not.
+  let version = '';
   if (editing) {
     try {
       const v = await api(conceptURL(id));
       doc = v.document || '';
       entryID = v.id;
+      version = v.etag || '';
     } catch (e) {
       view.innerHTML = `<div class="error-banner">${esc(id)} を読み込めませんでした: ${esc(e.message)}</div>`;
       return;
@@ -2462,7 +2491,7 @@ async function viewEditor(id, prefix = '') {
     }
     try {
       const saved = await api(conceptURL(entryId), {
-        method: 'PUT', doc: document_, onlyIfAbsent: !editing,
+        method: 'PUT', doc: document_, onlyIfAbsent: !editing, ifMatch: version,
       });
       dirty = false;
       toast(editing ? 'Saved.' : 'Created.');
@@ -2480,6 +2509,18 @@ async function viewEditor(id, prefix = '') {
       const dupLink = !editing && e.code === 'already_exists'
         ? ` — <a href="#/k/${idPath(entryId)}">view the existing ${esc(entryId)}</a> (edit it, or pick another ID)`
         : '';
+      // The precondition failed: somebody else saved while this form was
+      // open. Say that rather than showing the server's sentence about
+      // ETags, and do not offer to retry — the answer is to read what
+      // they wrote, because the text in this box is now the older of two
+      // edits and only the person holding it knows which parts survive.
+      if (editing && e.code === 'precondition_failed') {
+        errBox.innerHTML = `<div class="error-banner">この concept は、この画面を開いてから誰かが保存しました。
+          上書きを避けるため保存していません — 書いたものはこの欄に残っています。
+          <a href="#/k/${idPath(entryId)}" target="_blank" rel="noopener">新しい版を別タブで開いて</a>、
+          残すべきところを移してから、もう一度この画面を開いてください。</div>`;
+        return;
+      }
       errBox.innerHTML = `<div class="error-banner">${editing ? 'Save' : 'Create'} failed: ${esc(e.message)}${dupLink}</div>`;
     }
   });

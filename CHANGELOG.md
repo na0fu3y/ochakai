@@ -280,6 +280,21 @@ last entry.
 
 ### Fixed
 
+- **The web UI's editor overwrote whatever was saved while it was open.**
+  It PUT the document with no precondition, so two curators on the same
+  concept — or one who left a tab open over lunch — produced one winner
+  and silently lost the other's work. The REST API has had `If-Match`
+  since [0030](docs/design/0030-optimistic-locking.md) and the CLI sends
+  it; this page was the one client that did not — on the surface this
+  product says only a person can operate, losing the one thing an agent
+  cannot redraft. The editor saves against the version it opened at now,
+  and a save that would have overwritten stops with what happened and the
+  text still in the box: the answer is to read what the other person
+  wrote, not to retry. The version is the ETag the read carried, not the
+  content hash rebuilt from the body — the header is the validator, and a
+  page reassembling it would be a second opinion about quoting that
+  nothing checks.
+
 - **Archiving a bundle that holds files, on a deployment with no bucket,
   answered `internal error`.** The store refuses that archive on purpose
   — one that silently omitted the files would be a backup missing what it
