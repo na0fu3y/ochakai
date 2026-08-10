@@ -391,6 +391,22 @@ last entry.
 
 ### Changed
 
+- **The web UI is ES modules, and its tests run.** The page was one 2,438
+  line file, and its thirteen tests were greps over that file as a
+  string — nothing asserted what any of its code returned, on the surface
+  where a person decides whether to trust a concept. It is `index.html`,
+  `app.css` and eighteen modules now, cut by direction of dependency so
+  that the ones that never touch the document — escaping, formatting, the
+  markdown renderer, the vocabularies, the document edits — can be
+  imported and held to examples. **Nothing about how it is built or
+  served changes**: no build step, no framework, no CDN, no npm
+  dependency, and the same two commands serve it. The split found four
+  functions that were declared and never called, which are gone. The
+  assets carry an ETag and `Cache-Control: no-cache`, so a load costs
+  twenty 304s rather than twenty downloads
+  ([#536](https://github.com/na0fu3y/ochakai/issues/536), design doc
+  0092).
+
 - **BREAKING (stored shape): a file's vector is keyed by its path, and
   the old vectors are dropped at startup. Run `ochakai reembed` once
   after upgrading.** The key was `(concept id, filename)` — the shape

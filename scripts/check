@@ -1,8 +1,9 @@
 #!/bin/sh
 # check: run the checks CI runs, in the order CI runs them.
 #
-#   scripts/check          everything (core, lint, vuln)
+#   scripts/check          everything (core, ui, lint, vuln)
 #   scripts/check core     gofmt, go vet, go test -race, CGO_ENABLED=0 build
+#   scripts/check ui       the web UI's own tests (node --test)
 #   scripts/check lint     golangci-lint
 #   scripts/check vuln     govulncheck
 #   scripts/check --db …   run a throwaway PostgreSQL for the store tests
@@ -25,12 +26,13 @@ cd "$(git rev-parse --show-toplevel)"
 
 want_db=no
 skipped_store=no
+skipped_ui=no
 db_note=""
 steps=""
 for arg in "$@"; do
 	case $arg in
 	--db) want_db=yes ;;
-	core | lint | vuln) steps="$steps $arg" ;;
+	core | ui | lint | vuln) steps="$steps $arg" ;;
 	-h | --help)
 		awk 'NR > 1 && !/^#/ {exit} NR > 1 {sub(/^# ?/, ""); print}' "$0"
 		exit 0
@@ -41,7 +43,7 @@ for arg in "$@"; do
 		;;
 	esac
 done
-[ -n "$steps" ] || steps="core lint vuln"
+[ -n "$steps" ] || steps="core ui lint vuln"
 
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*" >&2; }
 
@@ -203,6 +205,24 @@ run_core() {
 	CGO_ENABLED=0 go build -trimpath ./...
 }
 
+# The web UI is ES modules now, and the ones that are pure — the markdown
+# renderer, the formatters, the document edits — are held to examples by
+# Node's own test runner. No package.json and no node_modules: the point
+# of a page with no build step is that its tests need no build either.
+#
+# The browser smoke beside them (internal/webui/jstest/smoke.mjs) is not
+# run here, because it needs a database, a server and a browser; CI's
+# `webui` job stands those up and runs it.
+run_ui() {
+	if ! command -v node >/dev/null 2>&1; then
+		step "web UI tests skipped (no node; CI runs them)"
+		skipped_ui=yes
+		return
+	fi
+	step "node --test (web UI)"
+	node --test "internal/webui/jstest/*.test.js"
+}
+
 run_lint() {
 	v=$(linter_version)
 	case $v in
@@ -230,6 +250,7 @@ if [ "$want_db" = yes ]; then start_db; fi
 for s in $steps; do
 	case $s in
 	core) run_core ;;
+	ui) run_ui ;;
 	lint) run_lint ;;
 	vuln) run_vuln ;;
 	esac
@@ -239,10 +260,13 @@ done
 # against a database while a local run without --db does not. "ok" alone
 # would let a run that never touched the store read as the run CI will do
 # — and so would a run against a PostgreSQL that is not the one CI runs.
+note=""
 if [ "$skipped_store" = yes ]; then
-	step "ok — store tests skipped (rerun with --db; CI runs them)"
+	note=" — store tests skipped (rerun with --db; CI runs them)"
 elif [ -n "$db_note" ]; then
-	step "ok — store tests ran against $db_note"
-else
-	step "ok"
+	note=" — store tests ran against $db_note"
 fi
+if [ "$skipped_ui" = yes ]; then
+	note="$note${note:+;} — web UI tests skipped (install node; CI runs them)"
+fi
+step "ok$note"

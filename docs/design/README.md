@@ -38,7 +38,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md) |
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂) |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md) |
-| Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5 |
+| Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂) |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)** |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
@@ -358,6 +358,22 @@ JSON キーと MCP ツール名だけである。`change` の語彙に残って�
   `ochakai serve-ui` の二経路で配る — 危険な組み合わせはコマンドを分けること
   で書けなくなる。編集は正準 OKF 文書のテキスト編集一本で、行エディタを
   失うことは値引きではなく支払いである。
+- [0092 ページはモジュールになる — テストできるように](0092-the-page-is-modules-so-it-can-be-tested.md)
+  — **Accepted**。0072 §1 を改訂する。「自己完結の一枚」はビルドステップを
+  持たないことの言い換えだった — **そこは変わらない**(ビルドなし・
+  フレームワークなし・CDN なし・ページは認証を知らない、の四つはそのまま)。
+  変わったのは 2,438 行が**一つの名前空間**に載っていたことで、境界が無い
+  ところにはテストが書けない。分割して最初に分かったのは、**四つの関数が
+  宣言されたきり一度も呼ばれていなかった**ことである。切り方は面ではなく
+  依存の向きで決めた — 五つのモジュールは document に触らないので Node が
+  import でき、それが実行されるテストの前提になる。**バンドラも
+  フレームワークも npm 依存も入れない**: テストランナは Node に付いてくる
+  ものを使い、ブラウザ側も CDP を標準 `WebSocket` で叩く一ファイルにした。
+  一枚が二十個になったので静的資産は**一式で一つの ETag** と `no-cache` を
+  持つ(`max-age` は先に進んだ API に古いモジュールを出す)。テストは
+  「HTML 文字列の grep が 13 本」から三層になり、Go に残るのは Go と JS に
+  またがる不変とページ全体についての主張だけ。CSP・a11y・日本語切り替えは
+  **可能になっただけで、決めていない**。
 - [0006 Web UI の二つの配信経路](0006-web-ui-serving.md) — **Superseded by 0072**。
 - [0014 フォルダブラウズ](0014-folder-browse.md) — **Superseded by 0046**。
   prefix によるツリー閲覧。

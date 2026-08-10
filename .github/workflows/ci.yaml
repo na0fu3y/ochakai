@@ -105,6 +105,64 @@ jobs:
             ~/go/pkg/mod
             ~/.cache/go-build
           key: lint-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+  # The web UI's own tests. The unit half needs nothing but Node; the
+  # browser smoke needs a page to load, which means a database, a server
+  # with something in it, and the `ochakai ui` proxy in front — so the
+  # job stands the whole thing up rather than mocking a knowledge base
+  # the page would then be tested against instead of the real one.
+  webui:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: t
+          POSTGRES_PASSWORD: t
+          POSTGRES_DB: t
+        ports: ["55433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U t"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false # same shared-key problem as in the test job
+      # The unit half first: it is the part that fails for a reason in
+      # the code rather than a reason in the plumbing.
+      - run: scripts/check ui
+      - run: go build -o /tmp/ochakai ./cmd/ochakai
+      # dev mode because the proxy has no Google identity here; the page
+      # under test does not know the difference (design doc 0006).
+      - name: stand up ochakai and the UI proxy
+        env:
+          OCHAKAI_DATABASE_URL: postgres://t:t@localhost:55433/t?sslmode=disable
+          OCHAKAI_EMBEDDINGS: "off"
+          OCHAKAI_MODE: dev
+        run: |
+          /tmp/ochakai serve &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8080/health > /dev/null && break
+            sleep 1
+          done
+          /tmp/ochakai import examples/demo --url http://127.0.0.1:8080
+          OCHAKAI_URL=http://127.0.0.1:8080 /tmp/ochakai ui --port 8098 &
+          for i in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8098/ > /dev/null && exit 0
+            sleep 1
+          done
+          echo "the UI proxy never answered" >&2
+          exit 1
+      # Chrome is preinstalled on the runner image. REQUIRED turns the
+      # smoke's "no browser / no server" skip into a failure: here, a skip
+      # is a green run that tested nothing.
+      - run: node internal/webui/jstest/smoke.mjs http://127.0.0.1:8098
+        env:
+          OCHAKAI_SMOKE_REQUIRED: "1"
+
   govulncheck:
     runs-on: ubuntu-latest
     steps:

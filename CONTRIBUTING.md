@@ -106,6 +106,41 @@ installed beside it, and deletes it on exit. That is a real run of the
 store tests but not CI's, so the script's closing line names which
 database it used.
 
+### The web UI's tests
+
+`scripts/check ui` runs `node --test` over `internal/webui/jstest`. Those
+tests import the page's ES modules directly, so what they assert is what
+a function returns — the markdown renderer, the formatters, and the
+document edits, which are the modules that touch what somebody wrote.
+There is no `package.json` and no `node_modules`: the runner ships with
+Node, and a page with no build step should not need one to be tested
+(design doc 0092 §2). Without Node the step says so and skips; CI runs
+it.
+
+The browser smoke beside them is not part of that step, because it needs
+a page to load:
+
+```sh
+ochakai serve &                                     # against a database
+ochakai import examples/demo
+OCHAKAI_URL=http://127.0.0.1:8080 ochakai ui &
+node internal/webui/jstest/smoke.mjs http://127.0.0.1:8098
+```
+
+Point it at a database holding `examples/demo` and **nothing else**. A
+development database accumulates concepts at the root from the store
+tests, and the sidebar renders those as entries — which is how the first
+version of this file came to assert on a selector that a fresh import
+could never match, and passed locally while failing in CI. `createdb`
+first if the one you have has been used for anything.
+
+It drives the Chromium it finds (`$CHROME` overrides the search) over the
+DevTools Protocol, walks every route, and fails on any console error —
+which is what a module that failed to load looks like, since the panel it
+would have drawn is simply blank. A missing browser or an unreachable UI
+is a skip locally and a failure under `OCHAKAI_SMOKE_REQUIRED=1`, which
+is how CI runs it: a skip there would be a green run that tested nothing.
+
 ## Working with Claude Code
 
 The repository checks in a `.claude/settings.json` with **hooks only**.

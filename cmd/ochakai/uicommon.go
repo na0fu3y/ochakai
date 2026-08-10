@@ -6,27 +6,84 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"sync"
 
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/webui"
 )
 
-// webUIMux serves the embedded page at / and routes /api/v1 and /mcp
-// through proxy. Callers add their own extras (serve-ui's /health) and
-// wrapping (ui's localBrowserGuard).
+// webUIMux serves the embedded page and its modules at /, and routes
+// /api/v1 and /mcp through proxy. Callers add their own extras
+// (serve-ui's /health) and wrapping (ui's localBrowserGuard).
+//
+// The two API patterns are more specific than "/", so they win the
+// ServeMux match however the page's own asset paths are spelled.
 func webUIMux(proxy http.Handler) *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = w.Write(webui.Index)
-	})
+	// No method on the catch-all: "GET /" and "/api/v1/" are ambiguous to
+	// ServeMux — one is more specific in its method and the other in its
+	// path — and it says so by panicking at registration. The method
+	// check moves inside the handler instead.
+	mux.Handle("/", assets(webui.Files))
 	mux.Handle("/api/v1/", proxy)
 	mux.Handle("/mcp", proxy)
 	return mux
 }
+
+// assets serves the embedded UI, read-only and revalidatable.
+//
+// The ETag is there because the page is a page plus a stylesheet plus
+// eighteen modules now: an embedded file carries no modification time, so
+// without a validator the browser has nothing to revalidate against and
+// every load re-downloads all twenty in full.
+//
+// no-cache, not no-store and not a max-age: the browser keeps its copy
+// and asks whether it is still good, so the steady state costs twenty
+// 304s and an upgrade is picked up on the first load after it. A max-age
+// would serve a module out of cache against an API that has moved on,
+// which is the one failure this page cannot show anybody.
+func assets(files fs.FS) http.Handler {
+	srv := http.FileServerFS(files)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("ETag", assetTag())
+		w.Header().Set("Cache-Control", "no-cache")
+		srv.ServeHTTP(w, r)
+	})
+}
+
+// assetTag is one tag for the whole UI: the hash of every embedded file,
+// so any edit to any of them invalidates all of them. One tag rather
+// than one per file because they ship as a set and a page that reloaded
+// half of them is not a state worth being able to reach — and because
+// the build identity does not work here: in-tree builds are all "dev",
+// which would pin a browser to whichever version it saw first.
+var assetTag = sync.OnceValue(func() string {
+	sum := sha256.New()
+	_ = fs.WalkDir(webui.Files, ".", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := fs.ReadFile(webui.Files, p)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(sum, "%s\x00%x\x00", p, sha256.Sum256(b))
+		return nil
+	})
+	return `"` + hex.EncodeToString(sum.Sum(nil)[:16]) + `"`
+})
 
 // newCredentialProxy reverse-proxies to target, substituting the proxy's
 // own identity for whatever the browser sent. Both credential headers
