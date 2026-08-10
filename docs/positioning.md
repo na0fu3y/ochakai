@@ -282,10 +282,14 @@ vault が持たないのは、ファイル形式でないすべてである:
 - **インフラ。** vault を立てるのはただである。ochakai は Google Cloud
   プロジェクトと Postgres を要る — 月 $10 ほどだが、ゼロではないし、
   5 分でもない。
-- **Google Cloud のみ。** C2 の secret-zero という性質は Cloud Run IAM
-  と Cloud SQL IAM で買われており、他所で本番を動かすサポートされた方法
-  は無い([0003](design/0003-gcp-only.md))。多くのチームにとってこれは
-  失格要件であり、そしてそれは欠落ではなく決定である。
+- **Google Cloud 推奨、外は認証だけ。** C2 の secret-zero という性質は
+  Cloud Run IAM と Cloud SQL IAM で無設定に買われている
+  ([0003](design/0003-gcp-only.md))。外で動かす道は認証には開いた —
+  OIDC 発行者を名指せば ochakai が公開鍵で自分で検証し、secret は
+  増えない([0086](design/0086-a-second-way-to-say-who-is-calling.md))
+  — が、埋め込みは Vertex AI か無いかで検索は lexical のみになり、
+  データベースの資格情報は運用者の仕事に戻る。失格要件が一つ消えた
+  だけで、Google Cloud の外が快適になったわけではない。
 - **認可が無い。** デプロイに到達できる者は、すべてを読み書きできる
   ([0065](design/0065-identity-and-provenance.md) §1)。concept ごとの
   権限が要るなら、これは間違った道具である。
