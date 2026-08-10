@@ -10,7 +10,7 @@ per query somebody keeps running. Pipe it into `ochakai import -`.
          FROM `region-us`.INFORMATION_SCHEMA.JOBS
         WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
           AND job_type = "QUERY" AND state = "DONE" AND error_result IS NULL' \\
-      | ./draft-from-query-history.py --project my-project \\
+      | ./draft-from-query-history.py \\
       | ochakai import -
 
 **It does not connect to anything.** You run the query, with your own
@@ -234,7 +234,6 @@ def main() -> int:
     p.add_argument("--limit", type=int, default=50,
                    help="most-run first, at most this many (default: %(default)s). "
                         "A review queue nobody can finish is one nobody starts")
-    p.add_argument("--project", default="", help="named in the drafts' provenance")
     args = p.parse_args()
 
     rows = rows_from(sys.stdin)
@@ -257,12 +256,14 @@ def main() -> int:
             tar.addfile(info, io.BytesIO(data))
     sys.stdout.buffer.write(buf.getvalue())
 
-    print(
-        f"read {len(rows)} jobs, {len(cands)} distinct queries, "
-        f"{len(kept)} drafted (>= {args.min_runs} runs); "
-        "pipe into `ochakai import -` and rule on them in the review queue",
-        file=sys.stderr,
-    )
+    # stdout is the bundle, so the receipt the entry's `executor.receipt`
+    # declares goes to stderr instead — the one place left for it, and
+    # exactly the fields declared, nothing more (`run-a-python-job.md`).
+    print(json.dumps({
+        "jobs_read": len(rows),
+        "distinct_queries": len(cands),
+        "drafted": len(kept),
+    }), file=sys.stderr)
     return 0
 
 

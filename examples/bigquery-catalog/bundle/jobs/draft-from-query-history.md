@@ -11,7 +11,6 @@ parameters:
   - { name: min_runs, type: integer }
   - { name: min_users, type: integer }
   - { name: limit, type: integer }
-  - { name: project, type: string }
 computation: /jobs/draft-from-query-history/draft-from-query-history.py
 executor:
   resource: /skills/run-a-python-job.md
