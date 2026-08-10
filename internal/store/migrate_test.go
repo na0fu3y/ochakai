@@ -1,6 +1,51 @@
 package store
 
-import "testing"
+import (
+	"regexp"
+	"strconv"
+	"testing"
+)
+
+// migrationNumberGaps records numbers deliberately skipped in
+// internal/store/migrations, so a genuinely missing or duplicated file
+// still fails TestMigrationsAreSequentiallyNumbered instead of passing
+// silently.
+var migrationNumberGaps = map[int]string{
+	6: "0005_outcomes.sql and 0007_blob_external.sql landed in the same commit; 0006 never existed",
+}
+
+// Migrate (migrate.go) applies migrations in filename order without
+// checking that the sequence is contiguous or free of duplicates — a
+// renamed or accidentally reused number would only surface as a subtle
+// ordering bug. This test is the check.
+func TestMigrationsAreSequentiallyNumbered(t *testing.T) {
+	entries, err := migrationFS.ReadDir("migrations")
+	if err != nil {
+		t.Fatal(err)
+	}
+	re := regexp.MustCompile(`^(\d{4})_`)
+	want := 1
+	for _, e := range entries {
+		m := re.FindStringSubmatch(e.Name())
+		if m == nil {
+			t.Fatalf("migration file %q does not start with a four-digit number", e.Name())
+		}
+		n, err := strconv.Atoi(m[1])
+		if err != nil {
+			t.Fatalf("migration file %q: %v", e.Name(), err)
+		}
+		for want < n {
+			if _, ok := migrationNumberGaps[want]; !ok {
+				t.Errorf("migration number %04d is missing and not recorded in migrationNumberGaps", want)
+			}
+			want++
+		}
+		if n != want {
+			t.Errorf("migration file %q duplicates or is out of order for number %04d", e.Name(), n)
+		}
+		want++
+	}
+}
 
 // Migration 0026 rewrites the ochakai:// links out of the bodies that
 // still carry them (design doc 0046 §3.6). It has to read where a bare

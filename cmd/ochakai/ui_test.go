@@ -75,7 +75,7 @@ func TestTheUIPageCarriesASecurityPolicy(t *testing.T) {
 				}
 			}
 			// The one that would undo the rest. A page with no inline
-			// script has no reason to allow one (design doc 0092).
+			// script has no reason to allow one (design doc 0094).
 			if strings.Contains(csp, "script-src 'self' 'unsafe-inline'") ||
 				strings.Contains(csp, "script-src 'unsafe-inline'") {
 				t.Errorf("script-src allows inline again, which is what the policy is for:\n%s", csp)

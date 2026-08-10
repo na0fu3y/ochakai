@@ -66,9 +66,10 @@ func assets(files fs.FS) http.Handler {
 }
 
 // contentSecurityPolicy is what the page is allowed to do. It became
-// writable when the page stopped carrying an inline script (design doc
-// 0092): `script-src 'self'` with nothing inline is the whole point —
-// an injection that reaches the DOM cannot become code.
+// writable when the page stopped carrying an inline script, and design
+// doc 0094 is what decided to write it: `script-src 'self'` with nothing
+// inline is the whole point — an injection that reaches the DOM cannot
+// become code.
 //
 // The page renders a concept's body, which is somebody else's text, and
 // every value it interpolates goes through one escape function. This is
