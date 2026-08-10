@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 	"unicode"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -315,5 +316,116 @@ func TestUsageFeedRanksByReadsNotByListings(t *testing.T) {
 	if hits[0].ID != read {
 		t.Errorf("the feed puts %q first; want %q — the one that was read, not the one "+
 			"the ranker listed twice as often", hits[0].ID, read)
+	}
+}
+
+// The feeds rank on what happened lately, not on what a concept was once
+// worth.
+//
+// The counters in knowledge_usage only ever grow, so before this a
+// concept that was read a hundred times in a knowledge base's first month
+// sat at the top of the promotion queue for as long as the deployment
+// lived — and a queue whose job is "look at this next" was answering
+// "look at what you already looked at". The same shape put a long-ago
+// repeat offender above the concept failing this week.
+//
+// Backdated by writing knowledge_event directly, because that is the one
+// thing a test cannot ask the product to do: the running totals and the
+// raw rows are written together, and only the raw rows carry a time.
+func TestTheFeedsRankOnTheRecentWindowIntegration(t *testing.T) {
+	ctx := context.Background()
+	s := newSearchStore(t, ctx)
+	run := testdb.Unique(t, "decay")
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+
+	old, now := run+"/once-hot", run+"/hot-now"
+	for _, id := range []string{old, now} {
+		if err := s.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: id,
+			Status: domain.StatusDraft, CreatedBy: actor,
+		}, false); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+	}
+	// Twenty reads and four failures, all older than the window; against
+	// three reads and one failure inside it. Lifetime totals say the old
+	// one wins by five to one.
+	backdate := fmt.Sprintf("%d days", domain.RecentUsageDays+10)
+	for _, e := range []struct {
+		event string
+		n     int
+	}{{domain.EventFetched, 20}, {domain.EventFailed, 4}} {
+		for range e.n {
+			if _, err := s.pool.Exec(ctx,
+				`INSERT INTO knowledge_event (knowledge_id, event, actor_kind, actor_name, at)
+				 VALUES ($1, $2, 'human', 'test', now() - $3::interval)`,
+				old, e.event, backdate); err != nil {
+				t.Fatal(err)
+			}
+		}
+		// The running totals are what a real write would have left behind.
+		if _, err := s.pool.Exec(ctx,
+			`INSERT INTO knowledge_usage (knowledge_id, event, count, last_at)
+			 VALUES ($1, $2, $3, now() - $4::interval)
+			 ON CONFLICT (knowledge_id, event) DO UPDATE SET count = knowledge_usage.count + $3`,
+			old, e.event, e.n, backdate); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for range 3 {
+		if err := s.RecordEvents(ctx, domain.EventFetched, actor, []string{now}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.RecordEvents(ctx, domain.EventFailed, actor, []string{now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.FlushUsage(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	f := Filter{Prefixes: []string{run}}
+	usage, err := s.ListByUsage(ctx, f, nil, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(usage) != 2 {
+		t.Fatalf("the usage feed held %d concepts, want the two this test wrote", len(usage))
+	}
+	if usage[0].ID != now {
+		t.Errorf("the promotion queue leads with %s; 20 reads from before the window "+
+			"must not outrank 3 inside it", usage[0].ID)
+	}
+	// The number that explains the order travels with it, and says its
+	// window: an order by a count nobody can see reads as a broken sort.
+	if got := usage[0].Usage.Recent; got.Fetches != 3 || got.Days != domain.RecentUsageDays {
+		t.Errorf("the leading hit carries recent = %+v, want 3 fetches over %d days",
+			got, domain.RecentUsageDays)
+	}
+	if got := usage[1].Usage; got.Recent.Fetches != 0 || got.Fetches != 20 {
+		t.Errorf("the aged concept carries %+v, want 0 recent against 20 lifetime", got)
+	}
+
+	failed, err := s.ListByFailed(ctx, f, nil, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(failed) != 2 {
+		t.Fatalf("the re-verification feed held %d concepts, want two", len(failed))
+	}
+	if failed[0].ID != now {
+		t.Errorf("the re-verification feed leads with %s; four failures from before the "+
+			"window must not outrank one inside it", failed[0].ID)
+	}
+}
+
+// The window is counted over raw events, and those are pruned. A window
+// longer than the retention would read like a period of time and mean
+// "as much as we still have".
+func TestTheRecentWindowFitsInsideRetention(t *testing.T) {
+	window := time.Duration(domain.RecentUsageDays) * 24 * time.Hour
+	if window > eventRetention {
+		t.Errorf("the recent window is %s and raw events are kept %s: the counts would be "+
+			"silently short of what they claim", window, eventRetention)
 	}
 }

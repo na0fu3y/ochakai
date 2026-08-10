@@ -9,7 +9,8 @@ Status: Accepted(2026-08-02)。**検証ループと利用測定の現行ドキ�
 [0059](0059-a-queue-is-named-by-its-listing.md) を Superseded にする。
 **六つが決めたことは何一つ変えない**(§0)。裁定を下す面と、一覧が
 ページングして順位がしない規則は同じ統合の片割れである
-[0068](0068-how-a-face-is-added-and-removed.md) が持つ
+[0068](0068-how-a-face-is-added-and-removed.md) が持つ。二つのフィードが
+生涯累積ではなく直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)
 Date: 2026-08-02
 
 ## 0. この記録が決めたこと

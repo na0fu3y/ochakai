@@ -2787,7 +2787,29 @@ components:
         worked: { type: integer, description: Outcome reports saying the concept led to a correct result. }
         failed: { type: integer, description: Outcome reports saying the concept led to a wrong or unusable result. }
         last_used_at: { type: string, format: date-time }
-      required: [search_hits, fetches, worked, failed]
+        recent:
+          type: object
+          description: >
+            The same activity inside a fixed recent window, and what the
+            `usage` and `failed` listings are ordered by (design doc
+            0090). The counters above are lifetime and never decay, so
+            ranking on them left a concept that was read a lot in a
+            knowledge base's first month at the top of the promotion
+            queue for as long as the deployment lived, and a long-ago
+            repeat offender above the concept failing this week.
+
+
+            The window travels with the counts because a count whose
+            period is implicit is one a reader cannot check. Two counts
+            and not four: `search_hits` is not demand — one is recorded
+            for every id in every result set — and nothing ranks on
+            `worked`.
+          properties:
+            days: { type: integer, description: How far back the two counts below reach. }
+            fetches: { type: integer, description: Times the concept's body was delivered in the window. }
+            failed: { type: integer, description: Outcome reports of failure in the window. }
+          required: [days, fetches, failed]
+      required: [search_hits, fetches, worked, failed, recent]
     Stats:
       description: >
         The instance-level view of the loop (design doc 0069 §5). State

@@ -323,5 +323,21 @@ func (s *Store) Usage(ctx context.Context, id string) (*domain.Usage, error) {
 			u.LastUsedAt = &t
 		}
 	}
-	return u, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// The same window the feeds rank in, on the same shape, so `recent`
+	// never means one thing in a listing and another here. A concept read
+	// through this endpoint is usually one a curator is looking at
+	// *because* a feed put it in front of them.
+	u.Recent.Days = domain.RecentUsageDays
+	if err := s.pool.QueryRow(ctx, `
+		SELECT count(*) FILTER (WHERE event = 'fetched'),
+		       count(*) FILTER (WHERE event = 'failed')
+		  FROM knowledge_event
+		 WHERE knowledge_id = $1 AND at >= now() - $2::interval`,
+		id, recentWindow()).Scan(&u.Recent.Fetches, &u.Recent.Failed); err != nil {
+		return nil, err
+	}
+	return u, nil
 }

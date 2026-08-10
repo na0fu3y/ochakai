@@ -330,13 +330,14 @@ with --cursor reads the next one.
 
 The feed is the argument; it sets the order and the first column:
 
-  usage         most fetches first, never-read oldest first at the
+  usage         most-read first over the last 90 days, then by
+                lifetime reads, then never-read oldest first at the
                 bottom. With --status draft, the draft review feed
   verified_at   oldest verification first, never-verified last — the
                 canary feed
   failed        unanswered failure reports (report_outcome failed),
-                worst first — the re-verification feed, which
-                `ochakai verify` empties
+                worst first over the last 90 days — the re-verification
+                feed, which `ochakai verify` empties
   stale_after   past the expiry their author declared, most overdue
                 first. Verifying does not empty this one: the date is
                 the writer's declaration, so clearing it means editing

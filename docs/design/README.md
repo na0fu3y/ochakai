@@ -39,7 +39,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂) |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 6 本とその境界は [0076](0076-two-tools-leave-mcp.md)。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5 |
-| 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md) |
+| 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)** |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
@@ -478,6 +478,20 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   しか空かない。利用測定は読み取りパスに触れず best-effort、ヒット 0 の検索は
   行として残り、`GET /api/v1/stats` がインスタンスを一回で答える
   (`prefix` はミス以外のすべてを絞る)。押すのは数であって通知ではない。
+  利用測定は [0090](0090-a-queue-ranks-on-what-happened-lately.md) が改訂 —
+  カウンタは残り、フィードの並びだけが窓の中に移る。
+- [0090 キューは、最近あったことで並ぶ](0090-a-queue-ranks-on-what-happened-lately.md)
+  — **Accepted**。0069 の利用測定を改訂する。利用カウンタは running total で
+  **減らない**ので、そこにキューの並びを乗せると、ベースの最初の一か月に読まれた
+  concept がデプロイの生きているあいだずっとプロモーションキューの先頭に居て、
+  「次はこれを見よ」が「あなたが既に見たものを見よ」になる。`sort=usage` と
+  `sort=failed` は**直近 90 日の数**で並び、生涯累積は残って同点を割る。
+  数はワイヤに出て(`usage.recent`)、**窓を自分で運ぶ** — 期間の暗黙な数は
+  読者が検算できない(0089 と同じ規則)。窓は**設定ではなく定数**で、生イベント
+  の保持 180 日の内側でなければならない(保持より長い窓は「まだ残っている分
+  だけ」を意味する)。保存された減衰列は取らない — 定期実行という可動部を
+  この製品は持たない。`search_hits` に窓を掛けないのは、それが需要ではない
+  から(ランカーの最近の出力が最近の需要になるだけ)。
 - [0050 一覧はカーソルでページングし、順位はしない](0050-listings-page-rankings-do-not.md) — **Superseded by 0068**。
 - [0062 一覧は検索ではない](0062-a-listing-is-not-a-search.md) — **Superseded by 0068**。
 - [0056 一つの問いに一つのコマンド](0056-one-question-one-command.md) — **Superseded by 0068**。

@@ -352,6 +352,24 @@ last entry.
 
 ### Changed
 
+- **The promotion queue and the re-verification feed rank on the last 90
+  days.** The usage counters are running totals and never decay, so a
+  concept read a lot in a knowledge base's first month sat at the top of
+  `sort=usage` for as long as the deployment lived — a queue whose job is
+  *"look at this next"* answering *"look at what you already looked at"* —
+  and on `sort=failed` a long-ago repeat offender outranked the concept
+  failing this week, on evidence the instance had already pruned. Both
+  feeds order by the window now, with the lifetime totals kept as the
+  tie-break, and the counts reach the wire as `usage.recent` carrying
+  their own `days` so an order nobody can see is not mistaken for a
+  broken sort. The window is a constant, not a setting, and has to fit
+  inside the raw events' retention
+  ([0090](docs/design/0090-a-queue-ranks-on-what-happened-lately.md)).
+  `ochakai usage` prints three more lines, the review cards read
+  `fetched 20 (3 in 90d)`, and MCP does not carry it — ordering a queue
+  is the curator's job. Cursors from before this release are refused with
+  a sentence, as a cursor whose listing changed shape always has been.
+
 - **BREAKING (MCP): the `trust` filter on `search_concepts` and
   `get_context` is now `trusts`.** This surface takes its filters as
   arrays of values, and the other four say so in their name — `types`,

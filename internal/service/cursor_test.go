@@ -119,13 +119,17 @@ func TestCursorKeysMatchTheOrder(t *testing.T) {
 		// search_hits and fetches differ on purpose: the usage feed ranks
 		// by reads, and a cursor built from the listings it was ranked by
 		// until now would pass every other assertion here.
-		Usage: &domain.Usage{SearchHits: 74, Fetches: 41, Worked: 2, Failed: 3},
+		// The recent counts differ from the lifetime ones for the same
+		// reason: the feeds rank on the window and break ties on the
+		// total, so a cursor built from either alone passes half of this.
+		Usage: &domain.Usage{SearchHits: 74, Fetches: 41, Worked: 2, Failed: 3,
+			Recent: domain.RecentUsage{Days: domain.RecentUsageDays, Fetches: 9, Failed: 1}},
 	}
 	for sort, want := range map[string][]string{
 		"verified_at": {"2026-07-14T02:33:41.019778Z"},
 		"stale_after": {"2026-12-31"},
-		"usage":       {"41", "2026-07-14T02:33:41.019778Z"},
-		"failed":      {"3", "2", "2026-07-14T02:33:41.019778Z"},
+		"usage":       {"9", "41", "2026-07-14T02:33:41.019778Z"},
+		"failed":      {"1", "3", "2", "2026-07-14T02:33:41.019778Z"},
 		"source":      {},
 	} {
 		keys := cursorKeys(sort, hit)
@@ -151,7 +155,7 @@ func TestCursorKeysMatchTheOrder(t *testing.T) {
 	}
 	// A listing whose hits carry no usage object at all must still produce
 	// a position rather than panic: score-0 listings share one wire shape.
-	if k := cursorKeys("usage", domain.SearchHit{Summary: domain.Summary{ID: "x"}}); len(k) != 2 || *k[0] != "0" {
+	if k := cursorKeys("usage", domain.SearchHit{Summary: domain.Summary{ID: "x"}}); len(k) != 3 || *k[0] != "0" {
 		t.Errorf("a hit with no usage totals = %v, want a zero position", k)
 	}
 }

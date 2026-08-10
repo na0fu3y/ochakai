@@ -122,10 +122,14 @@ func cursorKeys(sort string, h domain.SearchHit) []*string {
 	case "stale_after":
 		return []*string{cursorText(h.StaleAfter)}
 	case "usage":
-		return []*string{cursorCount(usageOf(h).Fetches), cursorTime(&h.CreatedAt)}
+		u := usageOf(h)
+		return []*string{cursorCount(u.Recent.Fetches), cursorCount(u.Fetches), cursorTime(&h.CreatedAt)}
 	case "failed":
 		u := usageOf(h)
-		return []*string{cursorCount(u.Failed), cursorCount(u.Worked), cursorTime(h.VerifiedAt)}
+		return []*string{
+			cursorCount(u.Recent.Failed), cursorCount(u.Failed),
+			cursorCount(u.Worked), cursorTime(h.VerifiedAt),
+		}
 	default: // the reverse lookups order by id alone
 		return nil
 	}
