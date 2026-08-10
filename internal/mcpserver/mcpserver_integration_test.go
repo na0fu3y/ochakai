@@ -191,7 +191,7 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 	// packages running beside it, and a live entry called 売上 would
 	// crowd their search assertions while this one runs.
 	title := "mcp put " + id
-	put(t, "---\ntype: Metric\ntitle: "+title+"\nstatus: draft\n---\n\n受注合計。\n")
+	first := put(t, "---\ntype: Metric\ntitle: "+title+"\nstatus: draft\n---\n\n受注合計。\n")
 	k, err := svc.Get(ctx, id)
 	if err != nil {
 		t.Fatalf("the entry was not created: %v", err)
@@ -203,13 +203,40 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 	// The same id again is a replace, not a conflict: a write says what
 	// the entry should say, and the id being taken is not the agent's
 	// question to answer.
-	put(t, "---\ntype: Metric\ntitle: "+title+"(改)\nstatus: draft\n---\n\n受注合計。返品を除く。\n")
+	second := "---\ntype: Metric\ntitle: " + title + "(改)\nstatus: draft\n---\n\n受注合計。返品を除く。\n"
+	put(t, second)
 	k, err = svc.Get(ctx, id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if k.Title != title+"(改)" {
 		t.Errorf("the second write did not replace: title = %q", k.Title)
+	}
+
+	// And the answer says which of the three it was, because this
+	// surface has no headers to carry it (design doc 0097): an agent
+	// that wrote something could not otherwise tell a replacement from a
+	// write that changed nothing without reading the concept back.
+	planOf := func(t *testing.T, res *mcp.CallToolResult) string {
+		t.Helper()
+		var out knowledgeOut
+		raw, err := json.Marshal(res.StructuredContent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatal(err)
+		}
+		return out.Knowledge.Plan
+	}
+	if got := planOf(t, first); got != domain.PlanCreated {
+		t.Errorf("the first write answered plan = %q, want %q", got, domain.PlanCreated)
+	}
+	if got := planOf(t, put(t, second)); got != domain.PlanUnchanged {
+		t.Errorf("an identical write answered plan = %q, want %q", got, domain.PlanUnchanged)
+	}
+	if got := planOf(t, put(t, "---\ntype: Metric\ntitle: "+title+"(改2)\nstatus: draft\n---\n\n受注合計。\n")); got != domain.PlanUpdated {
+		t.Errorf("a changed write answered plan = %q, want %q", got, domain.PlanUpdated)
 	}
 
 	// A human ruling still stops the replace half, with the advice the

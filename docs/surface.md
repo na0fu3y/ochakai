@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - CLI: 25
 - FLAG: 29
 - ENV: 13
-- VOCAB: 46
+- VOCAB: 49
 - DOC: 26
 - DOC-LINES: 6500
 - DOC-LINES-SLACK: 500
@@ -255,6 +255,14 @@ PR がまたこの行に戻ってくるからで、慣行として書くだけ�
 はそのうちの一つしか言えない。三値を二つのヘッダに割ると、クライアント
 は片方しか読まなくなる — だから dry run では `Ochakai-Unchanged` を
 出さず、`Ochakai-Plan` が置き換える。
+
+**13 のまま、同じ三語が本文にも乗った**
+([0097](design/0097-a-write-says-what-it-did-in-the-body.md))。ヘッダは
+一本も減っていない — [0082](design/0082-what-the-freeze-holds-still.md) §2
+が凍結の対象に「ヘッダ名」を挙げているので、外すのは 1.0 の仕事である。
+ここで数が動かないことがこの節の言いたいことでもある: **応答本文への
+追加はこの次元に現れない**。現れたのは `VOCAB` のほうで、三語が
+`internal/domain` に移ったとたん 46 → 49 になった。
 
 10 のまま、同じ PR [#407](https://github.com/na0fu3y/ochakai/issues/407)
 が `Ochakai-On-Behalf-Of` / `Ochakai-Producer` から `X-` 接頭辞を落とし、
@@ -559,7 +567,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 - `OCHAKAI_URL`
 - `PORT`
 
-## VOCAB (46)
+## VOCAB (49)
 
 八つ目の次元は**語**である。上の七つが数えているのは機構 — 呼べるもの、
 設定できるもの — であって、**キュレーターが頭に入れておくもの**は一つも
@@ -602,6 +610,16 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 — SPEC の例示にはあったが、ochakai 自身の examples にも OKF 公式の
 リファレンスバンドルにも一度も書かれていなかった。
 
+**46 → 49 は [0097](design/0097-a-write-says-what-it-did-in-the-body.md) の
+`plan.*` 3 語である。ここで増えたのは製品が言えるようになった語ではなく、
+**ずっと教えていたのに数えられていなかった語**である — `Ochakai-Plan` の
+enum は凍結された契約に書いてあり、`ochakai import` はこの三語を印字して
+いた。数に出なかったのは、値が `internal/restapi` と `internal/apiclient`
+の非公開定数として二箇所に在り、この節が読む `internal/domain` に無かった
+からである。本文が同じ語を言うようになったので `domain` に移し、移した
+とたんに数が動いた。`error.*` と同じ形である: 書き直せる文言のうちは
+覚える語ではなく、クライアントが分岐する値になった瞬間にそうなる。
+
 **34 → 46 は [0083](design/0083-an-error-carries-a-code.md) の
 `error.*` 12 語である。天井を上げる決定であり、そう言って上げている。**
 そしてこれは、下の「次の逃げ道」の段落が**自分で名指していた**一つで
@@ -636,6 +654,9 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 - `error.unsupported`
 - `outcome.failed`
 - `outcome.worked`
+- `plan.created`
+- `plan.unchanged`
+- `plan.updated`
 - `queue.drafts`
 - `ruling.rejected`
 - `ruling.verified`

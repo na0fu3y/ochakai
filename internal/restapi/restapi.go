@@ -677,7 +677,12 @@ func Handler(svc *service.Service) http.Handler {
 				return
 			}
 			if dry {
-				w.Header().Set(planHeader, planOf(created, changed))
+				// Header only, for a file: unlike a concept, a real file
+				// write does not compare the bytes it was handed against
+				// the bytes that were there, so the fact exists on one of
+				// the two paths and a field present on half of them is
+				// worse than the header (design doc 0097 §4).
+				w.Header().Set(planHeader, domain.PlanOf(created, changed))
 				writeJSON(w, http.StatusOK, att)
 				return
 			}
@@ -1528,16 +1533,21 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 	for _, n := range notes {
 		w.Header().Add("Ochakai-Note", n)
 	}
+	// What the write did, in the body as well as in the headers (design
+	// doc 0097). The headers stay because header names are inside the
+	// freeze (0082 §2); the body is where a reader of `curl | jq` and a
+	// generated client find it without knowing to look.
+	plan := domain.PlanOf(created, changed)
 	// A dry run has nothing to report about a version that was not
 	// written: no ETag, because there is no state to precondition on, and
 	// no 201, because nothing was created. What it has is the plan.
 	if dry {
-		w.Header().Set(planHeader, planOf(created, changed))
+		w.Header().Set(planHeader, plan)
 		if wantsDocument(r) {
 			writeDocument(w, http.StatusOK, out)
 			return
 		}
-		writeView(w, http.StatusOK, out)
+		writePlannedView(w, http.StatusOK, out, plan)
 		return
 	}
 	// A payload identical to the stored content wrote nothing (no
@@ -1555,7 +1565,7 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		writeDocument(w, status, out)
 		return
 	}
-	writeView(w, status, out)
+	writePlannedView(w, status, out, plan)
 }
 
 // Ochakai-Plan is what ?dry_run=true answers with: the one word the write
@@ -1563,33 +1573,28 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 // dry run rather than joining it — "unchanged" is one of the three values,
 // and two headers saying overlapping things is how a client ends up
 // reading only one of them.
+//
+// The words themselves are domain.Plans: the body says them too now, and
+// a vocabulary spelled once in the package that owns it cannot drift
+// between the two places it is written (design doc 0097).
 const planHeader = "Ochakai-Plan"
-
-const (
-	planCreated   = "created"
-	planUpdated   = "updated"
-	planUnchanged = "unchanged"
-)
-
-func planOf(created, changed bool) string {
-	switch {
-	case created:
-		return planCreated
-	case !changed:
-		return planUnchanged
-	default:
-		return planUpdated
-	}
-}
 
 // writeView responds with a read of one concept: the canonical document,
 // the projection, and what this instance observed (design doc 0043 §3.5).
 func writeView(w http.ResponseWriter, status int, k *domain.Knowledge) {
+	writePlannedView(w, status, k, "")
+}
+
+// writePlannedView is the same answer from a write, carrying the one word
+// the write turned out to be (design doc 0097). plan is empty on a read,
+// where none of the three words is true.
+func writePlannedView(w http.ResponseWriter, status int, k *domain.Knowledge, plan string) {
 	v, err := okf.ViewOf(k)
 	if err != nil {
 		writeError(w, fmt.Errorf("render document: %w", err))
 		return
 	}
+	v.Plan = plan
 	writeJSON(w, status, v)
 }
 

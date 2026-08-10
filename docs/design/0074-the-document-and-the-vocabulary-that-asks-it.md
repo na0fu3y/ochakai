@@ -12,7 +12,9 @@ Status: Accepted(2026-08-03)。**concept 文書の形と、問いの語彙の現
 [0064](0064-rest-stops-at-api-v1.md) §18 が撤回した(OKF SPEC §4.1・§11 が
 未知の型への寛容を MUST で求めるため)。§1 の「title は任意」は同 §15 が
 wire にも届かせた。§1 の「SPEC より狭かった」がどこまで及ぶかは
-[0079](0079-taking-the-document.md) が改訂している。
+[0079](0079-taking-the-document.md) が改訂している。§5 の三語が応答本文
+にも乗ることは [0097](0097-a-write-says-what-it-did-in-the-body.md) が
+決める(2026-08-10。ヘッダは残る)。
 Date: 2026-08-03
 
 ## 0. この記録が決めたこと

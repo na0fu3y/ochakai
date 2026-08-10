@@ -462,12 +462,15 @@ func (c *Client) Put(ctx context.Context, id string, doc []byte, ifMatch string,
 		resp.Header.Get("Ochakai-Unchanged") != "true", resp.Header.Values("Ochakai-Note"), nil
 }
 
-// The three answers a plan can give, as the Ochakai-Plan header spells
-// them (design doc 0061).
+// The three answers a plan can give, as the Ochakai-Plan header and the
+// response body both spell them (design docs 0074 §5, 0097). The values are
+// domain's: one home for the vocabulary, so the client cannot come to
+// disagree with the server about a word they exchange.
+
 const (
-	PlanCreated   = "created"
-	PlanUpdated   = "updated"
-	PlanUnchanged = "unchanged"
+	PlanCreated   = domain.PlanCreated
+	PlanUpdated   = domain.PlanUpdated
+	PlanUnchanged = domain.PlanUnchanged
 )
 
 // Plan asks what a Put of doc would do, and writes nothing
