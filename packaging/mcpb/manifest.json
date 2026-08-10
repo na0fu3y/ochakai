@@ -1,0 +1,73 @@
+{
+  "manifest_version": "0.3",
+  "name": "ochakai",
+  "display_name": "ochakai",
+  "version": "0.0.0",
+  "description": "Your team's metric definitions, verified golden queries, and the interpretation knowledge around them.",
+  "long_description": "ochakai is a context provider for data agents. A semantic layer tells you that revenue = SUM(price); it does not tell you whether 100 is good or bad. ochakai keeps that missing half — metric definitions, verified golden queries, insights that say how to read a number, glossary terms, table catalog entries — curated by people and agents together.\n\nThis bundle is a client. It talks to an ochakai server over MCP: the public demo to look around, or your own deployment. No LLM runs inside ochakai, and it holds no warehouse credential — it hands back what people wrote and verified, with the provenance still on it.",
+  "author": {
+    "name": "na0fu3y",
+    "url": "https://github.com/na0fu3y"
+  },
+  "homepage": "https://ochak.ai",
+  "documentation": "https://github.com/na0fu3y/ochakai#readme",
+  "support": "https://github.com/na0fu3y/ochakai/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/na0fu3y/ochakai"
+  },
+  "license": "MIT",
+  "keywords": ["knowledge", "data", "analytics", "metrics", "okf"],
+  "server": {
+    "type": "binary",
+    "entry_point": "server/ochakai",
+    "mcp_config": {
+      "command": "server/ochakai",
+      "args": ["mcp-stdio", "--url", "${user_config.url}"],
+      "env": {},
+      "platform_overrides": {
+        "win32": {
+          "command": "server/ochakai.exe"
+        }
+      }
+    }
+  },
+  "user_config": {
+    "url": {
+      "type": "string",
+      "title": "Server URL",
+      "description": "https://demo.ochak.ai reads a public demo knowledge base and writes nothing. Point this at your own deployment when you have one; against Cloud Run, sign in with `gcloud auth login` first and this bundle mints the ID token itself.",
+      "required": true,
+      "default": "https://demo.ochak.ai"
+    }
+  },
+  "tools": [
+    {
+      "name": "get_context",
+      "description": "The one call before answering a data question: the concepts that bear on it, in full."
+    },
+    {
+      "name": "search_concepts",
+      "description": "Search the knowledge base; verified concepts rank higher."
+    },
+    {
+      "name": "get_concept",
+      "description": "One concept by id, with its body, attributes and links."
+    },
+    {
+      "name": "get_file",
+      "description": "One file of the bundle by path."
+    },
+    {
+      "name": "put_concept",
+      "description": "Write a concept back. It lands as a draft for a human to rule on."
+    },
+    {
+      "name": "report_outcome",
+      "description": "Say whether knowledge you acted on worked. This is what keeps the loop honest."
+    }
+  ],
+  "compatibility": {
+    "platforms": ["darwin", "win32"]
+  }
+}

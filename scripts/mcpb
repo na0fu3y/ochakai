@@ -1,0 +1,78 @@
+#!/bin/sh
+# Packs the MCP bundle (.mcpb) — the one-click install for Claude Desktop
+# and the other desktop apps that read the format.
+#
+# A bundle is a zip of one manifest and the server it describes. What goes
+# in here is the ordinary ochakai binary running `ochakai mcp-stdio`: the
+# same bridge the manual tells a Claude Desktop user to configure by hand,
+# with the JSON written for them and the server URL asked for through the
+# app's own settings UI instead of a config file.
+#
+# **Two binaries, not six.** The manifest can vary its command by
+# operating system and not by CPU, so an architecture has to be settled
+# before packing: macOS gets the universal binary goreleaser lipos out of
+# the two darwin builds, and Windows gets amd64, which Windows on ARM
+# emulates. Linux is not in the bundle at all — the apps that install one
+# run on macOS and Windows, and a Linux user has `go install`, an archive,
+# and the container image.
+#
+# **Packed with zip rather than `mcpb pack`.** The official packer is an
+# npm package, and pulling an unpinned one into the release job is the
+# supply chain this repository otherwise refuses (every action in
+# .github/workflows is pinned by commit SHA, and the archives carry SLSA
+# provenance). A zip is a zip; what `mcpb pack` would have checked, the
+# manifest's own test checks instead — cmd/ochakai/mcpb_test.go reads the
+# checked-in manifest and fails when it names a command the CLI does not
+# have, a user_config key nothing substitutes, or a tool the MCP server
+# does not serve.
+#
+# Usage: scripts/mcpb <version> [dist-dir]
+#   scripts/mcpb v0.21.0            # after goreleaser, reads ./dist
+set -eu
+
+version=${1:-}
+dist=${2:-dist}
+if [ -z "$version" ]; then
+	echo "usage: scripts/mcpb <version> [dist-dir]" >&2
+	exit 2
+fi
+# The manifest wants semver; the tag carries a leading v and every other
+# path that reports a version keeps it (.goreleaser.yaml says why).
+semver=${version#v}
+
+root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+manifest="$root/packaging/mcpb/manifest.json"
+macos="$dist/ochakai-macos_darwin_all/ochakai"
+windows="$dist/ochakai_windows_amd64_v1/ochakai.exe"
+
+for f in "$manifest" "$macos" "$windows"; do
+	if [ ! -f "$f" ]; then
+		echo "mcpb: $f is missing — run goreleaser first (scripts/mcpb reads its dist/)" >&2
+		exit 1
+	fi
+done
+
+work="$dist/mcpb"
+rm -rf "$work"
+mkdir -p "$work/server"
+cp "$macos" "$work/server/ochakai"
+cp "$windows" "$work/server/ochakai.exe"
+chmod 0755 "$work/server/ochakai" "$work/server/ochakai.exe"
+
+# The version is the one thing the checked-in manifest cannot know. Every
+# other field is reviewed in the diff, which is the point of keeping it a
+# file rather than generating it here.
+sed 's/"version": "0.0.0"/"version": "'"$semver"'"/' "$manifest" > "$work/manifest.json"
+if ! grep -q "\"version\": \"$semver\"" "$work/manifest.json"; then
+	echo "mcpb: the manifest's version placeholder moved; nothing was stamped" >&2
+	exit 1
+fi
+
+out="$dist/ochakai_${semver}.mcpb"
+rm -f "$out"
+# -X drops the extra attributes (uid, gid, timestamps beyond the DOS
+# field) that would make the archive differ between machines building the
+# same tag. The Unix permission bits stay, which is what the macOS binary
+# needs to be executable after the app unpacks it.
+(cd "$work" && zip -q -X -r "$OLDPWD/$out" manifest.json server)
+echo "mcpb: wrote $out"

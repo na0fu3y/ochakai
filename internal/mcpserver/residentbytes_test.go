@@ -121,3 +121,58 @@ Trimming is worth as much as not growing, so the budget it earned goes
 back: lower MCP-BYTES in the same PR.`, total, ceiling-total, ceiling, slack, breakdown)
 	}
 }
+
+// The MCP bundle's manifest lists the tools for the desktop app to show
+// before anyone installs it (packaging/mcpb/manifest.json). That list is
+// a second copy of the tool names, in a file no compiler reads, so it
+// drifts the moment a tool is added, renamed or retired — and it drifts
+// into the one place a person looks *while deciding whether to install*.
+//
+// Read against a real session, like the byte cap above: the names are
+// what the wire carries, not what the source says.
+//
+// The descriptions are deliberately not compared. The manifest's are
+// display copy for a human choosing a bundle; the server's are written
+// for an agent and paid for out of its context window (MCP-BYTES). Two
+// audiences, two sentences, one set of names.
+func TestMCPBManifestListsTheToolsTheServerServes(t *testing.T) {
+	raw, err := os.ReadFile("../../packaging/mcpb/manifest.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifest struct {
+		Tools []struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		} `json:"tools"`
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	listed := map[string]bool{}
+	for _, tool := range manifest.Tools {
+		if tool.Description == "" {
+			t.Errorf("the bundle lists %s with no description; the app shows the list before "+
+				"anyone installs it", tool.Name)
+		}
+		listed[tool.Name] = true
+	}
+
+	res, err := connect(t).ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	served := map[string]bool{}
+	for _, tool := range res.Tools {
+		served[tool.Name] = true
+		if !listed[tool.Name] {
+			t.Errorf("the server serves %s and the bundle's manifest does not list it", tool.Name)
+		}
+	}
+	for name := range listed {
+		if !served[name] {
+			t.Errorf("the bundle's manifest lists %s, which the server does not serve", name)
+		}
+	}
+}

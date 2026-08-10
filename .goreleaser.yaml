@@ -41,8 +41,24 @@ builds:
       - amd64
       - arm64
 
+# One macOS binary that runs on both Intel and Apple Silicon, for the MCP
+# bundle (scripts/mcpb). A bundle's manifest can vary its command by
+# operating system and not by CPU, so the architecture has to be settled
+# before packing — and shipping the amd64 build alone would need Rosetta,
+# which recent macOS does not install by itself.
+#
+# It is not archived and not released: `archives` below takes `ids: [ochakai]`,
+# so this stays a plain Binary artifact in dist/, which the release pipe
+# does not upload. The six archives people download are unchanged.
+universal_binaries:
+  - id: ochakai-macos
+    ids: [ochakai]
+    replace: false
+    name_template: ochakai
+
 archives:
-  - formats: [tar.gz]
+  - ids: [ochakai]
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
         formats: [zip]
