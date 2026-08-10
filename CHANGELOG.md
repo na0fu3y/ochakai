@@ -21,6 +21,24 @@ last entry.
 
 ### Added
 
+- **The README is one staircase, and it says the product is good at
+  Japanese.** The quick start ran demo → your own server → an agent, but
+  the rungs were unlabelled and production was not one of them, so a
+  reader still had to work out which entrance was theirs; it is three
+  named steps now (sixty seconds, ten minutes, for real), and the last
+  one carries Cloud Run and Cloud SQL instead of leaving them to a link
+  in the intro. Filling a base with your own tables leads with `ochakai
+  seed` — shipped for exactly that and named nowhere on the front page —
+  and the ten-minute rung uses the CLI the first rung installed rather
+  than reaching into the container. **The word "Japanese" appeared in
+  this README only as a warning label on documentation links**, never as
+  something the product does, so a Japanese-speaking evaluator learned
+  only that the manual might be unreadable to them. There is a *Why*
+  bullet now: no tokenizer extension to install (which managed Postgres
+  would not allow anyway), 売上 answered from an index rather than a
+  scan, latin words stemmed, nothing to configure
+  ([#527](https://github.com/na0fu3y/ochakai/issues/527)).
+
 - **A renamed MCP tool or CLI command keeps answering for one release**
   ([0088](docs/design/0088-a-retired-name-answers-for-one-release.md)).
   The policy used to be that there was no deprecation window for
