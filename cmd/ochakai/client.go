@@ -1530,21 +1530,20 @@ func cmdImport(ctx context.Context, args []string) error {
 			" — the document is still in the bundle you imported from")
 		fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
 	}
-	// A document that carried a verified key is confirmed by whoever ran
-	// the import — the actor who put it through the review gate (design
-	// docs 0009 §3.2, 0043 §3.2). The values inside the key never become
-	// this instance's ledger: what the document said stays a claim beside
-	// it (design doc 0046 §2.2), and the verification recorded here is
-	// the importer's own.
-	confirm := func(ctx context.Context, d *okf.Doc) string {
-		if !d.Verified {
-			return ""
-		}
-		if _, err := c.Verify(ctx, d.ID); err != nil {
-			return fmt.Sprintf("%s imported, but recording its verification failed: %v", d.ID, err)
-		}
-		return ""
-	}
+	// An import rules on nothing. A document that carries a verified key
+	// says so as a claim, kept beside the concept under `received`
+	// (design doc 0046 §2.2); it does not move the trust tier, because
+	// **a merge is not a verify** — Git's review is not ochakai's ruling
+	// surface, and a verification comes down from
+	// `POST /api/v1/review/{id}` (design doc 0009 §3.2).
+	//
+	// This used to call c.Verify on every such document, recording the
+	// importer as its verifier. That was 0009 §3.2 as it read when the
+	// code was written — the section was titled "verifier は取り込んだ者"
+	// — and the record's body was replaced when it was settled, leaving
+	// the citation pointing at the sentence that forbids it. Nothing is
+	// lost by stopping: what the document asserted is still on the
+	// concept, as the claim it always was.
 	err = eachConcurrently(ctx, len(entries), func(ctx context.Context, i int) error {
 		d := &entries[i]
 		k := &d.Knowledge
@@ -1576,18 +1575,10 @@ func cmdImport(ctx context.Context, args []string) error {
 		// (design doc 0046 §2.2), which is what keeps the Git review loop
 		// note-free.
 		notes = okf.NoteStoredClaim(notes, d.Claimed, stored.Document)
-		verifyNote := ""
-		if wasCreated || changed {
-			verifyNote = confirm(ctx, d)
-		}
 		mu.Lock()
 		defer mu.Unlock()
 		noted += len(notes)
 		reportNotes(notes)
-		if verifyNote != "" {
-			noted++
-			fmt.Fprintln(os.Stderr, "note:", verifyNote)
-		}
 		switch {
 		case wasCreated:
 			created++
