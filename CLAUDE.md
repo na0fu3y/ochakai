@@ -130,5 +130,5 @@ checked-in deny list enforces it — because the dev instance records CLI
 callers as the anonymous human, while the MCP connection carries your
 process identity, and that distinction is what keeps the trust tier
 honest about who reviewed what
-([kb/policies/ai-human-identity.md](kb/policies/ai-human-identity.md)).
+([kb/bundle/policies/ai-human-identity.md](kb/bundle/policies/ai-human-identity.md)).
 Rulings — verify and reject — belong to the human.

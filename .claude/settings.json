@@ -1,5 +1,5 @@
 {
-  "$comment": "Checked-in Claude Code settings for this repository. Hooks, plus the one permissions rule that is not a personal choice: the deny list keeps agent sessions from writing to the dogfood knowledge base through the CLI, which the dev instance would record as the anonymous human — agent writes go through the ochakai MCP tools, whose connection carries the process identity (kb/policies/ai-human-identity.md). Everything else about permissions belongs in the untracked settings.local.json.",
+  "$comment": "Checked-in Claude Code settings for this repository. Hooks, plus the one permissions rule that is not a personal choice: the deny list keeps agent sessions from writing to the dogfood knowledge base through the CLI, which the dev instance would record as the anonymous human — agent writes go through the ochakai MCP tools, whose connection carries the process identity (kb/bundle/policies/ai-human-identity.md). Everything else about permissions belongs in the untracked settings.local.json.",
   "permissions": {
     "deny": [
       "Bash(ochakai put:*)",
