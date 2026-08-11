@@ -149,6 +149,14 @@ jobs:
             sleep 1
           done
           /tmp/ochakai import examples/demo --url http://127.0.0.1:8080
+          # The review page draws its trend only for a base somebody has
+          # ruled on: eight zeroes would read as "review stopped", so the
+          # sparkline is absent instead (design doc 0095), and the smoke
+          # asserts the shape. An import does not rule on what it writes
+          # (design doc 0009 §3.2) — so the ruling is made here, the way
+          # a curator makes it, rather than as a side effect of loading
+          # the corpus.
+          /tmp/ochakai verify metrics/revenue --url http://127.0.0.1:8080
           OCHAKAI_URL=http://127.0.0.1:8080 /tmp/ochakai ui --port 8098 &
           for i in $(seq 1 60); do
             curl -sf http://127.0.0.1:8098/ > /dev/null && exit 0
