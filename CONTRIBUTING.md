@@ -175,21 +175,32 @@ and cheap to delete once it has been read.
 
 ## Working with Claude Code
 
-The repository checks in a `.claude/settings.json` with **hooks only**.
-One runs `gofmt` on Go files as they are written, since that is the
-cheapest CI failure to avoid. The other runs at session start and does
-nothing at all unless `CLAUDE_CODE_REMOTE` says the session is a
-disposable cloud container, where it installs pgvector beside the
-container's PostgreSQL so `scripts/check --db` has something to fall back
-to, and tells the agent what that environment cannot check. Docker has a
-CLI there but no daemon, and starting `dockerd` does not help because the
-egress policy refuses Docker Hub's blob CDN; the same policy refuses
-`vuln.go.dev`. So the store tests run, `core` and `lint` are honest there,
-and the `Dockerfile`, `deploy/compose.yaml` and `govulncheck` are CI's to
-verify — which is worth saying plainly, because an agent that reports a
-blocked host as a failing check is the expensive outcome. Permissions
-are a personal choice and belong in `.claude/settings.local.json`, which
-is not tracked.
+The repository checks in a `.claude/settings.json` with four hooks and
+one permissions rule. Two hooks serve the checks: one runs `gofmt` on Go
+files as they are written, since that is the cheapest CI failure to
+avoid; the other runs at session start and does nothing at all unless
+`CLAUDE_CODE_REMOTE` says the session is a disposable cloud container,
+where it installs pgvector beside the container's PostgreSQL so
+`scripts/check --db` has something to fall back to, and tells the agent
+what that environment cannot check. Docker has a CLI there but no
+daemon, and starting `dockerd` does not help because the egress policy
+refuses Docker Hub's blob CDN; the same policy refuses `vuln.go.dev`. So
+the store tests run, `core` and `lint` are honest there, and the
+`Dockerfile`, `deploy/compose.yaml` and `govulncheck` are CI's to verify
+— which is worth saying plainly, because an agent that reports a blocked
+host as a failing check is the expensive outcome.
+
+The other two hooks and the permissions rule are the dogfood loop
+([kb/README.md](kb/README.md)): recall injects concepts from the local
+instance as a prompt comes in, write-back asks its two questions once
+per session before the agent stops, and the deny list keeps agent
+sessions off the CLI write commands, which the dev instance would record
+as the anonymous human — agent writes go through the MCP tools, whose
+connection carries the process identity
+([kb/bundle/policies/ai-human-identity.md](kb/bundle/policies/ai-human-identity.md)).
+That deny list is the one permissions entry that is not a personal
+choice; everything else about permissions belongs in
+`.claude/settings.local.json`, which is not tracked.
 
 `.claude/skills/` holds the procedures that are long enough to get wrong
 from memory: `release` and `design-doc`. They are the same procedures
@@ -692,7 +703,7 @@ ceiling used to sit at the exact total with 15 lines of tolerance, beside
 a second one — `RECORD-COUNT` — that had to match the number of records
 exactly. Both are gone in favour of one number on a 500-line grid, after
 six records were written in parallel and every one of them had to rewrite
-the same two lines. [docs/surface.md](../docs/surface.md) had already
+the same two lines. [docs/surface.md](docs/surface.md) had already
 diagnosed this and prescribed the cure for the manual: **an alarm that
 sounds every time tells nobody anything**, and a line every concurrent PR
 edits is a line every concurrent PR conflicts on. A ceiling meant to make

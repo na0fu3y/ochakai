@@ -12,7 +12,7 @@
 # work, and the instructions point at the ochakai MCP tools rather than
 # the CLI — on the dev instance CLI writes are recorded as the anonymous
 # human, while the MCP connection carries the agent's process identity
-# (kb/policies/ai-human-identity.md).
+# (kb/bundle/policies/ai-human-identity.md).
 #
 # Requires: jq. Failures are silent: never block the agent from stopping.
 set -eu
@@ -50,5 +50,5 @@ fi
 
 jq -n --arg outcome "$outcome_reason" '{
   decision: "block",
-  reason: ($outcome + "Before finishing: if this session learned something durable about ochakai — how a failure was diagnosed, a constraint of an environment, a convention written nowhere — write it back to the knowledge base as a draft with the put_concept MCP tool. Search first with search_concepts (including rejected=true) to avoid re-proposing what was already turned down. Use the MCP tools, never the ochakai CLI, for writes and reports: the MCP connection carries your process identity, the CLI would record you as the anonymous human (kb/policies/ai-human-identity.md). If nothing durable was learned, finish now without creating anything — do not invent knowledge.")
+  reason: ($outcome + "Before finishing: if this session learned something durable about ochakai — how a failure was diagnosed, a constraint of an environment, a convention written nowhere — write it back to the knowledge base as a draft with the put_concept MCP tool. Search first with search_concepts (including rejected=true) to avoid re-proposing what was already turned down. Use the MCP tools, never the ochakai CLI, for writes and reports: the MCP connection carries your process identity, the CLI would record you as the anonymous human (kb/bundle/policies/ai-human-identity.md). If nothing durable was learned, finish now without creating anything — do not invent knowledge.")
 }'
