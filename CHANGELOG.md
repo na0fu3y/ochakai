@@ -19,6 +19,39 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **BREAKING (CLI): `ochakai import` no longer verifies what it writes.**
+  A document whose frontmatter carried `verified:` was confirmed on
+  arrival, with whoever ran the import recorded as the verifier — so a
+  bundle of ten concepts came out `human-reviewed` by the importer,
+  timestamped the moment the import ran, and the reviewer nobody
+  performed was indistinguishable from the one somebody did.
+  **Three places already said it should not**: design doc
+  [0009](docs/design/0009-provenance-portability.md) §3.2 — *merge は
+  verify ではない*, and a verification comes down from
+  `POST /api/v1/review/{id}`; [the Git-review
+  guide](docs/guides/git-review.md), under that same heading; and the
+  note the import itself prints on every such document, which says the
+  keys stay a claim that no trust tier answers from. Only the code
+  disagreed.
+  It disagreed for a reason that leaves no trace in a diff: the call
+  landed in 2026-07-28 citing 0009 §3.2, and **that section then read
+  「Git はレビュー経路、verifier は取り込んだ者」** — it endorsed exactly
+  this. A week later the record was settled and its body replaced, and
+  the citation was left pointing at the sentence that now forbids it.
+  Nothing failed, because no test watched the ruling surface during an
+  import; `TestImportDoesNotRuleOnWhatItCarries` does now.
+  **Nothing is lost.** What the document asserted is still on the
+  concept, under `received`, exactly as before — a claim, held apart
+  from this instance's ledger. What changes is that the ledger stays
+  empty until a human rules: `ochakai verify <id>`, or the web UI.
+  Anyone who was relying on an import to confirm a reviewed bundle has
+  to make that a verify. The demo is the case that found it: a public
+  sandbox is anonymous and writable, so **any visitor could import a
+  bundle and have every concept come out `human-reviewed`** — by
+  `human:anonymous`, which is the tier's whole meaning inverted.
+
 ## [0.21.1] - 2026-08-11
 
 ### Fixed

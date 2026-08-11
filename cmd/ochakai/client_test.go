@@ -676,6 +676,68 @@ func TestImportReportsAKeptClaim(t *testing.T) {
 	}
 }
 
+// **A merge is not a verify** (design doc 0009 §3.2): an import writes
+// documents and rules on nothing, so a `verified` key in the bundle is a
+// claim the concept carries and never a verification this instance made.
+//
+// This is a regression test with a story. The import used to call
+// `POST /api/v1/review/{id}` for every document that carried the key,
+// recording whoever ran it as the verifier — correct under 0009 §3.2 as
+// it read when that code was written ("verifier は取り込んだ者"), and
+// forbidden by the same section after the record was settled and its
+// body replaced. Nothing failed in between, because no test watched the
+// ruling surface during an import. This one does.
+func TestImportDoesNotRuleOnWhatItCarries(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "metrics"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const claimed = "---\ntype: metric\ntitle: Claimed\n" +
+		"verified:\n  - by: human:ceo@example.co.jp\n    at: 2026-07-02T00:00:00Z\n" +
+		"---\n\nbody\n"
+	if err := os.WriteFile(filepath.Join(dir, "metrics", "claimed.md"), []byte(claimed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var rulings int
+	var mu sync.Mutex
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.NewEncoder(w).Encode(domain.View{Document: string(body)})
+	})
+	mux.HandleFunc("POST /api/v1/review/{id...}", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		rulings++
+		mu.Unlock()
+		_ = json.NewEncoder(w).Encode(domain.View{})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	orig, origErr := os.Stdout, os.Stderr
+	pr, pw, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout, os.Stderr = pw, pw
+	importErr := cmdImport(context.Background(), []string{dir, "--url", srv.URL})
+	pw.Close()
+	os.Stdout, os.Stderr = orig, origErr
+	out, err := io.ReadAll(pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if importErr != nil {
+		t.Fatalf("cmdImport: %v\noutput:\n%s", importErr, out)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if rulings != 0 {
+		t.Errorf("import made %d ruling(s) on the concepts it wrote; a merge is not a verify (design doc 0009 §3.2)\noutput:\n%s", rulings, out)
+	}
+}
+
 // The false green --dry-run was: a bundle with nothing wrong in it as far
 // as the parse could see, and a note the server raises at write time (a
 // trust family kept as the document's own claim). The dry run reported it
