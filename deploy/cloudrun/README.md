@@ -19,7 +19,8 @@ Cloud SQL インスタンス一つでナレッジベース全体を賄う — �
 よい。取り壊しのコマンドは末尾にある。
 
 **推奨: [deploy/terraform](../terraform) で立ち上げる** — §1–§4b(web UI
-とデモの姿勢を含む)を 13 手順の `terraform apply` にまとめてあり、diff
+とデモの姿勢を含む)を一回の `terraform apply` と手作業ひとつ(スキーマの
+bootstrap)にまとめてあり、diff
 としてレビューでき、環境ごとに再現でき、きれいに壊せる。このガイドは引
 き続きリファレンスであり続ける — 各リソースがなぜそう作られているかを
 説明し、コマンドを手で打ちたい場合の経路でもある。§1–§5、§5d、§9 をカ
@@ -79,7 +80,7 @@ export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:$VERSION
 `:latest` ではなくバージョンを固定し、再デプロイを意識的な判断にする。
 `gh` CLI が無ければ
 [リリースページ](https://github.com/na0fu3y/ochakai/releases)から番号
-を読み、手で設定する — `export VERSION=0.21.1`。
+を読み、手で設定する — `export VERSION=0.22.0`。
 
 (このガイドは 0.9.0 以降を前提にしている。それより前のリリースは
 [retract](https://go.dev/ref/mod#go-mod-file-retract) 済みでサポート外
