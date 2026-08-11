@@ -19,6 +19,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-08-11
+
 ### Fixed
 
 - **BREAKING (CLI): `ochakai import` no longer verifies what it writes.**
@@ -4123,7 +4125,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.21.1...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/na0fu3y/ochakai/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/na0fu3y/ochakai/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/na0fu3y/ochakai/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/na0fu3y/ochakai/compare/v0.19.1...v0.20.0
