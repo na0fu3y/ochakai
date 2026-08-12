@@ -364,6 +364,18 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 である — `domain.TypesGuide()` の 1,319 バイトと、読みのツールが同じ
 フィルタの語をそれぞれのスキーマに持つぶん。
 
+**数えるのは通常の姿勢である。** サンドボックスだけは instructions に
+一文を足す — 匿名で書けて、次の復元で消えることを、エージェントにも
+言う([0087](design/0087-a-sandbox-says-it-is-one.md) §3。README を
+読んでいない呼び出し元の代表がエージェントであり、書くのはそれである)。
+ツールではなく instructions に載るのは、この面の既定が no である理由
+そのものによる([0067](design/0067-four-faces-and-what-they-decline.md)
+§4)— 守っているのは**すべてのエージェントが毎ターン払う文脈**であり、
+一つのデプロイだけが送る一文はそこに入らない。だから天井は動かず、
+その一文は `TestASandboxSaysSoInItsInstructions` が別に上限を持つ。
+`dev` は載せない: 失われるのは書いたものではなく裁定に載る名前で、
+それを知る必要があるのは運用者だから、CLI の `posture:` 行が言う。
+
 8 本のまま、もう一度。PR [#407](https://github.com/na0fu3y/ochakai/issues/407)
 (design doc [0064](design/0064-rest-stops-at-api-v1.md)) が
 `get_attachment` を `get_file` に改めた — ワイヤの `attachments` が

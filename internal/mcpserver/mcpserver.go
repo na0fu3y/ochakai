@@ -159,9 +159,38 @@ const instructions = "ochakai serves human-curated knowledge for data work: metr
 	"After acting on knowledge, call report_outcome. Write learnings back with " +
 	"put_concept as drafts for a human to confirm. Knowledge is co-owned by humans and agents."
 
+// sandboxNotice is what a sandbox owes the agent writing into it. Design
+// doc 0087 §3 requires the deployment to say what it is, because a
+// sandbox that does not takes the work of whoever wrote there — and an
+// agent writes there under instruction, which makes the loss a person's.
+//
+// It rides on the instructions rather than a tool of its own: MCP's
+// default is no (design doc 0067 §4) because a tool schema is resident in
+// every agent's context on every turn, and this is a sentence that only
+// the deployment it is true of ever sends. An ordinary deployment's
+// resident bytes do not move, which is what
+// TestMCPStaysUnderItsResidentByteCap measures.
+//
+// A `dev` deployment is deliberately not announced here. What it costs is
+// that no ruling names anybody, which is the operator's problem and the
+// CLI says it there; nothing an agent writes to it is lost.
+const sandboxNotice = "\nThis deployment is a sandbox: anyone may write, nobody is identified, " +
+	"and the whole base is restored on a schedule — a draft you write here will be erased. " +
+	"Write to it to try the loop, and say so when you report having written."
+
+// instructionsFor returns what this deployment tells a client to hold for
+// the whole conversation. Everything but the posture is the same
+// everywhere.
+func instructionsFor(cfg *config.Config) string {
+	if cfg != nil && cfg.Sandbox {
+		return instructions + sandboxNotice
+	}
+	return instructions
+}
+
 func newServer(svc *service.Service, version string, retired []RetiredToolName) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: version}, &mcp.ServerOptions{
-		Instructions: instructions,
+		Instructions: instructionsFor(svc.Config),
 	})
 
 	// A name this release renamed still answers, for this release only
