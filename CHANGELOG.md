@@ -21,6 +21,18 @@ last entry.
 
 ### Fixed
 
+- **The web UI's Japanese reads as Japanese.** The home page's opening
+  paragraph, the three feed banners and the review page's prose had
+  sentences whose halves did not agree — a clause ending in `に` where a
+  verb belonged, an id called "そのパス" with nothing for その to point
+  at — and the home page's shortcut row broke wherever the window
+  happened to end, leaving the separator at the head of a line and a
+  "link — what it is" pair split across two. That row is now a list
+  whose entries are flex items, so a break falls between entries rather
+  than inside one. Two of the sentences were also untrue: the draft
+  queue ranks on fetches and not on search hits (design doc 0090), and
+  verifying a concept drops it from 間違いと報告された but only re-sorts
+  it in 検証の古さ, which lists the whole base and never empties.
 - **A sandbox now says so to agents too, not only to people.** The CLI
   and the web UI announce the disposable posture; MCP did not, so an
   agent pointed at one — which the bundled `.mcpb` does by default, its
