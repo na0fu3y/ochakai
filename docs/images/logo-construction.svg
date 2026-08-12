@@ -34,14 +34,15 @@
     <clipPath id="drawingClip">
       <rect x="0" y="64" width="620" height="521"/>
     </clipPath>
-    <!-- The mark: bowl = lower half of a circle R=44; steam circles are
-         R/φ³ ≈ 10.4, R/φ⁴ ≈ 6.4, R/φ⁵ ≈ 4.0 (φ = golden ratio). -->
+    <!-- The mark: bowl = lower half of a circle R=44 on a wide low foot;
+         steam circles are R/φ³ ≈ 10.4, R/φ⁴ ≈ 6.4, R/φ⁵ ≈ 4.0 (φ = golden
+         ratio), gathered near the axis. -->
     <g id="mark">
       <path d="M56,90 A44,44 0 0 0 144,90 Z" fill="currentColor"/>
-      <path d="M90,128 L110,128 L106,142.5 L94,142.5 Z" fill="currentColor"/>
-      <circle cx="112" cy="72" r="4" fill="currentColor"/>
-      <circle cx="95" cy="54" r="6.4" fill="currentColor"/>
-      <circle cx="108" cy="30" r="10.4" fill="currentColor"/>
+      <path d="M87,128 L113,128 L110,139 L90,139 Z" fill="currentColor"/>
+      <circle cx="107" cy="73" r="4" fill="currentColor"/>
+      <circle cx="96" cy="56" r="6.4" fill="currentColor"/>
+      <circle cx="104" cy="33" r="10.4" fill="currentColor"/>
       <line x1="60" y1="98" x2="140" y2="98" stroke="#ece8dd" stroke-width="2.5"/>
     </g>
   </defs>
@@ -69,22 +70,22 @@
     <g transform="translate(310,336) scale(2.5) translate(-100,-88)">
       <g stroke="#3f3c33" fill="none" stroke-width="0.32">
         <!-- horizontals -->
-        <line x1="-96" y1="30" x2="296" y2="30" opacity="0.3"/>
+        <line x1="-96" y1="33" x2="296" y2="33" opacity="0.3"/>
         <line x1="-96" y1="46" x2="296" y2="46" opacity="0.25"/>
-        <line x1="-96" y1="54" x2="296" y2="54" opacity="0.3"/>
-        <line x1="-96" y1="72" x2="296" y2="72" opacity="0.3"/>
+        <line x1="-96" y1="56" x2="296" y2="56" opacity="0.3"/>
+        <line x1="-96" y1="73" x2="296" y2="73" opacity="0.3"/>
         <line x1="-96" y1="90" x2="296" y2="90" opacity="0.5" stroke-width="0.4"/>
         <line x1="-96" y1="134" x2="296" y2="134" opacity="0.3"/>
-        <line x1="-96" y1="142.5" x2="296" y2="142.5" opacity="0.3"/>
+        <line x1="-96" y1="139" x2="296" y2="139" opacity="0.3"/>
         <!-- verticals -->
         <line x1="56" y1="-22" x2="56" y2="190" opacity="0.4"/>
         <line x1="100" y1="-22" x2="100" y2="190" opacity="0.5" stroke-width="0.4"/>
         <line x1="144" y1="-22" x2="144" y2="190" opacity="0.4"/>
-        <line x1="95" y1="-22" x2="95" y2="190" opacity="0.22"/>
-        <line x1="108" y1="-22" x2="108" y2="190" opacity="0.28"/>
-        <line x1="112" y1="-22" x2="112" y2="190" opacity="0.22"/>
-        <line x1="90" y1="-22" x2="90" y2="190" opacity="0.18"/>
-        <line x1="110" y1="-22" x2="110" y2="190" opacity="0.18"/>
+        <line x1="96" y1="-22" x2="96" y2="190" opacity="0.22"/>
+        <line x1="104" y1="-22" x2="104" y2="190" opacity="0.28"/>
+        <line x1="107" y1="-22" x2="107" y2="190" opacity="0.22"/>
+        <line x1="87" y1="-22" x2="87" y2="190" opacity="0.18"/>
+        <line x1="113" y1="-22" x2="113" y2="190" opacity="0.18"/>
         <!-- concentric circles on the bowl centre: R/φ, R, Rφ, Rφ² -->
         <circle cx="100" cy="90" r="27.2" opacity="0.35"/>
         <circle cx="100" cy="90" r="44" opacity="0.55" stroke-width="0.4"/>
@@ -92,43 +93,43 @@
         <circle cx="100" cy="90" r="115.2" opacity="0.22"/>
         <circle cx="100" cy="134" r="16" opacity="0.3"/>
         <!-- steam construction: each circle with its φ-neighbours -->
-        <circle cx="108" cy="30" r="10.4" opacity="0.5"/>
-        <circle cx="108" cy="30" r="16.8" opacity="0.28"/>
-        <circle cx="108" cy="30" r="27.2" opacity="0.2"/>
-        <circle cx="95" cy="54" r="6.4" opacity="0.5"/>
-        <circle cx="95" cy="54" r="10.4" opacity="0.28"/>
-        <circle cx="112" cy="72" r="4" opacity="0.5"/>
-        <circle cx="112" cy="72" r="6.4" opacity="0.28"/>
+        <circle cx="104" cy="33" r="10.4" opacity="0.5"/>
+        <circle cx="104" cy="33" r="16.8" opacity="0.28"/>
+        <circle cx="104" cy="33" r="27.2" opacity="0.2"/>
+        <circle cx="96" cy="56" r="6.4" opacity="0.5"/>
+        <circle cx="96" cy="56" r="10.4" opacity="0.28"/>
+        <circle cx="107" cy="73" r="4" opacity="0.5"/>
+        <circle cx="107" cy="73" r="6.4" opacity="0.28"/>
         <!-- diagonals -->
         <line x1="-30" y1="-40" x2="230" y2="220" opacity="0.3"/>
         <line x1="-30" y1="220" x2="230" y2="-40" opacity="0.3"/>
         <line x1="-30" y1="4" x2="160" y2="194" opacity="0.25"/>
         <line x1="40" y1="194" x2="230" y2="4" opacity="0.25"/>
         <line x1="-100" y1="-25.5" x2="300" y2="205.5" opacity="0.2"/>
-        <line x1="15" y1="-30.7" x2="192" y2="156.7" opacity="0.3"/>
-        <line x1="35" y1="164.8" x2="168" y2="-80.8" opacity="0.3"/>
+        <line x1="41" y1="-29" x2="162" y2="158" opacity="0.3"/>
+        <line x1="56" y1="171" x2="144" y2="-82" opacity="0.3"/>
         <!-- dashed details -->
         <path d="M56,90 A44,44 0 0 0 144,90 Z" opacity="0.6" stroke-dasharray="1.6 1.6" stroke-width="0.36"/>
-        <rect x="88" y="126" width="24" height="19" opacity="0.45" stroke-dasharray="1.6 1.6" stroke-width="0.36"/>
-        <circle cx="108" cy="30" r="13" opacity="0.4" stroke-dasharray="1.4 1.4" stroke-width="0.34"/>
-        <circle cx="95" cy="54" r="8.6" opacity="0.4" stroke-dasharray="1.4 1.4" stroke-width="0.34"/>
+        <rect x="85" y="126" width="30" height="16" opacity="0.45" stroke-dasharray="1.6 1.6" stroke-width="0.36"/>
+        <circle cx="104" cy="33" r="13" opacity="0.4" stroke-dasharray="1.4 1.4" stroke-width="0.34"/>
+        <circle cx="96" cy="56" r="8.6" opacity="0.4" stroke-dasharray="1.4 1.4" stroke-width="0.34"/>
       </g>
       <!-- centre dots -->
       <g fill="#3f3c33" opacity="0.55">
         <circle cx="100" cy="90" r="0.9"/>
         <circle cx="100" cy="134" r="0.7"/>
-        <circle cx="108" cy="30" r="0.7"/>
-        <circle cx="95" cy="54" r="0.7"/>
-        <circle cx="112" cy="72" r="0.7"/>
+        <circle cx="104" cy="33" r="0.7"/>
+        <circle cx="96" cy="56" r="0.7"/>
+        <circle cx="107" cy="73" r="0.7"/>
       </g>
       <!-- ratio labels -->
       <g font-family="Georgia, 'Times New Roman', serif" font-style="italic" font-size="4" fill="#3f3c33" opacity="0.55">
-        <text x="126" y="61">R</text>
+        <text x="128" y="63">R</text>
         <text x="146" y="41">Rφ</text>
         <text x="72" y="61">R/φ</text>
-        <text x="120" y="22">R/φ³</text>
-        <text x="84" y="45">R/φ⁴</text>
-        <text x="118" y="79">R/φ⁵</text>
+        <text x="117" y="24">R/φ³</text>
+        <text x="82" y="48">R/φ⁴</text>
+        <text x="113" y="82">R/φ⁵</text>
       </g>
       <!-- the mark, blueprint fill -->
       <use href="#mark" color="#524f45" opacity="0.55"/>
