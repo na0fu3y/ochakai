@@ -10,6 +10,11 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
+	"github.com/na0fu3y/ochakai/internal/config"
+	"github.com/na0fu3y/ochakai/internal/service"
 )
 
 // The tool count is a budget, and it has been one since design doc 0015
@@ -78,6 +83,12 @@ func residentBytes(t *testing.T) (total int, perTool map[string]int) {
 		perTool[tool.Name+" (schema)"] = len(schema)
 		total += n
 	}
+	// The ordinary posture's instructions, which is what connect(t)
+	// serves and what all but one deployment sends. A sandbox appends a
+	// sentence (sandboxNotice) and is the only deployment that pays for
+	// it — counting it here would put every other deployment's budget
+	// under a warning that is not true of it. What keeps that honest is
+	// TestASandboxSaysSoInItsInstructions, which bounds the addition.
 	total += len(instructions)
 	return total, perTool
 }
@@ -174,5 +185,78 @@ func TestMCPBManifestListsTheToolsTheServerServes(t *testing.T) {
 		if !served[name] {
 			t.Errorf("the bundle's manifest lists %s, which the server does not serve", name)
 		}
+	}
+}
+
+// noticeCap bounds what a sandbox may add to the instructions. It is not
+// MCP-BYTES — no ordinary deployment pays it — but it is not free
+// either: the agent connected to a sandbox holds it for the whole
+// conversation, and the reason for the announcement does not license a
+// paragraph. One sentence's worth.
+const noticeCap = 300
+
+// A sandbox announces itself to agents as well as to people. Design doc
+// 0087 §3 puts the announcement on the product rather than on the README
+// somebody may not have read, and an agent is exactly the caller that
+// read no README: it writes drafts where it is pointed, and on a sandbox
+// they are erased on the next restore.
+//
+// The channel is the instructions rather than a tool, because MCP's
+// default is no (0067 §4) and what that protects is the context every
+// agent spends on every turn — which this leaves untouched everywhere
+// but on the one deployment the sentence is true of.
+func TestASandboxSaysSoInItsInstructions(t *testing.T) {
+	ordinary := instructionsFor(&config.Config{})
+	if ordinary != instructions {
+		t.Errorf("an ordinary deployment's instructions are not the plain ones:\n%s", ordinary)
+	}
+	// A client that predates the field, and the zero Service the other
+	// tests connect with, must not crash on a nil config.
+	if instructionsFor(nil) != instructions {
+		t.Error("a nil config did not read as the ordinary posture")
+	}
+
+	sandbox := instructionsFor(&config.Config{Sandbox: true})
+	if sandbox == ordinary {
+		t.Fatal("a sandbox said nothing about being one")
+	}
+	if !strings.HasPrefix(sandbox, instructions) {
+		t.Error("the sandbox notice replaced the instructions rather than adding to them")
+	}
+	// The words that carry the warning, not the sentence verbatim: what
+	// must survive an edit is that an agent is told it may write and that
+	// what it writes goes away.
+	for _, want := range []string{"sandbox", "erased"} {
+		if !strings.Contains(sandbox, want) {
+			t.Errorf("the sandbox notice does not say %q:\n%s", want, sandbox)
+		}
+	}
+	if added := len(sandbox) - len(ordinary); added > noticeCap {
+		t.Errorf("the sandbox notice is %d bytes, over the %d a sentence is worth", added, noticeCap)
+	}
+
+	// A dev deployment is left out on purpose: what it costs is that no
+	// ruling names anybody, which is the operator's to know and the CLI's
+	// to print, and nothing an agent writes to it is lost.
+	if instructionsFor(&config.Config{InsecureDev: true}) != instructions {
+		t.Error("dev announced itself here; that announcement belongs to the CLI")
+	}
+
+	// And it reaches a client, which is the only form of the claim worth
+	// checking: read back off a real initialize rather than off the
+	// function that composed it (design doc 0035).
+	ctx := context.Background()
+	ct, st := mcp.NewInMemoryTransports()
+	svc := &service.Service{Config: &config.Config{Sandbox: true}}
+	if _, err := newServer(svc, "test", RetiredToolNames).Connect(ctx, st, nil); err != nil {
+		t.Fatalf("server connect: %v", err)
+	}
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatalf("client connect: %v", err)
+	}
+	defer cs.Close()
+	if got := cs.InitializeResult().Instructions; got != sandbox {
+		t.Errorf("initialize carried different instructions than the server composed:\n%s", got)
 	}
 }

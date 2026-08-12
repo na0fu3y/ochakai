@@ -21,6 +21,18 @@ last entry.
 
 ### Fixed
 
+- **A sandbox now says so to agents too, not only to people.** The CLI
+  and the web UI announce the disposable posture; MCP did not, so an
+  agent pointed at one — which the bundled `.mcpb` does by default, its
+  prefilled URL being the public demo — wrote drafts that the next
+  restore erased, with nothing having told it. A sandbox's `initialize`
+  instructions now carry one sentence saying it. It is not a tool:
+  MCP's default is no because a tool schema is resident in every agent's
+  context on every turn (design doc 0067 §4), and this is a sentence
+  only the deployment it is true of ever sends — an ordinary
+  deployment's resident bytes do not move, and `MCP-BYTES` is unchanged.
+  A `dev` deployment stays out on purpose: what it costs is the name on
+  a ruling, which is the operator's to know and the CLI already prints.
 - **The quick start's first three commands failed on a machine that has
   gcloud but cannot mint a token.** A session due for reauthentication,
   no account selected, or any non-interactive shell (an agent's, a CI
