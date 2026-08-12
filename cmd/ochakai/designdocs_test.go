@@ -621,3 +621,55 @@ tense, and nobody rereads it to notice.`,
 		t.Fatal("no superseded record has an English index entry: this check now guards nothing")
 	}
 }
+
+// A record cites its neighbours by number and spells the number as a
+// filename — [0086](0086-a-second-way-to-say-who-is-calling.md) — and a
+// record is renamed while the decision it holds stays put. When that
+// happens the citing record is left pointing at a name nothing answers
+// to, and the reader gets a 404 for a decision that is sitting right
+// there under a different title.
+//
+// TestManualLinksResolve deliberately leaves design records out: a link
+// inside an immutable record is a record of what was true when it was
+// written, and a target that has since been folded away should stay
+// pointed at. This asks the narrower question that immutability does not
+// protect — the cited *number* still exists, so nothing about the
+// decision has changed and only the spelling is wrong. Repairing that
+// leaves the citation saying exactly what its author said.
+//
+// Superseded records are included as citation targets rather than
+// resolved onward: a tombstone forwards the reader in its own Status:
+// header, which is the mechanism that exists for exactly this.
+func TestDesignRecordsCiteNumbersThatResolve(t *testing.T) {
+	records := designRecords(t)
+	byNumber := make(map[string]string, len(records))
+	for _, r := range records {
+		byNumber[r.number] = r.file
+	}
+	// Only links whose target names a numbered record: a record also
+	// links to source files, to GitHub, and to the manual, and none of
+	// those is this check's business.
+	citationRe := regexp.MustCompile(`\((\d{4})-[^)\s]*\.md\)`)
+	cited := 0
+	for _, r := range records {
+		for _, m := range citationRe.FindAllStringSubmatch(r.body, -1) {
+			target, number := strings.Trim(m[0], "()"), m[1]
+			file, ok := byNumber[number]
+			if !ok {
+				// A number with no record at all is a different mistake
+				// and not one this check can repair by renaming.
+				continue
+			}
+			cited++
+			if target != file {
+				t.Errorf("%s cites %s, which does not exist; record %s is %s now.\n\n"+
+					"A renamed record keeps its number, so this citation is right about the\n"+
+					"decision and wrong about the spelling: point it at the current filename.",
+					r.file, target, number, file)
+			}
+		}
+	}
+	if cited == 0 {
+		t.Fatal("no record cited another by filename: this check now guards nothing")
+	}
+}

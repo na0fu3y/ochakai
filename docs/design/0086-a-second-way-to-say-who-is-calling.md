@@ -57,7 +57,7 @@ Cloud Run が検証したものを読む。
   仕事である)。
 - **委譲**(`Ochakai-On-Behalf-Of`)は経路に依らず同じ規則で動く。
   検証済みの呼び出し元が許可リストにいるかを見るだけで、そこは
-  [0027](0027-delegated-identity.md) のままである。
+  [0027](0027-delegated-provenance.md) のままである。
 
 ## 4. 記録される名前
 
@@ -98,7 +98,7 @@ Cloud Run が検証したものを読む。
   経路は検証に落ちたとき — が、`api/openapi.yaml` はこれまで黙っていて、
   info の散文は「ochakai itself verifies nothing」とまで言っていた。
   in-process 検証が 401 を*最初の応答*にした以上、両方とも偽になる。
-  [0064](0064-rest-freeze-and-the-long-tail.md) が 400/413 でやったのと
+  [0064](0064-rest-stops-at-api-v1.md) が 400/413 でやったのと
   同じ扱いで、サーバが既に送っているものを
   `components/responses/Unauthorized` として全操作に宣言し、散文を
   二経路の現在形に書き直す。封筒の `code` は `invalid` である —

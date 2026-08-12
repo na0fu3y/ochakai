@@ -21,6 +21,30 @@ last entry.
 
 ### Fixed
 
+- **The quick start's first three commands failed on a machine that has
+  gcloud but cannot mint a token.** A session due for reauthentication,
+  no account selected, or any non-interactive shell (an agent's, a CI
+  job's) — the CLI committed to the gcloud path on the mere presence of
+  the binary, and the minting failure then aborted every request before
+  it was sent, including requests to the public demo, which reads no
+  identity and would have answered anybody. 0.19.1 deferred this
+  judgement to the server for the machine that has no credentials at
+  all; the machine that has some it cannot use is the same case and now
+  takes the same path. The request goes out bare, and where an identity
+  *was* wanted the 401 carries gcloud's own message, `gcloud auth login`
+  included. `ochakai whoami` reports the identity such a client will
+  actually present — `human:anonymous` — rather than an error, and
+  `ochakai mcp-stdio` no longer fails the bridge for the same reason.
+- **Nothing on the CLI said a deployment was a sandbox.** The disposable
+  posture announces itself on `GET /api/v1/stats` and the bundled web UI
+  turns that into a banner — but the public demo serves no pages, and
+  the quick start reaches it with the CLI, so the announcement that
+  design doc 0087 §3 requires ("a sandbox that does not say so takes the
+  work of whoever wrote there") reached nobody who followed the README.
+  `ochakai whoami` now carries a `posture:` line and `ochakai stats` a
+  first line, for a sandbox and for a `dev` deployment alike. README
+  said the demo "writes nothing", which stopped being true when it
+  became a sandbox; it now says what the demo takes and what it erases.
 - **The web UI served an empty-looking page wherever it shows a banner.**
   `.shell` is a two-column grid — sidebar, then the view — and the dev
   (`OCHAKAI_MODE=dev`) and sandbox (`OCHAKAI_MODE=sandbox`) banners sat

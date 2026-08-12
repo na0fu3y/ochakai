@@ -841,6 +841,11 @@ credentials present (the server's actor resolution is authoritative),
 the producer $OCHAKAI_PRODUCER declares for writes from this shell, if
 any, and whether the server is reachable.
 
+The last two lines are what the deployment is, when there is something
+to say: `mode` when it refuses writes, and `posture` when it accepts
+them on terms worth knowing first — a sandbox erases what you write on
+its next restore, and a dev deployment authenticates nobody.
+
 Flags:
   -json
     	print JSON

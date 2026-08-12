@@ -324,3 +324,46 @@ func TestOutcomeCoverageIsCountedIntegration(t *testing.T) {
 			st.Outcomes.ConceptsReported)
 	}
 }
+
+// A sandbox and a dev deployment each carry one fact the numbers beside
+// them have to be read through, and both travel on this response because
+// the frozen wire has no header to put them in (design doc 0087 §4). It
+// is the whole mechanism behind "a sandbox that does not say so takes the
+// work of whoever wrote there" (§3) — the web UI's banner and the CLI's
+// posture line are both readers of these two fields, so a deployment that
+// stopped setting them would go quiet everywhere at once.
+func TestStatsCarriesThePostureItIsServing(t *testing.T) {
+	dbURL := testdb.URL(t)
+	ctx := context.Background()
+	st, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	// config_test.go covers the mode word turning into these flags; the
+	// link this asks about is the next one — a Config that says sandbox
+	// reaching the response that announces it.
+	for _, c := range []struct {
+		name string
+		cfg  *config.Config
+	}{
+		{"sandbox", &config.Config{Sandbox: true}},
+		{"dev", &config.Config{InsecureDev: true}},
+		{"ordinary", &config.Config{}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			svc := &Service{Store: st, Log: slog.New(slog.DiscardHandler), Config: c.cfg}
+			got, err := svc.Stats(ctx, 1, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Sandbox != c.cfg.Sandbox || got.InsecureDev != c.cfg.InsecureDev {
+				t.Errorf("%s: sandbox=%v insecure_dev=%v, want %v/%v",
+					c.name, got.Sandbox, got.InsecureDev, c.cfg.Sandbox, c.cfg.InsecureDev)
+			}
+		})
+	}
+}

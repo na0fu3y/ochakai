@@ -82,7 +82,25 @@ func authedHTTPClient(tokens oauth2.TokenSource) *http.Client {
 	if tokens == nil {
 		return http.DefaultClient
 	}
-	return &http.Client{Transport: &oauth2.Transport{Source: tokens, Base: http.DefaultTransport}}
+	return &http.Client{Transport: bestEffortToken{tokens}}
+}
+
+// bestEffortToken attaches a Google ID token when one can be minted and
+// sends the request bare when one cannot — oauth2.Transport fails the
+// request instead, which would deny a public deployment (design doc 0066
+// §3) on this end's guess. It is `ochakai ui`'s rule for the same reason:
+// whether an identity is wanted is the server's answer, and it gives it
+// as 401.
+type bestEffortToken struct{ src oauth2.TokenSource }
+
+func (t bestEffortToken) RoundTrip(req *http.Request) (*http.Response, error) {
+	if tok, err := t.src.Token(); err == nil {
+		// Per net/http's RoundTripper contract: do not modify the
+		// request that was handed in.
+		req = req.Clone(req.Context())
+		tok.SetAuthHeader(req)
+	}
+	return http.DefaultTransport.RoundTrip(req)
 }
 
 // bridge connects both transports and copies messages between them in

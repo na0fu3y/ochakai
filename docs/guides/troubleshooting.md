@@ -32,6 +32,18 @@ mode:      read-write
 `OCHAKAI_URL` を export したままのシェルは、毎回 `ochakai use` を
 上書きする。
 
+**`server answered 401 Unauthorized: resolve Google ID token: … gcloud
+auth print-identity-token: ERROR: … Reauthentication failed`。**
+gcloud のセッションが再認証を求めている。CLI は資格情報を作れなければ
+無認証のまま送り、identity を読まないデプロイ(公開デモやサンドボックス)
+はそれで普通に答える — このメッセージが出るのは、**identity を求めた
+デプロイに当たったとき**だけである。`gcloud auth login` を対話シェルで
+実行する。エージェントや CI から出ているなら、そこはプロンプトに答え
+られないので、サービスアカウントの ADC を使う
+([mcp-clients.md](mcp-clients.md#what-the-bridge-needs))。
+`ochakai whoami` の identity 行が `human:anonymous (no Google
+credentials found)` になっているのが同じ状態の別の見え方である。
+
 **書き込みが 403 で失敗し、`mode:` が `read-only` を示す。** デプロイが
 `OCHAKAI_MODE`(`read-only` または `public`)を設定している。運用者で
 あるあなたのものも含め、すべての書き込みが拒否される — それは呼び出し
@@ -168,6 +180,25 @@ webui のサービスアカウントがサーバーの `OCHAKAI_DELEGATING_CALLE
 <a id="startup"></a>
 
 ## 起動
+
+**`docker compose … up` が `Bind for 0.0.0.0:8080 failed: port is
+already allocated` で止まる。** 8080 は取り合いになりやすい番号で、
+別のインスタンスや無関係なプロセスが先に握っている。
+`deploy/compose.yaml` はポートを固定しているので、上書きは
+override ファイルで行う(`docker compose -f deploy/compose.yaml -f
+ports.yaml up -d`):
+
+```yaml
+services:
+  ochakai:
+    ports: !override
+      - "8123:8080"
+```
+
+`ochakai use http://localhost:8123` で指し直す。**先に握っていたのが
+別の ochakai だった場合は、書き込む前に必ず `ochakai whoami` で
+`server:` 行を確かめること** — 起動に失敗したことに気づかないまま
+import すると、書き込み先は隣のインスタンスである。
 
 **embedding の設定変更後、semantic search が静かになった。**
 `OCHAKAI_EMBEDDINGS` で別のモデルを名指すと、古い vector は残るが新しい

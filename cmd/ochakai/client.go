@@ -689,6 +689,26 @@ func cmdStats(ctx context.Context, args []string) error {
 		}
 		return pendingWork(st.Queues, *exitCode)
 	}
+	// What the deployment is, before what is in it: a posture the numbers
+	// below have to be read through. A sandbox is restored on a schedule,
+	// so every count here is temporary and so is anything the reader
+	// writes; a dev deployment authenticates nobody, so no ruling it
+	// records names anybody. Both are answered on this endpoint because
+	// the wire is frozen against headers of their own (design docs 0087
+	// §4, 0064), and the bundled web UI's banner reaches only the people
+	// who open it — a deployment that has no pages, or a caller who came
+	// by CLI, would otherwise never be told (0087 §3).
+	//
+	// Printed only when there is something to say. This is a posture, not
+	// a count, so there is no reading of "absent" that has to be told
+	// from zero: the ordinary posture is the one nothing is said about,
+	// and a server too old to carry these fields is too old to be either.
+	if st.Sandbox {
+		fmt.Print("sandbox\ttrue\tthe base is restored on a schedule — what you write here is disposable\n")
+	}
+	if st.InsecureDev {
+		fmt.Print("insecure_dev\ttrue\tauthentication is off — every caller is human:anonymous, including whoever rules on a concept\n")
+	}
 	// Tab-separated key/value, like `usage`: the vocabularies are printed
 	// in their own order (domain.Statuses, domain.Trusts) so a value
 	// added to either shows up here without this command being edited.

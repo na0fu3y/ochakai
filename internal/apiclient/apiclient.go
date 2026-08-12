@@ -78,20 +78,44 @@ func (c *Client) SetProducer(p string) { c.producer = p }
 // server say whether it wanted any.
 func (c *Client) TokenSource() oauth2.TokenSource { return c.tokens }
 
+// credentials returns the token to attach, or nil with the reason there
+// is none. Having none has two shapes and they are one case to a caller:
+// this machine never had credentials, so New resolved no source at all;
+// or it advertised some it cannot mint — a gcloud session that wants
+// reauthentication, no account selected, a prompt in a shell that cannot
+// answer one. Neither is decided here, for New's reason: whether a
+// deployment wants an identity is the server's answer, so the request
+// goes out bare and a 401 carries this back.
+func (c *Client) credentials() (*oauth2.Token, error) {
+	if c.tokens == nil {
+		return nil, c.noCreds
+	}
+	tok, err := c.tokens.Token()
+	if err != nil {
+		return nil, fmt.Errorf("resolve Google ID token: %w", err)
+	}
+	return tok, nil
+}
+
 // Identity resolves, locally, the identity this client would present:
 // the ID token's email, prefixed the way the server maps actors (design
 // doc 0002) — service accounts to process:, everyone else to human:.
 // A client sending no credentials — plain http, or an https server this
-// machine has none for — presents human:anonymous, which is what a public
-// deployment resolves every caller to (design doc 0066 §3). The server's
-// actor resolution is authoritative; this is the client's best-effort view.
+// machine has none it can mint for — presents human:anonymous, which is
+// what a public deployment resolves every caller to (design doc 0066 §3).
+// The server's actor resolution is authoritative; this is the client's
+// best-effort view.
 func (c *Client) Identity() (actor, auth string, err error) {
-	if c.tokens == nil {
+	tok, noCreds := c.credentials()
+	if tok == nil {
+		if noCreds != nil && c.tokens != nil {
+			// The path named at construction (gcloud, ADC) is not the
+			// one this request will take, so it must not be reported as
+			// the one it took: nothing is sent, exactly as when there was
+			// never a source, and it reads the same here.
+			return "human:anonymous", "no Google credentials found", nil
+		}
 		return "human:anonymous", c.auth, nil
-	}
-	tok, err := c.tokens.Token()
-	if err != nil {
-		return "", c.auth, fmt.Errorf("resolve Google ID token: %w", err)
 	}
 	email := jwtEmail(tok.AccessToken)
 	if email == "" {
@@ -801,11 +825,8 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 	if c.producer != "" {
 		req.Header.Set(httpauth.ProducerHeader, c.producer)
 	}
-	if c.tokens != nil {
-		tok, err := c.tokens.Token()
-		if err != nil {
-			return nil, fmt.Errorf("resolve Google ID token: %w", err)
-		}
+	tok, noCreds := c.credentials()
+	if tok != nil {
 		tok.SetAuthHeader(req)
 	}
 	resp, err := c.http.Do(req)
@@ -828,8 +849,8 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 		// doc 0066 §3) — wanted an identity. Say why the request went out
 		// bare: Cloud Run rejects ahead of the container, so the body is
 		// Google's HTML and APIError alone would say only "Unauthorized".
-		if resp.StatusCode == http.StatusUnauthorized && c.noCreds != nil {
-			return nil, fmt.Errorf("server answered %w: %w", apiErr, c.noCreds)
+		if resp.StatusCode == http.StatusUnauthorized && noCreds != nil {
+			return nil, fmt.Errorf("server answered %w: %w", apiErr, noCreds)
 		}
 		return nil, apiErr
 	}

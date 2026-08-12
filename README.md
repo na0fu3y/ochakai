@@ -35,9 +35,9 @@ else's knowledge, then hold your own, then run it for a team.
 ### Sixty seconds: the public demo
 
 A public demo already holds the knowledge base below. It reads no
-identity and writes nothing, which is what makes it safe to leave open
-([design doc 0066](docs/design/0066-four-postures-one-word.md) §3), so
-there is no account and nothing to configure:
+identity ([design doc
+0066](docs/design/0066-four-postures-one-word.md) §3), so there is no
+account and nothing to configure:
 
 ```sh
 go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
@@ -47,6 +47,14 @@ ochakai context "why is revenue down?"
 
 It is also the one deployment where plain curl works — nothing to sign:
 `curl 'https://demo.ochak.ai/api/v1/search?q=revenue'`.
+
+**It is a sandbox, and it takes writes.** That is what makes the loop
+below — an agent drafts, a human rules — something you can try without
+standing anything up first. The price is that the base is restored on a
+schedule and everything written to it goes: a sandbox that did not say so
+would be taking your work ([design doc
+0087](docs/design/0087-a-sandbox-says-it-is-one.md) §3). `ochakai whoami`
+says it on the `posture:` line, and `ochakai stats` on its first.
 
 #### What that one call is worth
 
@@ -92,8 +100,9 @@ is your agent's job ([design doc
 
 ### Ten minutes: a base of your own
 
-The demo above is somebody else's knowledge, and it refuses every write.
-A server of your own is one command, and everything after it writes:
+The demo above is somebody else's knowledge, and nothing written to it
+outlives the next restore. A server of your own is one command, and
+everything after it keeps:
 
 ```sh
 git clone https://github.com/na0fu3y/ochakai && cd ochakai
