@@ -1,5 +1,7 @@
 # ochakai
 
+<img src="docs/images/logo-mark.svg" align="right" width="110" alt="ochakai logo: a tea bowl with three rising wisps of steam">
+
 [![ci](https://github.com/na0fu3y/ochakai/actions/workflows/ci.yaml/badge.svg)](https://github.com/na0fu3y/ochakai/actions/workflows/ci.yaml)
 [![release](https://img.shields.io/github/v/release/na0fu3y/ochakai?sort=semver)](https://github.com/na0fu3y/ochakai/releases)
 [![Go Reference](https://pkg.go.dev/badge/github.com/na0fu3y/ochakai.svg)](https://pkg.go.dev/github.com/na0fu3y/ochakai)
