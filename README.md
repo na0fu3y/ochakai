@@ -115,6 +115,13 @@ ochakai import examples/demo
 curl 'http://localhost:8080/api/v1/search?q=revenue'
 ```
 
+An import writes documents; it does not rule on them. The bundle's own
+`verified:` keys arrive as what the document claims, so a base that was
+just loaded holds no verification of its own. `ochakai verify
+metrics/revenue` — or the web UI's ✓ — is the first one, and until it
+lands, `--trust human-reviewed` answers with nothing and the review
+page's counters read zero, by design.
+
 That shop is invented. Your own tables go in the same way, and ochakai
 never touches the warehouse to get them — you run the schema query with
 your own client and your own identity, and pipe the rows in:
@@ -165,8 +172,8 @@ does:
 ochakai use https://your-service.run.app   # or back to http://localhost:8080
 ochakai whoami                      # which server, as whom, reachable?
 ochakai context "why is revenue down?"  # the one-call read before a data question
-ochakai search "revenue" --type Metric --trust human-reviewed
-ochakai verify metrics/revenue      # re-affirms a concept; status and ETag stay put
+ochakai verify metrics/revenue      # a human confirmed it; status and ETag stay put
+ochakai search "revenue" --type Metric --trust human-reviewed   # what that verify put there
 ochakai ui                          # web UI at http://127.0.0.1:8098, acting as you
 ```
 

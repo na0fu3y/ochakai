@@ -111,6 +111,13 @@ const { result: { targetId } } = await send('Target.createTarget', { url: 'about
 const { result: { sessionId } } = await send('Target.attachToTarget', { targetId, flatten: true });
 for (const domain of ['Runtime', 'Log', 'Page']) await send(domain + '.enable', {}, sessionId);
 
+// A desktop viewport, stated rather than inherited: headless opens
+// 800x600, which is exactly the width at which the page switches to its
+// stacked narrow layout — so the layout every reader on a laptop sees
+// would be the one this walk never loaded.
+await send('Emulation.setDeviceMetricsOverride',
+  { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false }, sessionId);
+
 async function evalJS(expression) {
   const r = await send('Runtime.evaluate',
     { expression, awaitPromise: true, returnByValue: true }, sessionId);
@@ -210,6 +217,29 @@ try {
       const n = document.querySelector('.dev-note');
       return !!n && (getComputedStyle(n).display !== 'none') === ${insecure};
     })()`), shown);
+
+  // And it costs the page nothing. The shell is a two-column grid, and a
+  // banner shown as a sibling of <main> was a third grid item: it took
+  // the content cell, the view was placed in the sidebar's column one
+  // row down, and a sticky sidebar covered it — a dev or sandbox
+  // deployment served an empty-looking page on every desktop screen.
+  // Every check around this one passed throughout, because all of it was
+  // still in the DOM. Geometry is the only thing that says otherwise, so
+  // this asks where the view actually is.
+  await check('the view is beside the sidebar, not under it',
+    await waitFor(`(() => {
+      const v = document.querySelector('#view').getBoundingClientRect();
+      const side = document.querySelector('.sidebar').getBoundingClientRect();
+      if (v.width < 400) return false;
+      // The narrow layout stacks them, which is its own correct answer.
+      if (getComputedStyle(document.querySelector('.shell')).display !== 'grid') {
+        return v.top >= side.bottom - 1;
+      }
+      return v.left >= side.right - 1;
+    })()`), () => evalJS(`JSON.stringify({
+      view: document.querySelector('#view').getBoundingClientRect(),
+      sidebar: document.querySelector('.sidebar').getBoundingClientRect(),
+    })`));
 
   await go('#/search');
   // Guarded rather than assumed: on a page that did not finish loading

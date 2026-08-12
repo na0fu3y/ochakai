@@ -93,6 +93,12 @@ pre code { background: none; padding: 0; }
    the toggle is desktop-only. */
 .shell.side-collapsed { grid-template-columns: minmax(0, 1fr); }
 .shell.side-collapsed .sidebar { display: none; }
+/* The second cell holds the view and whatever banner sits above it, so
+   the grid has exactly two children however many banners are shown. A
+   grid item's floor is its own content, which an unbreakable line — a
+   long id in a code span — would push the column past; min-width is
+   what keeps the column at the track minmax(0, 1fr) declares. */
+.content { min-width: 0; }
 #side-toggle {
   font: inherit; background: none; border: none; cursor: pointer;
   color: var(--muted); padding: .2rem .45rem; border-radius: 6px; font-size: 1.05rem; line-height: 1;
@@ -473,6 +479,13 @@ body.read-only .read-only-note {
   border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;
   font-size: .92rem; color: var(--muted);
 }
+/* Both page-wide banners ride above the view inside the content pane,
+   so they take the view's text column: 62rem less the 1.2rem <main>
+   insets its text by, which puts a banner's edge where the first line
+   of the page starts. */
+.dev-note, .sandbox-note {
+  max-width: calc(min(62rem, 100%) - 2.4rem); margin: 1.4rem auto 0;
+}
 /* A sandbox is writable, so nothing is hidden — what it needs is to
    say what it is (design doc 0087). It is the one banner that stays on
    every page, because the thing it warns about (your writing is going
@@ -485,11 +498,11 @@ body.read-only .read-only-note {
 body.insecure-dev .dev-note {
   display: block; background: var(--rejected-bg);
   border: 1px solid var(--rejected-bd); color: var(--rejected-fg);
-  border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;
+  border-radius: 8px; padding: .6rem .9rem;
   font-size: .92rem;
 }
 body.sandbox .sandbox-note {
   display: block; background: var(--accent-weak); border: 1px solid var(--border);
-  border-radius: 8px; padding: .6rem .9rem; margin: 0 0 1rem;
+  border-radius: 8px; padding: .6rem .9rem;
   font-size: .92rem;
 }

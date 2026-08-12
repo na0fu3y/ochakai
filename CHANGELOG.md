@@ -19,6 +19,39 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The web UI served an empty-looking page wherever it shows a banner.**
+  `.shell` is a two-column grid — sidebar, then the view — and the dev
+  (`OCHAKAI_MODE=dev`) and sandbox (`OCHAKAI_MODE=sandbox`) banners sat
+  in it as siblings of `<main>`. A shown banner therefore took the
+  content cell, and the view was auto-placed one row down in the
+  *sidebar's* column, where a `position: sticky` sidebar covered it: no
+  scroll position reached it, on any screen wider than the 800px
+  breakpoint below which the shell stacks. The review queue is where the
+  human half of the loop happens, and for the two postures meant for
+  trying ochakai out — a local `docker compose` base and a public
+  sandbox — it could not be reached from the page at all. The banners
+  are now inside the content pane, which is the one grid cell they were
+  always meant to share with the view.
+  The browser smoke walked all of this and passed: everything it asks
+  about was in the DOM, laid out where nobody could see it. It now runs
+  at a stated desktop viewport (headless opens 800x600, which is exactly
+  the stacked layout) and asks where the view actually is.
+- **Documentation that outlived 0.22.0's import change.** A base created
+  by following the README held nothing `human-reviewed`, because an
+  import no longer rules on what it writes — so README's own
+  `--trust human-reviewed` example returned nothing, and so did the
+  golden-query canary's first command. The quick start now says that the
+  first verification is a move somebody makes, and the pages that answer
+  "why is this empty" say it too.
+- **The manual described a quick start the README no longer has.**
+  `docs/configuration.md` and `docs/README.md` said a local trial needs
+  Docker and nothing else, from when the only client command ran inside
+  the compose container. README's steps run the CLI on the host, so they
+  need the binary; the container route still exists and is now written
+  down where somebody looking for it would find it.
+
 ## [0.22.0] - 2026-08-11
 
 ### Fixed
