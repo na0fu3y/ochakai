@@ -49,27 +49,34 @@
       <div id="tree" class="browse"><div class="empty">…</div></div>
     </details>
   </aside>
-  <!-- OCHAKAI_MODE=dev: authentication is off, so a ruling records
-       whoever asked to be recorded. The mode's own documentation says
-       not to deploy it, which is why the page says it too — the
-       deployments that need telling are the ones that did it anyway. -->
-  <div class="dev-note" role="status">
-    <strong>認証が切れています(<code>OCHAKAI_MODE=dev</code>)。</strong>
-    ここに届いた人は誰にでもなれます — 検証も却下も、名乗ったとおりの名前で
-    記録されるので、<strong>「人が確認した」がこのベースでは何も意味しません</strong>。
-    開発用の設定です。共有された URL でこれを見ているなら、それは事故です。
+  <!-- The banners are content, not a column. Left as siblings of <main>
+       they were grid items of their own: a displayed one took the
+       content cell and pushed the view into the second row of the
+       sidebar's column, where a sticky sidebar covered it. Anything
+       page-wide added later belongs in here for the same reason. -->
+  <div class="content">
+    <!-- OCHAKAI_MODE=dev: authentication is off, so a ruling records
+         whoever asked to be recorded. The mode's own documentation says
+         not to deploy it, which is why the page says it too — the
+         deployments that need telling are the ones that did it anyway. -->
+    <div class="dev-note" role="status">
+      <strong>認証が切れています(<code>OCHAKAI_MODE=dev</code>)。</strong>
+      ここに届いた人は誰にでもなれます — 検証も却下も、名乗ったとおりの名前で
+      記録されるので、<strong>「人が確認した」がこのベースでは何も意味しません</strong>。
+      開発用の設定です。共有された URL でこれを見ているなら、それは事故です。
+    </div>
+    <div class="sandbox-note" role="status">
+      <strong>ここはサンドボックスです。</strong>誰でも書き込めて、誰も識別されず、
+      ナレッジベース全体が定期的に復元されます — つまり、ここに書いたものはすべて
+      消えます。試すための場所です: concept を下書きし、検証し、結果を報告して
+      みてください。<strong>失って困るものは置かないでください。</strong>
+    </div>
+    <!-- tabindex="-1" so the router can move focus here after a
+       navigation: the view is replaced in place, and without it a
+       keyboard or screen-reader user stays where the last click left
+       them while the page around them changes. -->
+    <main id="view" tabindex="-1"></main>
   </div>
-  <div class="sandbox-note" role="status">
-    <strong>ここはサンドボックスです。</strong>誰でも書き込めて、誰も識別されず、
-    ナレッジベース全体が定期的に復元されます — つまり、ここに書いたものはすべて
-    消えます。試すための場所です: concept を下書きし、検証し、結果を報告して
-    みてください。<strong>失って困るものは置かないでください。</strong>
-  </div>
-  <!-- tabindex="-1" so the router can move focus here after a
-     navigation: the view is replaced in place, and without it a
-     keyboard or screen-reader user stays where the last click left
-     them while the page around them changes. -->
-  <main id="view" tabindex="-1"></main>
 </div>
 <!-- Every save, refusal and failure is announced here, so it is a live
      region: a screen reader gets told what a sighted reader sees flash

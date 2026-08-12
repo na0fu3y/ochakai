@@ -69,7 +69,8 @@ otherwise have to hunt for. Not a translation; a way in.
   リファレンスでもある: private IP、IAP 越しの web UI、security
   hardening のチェックリスト、アップグレードの経路。
 - [deploy/compose.yaml](../deploy/compose.yaml) — ローカルのスタック。
-  Docker だけで足り、Google アカウントは要らない。
+  Google アカウントは要らない。手元から CLI で触るならバイナリも要る
+  ([動作要件](configuration.md#requirements))。
 - [デプロイの運用](guides/operating.md) — 二種類のバックアップとそれぞれ
   が何を復旧するか、OKF バンドルからの復元が持ち帰ら*ない*もの、デプロイ
   が劣化しつつも動いているときログが何と言うか、スケールについて分かって

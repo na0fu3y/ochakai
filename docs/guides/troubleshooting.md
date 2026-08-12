@@ -56,6 +56,12 @@ mode:      read-write
   であり、機能語を三つ共有する concept が、主題そのものを言い当てている
   concept より上位に来ることがある。これは embeddings が直す場合であ
   る。
+- *`--trust human-reviewed` を付けると何も返らない。* trust tier は
+  このインスタンスが観測した裁定から決まる。取り込んだばかりのベース
+  では誰も裁定していないので、この絞り込みは空になる — バンドルの
+  `verified:` は文書の主張として `received` に残るだけである
+  ([merge は verify ではない](git-review.md#merge-は-verify-ではない))。
+  `ochakai verify <id>` か Web UI の「検証」を一手打つ。
 - *保存されているはずの語が何にもマッチしない。* rejected と
   soft-delete された concept は既定の検索から除外され、`--status` は
   さらに絞り込む。concept が無いと結論する前にフィルタを外す。

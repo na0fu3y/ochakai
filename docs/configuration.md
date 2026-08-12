@@ -31,15 +31,17 @@ migration 0036 が字句索引を `tsvector` の列に移し、trigram 索引に
 CI と deploy ガイドはどちらも Postgres 17 で動かしている。
 
 **サーバーには Docker が要る。クライアントのコマンドにはバイナリが
-要る。** README のクイックスタートは唯一の CLI コマンド `import` を
-compose のコンテナの中で動かす
-(`docker compose exec ochakai /ochakai import ...`)ので、それをなぞる
-だけなら Docker 以外は要らない。その先 — `ochakai use`・
-`ochakai context`・web UI — には
-[リリースアーカイブ](https://github.com/na0fu3y/ochakai/releases)か、
-`go run ./cmd/ochakai`(`go.mod` が名指す toolchain が要る。Go 1.21
-以降ならそれを自動で取ってくる)を使う。あるいは API を直接叩いても
-よい — CLI がやっているのはそれだけなので、一行の `curl` で書き込む版は
+要る。** README のクイックスタートは `ochakai use`・`ochakai import`・
+`ochakai context` を手元で動かすので、compose の Docker に加えて CLI が
+要る — `go install github.com/na0fu3y/ochakai/cmd/ochakai@latest`
+(`go.mod` が名指す toolchain が要る。Go 1.21 以降ならそれを自動で
+取ってくる)か、
+[リリースアーカイブ](https://github.com/na0fu3y/ochakai/releases)である。
+**Docker だけで済ませる**なら、compose のコンテナが同じバイナリを
+持っている: `docker compose -f deploy/compose.yaml exec ochakai
+/ochakai import /examples/demo`(`examples/` はコンテナの `/examples`
+にマウントされている)。あるいは API を直接叩いてもよい — CLI が
+やっているのはそれだけなので、一行の `curl` で書き込む版は
 [データモデル](architecture.md#the-data-model)にある。
 
 <a id="environment-variables"></a>

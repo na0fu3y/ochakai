@@ -34,7 +34,9 @@ ochakai list verified_at --type 'Attested Computation' --trust human-reviewed --
 
 `title` は任意である(OKF SPEC §4.1)。宣言していない concept では
 キーごと無いので、表示名は id の末尾セグメントで補う — 上の `//` が
-それである。
+それである。取り込んだばかりのベースでこれが空なら、カナリアが壊れて
+いるのではなく、まだ誰も裁定していない — `--trust human-reviewed` が
+答えるのは import ではなく `ochakai verify` である。
 
 hit は concept を手渡すのではなく名指すだけである: 順位付けこそが
 フィードの仕事であり、「このうちどれが期限切れか」に答えるために
