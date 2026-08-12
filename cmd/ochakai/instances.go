@@ -172,7 +172,7 @@ func cmdUse(_ context.Context, args []string) error {
 func cmdWhoami(ctx context.Context, args []string) error {
 	fs, target := newFlagSet(
 		"whoami",
-		"Usage: ochakai whoami [flags]\n\nPrint which server client commands target and where that choice came\nfrom (--url / $OCHAKAI_URL / `ochakai use`), the identity your\ncredentials present (the server's actor resolution is authoritative),\nthe producer $OCHAKAI_PRODUCER declares for writes from this shell, if\nany, and whether the server is reachable.",
+		"Usage: ochakai whoami [flags]\n\nPrint which server client commands target and where that choice came\nfrom (--url / $OCHAKAI_URL / `ochakai use`), the identity your\ncredentials present (the server's actor resolution is authoritative),\nthe producer $OCHAKAI_PRODUCER declares for writes from this shell, if\nany, and whether the server is reachable.\n\nThe last two lines are what the deployment is, when there is something\nto say: `mode` when it refuses writes, and `posture` when it accepts\nthem on terms worth knowing first — a sandbox erases what you write on\nits next restore, and a dev deployment authenticates nobody.",
 		"  ochakai whoami\n  ochakai whoami --json\n")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if _, err := exactArgs(fs, args, 0); err != nil {
@@ -191,6 +191,7 @@ func cmdWhoami(ctx context.Context, args []string) error {
 		Error    string `json:"error,omitempty"`
 		Health   string `json:"health"`
 		Mode     string `json:"mode,omitempty"`
+		Posture  string `json:"posture,omitempty"`
 	}{URL: *target, Source: urlSource(fs), Producer: os.Getenv("OCHAKAI_PRODUCER")}
 
 	c, err := newClient(ctx, *target)
@@ -218,6 +219,24 @@ func cmdWhoami(ctx context.Context, args []string) error {
 			if ro, err := c.ReadOnly(ctx); err == nil {
 				report.Mode = map[bool]string{true: "read-only", false: "read-write"}[ro]
 			}
+			// Writable is not the whole answer, and the rest of it is
+			// what somebody has to know *before* writing: a sandbox
+			// accepts the write and erases it on the next restore
+			// (design doc 0087), and a dev deployment accepts it from
+			// anybody as anybody. Both say so on stats rather than in a
+			// header of their own, which the freeze does not allow
+			// (0087 §4). The bundled web UI reads the same field for its
+			// banner; this is the same announcement for the surface the
+			// quick start actually opens with, and for the deployments
+			// that serve no pages at all.
+			if st, err := c.Stats(ctx, 0, nil); err == nil {
+				switch {
+				case st.Sandbox:
+					report.Posture = "sandbox — the base is restored on a schedule, so what you write here is disposable"
+				case st.InsecureDev:
+					report.Posture = "insecure dev — authentication is off, and every caller is human:anonymous"
+				}
+			}
 		}
 	}
 
@@ -241,6 +260,9 @@ func cmdWhoami(ctx context.Context, args []string) error {
 		fmt.Printf("health:    %s\n", report.Health)
 		if report.Mode != "" {
 			fmt.Printf("mode:      %s\n", report.Mode)
+		}
+		if report.Posture != "" {
+			fmt.Printf("posture:   %s\n", report.Posture)
 		}
 	}
 	if report.Error != "" || report.Health != "ok" {

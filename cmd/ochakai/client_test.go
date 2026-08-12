@@ -1275,3 +1275,60 @@ func captureRun(t *testing.T, fn func() error) (out, errOut string, err error) {
 	e, _ := io.ReadAll(errR)
 	return string(o), string(e), err
 }
+
+// A sandbox is announced where its numbers are, because the numbers are
+// the thing it qualifies: they are restored away on a schedule, and so
+// is whatever the reader writes (design doc 0087 §§3-4). The bundled web
+// UI reads the same field for its banner; a caller who came by CLI, or a
+// deployment serving no pages at all, is told here or nowhere.
+func TestStatsAnnouncesADisposableSandbox(t *testing.T) {
+	var body map[string]any
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(body)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	run := func(t *testing.T) string {
+		t.Helper()
+		orig := os.Stdout
+		pr, pw, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.Stdout = pw
+		err = cmdStats(context.Background(), []string{"--url", srv.URL})
+		pw.Close()
+		os.Stdout = orig
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := io.ReadAll(pr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(out)
+	}
+
+	body = map[string]any{"sandbox": true}
+	out := run(t)
+	if !strings.Contains(out, "sandbox\ttrue\t") {
+		t.Errorf("a sandbox did not say so:\n%s", out)
+	}
+	if !strings.Contains(out, "disposable") {
+		t.Errorf("the sandbox line does not say what it costs the reader:\n%s", out)
+	}
+
+	// Off the two announced postures there is nothing to announce, and a
+	// line that appears on every ordinary deployment would be noise
+	// rather than a warning.
+	body = map[string]any{"insecure_dev": true}
+	if out := run(t); !strings.Contains(out, "insecure_dev\ttrue\t") || strings.Contains(out, "sandbox\t") {
+		t.Errorf("dev deployment announced wrongly:\n%s", out)
+	}
+	body = map[string]any{}
+	if out := run(t); strings.Contains(out, "sandbox") || strings.Contains(out, "insecure_dev") {
+		t.Errorf("ordinary deployment announced a posture:\n%s", out)
+	}
+}

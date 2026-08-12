@@ -89,6 +89,119 @@ func TestPublicServerAnswersAnUncredentialedClient(t *testing.T) {
 	}
 }
 
+// withUnmintableCredentials makes credential resolution *succeed* and
+// minting fail, the way it fails on a machine that has gcloud but whose
+// session wants reauthentication, has no account selected, or is being
+// asked for one in a shell that cannot answer. The source is resolvable,
+// so New keeps it; the failure arrives one call later, at send time.
+func withUnmintableCredentials(t *testing.T) error {
+	t.Helper()
+	boom := errors.New("gcloud auth print-identity-token: ERROR: Reauthentication failed. cannot prompt during non-interactive execution")
+	saved := resolveTokenSource
+	resolveTokenSource = func(context.Context, string) (oauth2.TokenSource, string, error) {
+		return failingTokenSource{boom}, "gcloud", nil
+	}
+	t.Cleanup(func() { resolveTokenSource = saved })
+	return boom
+}
+
+type failingTokenSource struct{ err error }
+
+func (s failingTokenSource) Token() (*oauth2.Token, error) { return nil, s.err }
+
+// Credentials that cannot be minted are credentials this client will not
+// send, so it presents what it will actually be: anonymous, reported the
+// same way as a machine that never had any. Naming gcloud here would name
+// a path the request does not take.
+func TestUnmintableCredentialsPresentAsAnonymous(t *testing.T) {
+	withUnmintableCredentials(t)
+	c, err := New(context.Background(), "https://demo.example/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor, auth, err := c.Identity()
+	if err != nil || actor != "human:anonymous" || auth != "no Google credentials found" {
+		t.Errorf("actor = %q, auth = %q, err = %v", actor, auth, err)
+	}
+}
+
+// The public demo the README opens with: no identity is read and none is
+// wanted, so a broken gcloud session must not be the thing that decides
+// the caller cannot have it. The deferral covers both shapes of having
+// no credentials, not only the machine that never had any.
+func TestPublicServerAnswersAClientWhoseTokenWillNotMint(t *testing.T) {
+	withUnmintableCredentials(t)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "" {
+			t.Errorf("sent Authorization %q; want none", got)
+		}
+		_, _ = w.Write([]byte(`{"hits":[]}`))
+	}))
+	defer srv.Close()
+
+	c, err := New(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.http = srv.Client()
+	if _, err := c.Search(context.Background(), SearchParams{Query: "revenue"}); err != nil {
+		t.Errorf("public server refused a caller whose token would not mint: %v", err)
+	}
+}
+
+// And where an identity *was* wanted, the minting failure is the answer
+// to "why did that go out bare?" — it reaches the caller at the 401, with
+// the remedy (`gcloud auth login`) in the text gcloud itself wrote.
+func TestUnauthorizedExplainsAnUnmintableToken(t *testing.T) {
+	boom := withUnmintableCredentials(t)
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	c, err := New(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.http = srv.Client()
+	if err := c.Health(context.Background()); !errors.Is(err, boom) {
+		t.Errorf("401 did not carry the minting failure: %v", err)
+	}
+}
+
+// A token that mints is still attached — the fallback is for the failure,
+// not a quiet retreat from authenticating.
+func TestMintableCredentialsAreStillSent(t *testing.T) {
+	saved := resolveTokenSource
+	resolveTokenSource = func(context.Context, string) (oauth2.TokenSource, string, error) {
+		return oauth2.StaticTokenSource(&oauth2.Token{
+			AccessToken: fakeJWT(`{"email":"na0@example.com"}`),
+			TokenType:   "Bearer",
+		}), "gcloud", nil
+	}
+	t.Cleanup(func() { resolveTokenSource = saved })
+
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got == "" {
+			t.Error("sent no Authorization header")
+		}
+		_, _ = w.Write([]byte(`{"hits":[]}`))
+	}))
+	defer srv.Close()
+
+	c, err := New(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.http = srv.Client()
+	if _, err := c.Search(context.Background(), SearchParams{Query: "revenue"}); err != nil {
+		t.Fatal(err)
+	}
+	if actor, auth, err := c.Identity(); err != nil || actor != "human:na0@example.com" || auth != "gcloud" {
+		t.Errorf("actor = %q, auth = %q, err = %v", actor, auth, err)
+	}
+}
+
 // A server that does want an identity says so with 401, and only then
 // does the caller hear why the request went out without one.
 func TestUnauthorizedExplainsTheMissingCredentials(t *testing.T) {

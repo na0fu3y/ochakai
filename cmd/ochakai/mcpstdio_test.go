@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"golang.org/x/oauth2"
 )
 
 // remoteMCP starts an MCP server over streamable HTTP and returns its base
@@ -169,4 +171,54 @@ func TestBridgeStdoutCarriesOnlyProtocol(t *testing.T) {
 	outW.Close()
 	cancel()
 	<-done
+}
+
+// The bridge reaches a public deployment (design doc 0066 §3) from a
+// machine whose gcloud cannot mint a token — reauthentication due, no
+// account selected, a prompt nothing can answer. oauth2.Transport fails
+// the request in that case; sending it bare is what lets the server be
+// the one to say whether it wanted an identity.
+func TestAuthedHTTPClientSendsBareWhenTheTokenWillNotMint(t *testing.T) {
+	var sawAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAuth = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	c := authedHTTPClient(brokenTokenSource{})
+	resp, err := c.Get(srv.URL)
+	if err != nil {
+		t.Fatalf("a token that would not mint failed the request: %v", err)
+	}
+	resp.Body.Close()
+	if sawAuth != "" {
+		t.Errorf("sent Authorization %q; want none", sawAuth)
+	}
+}
+
+// And a token that mints still rides on the request.
+func TestAuthedHTTPClientSendsAMintedToken(t *testing.T) {
+	var sawAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAuth = r.Header.Get("Authorization")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	c := authedHTTPClient(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "tok", TokenType: "Bearer"}))
+	resp, err := c.Get(srv.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if sawAuth != "Bearer tok" {
+		t.Errorf("Authorization = %q, want %q", sawAuth, "Bearer tok")
+	}
+}
+
+type brokenTokenSource struct{}
+
+func (brokenTokenSource) Token() (*oauth2.Token, error) {
+	return nil, errors.New("gcloud auth print-identity-token: ERROR: Reauthentication failed")
 }

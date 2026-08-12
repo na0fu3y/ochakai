@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -112,5 +115,67 @@ func TestWhoamiAgainstPlainHTTPServer(t *testing.T) {
 	defer broken.Close()
 	if err := cmdWhoami(context.Background(), []string{"--url", broken.URL}); err == nil {
 		t.Error("unhealthy server reported as ok")
+	}
+}
+
+// `whoami` is the command a person runs to find out what they are
+// pointed at, so it is where "writable" has to stop being the whole
+// answer: a sandbox takes the write and erases it on its next restore
+// (design doc 0087 §3). The posture rides on stats because the frozen
+// wire has no header for it (0087 §4).
+func TestWhoamiAnnouncesTheSandboxPosture(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("OCHAKAI_URL", "")
+
+	var stats map[string]any
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("GET /api/v1/bundle/index.md", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("# index\n"))
+	})
+	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(stats)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	run := func(t *testing.T) string {
+		t.Helper()
+		orig := os.Stdout
+		pr, pw, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.Stdout = pw
+		err = cmdWhoami(context.Background(), []string{"--url", srv.URL})
+		pw.Close()
+		os.Stdout = orig
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := io.ReadAll(pr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(out)
+	}
+
+	stats = map[string]any{"sandbox": true}
+	out := run(t)
+	if !strings.Contains(out, "posture:   sandbox") || !strings.Contains(out, "disposable") {
+		t.Errorf("whoami did not say the server is a sandbox:\n%s", out)
+	}
+	// Still writable — the posture qualifies that answer rather than
+	// replacing it, and a reader who sees only one of the two lines has
+	// been told something untrue.
+	if !strings.Contains(out, "mode:      read-write") {
+		t.Errorf("whoami dropped the write mode:\n%s", out)
+	}
+
+	stats = map[string]any{}
+	if out := run(t); strings.Contains(out, "posture:") {
+		t.Errorf("ordinary deployment reported a posture:\n%s", out)
 	}
 }
