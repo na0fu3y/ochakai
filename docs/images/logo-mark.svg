@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="ochakai logo mark">
+  <!-- Geometry: bowl = lower half of a circle, R=44, on a wide low foot.
+       Steam = three circles derived from R by the golden ratio:
+       R/φ³≈10.4, R/φ⁴≈6.4, R/φ⁵≈4.0, gathered near the axis. -->
+  <rect x="0" y="0" width="200" height="200" rx="24" fill="#ece8dd"/>
+  <g transform="translate(100,102) scale(1.15) translate(-100,-81)" fill="#37352f">
+    <path d="M56,90 A44,44 0 0 0 144,90 Z"/>
+    <path d="M87,128 L113,128 L110,139 L90,139 Z"/>
+    <circle cx="107" cy="73" r="4"/>
+    <circle cx="96" cy="56" r="6.4"/>
+    <circle cx="104" cy="33" r="10.4"/>
+    <line x1="60" y1="98" x2="140" y2="98" stroke="#ece8dd" stroke-width="2.5"/>
+  </g>
+</svg>
