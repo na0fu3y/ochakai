@@ -147,9 +147,10 @@ bq query --format=json --nouse_legacy_sql \
 
 Every concept lands as a **draft**, because a projected schema is a
 skeleton somebody still has to say something about — which is what the
-review queue is for, and [the loop from a cold
-base](docs/loop.md#cold-start) (Japanese) is that first sitting: which
-drafts to read first, and why not all of them.
+review queue is for. [The first month](docs/guides/onboarding.md)
+(Japanese) is the road from there: how small to scope it, what to write
+in what order, **how to check that an agent's search finds it**, and
+which drafts to read first — not all of them.
 
 The warehouse also knows *what people keep asking*, which a schema does
 not: [examples/bigquery-catalog](examples/bigquery-catalog) (Japanese)
