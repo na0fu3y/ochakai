@@ -19,6 +19,30 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **A guide for the first month with an empty base**
+  ([docs/guides/onboarding.md](docs/guides/onboarding.md), Japanese).
+  Every step of a cold start already shipped — `ochakai seed`, the
+  day-one catalog procedure, the loop's four prompts, the golden-query
+  canary — but nothing said in what order to do them, how much of each
+  kind to write, or what to do between them. The guide is that spine:
+  scope it to two datasets, write down the ten to twenty questions your
+  team actually asks *before* seeding anything, project the skeleton,
+  then fill it in by type in an order where each kind can cite the one
+  above it, and stop at roughly twenty to thirty verified concepts
+  rather than planning to rule on everything.
+  Its §3 is the step no knowledge-base manual writes down: **fire those
+  questions back at `ochakai context` and check that what you wrote is
+  what comes out.** Nothing returned is already counted — `ochakai
+  stats`'s gap lines rank the questions that came back empty by how
+  often they were asked, which is the list of what to write next; the
+  wrong thing returned is a vocabulary problem in the concept body. The
+  questions that miss stay in the file and get fired again.
+  `docs/loop.md`'s cold-start section shrank to a pointer, so the two
+  pages no longer hold half of one story each. DOC 26 to 27, DOC-LINES
+  6,500 to 7,000.
+
 ### Fixed
 
 - **The web UI's Japanese reads as Japanese.** The home page's opening

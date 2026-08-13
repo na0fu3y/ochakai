@@ -40,7 +40,13 @@ the two disagree. [docs/guides/operating.md](guides/operating.md) covers
 backups, monitoring, hardening, the team web UI and upgrades.
 
 **Using it.** [docs/loop.md](loop.md) walks recall → write-back → ruling
-→ outcome in four prompts. [docs/cli.md](cli.md) (English, generated from
+→ outcome in four prompts, and
+[docs/guides/onboarding.md](guides/onboarding.md) is the month that comes
+first if your base is empty: scope and the twenty questions to write
+down before anything else, what to seed in what order and how much of
+each, **how to check that an agent's search actually finds what you
+wrote**, and what to look at weekly from the second pass on.
+[docs/cli.md](cli.md) (English, generated from
 the binary's own help) is the command reference.
 [docs/guides/mcp-clients.md](guides/mcp-clients.md) is how each MCP
 client is pointed at a deployment.
