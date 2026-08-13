@@ -27,19 +27,20 @@ export function viewReview() {
     <div class="read-only-note">この ochakai は read-only なので、レビューの操作は
     表示されません。キューそのものは本物です — 書き込めるデプロイのレビュアーが
     片付けていくのが、これと同じ列です。</div>
-    <p style="color:var(--muted);max-width:48rem">エージェントが書き戻した draft を、求められている順に — 検索ヒット数と、
-    その draft が実際に検索で浮いた回数で順位が付きます。正しいものは検証し、そうでないものは却下します
-    (理由は status_note として残るので、エージェントは同じ提案を繰り返さなくなります)。一度も使われていない
-    draft は下に沈みます。<em>放置されたものだけ</em> を切り替えると、その仕分けができます。</p>
-    <p style="color:var(--muted);font-size:.9rem;max-width:48rem">検証済みのナレッジには、それ自身の二つのキューがある:
-    <a href="#/search/reported-wrong">間違いと報告された</a>(失敗の報告に応えていない concept)と、
-    <a href="#/search/verification-age">検証の古さ</a>(検証が古い順)です。検証すると、その concept は両方から消えます。
-    三つ目の <a href="#/search/stale">期限切れ</a> は、著者が宣言した期限を過ぎた concept を並べます。
-    こちらは検証ではなく、concept を編集すると片付きます。</p>
+    <p style="color:var(--muted);max-width:48rem">エージェントが書き戻した draft を、求められている順に並べています。
+    順位を決めるのは検索に出た回数ではなく、実際に読み込まれた回数です — 直近の期間を先に見て、同じなら通算で比べます。
+    正しいものは検証し、そうでないものは却下してください(理由が status_note として残るので、エージェントは
+    同じ提案を繰り返さなくなります)。一度も読まれていない draft は下に沈むので、
+    <em>放置されたものだけ</em> に切り替えると、その仕分けができます。</p>
+    <p style="color:var(--muted);font-size:.9rem;max-width:48rem">検証済みのナレッジには、それ自身のキューが二つあります:
+    <a href="#/search/reported-wrong">間違いと報告された</a>(失敗の報告にまだ応えていない concept)と、
+    <a href="#/search/verification-age">検証の古さ</a>(検証が古いものから順)です。検証し直すと、前者からは消え、
+    後者では最後尾に回ります。三つ目の <a href="#/search/stale">期限切れ</a> は、書き手が宣言した期限を過ぎた
+    concept を並べます。こちらは検証では片付かず、concept を編集して期限を宣言し直すと消えます。</p>
     <div id="loop-stats"></div>
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
-        放置されたものだけ(ヒット 0 件、${STALE_DAYS} 日以上前)</label>
+        放置されたものだけ(検索ヒット 0 件・作成から ${STALE_DAYS} 日以上)</label>
       <span class="grow"></span>
       <span id="queue-strip" style="display:flex;gap:.35rem">${queueStrip()}</span>
     </div>
@@ -126,9 +127,10 @@ export async function loadLoopStats() {
       見つかりません — 語句そのものが含まれていれば字句検索は当てます。長すぎる concept を
       分けるか、より広い窓のモデルに移すかのどちらかです。</p>` : '') + (gaps.length ? `
     <details style="max-width:48rem;margin:0 0 1.2rem">
-      <summary style="cursor:pointer;color:var(--muted)">訊かれたのに無かったもの — 次に書くこと</summary>
+      <summary style="cursor:pointer;color:var(--muted)">答えの無かった検索 — 次に書くもの</summary>
       <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日で何も返さなかった検索を、
-      よく訊かれた順に。誰かが片付けるキューではありません: 答えが存在すれば、そのまま出なくなります。</p>
+      多く訊かれたものから順に並べています。誰かが片付けるキューではありません: 答えになる concept が書かれれば、
+      この一覧からは自然に消えます。</p>
       ${gaps.map(g => `<div style="display:flex;gap:.6rem;align-items:baseline;padding:.25rem 0">
         <span class="badge">${g.count}×</span>
         <a href="#/search" class="mono" data-gap="${esc(g.query)}">${esc(g.query)}</a></div>`).join('')}

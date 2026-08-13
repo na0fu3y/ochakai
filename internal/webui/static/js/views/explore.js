@@ -46,19 +46,21 @@ export function viewExplore() {
   <section>
     <div class="searchbox">
       ${explore.ageFeed
-        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">検証の古さのフィード — 検証が古い順で、検証済みクエリを再確認するためのカナリアです。
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">検証の古さのフィード — 最後に検証してから時間が経ったものから順に並べています。
+           古びた検証済みクエリを浮かせるためのカナリアです。
            検索に戻るには <strong>検証の古さ</strong> のチェックを外してください。</div>`
         : explore.failedFeed
         ? `<div class="feed-banner" style="flex:1;margin-bottom:0">再検証のフィード — 失敗の報告(report_outcome failed)にまだ応えていない concept を、
-           ひどい順に。開いて読み直し、検証するとこのフィードから外れます。検索に戻るには
-           <strong>間違いと報告された</strong> のチェックを外してください。</div>`
+           報告が多いものから順に並べています。開いて中身を確かめ、検証し直すとこのフィードから外れます。
+           検索に戻るには <strong>間違いと報告された</strong> のチェックを外してください。</div>`
         : explore.source
         ? `<div class="feed-banner" style="flex:1;margin-bottom:0"><code>${esc(explore.source)}</code> を引いている concept — この資料から派生したものすべてです。
-           <a href="#/search">検索に戻る</a>.</div>`
+           <a href="#/search">検索に戻る</a>。</div>`
         : explore.expiredFeed
-        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">期限切れのフィード — 著者が宣言した <code>stale_after</code> を過ぎた concept を、
-           超過が大きい順に。<strong>検証してもこのキューは片付きません</strong>: その日付は書き手の宣言なので、
-           concept を確かめ直したうえで編集し、新しい期限を宣言する(あるいは外す)必要があります。
+        ? `<div class="feed-banner" style="flex:1;margin-bottom:0">期限切れのフィード — 書き手が宣言した <code>stale_after</code> を過ぎた concept を、
+           超過が大きいものから順に並べています。<strong>検証してもこのキューは片付きません</strong>:
+           その日付はサーバーが測ったものではなく書き手の宣言なので、concept を確かめ直したうえで編集し、
+           新しい期限を宣言する(あるいは外す)必要があります。
            検索に戻るには <strong>期限切れ</strong> のチェックを外してください。</div>`
         : `<input type="text" id="q" placeholder="メトリクス・検証済みクエリ・insight・用語・テーブルを検索…"
                   value="${esc(explore.q)}" autocomplete="off">`}

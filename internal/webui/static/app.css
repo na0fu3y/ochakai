@@ -459,6 +459,15 @@ table.kv td.k { color: var(--muted); width: 11rem; white-space: nowrap; }
 @media (max-width: 620px) { .row-trio { grid-template-columns: 1fr; } }
 
 .section-title { font-size: 1.25rem; font-weight: 700; margin: .2rem 0 1rem; }
+/* The home page's shortcuts. Each entry is a flex item so a line breaks
+   between entries rather than inside one — as a run of text separated by
+   middots, a narrow window put the separator at the head of a line and
+   split "link — what it is" across two. */
+.home-links {
+  display: flex; flex-wrap: wrap; gap: .35rem 1.4rem;
+  list-style: none; margin: .9rem 0 0; padding: 0;
+  color: var(--muted); font-size: .9rem;
+}
 .toolbar { display: flex; align-items: center; gap: .6rem; margin-bottom: 1rem; flex-wrap: wrap; }
 .toolbar .grow { flex: 1; }
 

@@ -52,20 +52,22 @@ export function viewDir(rawPrefix) {
 export function viewHome() {
   view.innerHTML = `
     <div class="section-title" style="font-size:1.5rem">🍵 ochakai</div>
-    <p style="color:var(--muted);max-width:42rem">ナレッジはフォルダのツリーです — concept の id が
-    そのパスなので(<code>queries/sales/monthly-revenue</code>)、サイドバーのツリーが入口になります。
-    一緒に読まれるべきものは一緒に置き、ドキュメントのように辿ってください。どこを見ればよいか
-    分からないときが、検索の出番です。</p>
+    <p style="color:var(--muted);max-width:42rem">ナレッジはフォルダのツリーです。concept の id が
+    そのままパスになる(例: <code>queries/sales/monthly-revenue</code>)ので、サイドバーのツリーが
+    入口になります。まとめて読むものは同じ場所に置き、ドキュメントを読むように辿ってください。
+    どこを見ればよいか分からないときに、検索を使います。</p>
     <div class="searchbox" style="max-width:36rem">
       <input type="text" id="home-q" placeholder="メトリクス・検証済みクエリ・insight・用語・テーブルを検索…" autocomplete="off">
       <a class="btn" id="home-go" href="#/search">検索</a>
     </div>
-    <p style="color:var(--muted);font-size:.9rem">
-      <a href="#/review">レビューキュー</a> — エージェントが書いた draft を検証する / 却下する ·
-      <a href="#/search/reported-wrong">間違いと報告された</a> — 検証済みなのに間違いだったナレッジ ·
-      <a class="write-only" href="#/new">＋ concept を作る</a> ·
-      <a href="#" id="home-export" title="ナレッジベースを OKF バンドル(tar.gz)として書き出す">OKF を書き出す</a>
-    </p>
+    <ul class="home-links">
+      <li><a href="#/review">レビューキュー</a> — エージェントが書いた draft を検証・却下する</li>
+      <li><a href="#/search/reported-wrong">間違いと報告された</a> — 検証済みなのに間違いだったナレッジ</li>
+      <!-- Gated twice on purpose: the link is the write affordance, and the
+           item around it would otherwise leave a gap in the row. -->
+      <li class="write-only"><a class="write-only" href="#/new">＋ concept を作る</a></li>
+      <li><a href="#" id="home-export" title="ナレッジベースを OKF バンドル(tar.gz)として書き出す">OKF を書き出す</a></li>
+    </ul>
     <div id="home-index" style="margin-top:1.4rem"><div class="empty">…</div></div>`;
   $('#home-q').addEventListener('keydown', e => {
     if (e.key === 'Enter') { explore.q = e.target.value; location.hash = '#/search'; }
