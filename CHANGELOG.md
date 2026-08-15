@@ -21,6 +21,34 @@ last entry.
 
 ### Added
 
+- **A concept is found by the other names its writer gave it** ([design
+  doc 0105](docs/design/0105-a-concept-answers-to-its-other-names.md)).
+  The lexical haystack reads `synonyms` from a concept's frontmatter, so
+  a metric written as
+
+  ```yaml
+  synonyms: [net sales, top line, 売上]
+  ```
+
+  answers to all three. It did not before: the type vocabulary describes
+  a `Metric` as holding "its definition and synonyms", `examples/demo`
+  writes them that way, and the haystack was id, title, description,
+  tags, body and the filenames in the concept's namespace — a producer
+  key sits in `attrs`, which nothing read. Sharpest in Japanese, where
+  the warehouse column is `revenue` and the word in the room is `売上`.
+
+  Either a list or a bare string is read. **Only `synonyms`**: every
+  other producer key is a value *about* the concept, and indexing those
+  would make a search for one concept return the concepts that merely
+  mention it — the question `--links-to` and `--source` answer properly.
+  The key stays the producer's: no validation, no wire field, no filter
+  of its own, and it round-trips as written.
+
+  What an operator does about it: nothing. Migration `0040` recomputes
+  the stored haystacks once, and the search evaluation harness measures
+  the result (lexical MRR 0.90 → 0.91 over 42 cases, recall unchanged
+  at 1.00).
+
 - **A directory listing pages.** `GET /api/v1/bundle/<dir>/index.md` read
   as JSON now carries a `cursor` when rows remain, and takes it back as
   `?cursor=` to read the next page — `ochakai browse --cursor` on the CLI,
