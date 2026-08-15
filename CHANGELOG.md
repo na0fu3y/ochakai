@@ -19,6 +19,19 @@ last entry.
 
 ## [Unreleased]
 
+### Security
+
+- **Built with Go 1.26.6.** The 1.26.5 standard library carries seven
+  vulnerabilities this code reaches — quadratic `resolvePath` in
+  `net/url`, JavaScript regexp context tracking in `html/template`,
+  unbounded post-handshake messages in `crypto/tls`, a missing
+  `ReadHeaderTimeout` on the unencrypted HTTP/2 check in `net/http`,
+  recursion depth in `encoding/xml` and `encoding/asn1`, and
+  ASCII-only Punycode labels via `golang.org/x/net/idna` — all fixed
+  upstream in 1.26.6. The `toolchain` line and the build image move
+  together; the `go` directive stays `1.26`, so no minimum rises for
+  anyone installing with `GOTOOLCHAIN=local`.
+
 ## [0.22.1] - 2026-08-14
 
 ### Added
