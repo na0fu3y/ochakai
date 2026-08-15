@@ -1,14 +1,15 @@
 # ochakai 設計ドキュメント 0100: `.md` は concept の綴りである
 
-Status: **Proposed**(2026-08-15)。受理されれば
-[0075](0075-the-bundle-is-the-address-space.md) §3.3 と §2 の表、
+Status: Accepted(2026-08-15)。
+[0075](0075-the-bundle-is-the-address-space.md) §3.3 と §2 の表を改訂する
+(`type` の無い `.md` は 400 になり、ファイルはその住所に座れない)。
 [0064](0064-rest-stops-at-api-v1.md) §11 の「凍結を破ってよい唯一の理由は
-セキュリティ上の欠陥である」に手が入る。**その改訂は本書が Accepted に
-なる PR が行う** — 提案であるあいだ、二つの記録は一行も動かない。
+セキュリティ上の欠陥である」を改訂する — 二つ目の理由として**出力が OKF に
+適合しないこと**を足す(§4)。
 [0082](0082-what-the-freeze-holds-still.md) の分類はそのまま使う(§5)。
 Date: 2026-08-15
 
-## 0. この記録が提案すること
+## 0. この記録が決めたこと
 
 1. **`.md` の住所に座れるのは concept と予約名(`index.md` / `log.md`)
    だけである。** `type` を持たない `.md` の PUT は 400 になる(§2)。
@@ -30,13 +31,13 @@ SPEC v0.2 の実文は二箇所とも短い。
 > `.md` file in the tree contains a parseable YAML frontmatter block.
 > 2. Every frontmatter block contains a non-empty `type` field.
 
-ochakai はこの二つを同時に落とせる。`internal/restapi/restapi.go` の
+ochakai はこの二つを同時に落とせていた。`internal/restapi/restapi.go` の
 書き込み分岐は `isMarkdown && okf.CarriesType(body)` が偽なら**その `.md`
 という住所のまま**ファイルとして書き(`svc.PutFile`)、
 `writeBundleArchive` はファイルを自分の path でアーカイブに載せる。
 つまり `notes.md` を PUT した利用者の export には、**予約名でない `.md`
-で、frontmatter も `type` も持たないファイル**が入る。それを受け取った
-consumer の適合検査は §11.1 と §11.2 で落ちる。
+で、frontmatter も `type` も持たないファイル**が入っていた。それを受け
+取った consumer の適合検査は §11.1 と §11.2 で落ちる。
 
 §11 が consumer に禁じている拒否は五つだけである — 任意フィールドの
 欠落、未知の `type`、未知の追加キー、壊れたリンク、`index.md` の不在。
@@ -46,7 +47,7 @@ C3(形式は OKF v0.2)は八つの条件の一つで、C1(資産は丸ごと出�
 出口はその export である。**出口が規格を外れているなら、出口が無いのと
 同じ場所に近づく。**
 
-## 2. 決定案: 住所が種類を決める
+## 2. 決定: 住所が種類を決める
 
 規則は三行になる。
 
@@ -97,8 +98,8 @@ exist in the bundle is not malformed」。CHANGELOG は動いた path を数で
 ## 4. 凍結を破ってよい二つ目の理由
 
 0064 §11 は「凍結を破ってよい唯一の理由はセキュリティ上の欠陥である」と
-書いた。本書はそこに一つ足すことを求める —— **契約が OKF に適合しない
-出力を生む欠陥**である。
+書いた。本書はそこに一つ足す —— **契約が OKF に適合しない出力を生む
+欠陥**である。
 
 範囲を狭く書いておく。**OKF SPEC の適合条項(§11)に違反する出力を、
 ochakai の書き込み面が作れてしまう場合に限る。** 「SPEC に照らして
@@ -109,8 +110,8 @@ SPEC が MUST で書いた三条件に対する yes / no であり、外の文�
 
 これは 0082 §5 が却下した「今回だけ例外にして golden を再生成する」では
 ない。あちらは規則を書き換えずに曲げる形だった。本書は規則そのものを
-書き換えることを求めており、以後「これは適合の欠陥か」という問いに
-なる —— 答えは SPEC を読めば出る。
+書き換えるので、以後の問いは「これは適合の欠陥か」になる —— 答えは
+SPEC を読めば出る。
 
 ## 5. 指紋が一行も動かないこと
 

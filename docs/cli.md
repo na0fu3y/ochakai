@@ -238,7 +238,9 @@ Import an OKF bundle (a directory of markdown + YAML frontmatter, or
 a tar.gz of one; "-" reads the tar.gz from stdin). The inverse of
 `ochakai export`: each path names its concept (the path minus .md is
 the id), the frontmatter type key names the type (required — a
-markdown file without one is not a concept, and is kept as a file),
+markdown file without one is not a concept, and is kept as a file at
+a renamed path, since `.md` is a concept's address and a note says
+where it landed),
 reserved index.md / log.md files are skipped, keys the format does
 not define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical
 to what is stored are left untouched and reported as unchanged;

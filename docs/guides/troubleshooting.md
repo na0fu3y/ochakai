@@ -119,7 +119,10 @@ deprecated だったものを蘇らせることは拒否される — 記録済�
 (`imported N concepts (…, M skipped)`)。スキップに見えて数えられない
 二つのこと: frontmatter に `type` が無いファイルはスキップではない —
 type はパスから推測されることは無いので(design doc 0075 §2)、代わりに
-素の bundle ファイルとしてインポートされる。予約済みの `index.md`・
+素の bundle ファイルとしてインポートされる。ただし `.md` は concept の
+住所なので(design doc 0100)、`notes/meeting.md` は
+`notes/meeting.markdown` として入り、note がそう言う — バイト列は失わ
+れず、綴りだけが動く。予約済みの `index.md`・
 `log.md`、あるいは隠しパスは黙って捨てられ、出力にも件数にも現れない。
 スキップであるもの:
 

@@ -1058,14 +1058,21 @@ func cmdPut(ctx context.Context, args []string) error {
 }
 
 // isConceptInput answers the question the server answers for itself:
-// whether these bytes are a concept. The server reads the frontmatter's
-// `type` key and stores everything else as a file (design doc 0075 §1,
-// `internal/restapi`), so the CLI asks the same predicate of the same
-// bytes rather than inventing a second rule from the path's spelling —
-// that is what "a thin client over REST" means here (design doc 0067
-// §2), and it is why one `put` doing two things is not the defect design
-// doc 0068 §1 names: the two are one act at one address, told apart by
-// what is being written.
+// whether this write is a concept's. The server reads it off the address
+// — a `.md` path holds an OKF document with a `type` and nothing else
+// (design doc 0100 §2) — and falls back to the bytes where the address
+// is silent, which is what a bare path is: `queries/revenue` is a
+// concept's id and also a perfectly good file path. So the CLI asks the
+// same two questions in the same order rather than inventing a rule of
+// its own; that is what "a thin client over REST" means here (design doc
+// 0067 §2), and it is why one `put` doing two things is not the defect
+// design doc 0068 §1 names: the two are one act at one address, told
+// apart by what is being written.
+//
+// A typeless document at a `.md` path is deliberately sent as a concept
+// and refused by the server. The CLI does not answer for it: a rule the
+// server enforces and the client pre-empts is the shape design doc 0064
+// §20.4 found backwards, and the server's sentence names both ways out.
 //
 // JSON is the exception, and it is the CLI's own: it is an input form
 // this command accepts, never a form the bundle stores, so it is read as
@@ -1073,7 +1080,7 @@ func cmdPut(ctx context.Context, args []string) error {
 // `ochakai put schemas/orders.json -f orders.json` would store a JSON
 // *file* as a concept and refuse it for having no type.
 func isConceptInput(data []byte, path string) bool {
-	if okf.CarriesType(data) {
+	if strings.HasSuffix(path, ".md") || okf.CarriesType(data) {
 		return true
 	}
 	return bytes.HasPrefix(bytes.TrimLeft(data, " \t\r\n"), []byte("{")) && conceptAddress(path)
@@ -1482,7 +1489,7 @@ func eachConcurrently(ctx context.Context, n int, fn func(ctx context.Context, i
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its concept (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical\nto what is stored are left untouched and reported as unchanged;\na document the server refuses as a concept — e.g. an Attested\nComputation with no runtime — is not stored, and is reported by path\nand reason; the bundle you imported from still has it, and the files\nit pointed at are written anyway).\nFiles referenced by a concept's body markdown links become\nattributed to it, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside a concept's\ndirectory (<id>/<name>) attribute to that concept the same way. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no concept. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the concept still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per concept, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run is the same run with nothing written: each object is sent\nas a plan the server answers without storing it, so the notes, the\nrefusals and the created / updated / unchanged counts are the ones\nthe import would produce.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its concept (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file at\na renamed path, since `.md` is a concept's address and a note says\nwhere it landed),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical\nto what is stored are left untouched and reported as unchanged;\na document the server refuses as a concept — e.g. an Attested\nComputation with no runtime — is not stored, and is reported by path\nand reason; the bundle you imported from still has it, and the files\nit pointed at are written anyway).\nFiles referenced by a concept's body markdown links become\nattributed to it, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside a concept's\ndirectory (<id>/<name>) attribute to that concept the same way. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no concept. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the concept still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per concept, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run is the same run with nothing written: each object is sent\nas a plan the server answers without storing it, so the notes, the\nrefusals and the created / updated / unchanged counts are the ones\nthe import would produce.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on the import's own verdict\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "report what the import would do, and write nothing: every object is sent with the server's dry-run parameter, so the counts, the notes and the refusals are the ones the import itself would meet")
 	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. With --dry-run the same verdict is reached with nothing written, which is what makes it a CI gate")

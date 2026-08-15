@@ -1498,3 +1498,112 @@ func TestMigrationFilesBecomeObjects(t *testing.T) {
 		}
 	}
 }
+
+// A file that took a concept's address moves off it (design doc 0100).
+//
+// The rows are the ones a server wrote before the write face refused
+// them: a markdown file carrying no `type`, stored at its own `.md`
+// path, which every export then carried into a bundle that fails OKF
+// SPEC §11.1 and §11.2. What the migration owes them is the bytes — the
+// object moves, it is not dropped — and a history that still answers,
+// which means the ledger moves with it, since it is keyed by path and
+// numbers revisions per path.
+func TestMigrationMarkdownFilesLeaveConceptAddresses(t *testing.T) {
+	dbURL := testdb.URL(t)
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback is the cleanup
+
+	for _, q := range []string{
+		`CREATE SCHEMA md_scratch`,
+		`SET LOCAL search_path TO md_scratch`,
+		`CREATE TABLE object (
+			path text NOT NULL, id text, blob_hash text NOT NULL DEFAULT '',
+			CONSTRAINT object_pkey PRIMARY KEY (path))`,
+		`CREATE TABLE knowledge_revision (
+			path text NOT NULL, id text, rev int NOT NULL, change text NOT NULL,
+			CONSTRAINT knowledge_revision_pkey PRIMARY KEY (path, rev))`,
+		// A concept, two markdown files at concept addresses — one of
+		// them into a name that is already taken — and a file that never
+		// claimed one.
+		`INSERT INTO object (path, id, blob_hash) VALUES
+			('metrics/revenue.md', 'metrics/revenue', ''),
+			('notes/meeting.md', NULL, 'aaa'),
+			('notes/agenda.md', NULL, 'bbb'),
+			('notes/agenda.markdown', NULL, 'ccc'),
+			('diagrams/er.svg', NULL, 'ddd')`,
+		`INSERT INTO knowledge_revision (path, id, rev, change) VALUES
+			('metrics/revenue.md', 'metrics/revenue', 1, 'create'),
+			('notes/meeting.md', NULL, 1, 'create'),
+			('notes/meeting.md', NULL, 2, 'update')`,
+	} {
+		if _, err := tx.Exec(ctx, q); err != nil {
+			t.Fatalf("scratch setup: %v\n%s", err, q)
+		}
+	}
+
+	sql, err := migrationFS.ReadFile("migrations/0039_a_markdown_file_is_not_a_concept.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tx.Exec(ctx, string(sql)); err != nil {
+		t.Fatalf("apply 0039: %v", err)
+	}
+
+	var paths []string
+	rows, err := tx.Query(ctx, `SELECT path FROM object ORDER BY path`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			t.Fatal(err)
+		}
+		paths = append(paths, p)
+	}
+	rows.Close()
+	want := []string{
+		"diagrams/er.svg",
+		// The taken name pushes the loser one suffix further rather than
+		// overwriting what is there (design doc 0046 §3.13).
+		"notes/agenda.markdown", "notes/agenda.markdown.markdown",
+		"notes/meeting.markdown",
+		// A concept keeps its address: that is whose address it is.
+		"metrics/revenue.md",
+	}
+	sort.Strings(want)
+	if !reflect.DeepEqual(paths, want) {
+		t.Errorf("paths = %v, want %v", paths, want)
+	}
+
+	// The history follows the object, so ?history still answers and the
+	// next write continues the numbering instead of restarting at 1.
+	var revs int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM knowledge_revision WHERE path = 'notes/meeting.markdown'`).
+		Scan(&revs); err != nil {
+		t.Fatal(err)
+	}
+	if revs != 2 {
+		t.Errorf("revisions at the new address = %d, want the 2 the file already had", revs)
+	}
+	var orphaned int
+	if err := tx.QueryRow(ctx,
+		`SELECT count(*) FROM knowledge_revision WHERE path LIKE '%.md' AND id IS NULL`).
+		Scan(&orphaned); err != nil {
+		t.Fatal(err)
+	}
+	if orphaned != 0 {
+		t.Errorf("%d revision rows left at a concept's address with no concept", orphaned)
+	}
+}

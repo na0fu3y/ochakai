@@ -763,9 +763,9 @@ paths:
                     concept as it stood at each change, so a diff between
                     two revisions is a text diff. A *file's* carries the
                     changes alone in the shape above, having no document
-                    to carry — and a markdown document with no `type` is a
-                    file (design doc 0075 §1), so the shape follows what is stored at
-                    the path rather than the path's suffix.
+                    to carry. Which shape comes back is the address's
+                    answer, since a `.md` holds a concept and nothing else
+                    (design doc 0100).
                   value:
                     revisions:
                       - rev: 4
@@ -877,9 +877,14 @@ paths:
       summary: Write one object of the bundle
       description: >
         Stores the request body at the path (design doc 0075 §4). What
-        it becomes is decided by the bytes, not by a parameter:
+        it becomes is decided by the path, not by a parameter and not by
+        the bytes (design doc 0100):
 
-        A markdown path whose document carries a `type` is a concept.
+        A markdown path is a concept's address. OKF SPEC §3.1 says every
+        non-reserved `.md` in a bundle is a concept document and §11 makes
+        frontmatter with a non-empty `type` the condition of conformance,
+        so a body with no `type` is a 400 here rather than a file stored
+        at that address — write it at a path that does not end in `.md`.
         The write is create-or-replace and states what the concept should
         say; existence is expressed by the preconditions instead
         (`If-None-Match: *` for "only if the path is free", `If-Match` for
@@ -887,10 +892,11 @@ paths:
         matched what was stored answers `Ochakai-Unchanged`. A JSON body
         is a 415 naming the document form: the frontmatter is the
         metadata and the markdown is the body, and there is no typed
-        write surface beside the format. Anything else is a file,
-        including a markdown document with no `type`: SPEC §11 makes the
-        key what a concept has, and a bundle that carried a typeless
-        markdown file gets it back rather than losing it (design doc 0075 §1).
+        write surface beside the format.
+
+        Every other path is a file's, and its bytes are stored as they
+        arrived. A markdown file is one of them — it just cannot be
+        called `.md`.
 
         index.md and log.md are 409: they are generated from the bundle,
         so a write there is a conflict with what the address is.
@@ -942,9 +948,10 @@ paths:
           two are the spellings this contract names, and a generated
           client that sends one of them is always right.
 
-          `application/json` at a `.md` path is the one refusal: it is a
-          415 naming the document form, because stored as bytes it would
-          carry no `type` and be kept as a *file* called `x.md`.
+          The media type follows the path: a `.md` address takes
+          `text/markdown` and nothing else may be stored there, so
+          `application/json` at one is a 415 naming the document form and
+          `application/octet-stream` is a 400.
         content:
           text/markdown:
             schema: { type: string }
@@ -2829,7 +2836,11 @@ components:
         external asset a concept *describes*, not a file stored beside
         it. Bundles ochakai writes stay readable by an OKF consumer: the
         concepts are conformant and these files are ordinary files in the
-        tree, which the spec has nothing to say about either way.
+        tree, which the spec has nothing to say about either way — with
+        one exception it does speak to, which is why a file's path may not
+        end in `.md`. That suffix is where §3.1 says a concept document
+        lives, and a file sitting at one made every export carrying it
+        fail §11 (design doc 0100).
       properties:
         name: { type: string, description: Filename, unique within the concept. }
         media_type:

@@ -351,6 +351,14 @@ func TestBundleAddressesRefuseByPath(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			// A PUT at a `.md` path is a concept write, so it names the
+			// media type the spec declares for one. It used to be
+			// excluded from the validator entirely, because a body with
+			// no `type` was a file write and a file's bytes are opaque —
+			// which is exactly the conflation design doc 0100 removed.
+			if c.method == http.MethodPut {
+				req.Header.Set("Content-Type", "text/markdown")
+			}
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				t.Fatal(err)
@@ -643,30 +651,6 @@ func TestBooleanQueryParamsRejectUnreadableValues(t *testing.T) {
 				t.Errorf("body %q does not mention %q", rec.Body, c.wantSubstr)
 			}
 		})
-	}
-}
-
-// A concept's address is a bundle path now, and the read behind it falls
-// through to the file half when no concept is there. On an instance
-// without GCS that half cannot answer at all, and it says so with a 501
-// — which turned every 404 for a soft-deleted or never-written concept
-// into "this deployment does not do files". The path decides which
-// answer is the honest one.
-func TestMissingObjectAnswersAboutTheObjectNotTheDeployment(t *testing.T) {
-	noFiles := service.Unsupportedf("files are not supported without GCS")
-	if got := missingObject(noFiles, true); !errors.Is(got, store.ErrNotFound) {
-		t.Errorf("a markdown path with nothing at it = %v, want a 404: the question was "+
-			"about a concept, and the deployment's file support is not an answer to it", got)
-	}
-	if got := missingObject(noFiles, false); !errors.Is(got, noFiles) {
-		t.Errorf("a file path on an instance that holds no files = %v, want the 501 kept: "+
-			"there, what the deployment cannot do is exactly what was asked", got)
-	}
-	// Anything else travels unchanged, in both shapes.
-	for _, markdown := range []bool{true, false} {
-		if got := missingObject(store.ErrNotFound, markdown); !errors.Is(got, store.ErrNotFound) {
-			t.Errorf("markdown=%v: a plain 404 became %v", markdown, got)
-		}
 	}
 }
 

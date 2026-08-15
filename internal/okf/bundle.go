@@ -109,12 +109,51 @@ func FromBundle(files map[string][]byte) (entries []Doc, atts []AttributedFile, 
 			skipped = append(skipped, p+": "+err.Error())
 			continue
 		}
+		// A markdown file that is not a concept cannot keep its `.md`
+		// spelling: that address is a concept's, and a bundle carrying a
+		// typeless `.md` is the non-conformant one SPEC §11 describes
+		// (design doc 0100). Renaming rather than refusing, because what
+		// this path restores is somebody's bundle and losing bytes on the
+		// way back in is the worse answer — so the file arrives, at a
+		// spelling that no longer claims to be a concept, and the note says
+		// so (the same shape design doc 0079 gave a hand-written index.md).
+		if stored := unclaimMarkdown(clean, files); stored != clean {
+			notes = append(notes, fmt.Sprintf(
+				"%s: a `.md` file carries no `type`, so it is not a concept (SPEC §3.1, §11) "+
+					"and cannot hold a concept's address; imported as %s", p, stored))
+			clean = stored
+		}
 		loose = append(loose, BundleFile{Path: clean, Data: files[p]})
 	}
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 	sort.Slice(loose, func(i, j int) bool { return loose[i].Path < loose[j].Path })
 	return entries, atts, loose, skipped, notes
+}
+
+// unclaimMarkdown is the path a non-concept markdown file is stored at:
+// its own, with `.md` traded for `.markdown` so it stops sitting at an
+// address SPEC §3.1 reserves for concept documents (design doc 0100 §3).
+// The suffix is appended again on the rare collision rather than
+// overwriting the file already there — the migration that renamed the
+// stored ones settles the same question the same way.
+func unclaimMarkdown(clean string, files map[string][]byte) string {
+	taken := func(p string) bool {
+		for q := range files {
+			if cleanPath(q) == p {
+				return true
+			}
+		}
+		return false
+	}
+	if !strings.HasSuffix(clean, ".md") {
+		return clean
+	}
+	stored := strings.TrimSuffix(clean, ".md") + ".markdown"
+	for taken(stored) {
+		stored += ".markdown"
+	}
+	return stored
 }
 
 // BundleFile is one object of the bundle that belongs to no entry: a

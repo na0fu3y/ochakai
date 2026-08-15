@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -146,6 +145,16 @@ func (s *Service) settleFile(p string, data []byte) (path, mediaType string, err
 	if !domain.ValidBundlePath(p) {
 		return "", "", Invalidf("invalid bundle path %q (path segments separated by \"/\"; segments must not start with \".\", and index.md and log.md are generated rather than stored)", p)
 	}
+	// A `.md` path is a concept's address and holds nothing else: SPEC
+	// §3.1 says every non-reserved `.md` in a bundle is a concept
+	// document, and §11 makes frontmatter with a `type` the condition of
+	// conformance, so a file stored at one would leave every export
+	// carrying it non-conformant (design doc 0100). Refused here rather
+	// than at the REST face because every face writes through this one
+	// (0064 §23.3 closed status and trust the same way).
+	if _, isMarkdown := domain.ConceptID(p); isMarkdown {
+		return "", "", Invalidf("%q is a concept's address: a `.md` path holds an OKF document with a `type` (SPEC §3.1, §11), so a file cannot be stored there — name it something other than `.md` (design doc 0100)", p)
+	}
 	if len(data) == 0 {
 		return "", "", Invalidf("the file is empty")
 	}
@@ -162,11 +171,11 @@ func (s *Service) settleFile(p string, data []byte) (path, mediaType string, err
 // PlanFile is PutFile with the write withheld: the same refusals, and the
 // same three-way answer about what the write would do (design doc 0061).
 //
-// The file's own address is the one thing a concept's plan does not have
-// to ask about: a path a concept holds is not a path a file may take, and
-// the store says so only from inside the write. Asking here is what keeps
-// a bundle carrying a markdown file that lost its type key from passing a
-// dry run and failing the import.
+// A plan and a write refuse the same paths, which is the whole of what
+// a dry run promises: settleFile is the one gate, and since a `.md` is a
+// concept's address and holds nothing else (design doc 0100), the case
+// this used to probe the concept ledger for — a markdown file that lost
+// its type key passing a dry run and failing the import — cannot arise.
 func (s *Service) PlanFile(ctx context.Context, p string, data []byte, actor domain.Actor) (att *domain.File, created, changed bool, err error) {
 	p, mediaType, err := s.settleFile(p, data)
 	if err != nil {
@@ -180,11 +189,6 @@ func (s *Service) PlanFile(ctx context.Context, p string, data []byte, actor dom
 		return old, false, old.SHA256 != hash, nil
 	case !errors.Is(err, store.ErrNotFound):
 		return nil, false, false, err
-	}
-	if id, isMarkdown := strings.CutSuffix(p, ".md"); isMarkdown {
-		if _, err := s.Store.Get(ctx, id); err == nil {
-			return nil, false, false, fmt.Errorf("%w: %s is a concept", store.ErrAlreadyExists, p)
-		}
 	}
 	// The values the write would stamp, stamped without the write: a
 	// created file resolves both, so the plan does too rather than
