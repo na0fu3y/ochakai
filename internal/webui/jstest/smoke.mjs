@@ -76,18 +76,58 @@ if (!await reachable(BASE + '/')) {
 }
 
 const profile = mkdtempSync(join(tmpdir(), 'ochakai-smoke-'));
+// stderr is kept, not discarded. It is where chromium says why it will
+// not start — a missing shared library, a sandbox it cannot use, a
+// profile directory it cannot write — and it is also where it announces
+// "DevTools listening on ws://…". Throwing it away is what made a
+// failed launch unactionable: the harness could say only that a port
+// never opened, and every such failure cost a re-run to learn nothing.
+// Bounded, because a browser that is unhappy repeats itself.
 const chrome = spawn(browser, [
   '--headless=new', '--remote-debugging-port=' + PORT, '--no-sandbox',
   '--disable-gpu', '--user-data-dir=' + profile, 'about:blank',
-], { stdio: ['ignore', 'ignore', 'ignore'] });
+], { stdio: ['ignore', 'ignore', 'pipe'] });
+
+let said = '';
+chrome.stderr.setEncoding('utf8');
+chrome.stderr.on('data', d => { said = (said + d).slice(-4000); });
+
+// Whether the process is still trying. A launch that fails and a launch
+// that is slow look identical from the port alone, and they are not the
+// same failure: one is this machine, the other is this minute.
+let exit = null;
+chrome.on('exit', (code, signal) => { exit = { code, signal }; });
+
+// 60 seconds, from 20. The evidence for the raise is what CI leaves
+// behind when this fails: the chrome process is still alive at job
+// cleanup, so it had not crashed — it had not finished starting. A cold
+// first launch on a loaded runner is slower than the old budget, and the
+// job that pays for it is the one that just built the Go binaries.
+// Nothing waits the full minute on a healthy run: the loop ends the
+// moment the port answers.
+const launchBudgetMs = 60_000;
 
 async function debuggerURL() {
-  for (let i = 0; i < 80; i++) {
+  const step = 250;
+  for (let waited = 0; waited < launchBudgetMs; waited += step) {
     try {
       return (await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json()).webSocketDebuggerUrl;
-    } catch { await sleep(250); }
+    } catch { /* not up yet */ }
+    if (exit) {
+      throw new Error(`chromium exited before opening its debugging port ` +
+        `(${exit.signal ? 'signal ' + exit.signal : 'exit code ' + exit.code})` + saidBy(said));
+    }
+    await sleep(step);
   }
-  throw new Error('chromium never opened its debugging port');
+  throw new Error(`chromium never opened its debugging port within ${launchBudgetMs / 1000}s ` +
+    `(it is still running, so it was starting rather than broken)` + saidBy(said));
+}
+
+// What chromium said, indented under the error, or nothing when it said
+// nothing — an empty "chromium said:" reads like the output was lost.
+function saidBy(text) {
+  text = text.trim();
+  return text ? '\nchromium said:\n  ' + text.replace(/\n/g, '\n  ') : '';
 }
 
 const ws = new WebSocket(await debuggerURL());
