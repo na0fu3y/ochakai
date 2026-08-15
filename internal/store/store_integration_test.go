@@ -3113,7 +3113,7 @@ func TestIntegrationFilesAreObjectsAttributedByPathOrBody(t *testing.T) {
 			t.Errorf("search returned a non-entry: %q", h.ID)
 		}
 	}
-	lvl, err := s.Browse(ctx, base)
+	lvl, err := s.Browse(ctx, base, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -46,7 +46,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md) |
 | 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
-| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外)。凍結を破ってよい理由は二つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
+| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は二つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
@@ -511,6 +511,28 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 - [0007 DB 直結コマンドの廃止](0007-api-only-cli.md) — **Superseded by 0067**。
 - [0015 サーフェス一貫性の方針](0015-surface-consistency.md) — **Superseded by 0067**。
 - [0058 誰も通らなかった二つのフィルタ](0058-filters-nobody-arrived-through.md) — **Superseded by 0068**。
+- [0101 一覧は歩ける — 凍結はそれを止めていなかった](0101-a-level-can-be-walked.md)
+  — **Accepted**。`index.md` を JSON で読む一覧が `cursor` を持つ。
+  [0068](0068-how-a-face-is-added-and-removed.md) §2.1 は一覧について
+  「保証するのは歩き切ることではなく、**上限で静かに止まらないこと**」と
+  既に決めていたが、バンドルの一覧は別の操作なのでその規則が一度も届いて
+  いなかった —— 1000 件で切って `truncated: true` を立てるだけで、**先へ
+  行く綴りが無かった**(静かではないが、壁ではある)。**ページの大きさは
+  1000 のまま**にしたので、今日収まっている呼び出し元は今日と同じものを
+  受け取り、壁に当たっていた側だけが歩けるようになる。cursor は**二つの
+  走査**(概念は id 順、ファイルは path 順)と**ディレクトリ**を運ぶ —
+  サブディレクトリは `GROUP BY` の結果で位置を持たないので初回のページ
+  だけに載り、別の階層の cursor は 400 で両方を名指す。markdown の
+  `index.md` は歩かない(SPEC §8 に「続き」の綴りが無い)ので、そこへの
+  `?cursor=` は 400 である。もう半分は**凍結の規則**で、`cursor` という
+  新しいクエリパラメータが要ったこと自体がそれを露わにした:
+  [0082](0082-what-the-freeze-holds-still.md) は応答側の追加だけを外に
+  置いていたが、0064 §2 が未知キーを 400 にした理由は「**凍結後に何かを
+  安全に足せるかどうかを決める**」であり、**任意のクエリパラメータの追加**は
+  最初から凍結の外だった。検査は三つに絞る(`query` のみ・`required=false`
+  のみ・パラメータ一本の行のみ)。`truncated` は残す — 応答からの削除は
+  凍結の本体で、1.0 の仕事である(0097 §2 が `Ochakai-Plan` でした取引と
+  同じ)。指紋は 2 行増え、表面の数は一つも動かない。
 - [0100 `.md` は concept の綴りである](0100-md-is-how-a-concept-is-spelled.md)
   — **Accepted**。**BREAKING**。`.md` の住所に
   座れるのは concept と予約名だけであり、`type` を持たない `.md` の PUT は

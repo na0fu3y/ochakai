@@ -602,6 +602,16 @@ paths:
         listing or the changes; anything else returns the file the path
         names — two representations of one thing, at one address.
 
+        **The JSON listing pages.** A level is a total order, so
+        `index.md` read as JSON takes a `cursor` and hands back the next
+        one until the level runs out (design docs 0068 §2.1, 0101). The
+        page size is the server's, unchanged at 1000 rows of each kind,
+        so a caller that fits under it sees what it has always seen —
+        what has changed is that a wider directory can now be walked
+        instead of ending at `truncated: true`. The document form does
+        not page: SPEC §8 gives index.md no way to say "continued", so it
+        keeps the truncation note and the JSON is where the walk lives.
+
         **`?history` is the log.md of the one object at this path**
         (design doc 0075 §4) — the history of a concept or of a file,
         because a revision is an event about an object and the ledger is
@@ -642,6 +652,19 @@ paths:
             most (design doc 0064 §14.1).
           schema: { type: integer }
         - $ref: "#/components/parameters/IfNoneMatch"
+        - name: cursor
+          in: query
+          description: >
+            `index.md` as JSON only — resume the level where the previous
+            page ended, and a 400 naming the mode anywhere else on this
+            address, the document form included (design doc 0101). A page
+            with rows behind it carries `cursor` in `BundleListing`; its
+            absence is how a caller learns the level is done, which is the
+            only count a listing gives (design doc 0068 §2.1). It is
+            opaque, belongs to the directory it was issued for — one from
+            another level is a 400 — and carries no filter, because a
+            level has none.
+          schema: { type: string }
         - name: files
           in: query
           description: >
@@ -3326,7 +3349,22 @@ components:
             required: [name, path, media_type, size, created_at]
         truncated:
           type: boolean
-          description: The concept or file list hit the 1000-per-level cap.
+          description: >
+            The concept or file list hit the 1000-per-page cap. It says
+            what it has always said about the page it describes; what has
+            changed is that `cursor` beside it is the way past the cap
+            (design doc 0101). Removing it would be a removal from a
+            response, which the freeze holds, so it stays until 1.0.
+        cursor:
+          type: string
+          description: >
+            Where the next page of this level resumes, absent on the last
+            one — a listing gives no total, and the absence is the whole
+            of "there is no more" (design doc 0068 §2.1). Opaque: hand
+            back what arrived, with the same prefix. A cursor from another
+            level is a 400 naming both, because resuming one directory
+            from another's position would skip rows in both. The
+            subdirectories are on the first page only.
     BundleLog:
       type: object
       description: >

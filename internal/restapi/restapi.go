@@ -368,17 +368,27 @@ func Handler(svc *service.Service) http.Handler {
 		dir, base := splitReserved(path)
 		switch base {
 		case "index.md":
-			if err := rejectOutOfModeParams(q, "on index.md"); err != nil {
+			if err := rejectOutOfModeParams(q, "on index.md", "cursor"); err != nil {
 				writeError(w, err)
 				return
 			}
 			if wantsJSON(r) {
-				res, err := svc.Browse(r.Context(), dir)
+				res, err := svc.Browse(r.Context(), dir, q.Get("cursor"))
 				if err != nil {
 					writeError(w, err)
 					return
 				}
 				writeJSON(w, http.StatusOK, res)
+				return
+			}
+			// The document form does not page (design doc 0101 §4), and a
+			// cursor it accepted and ignored would be the silence design
+			// doc 0064 §2 closed everywhere else: the caller asked for a
+			// page and would receive the first one.
+			if q.Has("cursor") {
+				writeError(w, service.Invalidf(
+					"cursor pages the JSON listing; index.md as a document is one level whole, "+
+						"so ask for it with Accept: application/json"))
 				return
 			}
 			doc, err := svc.IndexDocument(r.Context(), dir)
@@ -1854,7 +1864,12 @@ var repeatableParams = []string{"prefix", "status", "tag", "trust", "type"}
 // file's own address). rejectOutOfModeParams is what makes that precise —
 // before design doc 0064 §2 item 2, a mode that did not read one of these
 // silently ignored it instead of saying so.
-var bundleModeParams = []string{"history", "limit", "files"}
+//
+// `cursor` joined them with the level listing (design doc 0101): it is
+// read by one mode of this address, which is the property this list is
+// for, and a parameter declared for the address has to be refused by name
+// rather than as an unknown key everywhere else.
+var bundleModeParams = []string{"history", "limit", "files", "cursor"}
 
 // rejectOutOfModeParams 400s a bundleModeParams key present outside the
 // mode that reads it, naming the mode — mode reads as "<key> is not

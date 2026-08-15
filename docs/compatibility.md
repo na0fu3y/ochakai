@@ -57,7 +57,14 @@ moves:
   rest) — and CI fails when the two disagree
   (`cmd/ochakai/frozenwire_test.go`), so a rename that keeps every count
   still cannot land quietly. Prose is deliberately outside it: the
-  documentation in the contract stays free to improve. **What the
+  documentation in the contract stays free to improve, and so is an
+  **optional query parameter**: 0064 §2 made an unrecognized key a 400
+  expressly so one could be added later, and
+  [0101](design/0101-a-level-can-be-walked.md) §5 finished writing that
+  down on the request side — the first one added is `cursor`, which walks
+  a directory listing past the 1000-row page instead of ending at
+  `truncated: true`. A caller that does not send it reads the same answer
+  it read before. **What the
   fingerprint cannot hold is which input gets which answer**, and
   [0100](design/0100-md-is-how-a-concept-is-spelled.md) is the first change
   to land in that gap: a `.md` path now holds a concept and nothing else,

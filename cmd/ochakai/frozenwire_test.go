@@ -62,10 +62,12 @@ const frozenWireHeader = `# The frozen REST wire, read out of api/openapi.yaml b
 # One line per thing a client can observe. Prose (description, summary,
 # example, examples) is left out on purpose: documentation stays free to
 # improve after the freeze. Moving any line below is a change to a contract
-# design doc 0064 froze at /api/v1, and §11 says the only reason left is a
-# security defect — except for a property added under components/schemas
-# for a schema no requestBody reaches, which design doc 0082 says the
-# freeze was never holding still.
+# design doc 0064 froze at /api/v1, and §11 says the only reasons left are a
+# security defect and output that does not conform to OKF (design doc 0100)
+# — except for two additions the freeze was never holding still: a property
+# added under components/schemas for a schema no requestBody reaches
+# (design doc 0082), and an optional query parameter added to an operation
+# (design doc 0101).
 
 `
 
@@ -89,14 +91,17 @@ func TestFrozenWireHasNotMoved(t *testing.T) {
 	if want == got {
 		return
 	}
-	if onlyResponseAdditions(t, want, got) {
+	if onlyAdditionsOutsideTheFreeze(t, want, got) {
 		t.Errorf(`the frozen REST wire grew:
 
 %s
-Adding a property to a response-only schema is outside the freeze (design
-doc 0082): a client ignores a response key it does not know, and `+"`required`"+`
+Two additions are outside the freeze. A property on a response-only schema
+(design doc 0082): a client ignores a response key it does not know, and `+"`required`"+`
 in a response is a promise the server makes rather than a demand on the
-caller. It still has to show in a diff, so regenerate the golden in the
+caller. An optional query parameter (design doc 0101): 0064 §2 made an
+unrecognized key a 400 expressly so one could be added later, and a caller
+that does not send it reads the same answer it reads today. Both still have
+to show in a diff, so regenerate the golden in the
 same PR and say in the description what the addition is for:
 
 	go test ./cmd/ochakai -run TestFrozenWireHasNotMoved -update`,
@@ -111,10 +116,11 @@ contract is the address list a client holds onto, and after the freeze the
 only reason to move a line above is a security defect (0064 §11). Prose is
 not fingerprinted, so a documentation edit never lands here.
 
-What 0082 leaves outside the freeze is narrower than this diff: properties
-*added* to a schema no `+"`requestBody`"+` can reach. A line that disappeared or
-changed — a rename, a type, a requiredness, an address — is the freeze
-itself, and only a security defect moves it.
+What 0082 and 0101 leave outside the freeze is narrower than this diff:
+properties *added* to a schema no `+"`requestBody`"+` can reach, and *optional query
+parameters* added to an operation. A line that disappeared or changed — a
+rename, a type, a requiredness, an address — is the freeze itself, and only
+a security defect or an OKF conformance defect moves it.
 
 If this change is meant, regenerate the golden in the same PR and say in the
 description which security defect it closes:
@@ -123,14 +129,16 @@ description which security defect it closes:
 		wireDiff(want, got))
 }
 
-// onlyResponseAdditions reports whether every difference between the
-// golden and the spec is a line added under a schema no request can
-// reach — the one movement design doc 0082 leaves outside the freeze.
+// onlyAdditionsOutsideTheFreeze reports whether every difference between
+// the golden and the spec is one of the two the freeze was never holding
+// still: a line added under a schema no request can reach (design doc
+// 0082), or an optional query parameter added to an operation (design doc
+// 0101).
 //
 // A removal is never one of those, and neither is a change: the
 // fingerprint is a sorted set of lines, so an edited line arrives here as
 // a removal beside an addition, and the removal is what fails.
-func onlyResponseAdditions(t *testing.T, want, got string) bool {
+func onlyAdditionsOutsideTheFreeze(t *testing.T, want, got string) bool {
 	t.Helper()
 	old := map[string]bool{}
 	for _, line := range fingerprintLines(want) {
@@ -159,6 +167,9 @@ func onlyResponseAdditions(t *testing.T, want, got string) bool {
 		if strings.HasPrefix(line, "components/responses/") {
 			continue
 		}
+		if isOptionalQueryParam(line) {
+			continue
+		}
 		name, ok := schemaOfLine(line)
 		if !ok || !responseOnly[name] {
 			return false
@@ -166,6 +177,45 @@ func onlyResponseAdditions(t *testing.T, want, got string) bool {
 	}
 	return true
 }
+
+// isOptionalQueryParam reports whether a line declares a query parameter
+// a caller may omit — the addition design doc 0101 places outside the
+// freeze, because 0064 §2 closed unrecognized keys with a 400 expressly
+// so that one could be added afterwards.
+//
+// Three narrowings, each load-bearing. Only `query`: a request header can
+// be added by a relay the caller does not control (0064 §11), and a path
+// parameter is an address. Only `required=false`: a required one is a 400
+// for every client that predates it, which 0082 §2 already names as the
+// freeze itself. And only a whole parameter line — a line that names a
+// key of an existing parameter arrives as a removal beside an addition,
+// and the removal fails before this is reached.
+func isOptionalQueryParam(line string) bool {
+	method, rest, ok := strings.Cut(line, " ")
+	if !ok || !slices.Contains(fingerprintedMethods, method) {
+		return false
+	}
+	_, decl, ok := strings.Cut(rest, " query ")
+	if !ok {
+		return false
+	}
+	name, facets, ok := strings.Cut(decl, " ")
+	if !ok || strings.Contains(name, ".") {
+		return false
+	}
+	// The array members of a repeatable parameter fingerprint as
+	// "query type[] ref=Type", which carries no requiredness of its own
+	// and rides on the parameter line above it.
+	if strings.HasSuffix(name, "[]") {
+		return true
+	}
+	return strings.HasPrefix(facets, "required=false")
+}
+
+// fingerprintedMethods are the HTTP methods a fingerprint line can start
+// with, so a schema line that happens to contain " query " is never read
+// as one.
+var fingerprintedMethods = []string{"GET", "PUT", "POST", "DELETE", "PATCH", "HEAD", "OPTIONS"}
 
 // schemaOfLine names the component schema a fingerprint line belongs to,
 // for the lines that belong to one: "components/schemas/Stats.dropped
@@ -686,13 +736,21 @@ func TestOnlyResponseAdditionsRefusesEverythingElse(t *testing.T) {
 		{"a changed line", base,
 			"components/schemas/Stats.misses required=false type=object", false},
 		{"an added operation", base, base + "\nGET /api/v1/new", false},
-		{"an added request parameter", base,
-			base + "\nGET /api/v1/stats query weeks required=false type=integer", false},
+		// The request half of what 0064 §2 built the unknown-key 400 for
+		// (design doc 0101): optional and query, or it is the freeze.
+		{"an added optional query parameter", base,
+			base + "\nGET /api/v1/stats query weeks required=false type=integer", true},
+		{"an added required query parameter", base,
+			base + "\nGET /api/v1/stats query weeks required=true type=integer", false},
+		{"an added request header", base,
+			base + "\nGET /api/v1/stats header Ochakai-Window ref=Window", false},
+		{"an added path parameter", base,
+			base + "\nGET /api/v1/stats path id required=false type=string", false},
 		{"nothing at all", base, base, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			if got := onlyResponseAdditions(t, c.golden, c.spec); got != c.ok {
-				t.Errorf("onlyResponseAdditions = %v, want %v", got, c.ok)
+			if got := onlyAdditionsOutsideTheFreeze(t, c.golden, c.spec); got != c.ok {
+				t.Errorf("onlyAdditionsOutsideTheFreeze = %v, want %v", got, c.ok)
 			}
 		})
 	}

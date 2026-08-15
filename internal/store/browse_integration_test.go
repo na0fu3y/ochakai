@@ -61,7 +61,7 @@ func TestIntegrationBrowse(t *testing.T) {
 
 	// The root is the top-level segments of the shared test DB; our
 	// directory must be there with its subtree count.
-	root, err := s.Browse(ctx, "")
+	root, err := s.Browse(ctx, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestIntegrationBrowse(t *testing.T) {
 		t.Errorf("root dir counts wrong: %v", rootCounts)
 	}
 
-	lvl, err := s.Browse(ctx, "it-br-sales/")
+	lvl, err := s.Browse(ctx, "it-br-sales/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestIntegrationBrowse(t *testing.T) {
 	}
 
 	// The underscore ID lives in its own directory, not under it-br-sales.
-	lvl, err = s.Browse(ctx, "it-br_x/")
+	lvl, err = s.Browse(ctx, "it-br_x/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestIntegrationBrowse(t *testing.T) {
 	}
 
 	// Root level: the rejected entry is invisible.
-	lvl, err = s.Browse(ctx, "")
+	lvl, err = s.Browse(ctx, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,5 +107,76 @@ func TestIntegrationBrowse(t *testing.T) {
 		if e.ID == "it-br-rejected" {
 			t.Error("rejected entry visible in browse")
 		}
+	}
+}
+
+// A level pages: a directory wider than one page hands back a position,
+// and resuming from it reads the rest (design docs 0068 §2.1, 0101).
+//
+// The rows go in with one INSERT rather than 1001 writes through the
+// service: what is under test is the keyset predicate and where a page
+// stops, and neither reads anything the write path would have filled in.
+func TestBrowsePagesPastTheCap(t *testing.T) {
+	dbURL := testdb.URL(t)
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+
+	dir := testdb.Unique(t, "it-brpage")
+	t.Cleanup(func() {
+		_, _ = s.pool.Exec(context.WithoutCancel(ctx),
+			`DELETE FROM object WHERE starts_with(path, $1)`, dir+"/")
+	})
+	// One past the page, so the last page is a short one rather than an
+	// empty one — the case that tells "full page" from "done".
+	if _, err := s.pool.Exec(ctx, `
+		INSERT INTO object (path, id, type, title, description, body, status,
+		                    created_by_kind, created_by_name, updated_by_kind, updated_by_name)
+		SELECT $1 || '/' || to_char(n, 'FM0000') || '.md', $1 || '/' || to_char(n, 'FM0000'),
+		       'Metric', '', '', '', 'stable', 'human', 't', 'human', 't'
+		  FROM generate_series(1, $2::int) n`, dir, MaxBrowseEntries+1); err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := s.Browse(ctx, dir+"/", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Concepts) != MaxBrowseEntries || !first.MoreConcepts || !first.Truncated {
+		t.Fatalf("first page = %d concepts, more=%v truncated=%v",
+			len(first.Concepts), first.MoreConcepts, first.Truncated)
+	}
+	if first.MoreFiles {
+		t.Error("no files were written, so no file page can be behind this one")
+	}
+
+	last := first.Concepts[len(first.Concepts)-1].ID
+	next, err := s.Browse(ctx, dir+"/", &BrowseAfter{Concepts: &last})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(next.Concepts) != 1 || next.MoreConcepts {
+		t.Fatalf("second page = %d concepts, more=%v, want the one row left", len(next.Concepts), next.MoreConcepts)
+	}
+	if next.Concepts[0].ID <= last {
+		t.Errorf("second page starts at %q, which is not after %q", next.Concepts[0].ID, last)
+	}
+	// The subdirectories ride on the first page only: they are a
+	// grouping, so repeating them would report the same directory twice
+	// to anyone walking the level.
+	if next.Dirs != nil {
+		t.Errorf("a resumed page carries %d subdirectories, want none", len(next.Dirs))
+	}
+	// A kind the cursor marked finished is not asked again — the files
+	// query does not run, which is what a nil position means.
+	files, err := s.Browse(ctx, dir+"/", &BrowseAfter{Concepts: &last, Files: nil})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files.Files != nil {
+		t.Errorf("a finished kind came back with %d rows", len(files.Files))
 	}
 }

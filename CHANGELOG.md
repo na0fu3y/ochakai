@@ -19,6 +19,28 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **A directory listing pages.** `GET /api/v1/bundle/<dir>/index.md` read
+  as JSON now carries a `cursor` when rows remain, and takes it back as
+  `?cursor=` to read the next page — `ochakai browse --cursor` on the CLI,
+  which prints the next one to stderr the way `ochakai list` does. A level
+  wider than 1000 rows used to end at `truncated: true` with no way past
+  it ([design doc 0101](docs/design/0101-a-level-can-be-walked.md);
+  [0068](docs/design/0068-how-a-face-is-added-and-removed.md) §2.1 had
+  already decided a listing must not do that). **Nothing changes for a
+  caller that fits under the cap**: the page is still 1000 rows of each
+  kind, and `truncated` still says what it always said. The markdown
+  `index.md` does not page — OKF SPEC §8 has no spelling for "continued" —
+  so `?cursor=` there is a 400, as it is on every other mode of the
+  address.
+
+  This is the first **optional query parameter** added since the freeze,
+  which 0101 §5 records as something the freeze was never holding still:
+  0064 §2 made an unrecognized query key a 400 precisely so that one could
+  be added safely afterwards, and 0082 had written down only the response
+  half of that. `api/openapi.frozen.txt` grows by two lines.
+
 ### Changed
 
 - **BREAKING: a `.md` path holds a concept and nothing else**

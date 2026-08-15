@@ -2720,6 +2720,70 @@ func TestRESTIntegrationMarkdownAddressesHoldConcepts(t *testing.T) {
 	}
 }
 
+// A level is a listing, so the JSON form takes a cursor (design doc
+// 0101). The refusals are what this reads: the walk itself is the store's
+// test, because issuing a cursor takes a directory wider than the page
+// and 1001 writes through the API would buy the same assertion at a
+// hundred times the cost.
+func TestRESTIntegrationLevelListingTakesACursor(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	typ := testdb.Unique(t, "restcursor")
+	id := typ + "/revenue"
+	removeEntries(t, srv, id)
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": typ, "id": id, "title": "Revenue"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create status = %d", resp.StatusCode)
+	}
+
+	// A level that fits in a page hands out no cursor: the absence is
+	// how a caller learns it is done (design doc 0068 §2.1).
+	var listing service.BrowseResult
+	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/index.md", &listing)
+	if listing.Cursor != "" || listing.Truncated {
+		t.Errorf("a level of one concept came back with cursor %q truncated=%v",
+			listing.Cursor, listing.Truncated)
+	}
+
+	at := srv.URL + "/api/v1/bundle/" + typ + "/index.md"
+	for _, tc := range []struct{ name, url, accept string }{
+		// Malformed, and from another listing entirely.
+		{"a cursor that decodes to nothing", at + "?cursor=not-a-cursor", "application/json"},
+		// The document form does not page, so a cursor it accepted would
+		// be a page silently answered with the first one.
+		{"a cursor on the document form", at + "?cursor=x", ""},
+		// Every other mode of this address refuses it by name, the way
+		// design doc 0064 §2 closed the rest of the matrix.
+		{"a cursor on a concept", srv.URL + "/api/v1/bundle/" + id + ".md?cursor=x", "application/json"},
+		{"a cursor on log.md", srv.URL + "/api/v1/bundle/" + typ + "/log.md?cursor=x", "application/json"},
+		{"a cursor with ?history", srv.URL + "/api/v1/bundle/" + id + ".md?history&cursor=x", "application/json"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest(http.MethodGet, tc.url, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.accept != "" {
+				req.Header.Set("Accept", tc.accept)
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("%s = %d, want 400: %s", tc.url, resp.StatusCode, body)
+			}
+			if !bytes.Contains(body, []byte("cursor")) {
+				t.Errorf("the refusal does not name the parameter: %s", body)
+			}
+		})
+	}
+}
+
 // The two names OKF reserves are generated from the bundle rather than
 // stored in it (design doc 0046 §§3.7-3.8), and every face that reads a
 // path as something other than "the object at it" says so the same way.

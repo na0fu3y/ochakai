@@ -83,7 +83,8 @@ func decodeCursor(enc, sort string, want int) (*store.After, error) {
 	// is named back: the rest is the caller's own bytes, and quoting them
 	// says nothing true about the request.
 	if parts[1] != sort {
-		if slices.Contains(domain.ListSorts, parts[1]) || parts[1] == sortBySource || parts[1] == sortByLinksTo {
+		if slices.Contains(domain.ListSorts, parts[1]) || parts[1] == sortBySource ||
+			parts[1] == sortByLinksTo || parts[1] == browseListing {
 			return nil, Invalidf("cursor belongs to the %s listing; it cannot resume the %s one", parts[1], sort)
 		}
 		return nil, malformedCursor()
