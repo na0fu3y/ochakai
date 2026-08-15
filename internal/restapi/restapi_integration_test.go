@@ -251,9 +251,13 @@ func TestRESTIntegration(t *testing.T) {
 	// Neither is writable: they are generated, not stored, so a write to
 	// one conflicts with what the address is (design doc 0046 §3.5).
 	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+typ+"/index.md", strings.NewReader("x"))
+	// A `.md` PUT is a concept write and names the media type the spec
+	// declares for one; the refusal below is about the address, and comes
+	// before anything reads the body (design docs 0064 §15, 0100).
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Set("Content-Type", "text/markdown")
 	resp, err = http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -1665,9 +1669,10 @@ func TestRESTIntegrationAnyFileIsAcceptedAndServedInert(t *testing.T) {
 
 // The bundle address serves and takes every object in it (design doc
 // 0046 §3.5): a concept at its own path, a file at its own path, and a
-// markdown document that carries no type — which is not a broken concept
-// but a file that happens to be markdown (SPEC §11 makes the key what a
-// concept has), and which a bundle that carried one gets back.
+// markdown file that is not a concept — which keeps its bytes and, since
+// design doc 0100, not a concept's address: `.md` is where SPEC §3.1
+// says a concept document lives, and §11 makes the `type` key the
+// condition of that.
 func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	lockLiveAttachments(t)
 	srv, s := newIntegrationServer(t)
@@ -1692,9 +1697,10 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 		// A concept is written as text/markdown: the spec declares the PUT
 		// body under that media type and application/octet-stream, and a
 		// request that names neither is off-contract even though the
-		// handler decides by the bytes and would accept it (design doc
-		// 0064 §15).
-		if strings.HasSuffix(path, ".md") && okf.CarriesType(body) {
+		// handler is lenient and would accept it (design doc 0064 §15).
+		// Which of the two applies is the address's answer (design doc
+		// 0100 §2).
+		if strings.HasSuffix(path, ".md") {
 			req.Header.Set("Content-Type", "text/markdown")
 		}
 		resp, err := http.DefaultClient.Do(req)
@@ -1756,14 +1762,29 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 		t.Errorf("the entry does not carry the file its body shows: %+v", read.Files)
 	}
 
-	// A markdown document with no type is a file, not a bad concept.
+	// A markdown document with no type is a file, not a bad concept —
+	// and a file may not sit at a concept's address. Both halves are one
+	// rule, so both are read here: the `.md` spelling is refused, and the
+	// same bytes at a spelling that claims nothing are stored.
 	notes := []byte("# 会議メモ\n\ntype なし。\n")
 	resp = put(t, typ+"/notes.md", notes)
+	refusal, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("a typeless document at a concept's address = %d, want 400 (design doc 0100)", resp.StatusCode)
+	}
+	// The sentence names both ways out, because the caller meant one of
+	// them and the server cannot tell which.
+	if !bytes.Contains(refusal, []byte(".md")) || !bytes.Contains(refusal, []byte("file")) {
+		t.Errorf("the refusal reads %s, want it to name the `.md` address and the way to store "+
+			"these bytes as a file", refusal)
+	}
+	resp = put(t, typ+"/notes.markdown", notes)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("writing a typeless markdown file = %d, want 201", resp.StatusCode)
+		t.Fatalf("writing the same bytes at a path that is not a concept's = %d, want 201", resp.StatusCode)
 	}
-	resp, err = http.Get(bundle + typ + "/notes.md")
+	resp, err = http.Get(bundle + typ + "/notes.markdown")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1781,13 +1802,13 @@ func TestRESTIntegrationBundleAddressWritesEveryObject(t *testing.T) {
 	var listing service.BrowseResult
 	getJSON(t, srv.URL+"/api/v1/bundle/"+typ+"/index.md", &listing)
 	for _, e := range listing.Concepts {
-		if e.ID == typ+"/notes" || e.ID == typ+"/notes.md" {
+		if e.ID == typ+"/notes" || e.ID == typ+"/notes.markdown" {
 			t.Errorf("a typeless markdown file is listed as a concept: %+v", e)
 		}
 	}
 
 	// Delete reaches both kinds.
-	for _, path := range []string{typ + "/notes.md", id + "/chart.png"} {
+	for _, path := range []string{typ + "/notes.markdown", id + "/chart.png"} {
 		req, _ := http.NewRequest(http.MethodDelete, bundle+path, nil)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -2603,52 +2624,99 @@ func TestRESTIntegrationArchivingFilesWithoutABucketIs501(t *testing.T) {
 	}
 }
 
-// A markdown document that carries no type is a file (design doc 0046
-// §3.2), and it lives at a ".md" path like a concept does. Its history is
-// the same history whichever representation asks for it.
+// A `.md` address holds a concept or nothing (design doc 0100). Every
+// verb is read here, because the rule is one sentence and the old
+// behaviour was spread across four: a typeless document used to be
+// stored as a file at that address, served from it, deleted through it,
+// and carried into every export — where SPEC §11.1 and §11.2 make a
+// non-reserved `.md` without a `type` the definition of a bundle that
+// does not conform.
 //
-// It used to be two answers: ?history routed on the suffix alone, so the
-// JSON went looking for a concept ledger under an id nothing held and
-// answered 404 — at an address whose markdown listed the history fine.
-func TestRESTIntegrationTypelessMarkdownHasOneHistory(t *testing.T) {
+// The 404s matter as much as the 400s. They used to be the file half's
+// answer, which on an instance holding no files at all was a 501 — "this
+// deployment does not do files" in reply to a question about a concept.
+func TestRESTIntegrationMarkdownAddressesHoldConcepts(t *testing.T) {
 	lockLiveAttachments(t)
 	srv, s := newIntegrationServer(t)
 	s.UseBlobStore(memBlobStore{})
 
-	typ := testdb.Unique(t, "resttypeless")
-	file := typ + "/notes.md"
-	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+file,
+	typ := testdb.Unique(t, "restmdaddr")
+	at := srv.URL + "/api/v1/bundle/" + typ + "/notes.md"
+
+	// A document with no type, at a concept's address.
+	req, err := http.NewRequest(http.MethodPut, at,
 		bytes.NewReader([]byte("# just a note\n\nno frontmatter, so no type, so not a concept\n")))
 	if err != nil {
 		t.Fatal(err)
 	}
+	req.Header.Set("Content-Type", "text/markdown")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
+	var refused struct {
+		Code  string `json:"code"`
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&refused); err != nil {
+		t.Fatal(err)
+	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		t.Fatalf("PUT a typeless markdown file = %d, want 201 (it is a file)", resp.StatusCode)
+	if resp.StatusCode != http.StatusBadRequest || refused.Code != domain.CodeInvalid {
+		t.Fatalf("PUT a typeless document at a concept's address = %d %q, want 400 invalid",
+			resp.StatusCode, refused.Code)
 	}
-	defer func() {
-		r, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+file, nil)
-		if resp, err := http.DefaultClient.Do(r); err == nil {
-			resp.Body.Close()
-		}
-	}()
 
-	if doc := getMarkdown(t, srv.URL+"/api/v1/bundle/"+file+"?history"); !strings.Contains(doc, "**Create**") {
-		t.Errorf("the file's history as a document:\n%s", doc)
+	// Bytes that are not markdown at all, at the same address: refused by
+	// the service rather than the document parser, which is why it is
+	// worth asking separately — every face writes a file through that one
+	// gate (design doc 0100 §2).
+	req, err = http.NewRequest(http.MethodPut, at,
+		bytes.NewReader(append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 16)...)))
+	if err != nil {
+		t.Fatal(err)
 	}
-	var log struct {
-		Changes []struct {
-			Path   string `json:"path"`
-			Change string `json:"change"`
-		} `json:"changes"`
+	req.Header.Set("Content-Type", "application/octet-stream")
+	if resp, err = http.DefaultClient.Do(req); err != nil {
+		t.Fatal(err)
 	}
-	getJSON(t, srv.URL+"/api/v1/bundle/"+file+"?history", &log)
-	if len(log.Changes) != 1 || log.Changes[0].Path != file || log.Changes[0].Change != "create" {
-		t.Errorf("the file's history as JSON = %+v, want the one create the document lists", log.Changes)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("PUT file bytes at a concept's address = %d, want 400", resp.StatusCode)
+	}
+
+	// Nothing was stored, by any of the three reads, and the answer is
+	// about the object rather than about the deployment.
+	for _, url := range []string{at, at + "?history"} {
+		resp, err := http.Get(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusNotFound {
+			t.Errorf("GET %s = %d, want 404", url, resp.StatusCode)
+		}
+	}
+	req, _ = http.NewRequest(http.MethodDelete, at, nil)
+	if resp, err = http.DefaultClient.Do(req); err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("DELETE a concept's address with nothing at it = %d, want 404", resp.StatusCode)
+	}
+
+	// The same read on an instance with nowhere to put file bytes. The
+	// question is about a concept, so the answer is 404 — never the 501
+	// that says this deployment holds no files.
+	blobless, _ := newIntegrationServer(t)
+	resp, err = http.Get(blobless.URL + "/api/v1/bundle/" + typ + "/notes.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Errorf("GET a missing concept on an instance without a bucket = %d, want 404", resp.StatusCode)
 	}
 }
 

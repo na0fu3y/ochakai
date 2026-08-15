@@ -452,13 +452,12 @@ func Handler(svc *service.Service) http.Handler {
 					}
 					return
 				}
-				// A markdown path with no concept at it may still be a
-				// file: a document that carries no type is not a concept
-				// and is kept as a file (design doc 0046 §3.2).
-				if !errors.Is(err, store.ErrNotFound) {
-					writeError(w, err)
-					return
-				}
+				// A markdown path holds a concept or nothing (design
+				// doc 0100 §2). The fall-through to the file branches
+				// below, which used to stand here, served the typeless
+				// `.md` — an object the write face no longer stores.
+				writeError(w, err)
+				return
 			}
 			// application/json on a file's own address answers metadata,
 			// not bytes: the only way to read a file's sha256 without
@@ -467,7 +466,7 @@ func Handler(svc *service.Service) http.Handler {
 			if wantsJSON(r) {
 				att, err := svc.GetFileMeta(r.Context(), path)
 				if err != nil {
-					writeError(w, missingObject(err, isMarkdown))
+					writeError(w, err)
 					return
 				}
 				w.Header().Set("ETag", `"`+att.SHA256+`"`)
@@ -486,7 +485,7 @@ func Handler(svc *service.Service) http.Handler {
 			}
 			att, data, err := svc.GetFile(r.Context(), path)
 			if err != nil {
-				writeError(w, missingObject(err, isMarkdown))
+				writeError(w, err)
 				return
 			}
 			w.Header().Set("ETag", `"`+att.SHA256+`"`)
@@ -564,10 +563,13 @@ func Handler(svc *service.Service) http.Handler {
 			// is a write to the concept — the same document, the same
 			// preconditions, the same answer. Anything else is a file.
 			//
-			// A .md that carries no type is not a concept (SPEC §11
-			// requires the key), and it is not an error either: it is a
-			// file that happens to be markdown, and a bundle that carried
-			// one gets it back (design doc 0046 §3.2).
+			// The address decides, not the bytes. SPEC §3.1 says every
+			// non-reserved `.md` in a bundle is a concept document and
+			// §11 makes frontmatter with a non-empty `type` the condition
+			// of conformance, so a `.md` carrying no type is refused
+			// rather than kept as a file at that address — which is what
+			// used to happen, and what put a non-conformant `.md` in
+			// every export that carried one (design doc 0100).
 			id, isMarkdown := strings.CutSuffix(path, ".md")
 			if r.Method == http.MethodDelete {
 				// A delete has no plan to report — what it would do is
@@ -598,16 +600,17 @@ func Handler(svc *service.Service) http.Handler {
 				}
 				// A path that is not a concept's address names a file,
 				// which takes no precondition (design doc 0064 §20.4).
-				// A `.md` path is decided below: it reaches DeleteFile
-				// only when no concept lives there, and a precondition
-				// against a concept that is not there is already a 404.
+				// The narrow gap that section wrote down — a typeless
+				// `.md` reaching DeleteFile through the concept branch
+				// with its precondition unread — is closed by the address
+				// rule above: nothing but a concept lives at a `.md`
+				// (design doc 0100 §6).
 				if !isMarkdown {
 					if err := refusePreconditions(r); err != nil {
 						writeError(w, err)
 						return
 					}
 				}
-				err = store.ErrNotFound
 				switch {
 				case isMarkdown && purge:
 					// No If-Match here: purge is already the second,
@@ -624,9 +627,12 @@ func Handler(svc *service.Service) http.Handler {
 						return
 					}
 					err = svc.Delete(r.Context(), id, actor, ifMatch)
-				}
-				if errors.Is(err, store.ErrNotFound) {
-					err = missingObject(svc.DeleteFile(r.Context(), path, actor), isMarkdown)
+				default:
+					// Not a concept's address, so the object here is a
+					// file and DeleteFile is the whole of the answer. The
+					// fall-through this replaces existed for the typeless
+					// `.md`, which no longer exists (design doc 0100).
+					err = svc.DeleteFile(r.Context(), path, actor)
 				}
 				if err != nil {
 					writeError(w, err)
@@ -653,7 +659,7 @@ func Handler(svc *service.Service) http.Handler {
 			if !ok {
 				return
 			}
-			if isMarkdown && okf.CarriesType(body) {
+			if isMarkdown {
 				putEntry(w, r, svc, id, body, actor, dry)
 				return
 			}
@@ -1131,24 +1137,21 @@ func writeObjectHistory(w http.ResponseWriter, r *http.Request, svc *service.Ser
 	// revisions is a text diff. A file's carry none, because a file has
 	// none, so its rows are the shape a directory's history has.
 	//
-	// Which of the two this is cannot be read off the path: a markdown
-	// document that carries no type is a *file* (design doc 0046 §3.2),
-	// and it lives at a ".md" path like any other. So the concept ledger
-	// is asked first and its ErrNotFound falls through to the object's —
-	// keyed by path, which is the one key both kinds have. Routing on the
-	// suffix alone answered 404 as JSON at an address whose markdown
-	// listed the history fine, which is the one thing two representations
-	// of one address may not do.
+	// Which of the two this is is read off the path, because the address
+	// decides what may live there (design doc 0100 §2). It used to be
+	// unreadable there — a markdown document carrying no type was a file
+	// at a ".md" path like any other — so the concept ledger was asked
+	// first and its ErrNotFound fell through to the object's. Both
+	// representations still answer at every address; what has gone is the
+	// case where the two disagreed about which kind of object was here.
 	if id, isMarkdown := strings.CutSuffix(path, ".md"); isMarkdown && wantsJSON(r) {
 		revs, err := svc.Revisions(r.Context(), id, limit)
-		if err == nil {
-			writeJSON(w, http.StatusOK, map[string]any{"revisions": revs})
-			return
-		}
-		if !errors.Is(err, store.ErrNotFound) {
+		if err != nil {
 			writeError(w, err)
 			return
 		}
+		writeJSON(w, http.StatusOK, map[string]any{"revisions": revs})
+		return
 	}
 	rows, err := svc.ObjectHistory(r.Context(), path, limit)
 	if err != nil {
@@ -1464,9 +1467,21 @@ func unmodified(r *http.Request, version string) (bool, error) {
 func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 	id string, body []byte, actor domain.Actor, dry bool,
 ) {
+	// Bytes that are not a concept, at an address that holds nothing else:
+	// the two ways to fail that are one refusal, because the caller meant
+	// one of two things and the answer has to name both. Until design doc
+	// 0100 the second of them stored a file called `x.md` in silence, and
+	// every export carried a `.md` with no frontmatter — the definition of
+	// a bundle that does not conform (SPEC §11.1, §11.2).
 	d, notes, err := okf.Parse(body)
-	if err != nil {
-		writeErrorBody(w, http.StatusBadRequest, domain.CodeInvalid, err.Error())
+	switch {
+	case err != nil:
+		refuseNonConcept(w, err.Error())
+		return
+	case strings.TrimSpace(string(d.Type)) == "":
+		// validate() would answer `invalid type ""`, which describes the
+		// field rather than the choice in front of the caller.
+		refuseNonConcept(w, "a concept's frontmatter names a `type` (OKF SPEC §11)")
 		return
 	}
 	// The path is the address; the document carries the metadata — type
@@ -1581,6 +1596,17 @@ const planHeader = "Ochakai-Plan"
 
 // writeView responds with a read of one concept: the canonical document,
 // the projection, and what this instance observed (design doc 0043 §3.5).
+// refuseNonConcept answers a write of bytes that are not a concept at an
+// address only a concept may hold (design doc 0100 §2). It names the
+// other way out, because the caller who meant to store a markdown file
+// is the one this refusal is new to — and the path they need is one
+// character away from the one they used.
+func refuseNonConcept(w http.ResponseWriter, why string) {
+	writeErrorBody(w, http.StatusBadRequest, domain.CodeInvalid,
+		"a `.md` path is a concept's address (OKF SPEC §3.1): "+why+
+			" — write these bytes at a path that does not end in `.md` to store them as a file")
+}
+
 func writeView(w http.ResponseWriter, status int, k *domain.Knowledge) {
 	writePlannedView(w, status, k, "")
 }
@@ -1714,29 +1740,6 @@ func writeErrorBody(w http.ResponseWriter, status int, code, msg string) {
 		rec.recordCode(code)
 	}
 	writeJSON(w, status, map[string]string{"error": msg, "code": code})
-}
-
-// missingObject reports what a read or delete that fell through to the
-// file half should say about a markdown path.
-//
-// A `.md` path is a concept's address first (design doc 0046 §3.5); the
-// file lookup behind it is §3.2's accommodation for a markdown document
-// that carries no type. When this instance holds no files at all — no
-// GCS (design doc 0013) — that accommodation is simply unavailable, and
-// answering 501 would reply to a question about a concept with news
-// about the deployment. There is no object at the path: 404.
-//
-// It matters because the bundle path is now a concept's only address:
-// without this, every 404 for a soft-deleted or never-written concept
-// became a 501 on an instance without GCS, which is most of them.
-// A path that is not markdown keeps the 501 — there, "this instance
-// cannot hold files" is exactly the answer to what was asked.
-func missingObject(err error, markdown bool) error {
-	var unsupported *service.UnsupportedError
-	if markdown && errors.As(err, &unsupported) {
-		return store.ErrNotFound
-	}
-	return err
 }
 
 // etagOf renders the concept's version as an ETag: the hash of its

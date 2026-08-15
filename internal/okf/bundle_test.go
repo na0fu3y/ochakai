@@ -195,6 +195,8 @@ func TestFromBundleNFCPaths(t *testing.T) {
 // the reserved index.md / log.md files are skipped silently, and a
 // non-markdown file or a typeless document — neither of which is a
 // concept — is kept as a file of the bundle (design doc 0046 §3.2).
+// The typeless one cannot keep a concept's address, so it arrives at
+// `.markdown` and the note says so (design doc 0100 §3).
 func TestFromBundleForeign(t *testing.T) {
 	files := map[string][]byte{
 		"index.md":         []byte("# my bundle\n"),
@@ -206,19 +208,33 @@ func TestFromBundleForeign(t *testing.T) {
 		"notes/2026/q3.md": []byte("---\ntitle: Q3 notes\n---\n"), // no frontmatter type at all
 		"viz.html":         []byte("<html></html>"),
 	}
-	entries, _, loose, skipped, _ := FromBundle(files)
+	entries, _, loose, skipped, notes := FromBundle(files)
 	// A document with no type is not a concept (SPEC §11) and not a
-	// mistake either: it is a markdown file, and it goes back where it
-	// came from. So does the HTML nobody references.
+	// mistake either: it is a markdown file, and it goes back — at a
+	// spelling that does not claim to be a concept, since `.md` is an
+	// address SPEC §3.1 reserves for one. The HTML nobody references
+	// keeps its own name: it never claimed anything.
 	var kept []string
 	for _, f := range loose {
 		kept = append(kept, f.Path)
 	}
-	if !reflect.DeepEqual(kept, []string{"notes/2026/q3.md", "viz.html"}) {
-		t.Errorf("kept = %v, want the typeless document and viz.html", kept)
+	if !reflect.DeepEqual(kept, []string{"notes/2026/q3.markdown", "viz.html"}) {
+		t.Errorf("kept = %v, want the renamed typeless document and viz.html", kept)
 	}
 	if len(skipped) != 0 {
 		t.Errorf("skipped = %v, want nothing", skipped)
+	}
+	// Renaming is a loss of a kind — the bundle that comes back is not
+	// byte-identical to the one that went in — so it is said, not done
+	// quietly. --strict reads the note as the refusal it is.
+	var renamed string
+	for _, n := range notes {
+		if strings.Contains(n, "notes/2026/q3.md") {
+			renamed = n
+		}
+	}
+	if !strings.Contains(renamed, "notes/2026/q3.markdown") {
+		t.Errorf("note about the renamed file = %q, want it to name the address it landed at", renamed)
 	}
 	byURI := map[string]domain.Knowledge{}
 	for _, e := range entries {
@@ -396,7 +412,7 @@ func TestFromBundleKeepsWhatItCannotAttribute(t *testing.T) {
 
 		// Nobody's, all of it kept.
 		"seeds/orders.csv":  []byte("a,b\n1,2\n"),
-		"notes/meeting.md":  []byte("# 議事録\n\ntype なし。\n"),      // not a concept (SPEC §11)
+		"notes/meeting.md":  []byte("# 議事録\n\ntype なし。\n"),      // not a concept (SPEC §11); lands at .markdown
 		"vendor/report.zip": append([]byte("PK\x03\x04"), 0, 0), // never was on any allowlist
 		"diagrams/er.svg":   []byte(`<svg xmlns="http://www.w3.org/2000/svg"/>`),
 
@@ -418,7 +434,9 @@ func TestFromBundleKeepsWhatItCannotAttribute(t *testing.T) {
 	for _, f := range loose {
 		kept = append(kept, f.Path)
 	}
-	want := []string{"diagrams/er.svg", "notes/meeting.md", "seeds/orders.csv", "vendor/report.zip"}
+	// notes/meeting.md keeps its bytes and loses its claim to a concept's
+	// address (design doc 0100 §3); everything else keeps its own name.
+	want := []string{"diagrams/er.svg", "notes/meeting.markdown", "seeds/orders.csv", "vendor/report.zip"}
 	if !reflect.DeepEqual(kept, want) {
 		t.Errorf("kept = %v, want %v", kept, want)
 	}

@@ -8,8 +8,10 @@ The short version, so nobody has to infer it:
 > release renames keeps answering under its old spelling until the next
 > release, and nothing else gets a window
 > ([0088](design/0088-a-retired-name-answers-for-one-release.md)). Only the
-> latest release is supported. Only a security defect can still break REST —
-> though a *new field in a response* was never a break, and is allowed
+> latest release is supported. Two things can still break REST — a security
+> defect, and output that does not conform to OKF
+> ([0100](design/0100-md-is-how-a-concept-is-spelled.md)) — though a *new
+> field in a response* was never a break, and is allowed
 > ([0082](design/0082-what-the-freeze-holds-still.md)).
 
 That is the actual policy, not a disclaimer. If you are deciding whether
@@ -55,7 +57,18 @@ moves:
   rest) — and CI fails when the two disagree
   (`cmd/ochakai/frozenwire_test.go`), so a rename that keeps every count
   still cannot land quietly. Prose is deliberately outside it: the
-  documentation in the contract stays free to improve.
+  documentation in the contract stays free to improve. **What the
+  fingerprint cannot hold is which input gets which answer**, and
+  [0100](design/0100-md-is-how-a-concept-is-spelled.md) is the first change
+  to land in that gap: a `.md` path now holds a concept and nothing else,
+  so a markdown document with no `type` is a 400 where it used to be
+  stored as a file at that address — a request that used to succeed and
+  now does not, with **no line of the fingerprint moving**, because
+  OpenAPI cannot spell a `requestBody` that differs per address. It is
+  also the first use of the second reason the freeze may be broken:
+  ochakai was writing bundles that fail OKF SPEC §11's conformance
+  conditions, and the export is the guarantee this project actually
+  makes.
 - **An error's sentence is unstable; its `code` is not.** Every error
   response carries both ([0083](design/0083-an-error-carries-a-code.md)):
   `error` is a sentence for a person and may be reworded in any release,

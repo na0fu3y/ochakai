@@ -29,7 +29,6 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
-	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/service"
 )
 
@@ -143,14 +142,17 @@ const bundlePath = "/api/v1/bundle/"
 // (design doc 0064 §15). A concept PUT sends text/markdown, which the
 // spec now declares, so it belongs under the validator like any other
 // request.
-func carriesOpaqueBytes(r *http.Request, body []byte) bool {
+func carriesOpaqueBytes(r *http.Request) bool {
 	if r.Method != http.MethodPut || !strings.HasPrefix(r.URL.Path, bundlePath) {
 		return false
 	}
-	// The same rule the handler applies: a markdown path whose document
-	// carries a type is a concept, and everything else is a file.
+	// The same rule the handler applies, and since design doc 0100 it is
+	// the address alone: a markdown path is a concept's and everything
+	// else is a file's. The body no longer decides, so the exclusion no
+	// longer has to read it — which is the difference between a rule the
+	// contract can stand behind and one only the handler knew.
 	_, isMarkdown := domain.ConceptID(strings.TrimPrefix(r.URL.Path, bundlePath))
-	return !isMarkdown || !okf.CarriesType(body)
+	return !isMarkdown
 }
 
 // sniffedResponse reports whether a response's media type was decided by
@@ -193,7 +195,7 @@ func checkedServer(t *testing.T, h http.Handler) *httptest.Server {
 			return
 		}
 		_ = r.Body.Close()
-		if carriesOpaqueBytes(r, body) {
+		if carriesOpaqueBytes(r) {
 			r.Body = io.NopCloser(bytes.NewReader(body))
 			h.ServeHTTP(w, r)
 			return

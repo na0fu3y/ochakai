@@ -32,7 +32,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 認証と identity | [0065](0065-identity-and-provenance.md) |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
-| 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5 |
+| 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5。**`.md` が concept の住所であり、そこに座れるものは concept だけであることは [0100](0100-md-is-how-a-concept-is-spelled.md)**(0075 §3.3 を改訂) |
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md) |
@@ -46,7 +46,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md) |
 | 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
-| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外)。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
+| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外)。凍結を破ってよい理由は二つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
@@ -512,9 +512,9 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 - [0015 サーフェス一貫性の方針](0015-surface-consistency.md) — **Superseded by 0067**。
 - [0058 誰も通らなかった二つのフィルタ](0058-filters-nobody-arrived-through.md) — **Superseded by 0068**。
 - [0100 `.md` は concept の綴りである](0100-md-is-how-a-concept-is-spelled.md)
-  — **Proposed**。受理されるまで何も動かない提案である。`.md` の住所に
-  座れるのは concept と予約名だけにし、`type` を持たない `.md` の PUT を
-  400 にする。動機は適合である — 今日の書き込み面は `type` の無い `.md`
+  — **Accepted**。**BREAKING**。`.md` の住所に
+  座れるのは concept と予約名だけであり、`type` を持たない `.md` の PUT は
+  400 になる。動機は適合である — 今日の書き込み面は `type` の無い `.md`
   を**その住所のまま**ファイルとして保存し、export がそれを載せるので、
   出てきたバンドルは OKF SPEC §11.1・§11.2 を落とす。§11 が consumer に
   禁じている拒否は五つ(任意フィールドの欠落・未知の `type`・未知の追加
@@ -529,7 +529,10 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   い)。見どころは、**破壊的変更でありながら golden の diff がゼロ**で
   あること: 住所ごとに違う `requestBody` を OpenAPI が綴れないので、
   0064 §21 の「凍結が守れるのは『何が在るか』であって『どれを選ぶと何が
-  返るか』ではない」がそのまま出る。表面の数は一つも動かない。
+  返るか』ではない」がそのまま出る。表面の数は一つも動かない。同じ PR で
+  0064 §20.4 の隙間(前提条件が読まれないまま消える DELETE)と、
+  §16 が本文を覗いて種類を決めていた分岐と、`missingObject`(concept の
+  住所で 404 と 501 を取り違えないための翻訳)が畳まれた。
 - [0082 凍結が止めているのは何か](0082-what-the-freeze-holds-still.md) —
   **Accepted**。0064 §11 の「凍結を破ってよい唯一の理由はセキュリティ上の
   欠陥である」を改訂する。凍結が守るのは**住所・リクエストの形・応答からの

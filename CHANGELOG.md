@@ -19,6 +19,39 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: a `.md` path holds a concept and nothing else**
+  ([design doc 0100](docs/design/0100-md-is-how-a-concept-is-spelled.md)).
+  A markdown document with no `type` used to be stored as a *file* at its
+  own `.md` path; every export carrying one handed out a bundle that
+  fails OKF SPEC §11.1 and §11.2, which make parseable frontmatter with a
+  non-empty `type` the condition of conformance for every non-reserved
+  `.md` in the tree. **This breaks the REST freeze**, under the second
+  reason [0064](docs/design/0064-rest-stops-at-api-v1.md) §11 now carries:
+  output that does not conform to OKF. `api/openapi.frozen.txt` does not
+  move — OpenAPI cannot spell a `requestBody` that differs per address —
+  so this entry is the only place the change is written down.
+
+  What an operator does about it: **migration `0039` renames stored
+  markdown files off concept addresses** (`notes/meeting.md` →
+  `notes/meeting.markdown`, taking the suffix twice if that name is
+  occupied), moving each file's history rows with it so `?history` keeps
+  answering. The bytes are untouched. Markdown links in concept bodies
+  that pointed at an old spelling break, which is the one break OKF
+  requires a consumer to tolerate (SPEC §6.1); the migration logs nothing
+  per row, so `ochakai export` before and after is the way to see what
+  moved.
+
+  What a client does about it: a `PUT /api/v1/bundle/<path>.md` whose
+  body carries no `type` is now `400 invalid` instead of `201`, and the
+  sentence names the other way out — store those bytes at a path that
+  does not end in `.md`. A `GET` or `DELETE` at a `.md` path with no
+  concept at it is `404` rather than the file half's answer (which, on an
+  instance with no bucket, was a `501`). `ochakai import` renames a
+  typeless `.md` on the way in and says so in a note; `--strict` reads
+  that note as the refusal it is.
+
 ### Security
 
 - **Built with Go 1.26.6.** The 1.26.5 standard library carries seven
