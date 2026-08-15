@@ -108,6 +108,21 @@ own concept — a failure that reads as a search bug in whatever change
 happens to cross the threshold. `TestNoTestRollsItsOwnNamespace` fails
 on a hand-rolled one.
 
+**A cleanup written by hand is the same mistake wearing a tidier hat,
+and it now misses half the rows.** Several tests delete their own rows
+on the way in — `DELETE FROM knowledge_revision WHERE id LIKE 'it-x-%'`
+— which was equivalent while every row a test wrote had an id. A file
+stopped having one: it is an object at its own path (design docs 0075
+§5, 0100), so its rows carry `path` and no `id`, and
+`knowledge_revision`'s primary key is `(path, rev)`. An id-keyed delete
+leaves a file's revisions behind, and the next run against that database
+collides on the primary key. Worse, the file it leaves is *live*, and
+its bytes exist only in the test's fake blob store — so
+`internal/restapi`'s export tests answer 501 for that database from then
+on, in a package that never wrote it. `testdb.Sweep` deletes on `id`
+**or** `path`, which is the whole difference; ask `testdb.Unique` for a
+namespace and delete nothing by hand.
+
 `--db` prefers Docker, because `pgvector/pgvector:pg17` is the database
 CI runs. Where Docker cannot serve one — no daemon, or a network that
 will not let the image be pulled — it builds a throwaway cluster out of

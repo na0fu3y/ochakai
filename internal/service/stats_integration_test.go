@@ -39,10 +39,6 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 	t.Cleanup(func() { deleteMisses(ctx, t, dbURL, nonsense) })
 
 	since := time.Now().Add(-time.Hour)
-	before, err := s.Stats(ctx, since, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	if hits, err := svc.Search(ctx, nonsense, store.Filter{}, 10); err != nil {
 		t.Fatal(err)
@@ -62,12 +58,18 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Misses.Count <= before.Misses.Count {
-		t.Errorf("misses.count did not move: %d, was %d", got.Misses.Count, before.Misses.Count)
+	// Not a delta against a snapshot taken before the writes: the
+	// instance-wide number moves under a test that shares the database
+	// with three other packages, and it moves *down* as well as up —
+	// a neighbour sweeping its own misses between the two reads made
+	// this assertion fail with "did not move: 6, was 7". What is true
+	// whatever the neighbours do is that this run's own two questions
+	// are in the window the number counts.
+	if got.Misses.Count < 2 {
+		t.Errorf("misses.count = %d, want at least the two this test just recorded", got.Misses.Count)
 	}
-	// This query's own rows, counted directly: the instance-wide number
-	// moves under a test that shares the database with three other
-	// packages, and what is being asserted is that each way of asking
+	// And this query's own rows, counted directly, which is the
+	// assertion that actually pins the behaviour: each way of asking
 	// recorded exactly one miss.
 	if n := countMisses(ctx, t, dbURL, nonsense); n != 2 {
 		t.Errorf("the question was recorded %d times, want 2 (the search and the context call)", n)
