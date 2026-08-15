@@ -24,12 +24,25 @@ type BrowseResult struct {
 	Concepts  []store.BrowseConcept `json:"concepts,omitempty"`
 	Files     []store.BrowseFile    `json:"files,omitempty"`
 	Truncated bool                  `json:"truncated,omitempty"`
+
+	// Cursor is where the next page resumes, absent on the last one —
+	// the same contract every other listing has (design doc 0068 §2.1).
+	// It travels beside Truncated rather than replacing it: the flag is
+	// in the frozen contract, still true of the page it describes, and
+	// removing it is 1.0's work (design doc 0101 §3).
+	Cursor string `json:"cursor,omitempty"`
 }
 
-// Browse lists one level of the knowledge hierarchy: the subdirectories,
-// concepts and files directly under prefix ("" is the root). prefix
-// accepts "a/b" or "a/b/".
-func (s *Service) Browse(ctx context.Context, prefix string) (*BrowseResult, error) {
+// browseListing names this listing inside a cursor, so one from another
+// listing — or from another directory — is refused rather than resuming
+// somewhere surprising (design doc 0050 §2.1).
+const browseListing = "bundle"
+
+// Browse lists one page of one level of the knowledge hierarchy: the
+// subdirectories, concepts and files directly under prefix ("" is the
+// root). prefix accepts "a/b" or "a/b/"; cursor is empty for the first
+// page and otherwise the one the previous page returned.
+func (s *Service) Browse(ctx context.Context, prefix, cursor string) (*BrowseResult, error) {
 	prefix, err := normalizePrefix(prefix)
 	if err != nil {
 		return nil, err
@@ -37,11 +50,63 @@ func (s *Service) Browse(ctx context.Context, prefix string) (*BrowseResult, err
 	if prefix != "" {
 		prefix += "/"
 	}
-	lvl, err := s.Store.Browse(ctx, prefix)
+	after, err := decodeBrowseCursor(cursor, prefix)
 	if err != nil {
 		return nil, err
 	}
-	return &BrowseResult{Dirs: lvl.Dirs, Concepts: lvl.Concepts, Files: lvl.Files, Truncated: lvl.Truncated}, nil
+	lvl, err := s.Store.Browse(ctx, prefix, after)
+	if err != nil {
+		return nil, err
+	}
+	return &BrowseResult{
+		Dirs: lvl.Dirs, Concepts: lvl.Concepts, Files: lvl.Files,
+		Truncated: lvl.Truncated, Cursor: nextBrowseCursor(prefix, lvl),
+	}, nil
+}
+
+// decodeBrowseCursor reads a cursor back as a position in this level.
+// The directory travels inside it because a level is a listing per
+// prefix: resuming "sales/" from a cursor that walked "glossary/" would
+// silently skip rows in both.
+func decodeBrowseCursor(cursor, prefix string) (*store.BrowseAfter, error) {
+	after, err := decodeCursor(cursor, browseListing, 2)
+	if err != nil || after == nil {
+		return nil, err
+	}
+	if after.ID != prefix {
+		return nil, Invalidf("cursor belongs to the listing of %q; it cannot resume %q",
+			dirName(after.ID), dirName(prefix))
+	}
+	return &store.BrowseAfter{Concepts: after.Keys[0], Files: after.Keys[1]}, nil
+}
+
+// nextBrowseCursor packs where each kind stopped, or "" when neither had
+// rows behind it — the absence is how a caller learns the level is done
+// (design doc 0068 §2.1).
+func nextBrowseCursor(prefix string, lvl *store.Level) string {
+	if !lvl.MoreConcepts && !lvl.MoreFiles {
+		return ""
+	}
+	// A kind that ran out is packed as absent, so the next page does not
+	// ask its query again. The two runs end independently, which is why
+	// one cursor carries two positions rather than one.
+	var concepts, files *string
+	if lvl.MoreConcepts {
+		concepts = &lvl.Concepts[len(lvl.Concepts)-1].ID
+	}
+	if lvl.MoreFiles {
+		files = &lvl.Files[len(lvl.Files)-1].Path
+	}
+	return encodeCursor(browseListing, []*string{concepts, files}, prefix)
+}
+
+// dirName spells a level for a person: the root has no name of its own,
+// and every other prefix carries the trailing slash the store keys by.
+func dirName(prefix string) string {
+	if prefix == "" {
+		return "the bundle root"
+	}
+	return strings.TrimSuffix(prefix, "/")
 }
 
 // normalizePrefix cleans one path prefix, for every surface that takes
@@ -82,7 +147,11 @@ func normalizePrefix(p string) (string, error) {
 // the file. The JSON is not a second surface, it is the same listing
 // without asking a browser to parse markdown.
 func (s *Service) IndexDocument(ctx context.Context, prefix string) ([]byte, error) {
-	res, err := s.Browse(ctx, prefix)
+	// The document is one level, whole as far as the cap reaches: SPEC §8
+	// gives index.md no way to say "continued", so the markdown keeps the
+	// truncation note it has always had and the JSON is the
+	// representation that pages (design doc 0101 §4).
+	res, err := s.Browse(ctx, prefix, "")
 	if err != nil {
 		return nil, err
 	}
@@ -191,30 +260,13 @@ func RenderLog(prefix string, rows []store.LogRow) []byte {
 	if prefix != "" {
 		title = prefix
 	}
-	return renderLog(title, prefix, rows)
-}
-
-// RenderObjectLog is the history of the one object at path, rendered as
-// the same document (design doc 0046 §3.5). It differs from RenderLog in
-// where the links point from: this document is not a file of the bundle,
-// but the object it is about is, so the links read from that object's own
-// directory — the same place a reader following them is standing.
-func RenderObjectLog(path string, rows []store.LogRow) []byte {
-	dir := ""
-	if i := strings.LastIndex(path, "/"); i >= 0 {
-		dir = path[:i]
-	}
-	return renderLog(path, dir, rows)
-}
-
-func renderLog(title, dir string, rows []store.LogRow) []byte {
 	lines := make([]okf.LogLine, 0, len(rows))
 	for _, r := range rows {
 		lines = append(lines, okf.LogLine{
 			At: r.ChangedAt, Change: r.Change, Path: r.Path, Title: r.Title, By: r.ChangedBy,
 		})
 	}
-	return okf.LogDocument(title, dir, lines)
+	return okf.LogDocument(title, prefix, lines)
 }
 
 // ObjectHistory is the changes to the one object at a bundle path — the

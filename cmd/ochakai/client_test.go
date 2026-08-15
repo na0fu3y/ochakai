@@ -1336,7 +1336,7 @@ func TestStatsAnnouncesADisposableSandbox(t *testing.T) {
 	}
 }
 
-// TestGetPrintsTheRulingAndWhy pins design doc 0102 on the surface that
+// TestGetPrintsTheRulingAndWhy pins design doc 0104 on the surface that
 // was missing it. `ochakai get` prints the document on stdout and what
 // this instance observed on stderr; a rejection is an observation, and
 // it used to be the one that never got printed — the command a body link
@@ -1411,7 +1411,7 @@ func TestGetPrintsTheRulingAndWhy(t *testing.T) {
 
 // A hit says nothing about a ruling — the columns are the concept's —
 // so the count of turned-down rows goes to stderr with the command that
-// prints the reason (design doc 0102 §3).
+// prints the reason (design doc 0104 §3).
 func TestPrintHitsNamesTurnedDownRowsWithoutChangingThem(t *testing.T) {
 	page := &apiclient.SearchResult{Hits: []domain.SearchHit{
 		{Summary: domain.Summary{ID: "metrics/a", Status: domain.StatusDraft, Title: "A", Rejected: true}, Score: 1},

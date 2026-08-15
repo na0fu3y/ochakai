@@ -127,7 +127,12 @@ func TestBadRequestValidation(t *testing.T) {
 		{"search limit too large", "/api/v1/search?q=x&limit=51", "between 1 and 50"},
 		{"context limit too large", "/api/v1/context?q=x&limit=21", "between 1 and 20"},
 		{"log limit too large", "/api/v1/bundle/metrics/log.md?limit=1001", "between 1 and 1000"},
-		{"revisions limit too large", "/api/v1/bundle/metrics/revenue.md?history&limit=1001", "between 1 and 1000"},
+		// A concept's ?history is 50/200 whatever the Accept says, because
+		// there is one representation of it now (design doc 0102). It
+		// used to answer 200 as markdown and this 400 as JSON — the same
+		// request with two answers, which 0064 §14.1 had to write down
+		// rather than fix.
+		{"revisions limit too large", "/api/v1/bundle/metrics/revenue.md?history&limit=1001", "between 1 and 200"},
 		// "fm." carries the OKF keys nothing else asks about (design
 		// doc 0047). The five with a column behind them, and every key
 		// OKF does not define, are refused on both surfaces that take a

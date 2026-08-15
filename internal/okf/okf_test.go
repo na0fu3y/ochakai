@@ -151,7 +151,7 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 		"status_note: revenue-seasonality と重複",
 		"rejected_by: human:na0",
 		`rejected_at: "2026-07-16T00:00:00Z"`,
-		// The reason travels with the ruling (design doc 0102): who and
+		// The reason travels with the ruling (design doc 0104): who and
 		// when are audit, and the note is the part the next writer acts
 		// on. It rode on the wire and never on the bundle until then, so
 		// a base moved to another instance said "somebody turned this

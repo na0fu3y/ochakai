@@ -132,7 +132,7 @@ func requestCtx(ctx context.Context, cfg *config.Config, req extraProvider) (con
 //
 // It is also where the answer becomes bytes, and it hands the SDK `any`
 // rather than the handler's own type so that no output schema is derived
-// from it (design doc 0101). Two things follow from that, and both are
+// from it (design doc 0103). Two things follow from that, and both are
 // the point: nothing declares a schema this deployment does not send —
 // the SDK derives one from the type parameter, so leaving it typed was
 // enough to publish 15KB nobody counted — and the result travels once,

@@ -368,9 +368,13 @@ func (c *Client) Context(ctx context.Context, p ContextParams) (*ContextResult, 
 // that directory's index.md (design docs 0014, 0016, and 0046 §3.7 for
 // where it now lives). The subdirectories and entries directly under
 // prefix — "" is the root, the top-level segments.
-func (c *Client) Browse(ctx context.Context, prefix string) (*BrowseResult, error) {
+func (c *Client) Browse(ctx context.Context, prefix, cursor string) (*BrowseResult, error) {
 	var out BrowseResult
-	if err := c.doJSON(ctx, http.MethodGet, reservedPath(prefix, "index.md"), nil, nil, &out); err != nil {
+	q := url.Values{}
+	if cursor != "" {
+		q.Set("cursor", cursor)
+	}
+	if err := c.doJSON(ctx, http.MethodGet, reservedPath(prefix, "index.md"), q, nil, &out); err != nil {
 		return nil, err
 	}
 	return &out, nil

@@ -183,3 +183,61 @@ func ptr(s string) *string { return &s }
 func encodeRaw(parts ...string) string {
 	return base64.RawURLEncoding.EncodeToString([]byte(strings.Join(parts, "\x00")))
 }
+
+// A level's cursor carries two positions and the directory it walked
+// (design doc 0101): the two runs of a level end independently, and a
+// cursor is a position in one listing — resuming another directory from
+// it would skip rows in both.
+func TestBrowseCursorCarriesBothRunsAndItsDirectory(t *testing.T) {
+	lvl := &store.Level{
+		Concepts:     []store.BrowseConcept{{ID: "sales/a"}, {ID: "sales/b"}},
+		Files:        []store.BrowseFile{{Path: "sales/x.png"}},
+		MoreConcepts: true,
+		MoreFiles:    true,
+	}
+	enc := nextBrowseCursor("sales/", lvl)
+	after, err := decodeBrowseCursor(enc, "sales/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Concepts == nil || *after.Concepts != "sales/b" {
+		t.Errorf("concepts resume at %v, want the last row of the page", after.Concepts)
+	}
+	if after.Files == nil || *after.Files != "sales/x.png" {
+		t.Errorf("files resume at %v, want the last row of the page", after.Files)
+	}
+
+	// A kind that ran out travels as absent, so the next page does not
+	// ask its query again.
+	lvl.MoreFiles = false
+	after, err = decodeBrowseCursor(nextBrowseCursor("sales/", lvl), "sales/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Files != nil {
+		t.Errorf("a finished kind resumes at %v, want nothing", *after.Files)
+	}
+
+	// Neither kind behind: no cursor at all, which is how a caller learns
+	// the level is done (design doc 0068 §2.1).
+	lvl.MoreConcepts = false
+	if got := nextBrowseCursor("sales/", lvl); got != "" {
+		t.Errorf("a last page handed out %q", got)
+	}
+
+	// The wrong directory, and the wrong listing.
+	lvl.MoreConcepts = true
+	enc = nextBrowseCursor("sales/", lvl)
+	if _, err := decodeBrowseCursor(enc, "glossary/"); err == nil ||
+		!strings.Contains(err.Error(), "sales") || !strings.Contains(err.Error(), "glossary") {
+		t.Errorf("a cursor from another directory = %v, want a refusal naming both", err)
+	}
+	if _, err := decodeBrowseCursor(encodeCursor("usage", []*string{ptr("7"), ptr("x")}, "sales/"), "sales/"); err == nil {
+		t.Error("a cursor from the usage feed resumed a level")
+	}
+	// The root has no name of its own, so the refusal gives it one rather
+	// than quoting an empty string at the reader.
+	if _, err := decodeBrowseCursor(enc, ""); err == nil || !strings.Contains(err.Error(), "root") {
+		t.Errorf("a cursor resuming the root from elsewhere = %v, want the root named", err)
+	}
+}

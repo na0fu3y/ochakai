@@ -64,7 +64,7 @@ func declaredCap(t *testing.T, content []byte, re *regexp.Regexp, name string) i
 // the wire gave it. Counting the input schema alone is what let 14,986
 // bytes of output schema — more than everything this number did count —
 // sit outside a budget whose whole subject is what an agent holds
-// (design doc 0101). They are nil today; the loop reads them anyway, so
+// (design doc 0103). They are nil today; the loop reads them anyway, so
 // the next one to declare an output schema pays for it here rather than
 // discovering that the budget was never watching that half.
 //

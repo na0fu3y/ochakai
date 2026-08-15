@@ -301,7 +301,7 @@ bundle が運ぶのはナレッジであって、一つのインスタンスの�
 ないからである(設計ドキュメント
 [0075](design/0075-the-bundle-is-the-address-space.md) §3.1)。
 理由まで書き出すのは、**裁定のうち次の書き手が使えるのは理由だけ**
-だからである([0102](design/0102-a-ruling-travels-with-its-reason.md))。
+だからである([0104](design/0104-a-ruling-travels-with-its-reason.md))。
 
 ochakai はこれらを**記録する**だけで、決してそれをもとに動かない。
 source の `resource` を取得することも、その信頼性の信号を採点する

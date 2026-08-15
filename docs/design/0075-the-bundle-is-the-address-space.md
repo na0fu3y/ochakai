@@ -10,6 +10,9 @@ Status: Accepted(2026-08-03)。**バンドル・住所・保存形の現行
 [0074](0074-the-document-and-the-vocabulary-that-asks-it.md) が持つ。
 §3(CLI が送るバイト列)と §4.2(予約ファイルの note)は
 [0079](0079-taking-the-document.md) が改訂している。
+**§4.2 の「一階層 1000 件の打ち切りは注記の行として出す」は
+[0101](0101-a-level-can-be-walked.md) が改訂した** —— JSON の一覧は
+`cursor` で歩き、注記が残るのは markdown のほうである。
 **§3.3 と §2 の表は [0100](0100-md-is-how-a-concept-is-spelled.md) が
 改訂した** — `type` の無い `.md` はファイルとして保存されず 400 になり、
 ファイルは `.md` の住所に座れない(SPEC §3.1・§11。0079 §1 が

@@ -75,10 +75,28 @@ type BrowseConcept struct {
 const browseNotRejected = `deleted_at IS NULL AND id IS NOT NULL
 	AND NOT EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = object.id)`
 
-// MaxBrowseEntries bounds one directory listing. A directory this wide
-// is a modeling smell, not a paging problem — the caller renders a
-// truncation note instead of paginating.
+// MaxBrowseEntries bounds one page of a directory listing. It used to
+// bound the listing itself, on the reasoning that a directory this wide
+// is a modeling smell rather than a paging problem — but the smell is
+// the base's and the wall was the caller's, and design doc 0068 §2.1
+// had already decided what a listing owes: a way past the cap rather
+// than a stop at it. The number is unchanged, so a caller that fits
+// under it today sees exactly what it sees today (design doc 0101).
 const MaxBrowseEntries = 1000
+
+// BrowseAfter is where a level's listing resumes: the last row already
+// delivered of each kind that pages, or nil for a kind that has run out.
+// A nil *BrowseAfter is the first page — every kind from its beginning,
+// subdirectories included.
+//
+// Two positions rather than one because a level is two ordered runs, not
+// one: concepts by id and files by path, each with its own end. Merging
+// them into a single order would change what the JSON says (three
+// sections, design doc 0046 §3.7) to buy a tidier cursor.
+type BrowseAfter struct {
+	Concepts *string
+	Files    *string
+}
 
 // Level is one directory of the bundle as browsing reads it: what sits
 // directly under a prefix, in the three kinds SPEC §8 lists.
@@ -87,12 +105,20 @@ type Level struct {
 	Concepts  []BrowseConcept `json:"concepts,omitempty"`
 	Files     []BrowseFile    `json:"files,omitempty"`
 	Truncated bool            `json:"truncated,omitempty"`
+
+	// Which kinds have rows past this page. The service turns them into
+	// one cursor; they are separate here because the two runs end
+	// independently.
+	MoreConcepts bool `json:"-"`
+	MoreFiles    bool `json:"-"`
 }
 
-// Browse returns what sits directly under prefix: the subdirectories
-// (with concept counts beneath them), the entries at this level and the
-// files at this level, each in name order; Truncated reports that the
-// entry list hit MaxBrowseEntries. prefix is "" for the root, or
+// Browse returns one page of what sits directly under prefix: the
+// subdirectories (with concept counts beneath them), the entries at this
+// level and the files at this level, each in name order; Truncated
+// reports that a list hit MaxBrowseEntries, and MoreConcepts / MoreFiles
+// say the same thing in the shape a cursor is built from. after resumes
+// a page (nil is the first). prefix is "" for the root, or
 // segments with a trailing slash ("sales/"). Prefix matching is by
 // string, not LIKE — paths may contain "_", which LIKE would treat as a
 // wildcard.
@@ -102,59 +128,81 @@ type Level struct {
 // a directory holding nothing but files is not a subdirectory here: OKF
 // says nothing about such a directory, and a count that mixed the kinds
 // would misdescribe every directory that has both.
-func (s *Store) Browse(ctx context.Context, prefix string) (*Level, error) {
+func (s *Store) Browse(ctx context.Context, prefix string, after *BrowseAfter) (*Level, error) {
 	var lvl Level
-	rows, err := s.pool.Query(ctx, `
-		SELECT split_part(substr(id, length($1::text)+1), '/', 1) AS dir, count(*)
-		FROM object
-		WHERE `+browseNotRejected+`
-		  AND left(id, length($1::text)) = $1
-		  AND strpos(substr(id, length($1::text)+1), '/') > 0
-		GROUP BY dir ORDER BY dir`, prefix)
-	if err != nil {
-		return nil, err
+	// The subdirectories ride on the first page only. They are a grouping
+	// rather than a run — one row per name, bounded by how many names a
+	// directory has — so there is no position in them to resume from, and
+	// repeating them on every page would make a walk report the same
+	// directory N times.
+	if after == nil {
+		rows, err := s.pool.Query(ctx, `
+			SELECT split_part(substr(id, length($1::text)+1), '/', 1) AS dir, count(*)
+			FROM object
+			WHERE `+browseNotRejected+`
+			  AND left(id, length($1::text)) = $1
+			  AND strpos(substr(id, length($1::text)+1), '/') > 0
+			GROUP BY dir ORDER BY dir`, prefix)
+		if err != nil {
+			return nil, err
+		}
+		lvl.Dirs, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (DirCount, error) {
+			var d DirCount
+			err := row.Scan(&d.Name, &d.Count)
+			return d, err
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
-	lvl.Dirs, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (DirCount, error) {
-		var d DirCount
-		err := row.Scan(&d.Name, &d.Count)
-		return d, err
-	})
-	if err != nil {
-		return nil, err
-	}
-	rows, err = s.pool.Query(ctx, fmt.Sprintf(`
-		SELECT type, id, title, description, status, updated_at
-		FROM object
-		WHERE `+browseNotRejected+`
-		  AND left(id, length($1::text)) = $1
-		  AND strpos(substr(id, length($1::text)+1), '/') = 0
-		ORDER BY id LIMIT %d`, MaxBrowseEntries+1), prefix)
-	if err != nil {
-		return nil, err
-	}
-	lvl.Concepts, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (BrowseConcept, error) {
-		var e BrowseConcept
-		err := row.Scan(&e.Type, &e.ID, &e.Title, &e.Description, &e.Status, &e.UpdatedAt)
-		return e, err
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(lvl.Concepts) > MaxBrowseEntries {
-		lvl.Concepts = lvl.Concepts[:MaxBrowseEntries]
-		lvl.Truncated = true
+	// One row past the page is read to tell a full page from the last
+	// one — the same trick the review feeds use, and for the same reason:
+	// without it a level whose width happens to equal the cap hands out a
+	// cursor onto nothing (design doc 0050 §2.1).
+	if resumes(after, func(a *BrowseAfter) *string { return a.Concepts }) {
+		args := []any{prefix}
+		rows, err := s.pool.Query(ctx, fmt.Sprintf(`
+			SELECT type, id, title, description, status, updated_at
+			FROM object
+			WHERE `+browseNotRejected+`
+			  AND left(id, length($1::text)) = $1
+			  AND strpos(substr(id, length($1::text)+1), '/') = 0
+			  %s
+			ORDER BY id LIMIT %d`, afterKey("id", after, func(a *BrowseAfter) *string { return a.Concepts }, &args),
+			MaxBrowseEntries+1), args...)
+		if err != nil {
+			return nil, err
+		}
+		lvl.Concepts, err = pgx.CollectRows(rows, func(row pgx.CollectableRow) (BrowseConcept, error) {
+			var e BrowseConcept
+			err := row.Scan(&e.Type, &e.ID, &e.Title, &e.Description, &e.Status, &e.UpdatedAt)
+			return e, err
+		})
+		if err != nil {
+			return nil, err
+		}
+		if len(lvl.Concepts) > MaxBrowseEntries {
+			lvl.Concepts = lvl.Concepts[:MaxBrowseEntries]
+			lvl.Truncated, lvl.MoreConcepts = true, true
+		}
 	}
 	// The files at this level. A file has no id, so it is matched on its
 	// path — and the same cap applies, because a directory of ten
 	// thousand files is as unreadable as a directory of ten thousand
 	// concepts.
-	rows, err = s.pool.Query(ctx, fmt.Sprintf(`
+	if !resumes(after, func(a *BrowseAfter) *string { return a.Files }) {
+		return &lvl, nil
+	}
+	args := []any{prefix}
+	rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 		SELECT path, media_type, size, created_at
 		FROM object
 		WHERE id IS NULL AND deleted_at IS NULL
 		  AND left(path, length($1::text)) = $1
 		  AND strpos(substr(path, length($1::text)+1), '/') = 0
-		ORDER BY path LIMIT %d`, MaxBrowseEntries+1), prefix)
+		  %s
+		ORDER BY path LIMIT %d`, afterKey("path", after, func(a *BrowseAfter) *string { return a.Files }, &args),
+		MaxBrowseEntries+1), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +219,28 @@ func (s *Store) Browse(ctx context.Context, prefix string) (*Level, error) {
 	}
 	if len(lvl.Files) > MaxBrowseEntries {
 		lvl.Files = lvl.Files[:MaxBrowseEntries]
-		lvl.Truncated = true
+		lvl.Truncated, lvl.MoreFiles = true, true
 	}
 	return &lvl, nil
+}
+
+// resumes reports whether one kind still has rows to read: on a first
+// page every kind does, and on a later one only those the cursor did not
+// mark finished.
+func resumes(after *BrowseAfter, key func(*BrowseAfter) *string) bool {
+	return after == nil || key(after) != nil
+}
+
+// afterKey renders "strictly after the last row delivered" for one kind,
+// appending the value to args. It returns "" on a first page, so the
+// caller can interpolate it unconditionally. A level orders by one column
+// with no ties — an id and a path are each unique — so the keyset
+// predicate is one comparison rather than the lexicographic walk the
+// review feeds need.
+func afterKey(col string, after *BrowseAfter, key func(*BrowseAfter) *string, args *[]any) string {
+	if after == nil || key(after) == nil {
+		return ""
+	}
+	*args = append(*args, *key(after))
+	return fmt.Sprintf("AND %s > $%d", col, len(*args))
 }

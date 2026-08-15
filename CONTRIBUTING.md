@@ -685,19 +685,21 @@ decision the product had outgrown; this one says the *cheapest* place to
 find them is a release audit, and that the corpus grows when somebody
 reads it against what shipped rather than when somebody builds.
 
-7,500 → 8,000 is three records — 0100, 0101 and 0102 — and the last two
-name a third pressure, next to "a decision the product had outgrown" and
-"a release audit found a record wrong". Both came out of somebody using
-ochakai as a user and writing down what they hit: an MCP budget that was
-policed to 26 bytes of slack while measuring under half of what the wire
-carried (0101), and a rejection's reason that reached REST, MCP and the
-web UI but neither the CLI's own output nor the bundle it exports
-(0102). Neither is a decision the product outgrew; both are decisions
-that were **made once and then only half implemented**, and nothing in
-the corpus could see that, because a record is checked against the other
-records and never against the experience of using what they describe.
-The cheapest place to find these is not a release audit — it is the
-quick start, read by somebody who has not memorized the answer.
+7,500 → 8,000 is three records — 0100, 0101 and 0102 — and all three
+break the REST freeze, which is what this crossing is about. 0064 §11
+shipped with one reason a frozen contract may move (a security defect);
+these add two more (output that does not conform to OKF, and folding away
+a second spelling of something the format defines) and place two
+additions outside the freeze entirely (a response-only property was
+already there, an optional query parameter joins it). **A frozen contract
+does not stop generating records — it changes what they are about.**
+Before the freeze a record said what the wire would do next; after it, a
+record says why the wire may move at all, and that argument has to be
+written down at the length that makes it checkable, because the
+fingerprint cannot see two of these three changes. The 7,000 crossing
+said a corpus grows when somebody reads it against what shipped; this one
+says it also grows when the rule for changing something is worth more
+than the change.
 
     RECORD-CORPUS-LINES: 8000
     RECORD-CORPUS-LINES-SLACK: 500

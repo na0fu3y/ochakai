@@ -17,7 +17,7 @@ import (
 )
 
 // answerOf decodes a tool result the way an agent reads one, and holds
-// the result to carrying exactly one copy of itself (design doc 0101):
+// the result to carrying exactly one copy of itself (design doc 0103):
 // JSON in a text block, and no structuredContent beside it saying the
 // same thing again. Every test that reads a result goes through here, so
 // the day something starts sending two the assertion is already

@@ -77,7 +77,7 @@ type frontmatter struct {
 	RejectedBy  text        `yaml:"rejected_by,omitempty"`
 	RejectedAt  text        `yaml:"rejected_at,omitempty"`
 	// The reason, which is the half of a rejection the next writer acts
-	// on (design doc 0102). text rather than string because a note is
+	// on (design doc 0104). text rather than string because a note is
 	// free prose and may span lines.
 	RejectedNote text `yaml:"rejected_note,omitempty"`
 }
@@ -539,7 +539,7 @@ func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 	// current") that a rejection specifically denies.
 	//
 	// All three keys, because a ruling without its reason is the half a
-	// reader cannot act on (design doc 0102): who and when say a
+	// reader cannot act on (design doc 0104): who and when say a
 	// proposal was turned down, and only the note says what would have
 	// to change for the next one to land.
 	if serverKeys && k.Rejection != nil {

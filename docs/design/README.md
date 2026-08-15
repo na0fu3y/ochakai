@@ -37,16 +37,16 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md) |
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4([0093](0093-the-budget-governs-the-whole-response.md) が予算の側を改訂)。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂) |
-| サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 7 本とその境界は [0076](0076-two-tools-leave-mcp.md) と、**7 本目を割った [0096](0096-a-listing-is-not-a-search-here-either.md)**。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0101](0101-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂) |
+| サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 7 本とその境界は [0076](0076-two-tools-leave-mcp.md) と、**7 本目を割った [0096](0096-a-listing-is-not-a-search-here-either.md)**。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂)。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)** |
-| 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)**。**却下の理由がどこまで運ばれるかは [0102](0102-a-ruling-travels-with-its-reason.md)**(CLI の出力と export へ) |
+| 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)**。**却下の理由がどこまで運ばれるかは [0104](0104-a-ruling-travels-with-its-reason.md)**(CLI の出力と export へ) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
-| バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**export が却下の理由まで運ぶことは [0102](0102-a-ruling-travels-with-its-reason.md)**(読み戻さないのは同じ) |
+| バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**export が却下の理由まで運ぶことは [0104](0104-a-ruling-travels-with-its-reason.md)**(読み戻さないのは同じ) |
 | 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
-| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外)。凍結を破ってよい理由は二つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
+| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
@@ -511,6 +511,45 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 - [0007 DB 直結コマンドの廃止](0007-api-only-cli.md) — **Superseded by 0067**。
 - [0015 サーフェス一貫性の方針](0015-surface-consistency.md) — **Superseded by 0067**。
 - [0058 誰も通らなかった二つのフィルタ](0058-filters-nobody-arrived-through.md) — **Superseded by 0068**。
+- [0102 履歴は一つの綴りで答える](0102-one-history-in-one-spelling.md)
+  — **Accepted**。**BREAKING**。`?history` は Accept が何であれ JSON で
+  答え、markdown のレンダリングは無くなる。OKF SPEC §9 が markdown の
+  履歴を一つ定めており(オブジェクトの隣の `log.md`)、`?history` は同じ
+  台帳の行から二つ目を描いていた。重複そのものより、**それが上限を二つに
+  割っていた**ほうが重い —— 0064 §14.1 が書き残したとおり、同じ
+  `?history&limit=500` が概念に対して JSON では 400、markdown では 200 に
+  なる。あの節の決定は「コードは変えず、スペックを直す」で、食い違いの
+  記述であって解消ではなかった。落ちる能力は「一オブジェクトの履歴を
+  markdown で読む」ことで、**製品の中でそれを使っていた面は一つも無い**
+  (`ochakai revisions` も Web UI の履歴パネルも元から JSON)。もう半分は
+  凍結の規則で、0064 §11 に**三つ目の理由**が付く: 規格が綴りを定めて
+  いるものの二つ目の綴りを畳むこと。三条件(規格が定めている・ochakai に
+  二つ目がある・畳むのは ochakai 側)を全部満たす場合に限り、**前の二つ
+  より弱い理由である**ことも記録が書く —— 「同じ事柄か」の判断が ochakai
+  の側にあるからで、だから畳めるのは表現だけで住所は畳めない。指紋は
+  一行も動かない(`text/markdown` の行は概念のエクスポート形と共有)。
+- [0101 一覧は歩ける — 凍結はそれを止めていなかった](0101-a-level-can-be-walked.md)
+  — **Accepted**。`index.md` を JSON で読む一覧が `cursor` を持つ。
+  [0068](0068-how-a-face-is-added-and-removed.md) §2.1 は一覧について
+  「保証するのは歩き切ることではなく、**上限で静かに止まらないこと**」と
+  既に決めていたが、バンドルの一覧は別の操作なのでその規則が一度も届いて
+  いなかった —— 1000 件で切って `truncated: true` を立てるだけで、**先へ
+  行く綴りが無かった**(静かではないが、壁ではある)。**ページの大きさは
+  1000 のまま**にしたので、今日収まっている呼び出し元は今日と同じものを
+  受け取り、壁に当たっていた側だけが歩けるようになる。cursor は**二つの
+  走査**(概念は id 順、ファイルは path 順)と**ディレクトリ**を運ぶ —
+  サブディレクトリは `GROUP BY` の結果で位置を持たないので初回のページ
+  だけに載り、別の階層の cursor は 400 で両方を名指す。markdown の
+  `index.md` は歩かない(SPEC §8 に「続き」の綴りが無い)ので、そこへの
+  `?cursor=` は 400 である。もう半分は**凍結の規則**で、`cursor` という
+  新しいクエリパラメータが要ったこと自体がそれを露わにした:
+  [0082](0082-what-the-freeze-holds-still.md) は応答側の追加だけを外に
+  置いていたが、0064 §2 が未知キーを 400 にした理由は「**凍結後に何かを
+  安全に足せるかどうかを決める**」であり、**任意のクエリパラメータの追加**は
+  最初から凍結の外だった。検査は三つに絞る(`query` のみ・`required=false`
+  のみ・パラメータ一本の行のみ)。`truncated` は残す — 応答からの削除は
+  凍結の本体で、1.0 の仕事である(0097 §2 が `Ochakai-Plan` でした取引と
+  同じ)。指紋は 2 行増え、表面の数は一つも動かない。
 - [0100 `.md` は concept の綴りである](0100-md-is-how-a-concept-is-spelled.md)
   — **Accepted**。**BREAKING**。`.md` の住所に
   座れるのは concept と予約名だけであり、`type` を持たない `.md` の PUT は
@@ -607,7 +646,7 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   改訂する。[docs/compatibility.md](../compatibility.md)
   を同 PR で書き換え、REST だけが「不安定」の対象から外れる。
 - [0033 context の hits は順位に徹する](0033-context-hits-are-a-ranking.md) — **Superseded by 0067**。
-- [0101 ツールの答えは一通で運ばれる](0101-the-tool-result-travels-once.md)
+- [0103 ツールの答えは一通で運ばれる](0103-the-tool-result-travels-once.md)
   — **Accepted**。MCP のツールは `outputSchema` を宣言せず、答えは text
   コンテントブロック一つで返る。実測が動機である: MCP-BYTES が数えて
   いたのは 13,474 バイト、数えていなかった `outputSchema` が 14,986
@@ -662,7 +701,7 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   group by だけだとその週は消え、両隣が隣同士として描かれる。Web UI は
   レビューページに一枚、**軸も目盛りも凡例も無い**(それ以上描けば 0067 §1 が
   BI ツールではないと言った当のものになる)。MCP には出さない。
-- [0102 裁定は理由ごと運ばれる](0102-a-ruling-travels-with-its-reason.md)
+- [0104 裁定は理由ごと運ばれる](0104-a-ruling-travels-with-its-reason.md)
   — **Accepted**。却下の理由(`reject --note`)は REST・MCP・Web UI・
   `ochakai context` には出ていたが、**`ochakai get` の出力と export した
   バンドルには無かった**。get は却下された concept をただの draft として

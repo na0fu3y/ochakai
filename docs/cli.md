@@ -81,7 +81,15 @@ it. Directories print as "name/	count", concepts as
 "name	file	media-type	bytes". Rejected concepts are hidden, as in
 search.
 
+A level is a listing, so it pages: a page with more behind it prints
+the way on to stderr, and passing that back with --cursor reads the
+next one. The subdirectories ride on the first page only — they are a
+grouping rather than a run, so there is no position in them to resume
+from.
+
 Flags:
+  -cursor cursor
+    	resume a level where the last page ended: the cursor the previous page printed, for the same prefix
   -json
     	print the raw JSON response
   -url ochakai use

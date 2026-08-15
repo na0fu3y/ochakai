@@ -19,11 +19,59 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **A directory listing pages.** `GET /api/v1/bundle/<dir>/index.md` read
+  as JSON now carries a `cursor` when rows remain, and takes it back as
+  `?cursor=` to read the next page — `ochakai browse --cursor` on the CLI,
+  which prints the next one to stderr the way `ochakai list` does. A level
+  wider than 1000 rows used to end at `truncated: true` with no way past
+  it ([design doc 0101](docs/design/0101-a-level-can-be-walked.md);
+  [0068](docs/design/0068-how-a-face-is-added-and-removed.md) §2.1 had
+  already decided a listing must not do that). **Nothing changes for a
+  caller that fits under the cap**: the page is still 1000 rows of each
+  kind, and `truncated` still says what it always said. The markdown
+  `index.md` does not page — OKF SPEC §8 has no spelling for "continued" —
+  so `?cursor=` there is a 400, as it is on every other mode of the
+  address.
+
+  This is the first **optional query parameter** added since the freeze,
+  which 0101 §5 records as something the freeze was never holding still:
+  0064 §2 made an unrecognized query key a 400 precisely so that one could
+  be added safely afterwards, and 0082 had written down only the response
+  half of that. `api/openapi.frozen.txt` grows by two lines.
+
 ### Changed
+
+- **BREAKING: `?history` answers JSON, whatever the `Accept` says**
+  ([design doc 0102](docs/design/0102-one-history-in-one-spelling.md)).
+  The markdown rendering of one object's history is gone. OKF SPEC §9
+  defines one markdown history — the reserved `log.md` beside the
+  objects — and this address rendered a second one from the same ledger
+  rows, which is what left a single `?history&limit=500` on a concept
+  answering 400 as JSON and 200 as markdown (0064 §14.1 wrote that split
+  down rather than closing it). A concept's `?history` is now 50 rows by
+  default and 200 at most on every read.
+
+  What a client does about it: if you fetched `?history` without an
+  explicit `Accept: application/json`, you now receive JSON instead of a
+  markdown document — the same rows, in the representation the other
+  three surfaces already read. `log.md` is unchanged, and is still the
+  markdown history of a directory. Reading **one object's** history as
+  markdown is no longer available; nothing in ochakai used it (`ochakai
+  revisions` and the web UI's history panel both read JSON).
+
+  This is the third reason the freeze may be broken, added by 0102 §3:
+  folding away a second spelling of something OKF already defines,
+  admitted only when the spec defines the spelling, ochakai carries a
+  second one, and the one folded is ochakai's. `api/openapi.frozen.txt`
+  does not move — the `text/markdown` line is shared with the concept
+  export — so this entry and the record are where the change is written
+  down.
 
 - **MCP hands back one copy of a tool's answer, and declares no output
   schema** ([design doc
-  0101](docs/design/0101-the-tool-result-travels-once.md)). Every tool
+  0103](docs/design/0103-the-tool-result-travels-once.md)). Every tool
   result used to arrive twice — the same JSON in `content[0].text` and in
   `structuredContent`, 10,384 and 10,439 bytes for one `get_context`, in
   a 22,009-byte response — and the seven output schemas the tool list
@@ -34,7 +82,7 @@ last entry.
   JSON is identical, and the budget counts both schemas from here on,
   which does not move its number because the output side is empty.
 - **A rejection's reason travels with the ruling** ([design doc
-  0102](docs/design/0102-a-ruling-travels-with-its-reason.md)).
+  0104](docs/design/0104-a-ruling-travels-with-its-reason.md)).
   `ochakai get` prints who rejected a concept, when, and the `--note`
   they left — on stderr, beside the provenance line, so stdout stays the
   document. `ochakai search --rejected` (and `list`) says on stderr that

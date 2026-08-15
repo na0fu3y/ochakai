@@ -6,10 +6,12 @@
 # One line per thing a client can observe. Prose (description, summary,
 # example, examples) is left out on purpose: documentation stays free to
 # improve after the freeze. Moving any line below is a change to a contract
-# design doc 0064 froze at /api/v1, and §11 says the only reason left is a
-# security defect — except for a property added under components/schemas
-# for a schema no requestBody reaches, which design doc 0082 says the
-# freeze was never holding still.
+# design doc 0064 froze at /api/v1, and §11 says the only reasons left are a
+# security defect and output that does not conform to OKF (design doc 0100)
+# — except for two additions the freeze was never holding still: a property
+# added under components/schemas for a schema no requestBody reaches
+# (design doc 0082), and an optional query parameter added to an operation
+# (design doc 0101).
 
 DELETE /api/v1/bundle/{path}
 DELETE /api/v1/bundle/{path} header If-Match ref=IfMatch
@@ -44,6 +46,7 @@ GET /api/v1/bundle/{path}
 GET /api/v1/bundle/{path} header If-None-Match ref=IfNoneMatch
 GET /api/v1/bundle/{path} operationId=getBundlePath
 GET /api/v1/bundle/{path} path path required=true type=string
+GET /api/v1/bundle/{path} query cursor required=false type=string
 GET /api/v1/bundle/{path} query files required=false type=boolean default=true
 GET /api/v1/bundle/{path} query history required=false type=string
 GET /api/v1/bundle/{path} query limit required=false type=integer
@@ -361,6 +364,7 @@ components/schemas/BundleListing.concepts[].status required=true ref=Status
 components/schemas/BundleListing.concepts[].title required=false type=string
 components/schemas/BundleListing.concepts[].type required=true ref=Type
 components/schemas/BundleListing.concepts[].updated_at required=true type=string format="date-time"
+components/schemas/BundleListing.cursor required=false type=string
 components/schemas/BundleListing.dirs required=false type=array
 components/schemas/BundleListing.dirs[] type=object
 components/schemas/BundleListing.dirs[].count required=true type=integer
