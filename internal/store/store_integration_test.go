@@ -699,42 +699,49 @@ func TestIntegrationMove(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.UseBlobStore(newFakeBlobStore())
-	for _, table := range []string{"object", "knowledge_revision", "knowledge_embedding"} {
-		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id LIKE 'it-move-%'`); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, table := range []string{"knowledge_event", "knowledge_usage", "attachment"} {
-		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE knowledge_id LIKE 'it-move-%'`); err != nil {
-			t.Fatal(err)
-		}
-	}
+	// A namespace of its own, swept when the test ends (CONTRIBUTING,
+	// *Tests and checks*). This test used to delete its own rows by
+	// `id LIKE 'it-move-%'` on the way in, which reads as the same thing
+	// and is not: a file is an object at its own path and carries no id
+	// (design docs 0075 §5, 0100), so the revisions of chart.png below
+	// survived every run and the next one collided on
+	// knowledge_revision's (path, rev). testdb.Sweep deletes on id *or*
+	// path, which is the difference.
+	run := testdb.Unique(t, "it-move-")
+	var (
+		src     = run + "/src/metric"
+		sibling = run + "/src/sibling" // same directory as src, so ./metric.md resolves
+		dst     = run + "/dst/metric"
+		bare    = run + "/bare"
+		attrs   = run + "/attrs"
+		taken   = run + "/taken"
+	)
 
 	actor := domain.Actor{Kind: "human", Name: "test"}
 	entries := []*domain.Knowledge{
-		{Type: domain.TypeMetrics, ID: "it-move-src/metric", Title: "target", Status: domain.StatusStable, CreatedBy: actor},
-		{Type: domain.TypeInsights, ID: "it-move-bare", Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
-			Body:  "Explains [the metric](/it-move-src/metric.md).",
-			Links: []domain.Link{{Target: "it-move-src/metric", Text: "the metric"}}},
-		{Type: domain.TypeInsights, ID: "it-move-src/sibling", Title: "relative link", Status: domain.StatusDraft, CreatedBy: actor,
+		{Type: domain.TypeMetrics, ID: src, Title: "target", Status: domain.StatusStable, CreatedBy: actor},
+		{Type: domain.TypeInsights, ID: bare, Title: "bare link", Status: domain.StatusDraft, CreatedBy: actor,
+			Body:  "Explains [the metric](/" + src + ".md).",
+			Links: []domain.Link{{Target: src, Text: "the metric"}}},
+		{Type: domain.TypeInsights, ID: sibling, Title: "relative link", Status: domain.StatusDraft, CreatedBy: actor,
 			Body:  "Explains [the metric](./metric.md) further.",
-			Links: []domain.Link{{Target: "it-move-src/metric", Text: "the metric"}}},
-		{Type: domain.TypeMetrics, ID: "it-move-attrs", Title: "attrs.model ref", Status: domain.StatusDraft, CreatedBy: actor,
-			Attrs: map[string]any{"model": "it-move-src/metric"}},
-		{Type: domain.TypeInsights, ID: "it-move-taken", Title: "occupies destination", Status: domain.StatusDraft, CreatedBy: actor},
+			Links: []domain.Link{{Target: src, Text: "the metric"}}},
+		{Type: domain.TypeMetrics, ID: attrs, Title: "attrs.model ref", Status: domain.StatusDraft, CreatedBy: actor,
+			Attrs: map[string]any{"model": src}},
+		{Type: domain.TypeInsights, ID: taken, Title: "occupies destination", Status: domain.StatusDraft, CreatedBy: actor},
 	}
 	for _, k := range entries {
 		if err := s.Create(ctx, k, false); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, _, err := s.PutFile(ctx, "it-move-src/metric/chart.png", "image/png", []byte("png"), actor); err != nil {
+	if _, _, err := s.PutFile(ctx, src+"/chart.png", "image/png", []byte("png"), actor); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.UpsertEmbedding(ctx, "it-move-src/metric", "test-model", []float32{1, 0, 0, 0}, false); err != nil {
+	if err := s.UpsertEmbedding(ctx, src, "test-model", []float32{1, 0, 0, 0}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RecordEvents(ctx, domain.EventFetched, actor, []string{"it-move-src/metric"}); err != nil {
+	if err := s.RecordEvents(ctx, domain.EventFetched, actor, []string{src}); err != nil {
 		t.Fatal(err)
 	}
 	// Flush before Move so the event is persisted under the old id and the
@@ -744,22 +751,22 @@ func TestIntegrationMove(t *testing.T) {
 	}
 
 	// Occupied destinations refuse, live or soft-deleted.
-	if _, err := s.Move(ctx, "it-move-src/metric", "it-move-taken", actor); !errors.Is(err, ErrAlreadyExists) {
+	if _, err := s.Move(ctx, src, taken, actor); !errors.Is(err, ErrAlreadyExists) {
 		t.Fatalf("move onto a live entry: got %v, want ErrAlreadyExists", err)
 	}
-	if err := s.SoftDelete(ctx, "it-move-taken", actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, taken, actor, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Move(ctx, "it-move-src/metric", "it-move-taken", actor); !errors.Is(err, ErrAlreadyExists) {
+	if _, err := s.Move(ctx, src, taken, actor); !errors.Is(err, ErrAlreadyExists) {
 		t.Fatalf("move onto a soft-deleted entry: got %v, want ErrAlreadyExists", err)
 	}
 
 	mover := domain.Actor{Kind: "human", Name: "mover"}
-	moved, err := s.Move(ctx, "it-move-src/metric", "it-move-dst/metric", mover)
+	moved, err := s.Move(ctx, src, dst, mover)
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
-	if moved.ID != "it-move-dst/metric" {
+	if moved.ID != dst {
 		t.Errorf("moved.ID = %q", moved.ID)
 	}
 	// A move rewrites the moved entry's links and every referrer's body,
@@ -768,7 +775,7 @@ func TestIntegrationMove(t *testing.T) {
 	if moved.UpdatedBy != mover {
 		t.Errorf("moved.UpdatedBy = %v, want %v", moved.UpdatedBy, mover)
 	}
-	for _, id := range []string{"it-move-dst/metric", "it-move-bare", "it-move-attrs"} {
+	for _, id := range []string{dst, bare, attrs} {
 		k, err := s.Get(ctx, id)
 		if err != nil {
 			t.Fatalf("%s: %v", id, err)
@@ -777,15 +784,15 @@ func TestIntegrationMove(t *testing.T) {
 			t.Errorf("%s updated_by = %v after the move, want %v", id, k.UpdatedBy, mover)
 		}
 	}
-	if _, err := s.Get(ctx, "it-move-src/metric"); !errors.Is(err, ErrNotFound) {
+	if _, err := s.Get(ctx, src); !errors.Is(err, ErrNotFound) {
 		t.Errorf("old id still resolves: %v", err)
 	}
-	if _, err := s.Get(ctx, "it-move-dst/metric"); err != nil {
+	if _, err := s.Get(ctx, dst); err != nil {
 		t.Errorf("new id does not resolve: %v", err)
 	}
 
 	// History follows: create + move under the new id.
-	revs, err := s.ListRevisions(ctx, "it-move-dst/metric", 10)
+	revs, err := s.ListRevisions(ctx, dst, 10)
 	if err != nil {
 		t.Fatalf("ListRevisions: %v", err)
 	}
@@ -794,17 +801,17 @@ func TestIntegrationMove(t *testing.T) {
 	}
 
 	// Attachments and usage follow.
-	atts, err := s.ListAttachments(ctx, "it-move-dst/metric")
+	atts, err := s.ListAttachments(ctx, dst)
 	if err != nil || len(atts) != 1 || atts[0].Name != "chart.png" {
 		t.Errorf("attachments after move: %v, %v", atts, err)
 	}
-	usage, err := s.Usage(ctx, "it-move-dst/metric")
+	usage, err := s.Usage(ctx, dst)
 	if err != nil || usage.Fetches < 1 {
 		t.Errorf("usage after move: %+v, %v", usage, err)
 	}
 	var embedded bool
 	if err := s.pool.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM knowledge_embedding WHERE id='it-move-dst/metric')`).Scan(&embedded); err != nil || !embedded {
+		`SELECT EXISTS (SELECT 1 FROM knowledge_embedding WHERE id=$1)`, dst).Scan(&embedded); err != nil || !embedded {
 		t.Errorf("embedding did not follow: %v, %v", embedded, err)
 	}
 
@@ -814,8 +821,8 @@ func TestIntegrationMove(t *testing.T) {
 	// bundle-absolute whichever form it went in as, since that is the one
 	// form a later move cannot reinterpret (0024 §3.5).
 	for id, wantBody := range map[string]string{
-		"it-move-bare":        "Explains [the metric](/it-move-dst/metric.md).",
-		"it-move-src/sibling": "Explains [the metric](/it-move-dst/metric.md) further.",
+		bare:    "Explains [the metric](/" + dst + ".md).",
+		sibling: "Explains [the metric](/" + dst + ".md) further.",
 	} {
 		k, err := s.Get(ctx, id)
 		if err != nil {
@@ -824,29 +831,29 @@ func TestIntegrationMove(t *testing.T) {
 		if k.Body != wantBody {
 			t.Errorf("%s body after move: %q, want %q", id, k.Body, wantBody)
 		}
-		if len(k.Links) != 1 || k.Links[0].Target != "it-move-dst/metric" {
-			t.Errorf("%s links after move: %+v, want target it-move-dst/metric", id, k.Links)
+		if len(k.Links) != 1 || k.Links[0].Target != dst {
+			t.Errorf("%s links after move: %+v, want target %s", id, k.Links, dst)
 		}
 		revs, err := s.ListRevisions(ctx, id, 10)
 		if err != nil || len(revs) < 2 || revs[0].Change != "update" {
 			t.Errorf("%s should carry an update revision for the rewrite: %+v, %v", id, revs, err)
 		}
 	}
-	ka, err := s.Get(ctx, "it-move-attrs")
+	ka, err := s.Get(ctx, attrs)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ka.Attrs["model"] != "it-move-dst/metric" {
+	if ka.Attrs["model"] != dst {
 		t.Errorf("attrs.model after move: %v", ka.Attrs["model"])
 	}
-	backlinks, err := s.ListByAddress(ctx, Filter{LinksTo: "it-move-dst/metric"}, nil, 10)
+	backlinks, err := s.ListByAddress(ctx, Filter{LinksTo: dst}, nil, 10)
 	if err != nil || len(backlinks) != 2 {
 		t.Errorf("backlinks after move: %d, %v", len(backlinks), err)
 	}
 
 	// Leave no live attachment behind: its bytes exist only in this
 	// test's fake blob store, and export scans every live attachment.
-	if err := s.DeleteFile(ctx, "it-move-dst/metric/chart.png", actor); err != nil {
+	if err := s.DeleteFile(ctx, dst+"/chart.png", actor); err != nil {
 		t.Fatalf("cleanup DeleteFile: %v", err)
 	}
 }
@@ -1219,11 +1226,13 @@ func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
 		return got
 	}
 
-	const id, moved = "it-haystack", "it-haystack-moved"
-	for _, dead := range []string{id, moved} {
-		_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, dead)
-		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, dead)
-	}
+	// Swept by token rather than by hand: the id-keyed delete this
+	// replaces could not reach seeds.txt's revisions, because a file is
+	// an object at its own path with no id of its own (design docs 0075
+	// §5, 0100) — so they survived, and the next run against the same
+	// database collided on knowledge_revision's (path, rev).
+	run := testdb.Unique(t, "it-haystack-")
+	id, moved := run, run+"-moved"
 	k := &domain.Knowledge{
 		Type: domain.TypeTerms, ID: id, Title: "haystack", Tags: []string{"ledger"},
 		Status: domain.StatusDraft, CreatedBy: actor, Body: "prose",
