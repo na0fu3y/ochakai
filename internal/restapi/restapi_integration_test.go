@@ -2520,9 +2520,28 @@ func TestRESTIntegrationHistoryIsAtTheObjectAndTheDirectory(t *testing.T) {
 		t.Errorf("the file's own history = %+v", log.Changes)
 	}
 
-	// And as a document, at either kind of address.
-	if doc := getMarkdown(t, srv.URL+"/api/v1/bundle/"+id+".md?history"); !strings.Contains(doc, "**Create**") {
-		t.Errorf("the concept's history as a document:\n%s", doc)
+	// One representation, whatever the Accept says: SPEC §9's markdown
+	// history is log.md, and ?history used to render a second one from
+	// the same rows (design doc 0102). Asked with no Accept at all, and
+	// asked for markdown by name — 0064 §22's rule is that naming a
+	// representation this address does not carry lands on the default.
+	for _, accept := range []string{"", "text/markdown"} {
+		req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/v1/bundle/"+id+".md?history", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if accept != "" {
+			req.Header.Set("Accept", accept)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if ct := resp.Header.Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+			t.Errorf("?history with Accept %q = %q, want JSON: %s", accept, ct, body)
+		}
 	}
 
 	// Nothing ever happened here.

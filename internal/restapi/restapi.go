@@ -1126,35 +1126,30 @@ func asChanges(rows []store.LogRow) []change {
 	return out
 }
 
-// writeObjectHistory answers ?history: the log.md of the one object at
-// this path, as the document (SPEC §9) or — with an explicit JSON
-// Accept — its ledger rows, each carrying the concept as it stood after
-// the change. The documents are the reason this representation exists:
-// a diff between two revisions is a text diff, which is what
-// `ochakai revisions --json` and the web UI's history panel are for.
+// writeObjectHistory answers ?history: the ledger rows of the one object
+// at this path, as JSON whatever the Accept says. A concept's carry the
+// document it was at each change, so a diff between two revisions is a
+// text diff — which is what `ochakai revisions --json` and the web UI's
+// history panel are for. A file's carry none, because a file has none.
 //
-// A file's revisions carry no document, because a file has none. Its
-// history is the record that it was written and removed, which is the
-// whole of what happened.
+// **There is no markdown here** (design doc 0102). SPEC §9 defines one
+// markdown history — `log.md`, the reserved file beside the objects —
+// and this address used to render a second one from the same rows, which
+// left the same `?history&limit=500` answering 400 as JSON and 200 as
+// markdown for a concept. The format's own spelling is the one that
+// stays.
 func writeObjectHistory(w http.ResponseWriter, r *http.Request, svc *service.Service, path string) {
 	limit, err := queryInt(r.URL.Query(), "limit")
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	// A concept's revisions carry the document it was; asked as JSON,
-	// that is the point of the representation — a diff between two
-	// revisions is a text diff. A file's carry none, because a file has
-	// none, so its rows are the shape a directory's history has.
-	//
-	// Which of the two this is is read off the path, because the address
-	// decides what may live there (design doc 0100 §2). It used to be
-	// unreadable there — a markdown document carrying no type was a file
-	// at a ".md" path like any other — so the concept ledger was asked
-	// first and its ErrNotFound fell through to the object's. Both
-	// representations still answer at every address; what has gone is the
-	// case where the two disagreed about which kind of object was here.
-	if id, isMarkdown := strings.CutSuffix(path, ".md"); isMarkdown && wantsJSON(r) {
+	// A concept's revisions carry the document it was; a file's carry
+	// none, because a file has none, so its rows are the shape a
+	// directory's history has. Which of the two this is is read off the
+	// path, because the address decides what may live there (design doc
+	// 0100 §2).
+	if id, isMarkdown := strings.CutSuffix(path, ".md"); isMarkdown {
 		revs, err := svc.Revisions(r.Context(), id, limit)
 		if err != nil {
 			writeError(w, err)
@@ -1168,11 +1163,7 @@ func writeObjectHistory(w http.ResponseWriter, r *http.Request, svc *service.Ser
 		writeError(w, err)
 		return
 	}
-	if wantsJSON(r) {
-		writeJSON(w, http.StatusOK, changeLog{Changes: asChanges(rows)})
-		return
-	}
-	writeMarkdown(w, service.RenderObjectLog(path, rows))
+	writeJSON(w, http.StatusOK, changeLog{Changes: asChanges(rows)})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

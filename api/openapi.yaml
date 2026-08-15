@@ -612,13 +612,20 @@ paths:
         not page: SPEC §8 gives index.md no way to say "continued", so it
         keeps the truncation note and the JSON is where the walk lives.
 
-        **`?history` is the log.md of the one object at this path**
+        **`?history` is the ledger of the one object at this path**
         (design doc 0075 §4) — the history of a concept or of a file,
         because a revision is an event about an object and the ledger is
-        keyed by path. As JSON a concept's carries each revision's whole
+        keyed by path. A concept's carries each revision's whole
         document, so a diff between two revisions is a text diff; a
         file's carries the changes alone, having no document to carry.
         404 when nothing ever happened at the path.
+
+        **It answers JSON whatever the Accept says** (design doc 0102).
+        SPEC §9 defines one markdown history — the reserved `log.md`
+        beside the objects — and this address used to render a second one
+        from the same rows, which is what left one `?history&limit=500`
+        with two answers. The format's own spelling is the one that
+        stays; the ledger as structure is what has no place in it.
 
         PUT and DELETE against the two reserved names are 409: a
         generated file is not one anybody writes.
@@ -643,13 +650,16 @@ paths:
           description: >
             log.md and ?history only — maximum rows, and a 400 naming
             the mode when sent anywhere else on this address (design doc
-            0064 §2). A concept's own `?history`, read as JSON, is 50 by
-            default and 200 at most: each row carries the whole document
-            as it stood at that revision, so 1000 of them is the
-            knowledge base several times over. log.md and every other
-            `?history` (a file's, or any of the two rendered as
-            markdown) carries no document and is 1000 by default and at
-            most (design doc 0064 §14.1).
+            0064 §2). A concept's own `?history` is 50 by default and 200
+            at most: each row carries the whole document as it stood at
+            that revision, so 1000 of them is the knowledge base several
+            times over. log.md and a file's `?history` carry no document
+            and are 1000 by default and at most (design doc 0064 §14.1).
+
+            Each of the two now has one answer. Until design doc 0102 the
+            same `?history&limit=500` on a concept was a 400 as JSON and a
+            200 as markdown, because the markdown rendering read the
+            other limit.
           schema: { type: integer }
         - $ref: "#/components/parameters/IfNoneMatch"
         - name: cursor

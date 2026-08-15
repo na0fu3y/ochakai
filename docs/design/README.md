@@ -46,7 +46,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md) |
 | 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
-| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は二つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
+| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
@@ -511,6 +511,23 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 - [0007 DB 直結コマンドの廃止](0007-api-only-cli.md) — **Superseded by 0067**。
 - [0015 サーフェス一貫性の方針](0015-surface-consistency.md) — **Superseded by 0067**。
 - [0058 誰も通らなかった二つのフィルタ](0058-filters-nobody-arrived-through.md) — **Superseded by 0068**。
+- [0102 履歴は一つの綴りで答える](0102-one-history-in-one-spelling.md)
+  — **Accepted**。**BREAKING**。`?history` は Accept が何であれ JSON で
+  答え、markdown のレンダリングは無くなる。OKF SPEC §9 が markdown の
+  履歴を一つ定めており(オブジェクトの隣の `log.md`)、`?history` は同じ
+  台帳の行から二つ目を描いていた。重複そのものより、**それが上限を二つに
+  割っていた**ほうが重い —— 0064 §14.1 が書き残したとおり、同じ
+  `?history&limit=500` が概念に対して JSON では 400、markdown では 200 に
+  なる。あの節の決定は「コードは変えず、スペックを直す」で、食い違いの
+  記述であって解消ではなかった。落ちる能力は「一オブジェクトの履歴を
+  markdown で読む」ことで、**製品の中でそれを使っていた面は一つも無い**
+  (`ochakai revisions` も Web UI の履歴パネルも元から JSON)。もう半分は
+  凍結の規則で、0064 §11 に**三つ目の理由**が付く: 規格が綴りを定めて
+  いるものの二つ目の綴りを畳むこと。三条件(規格が定めている・ochakai に
+  二つ目がある・畳むのは ochakai 側)を全部満たす場合に限り、**前の二つ
+  より弱い理由である**ことも記録が書く —— 「同じ事柄か」の判断が ochakai
+  の側にあるからで、だから畳めるのは表現だけで住所は畳めない。指紋は
+  一行も動かない(`text/markdown` の行は概念のエクスポート形と共有)。
 - [0101 一覧は歩ける — 凍結はそれを止めていなかった](0101-a-level-can-be-walked.md)
   — **Accepted**。`index.md` を JSON で読む一覧が `cursor` を持つ。
   [0068](0068-how-a-face-is-added-and-removed.md) §2.1 は一覧について

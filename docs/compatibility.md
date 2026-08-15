@@ -8,11 +8,15 @@ The short version, so nobody has to infer it:
 > release renames keeps answering under its old spelling until the next
 > release, and nothing else gets a window
 > ([0088](design/0088-a-retired-name-answers-for-one-release.md)). Only the
-> latest release is supported. Two things can still break REST — a security
-> defect, and output that does not conform to OKF
-> ([0100](design/0100-md-is-how-a-concept-is-spelled.md)) — though a *new
-> field in a response* was never a break, and is allowed
-> ([0082](design/0082-what-the-freeze-holds-still.md)).
+> latest release is supported. Three things can still break REST — a
+> security defect, output that does not conform to OKF
+> ([0100](design/0100-md-is-how-a-concept-is-spelled.md)), and folding away
+> a second spelling of something OKF already defines
+> ([0102](design/0102-one-history-in-one-spelling.md)) — though a *new
+> field in a response* and a *new optional query parameter* were never
+> breaks, and are allowed
+> ([0082](design/0082-what-the-freeze-holds-still.md),
+> [0101](design/0101-a-level-can-be-walked.md)).
 
 That is the actual policy, not a disclaimer. If you are deciding whether
 to build on ochakai, decide against *this*, not against what "SemVer"
@@ -75,7 +79,12 @@ moves:
   also the first use of the second reason the freeze may be broken:
   ochakai was writing bundles that fail OKF SPEC §11's conformance
   conditions, and the export is the guarantee this project actually
-  makes.
+  makes. The second change in that gap is
+  [0102](design/0102-one-history-in-one-spelling.md): `?history` answers
+  JSON whatever the `Accept` says, because SPEC §9 defines one markdown
+  history (`log.md`) and this address rendered a second one — again with
+  no fingerprint line moving, since the media type it drops is shared with
+  the concept export.
 - **An error's sentence is unstable; its `code` is not.** Every error
   response carries both ([0083](design/0083-an-error-carries-a-code.md)):
   `error` is a sentence for a person and may be reworded in any release,
