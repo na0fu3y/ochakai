@@ -260,30 +260,13 @@ func RenderLog(prefix string, rows []store.LogRow) []byte {
 	if prefix != "" {
 		title = prefix
 	}
-	return renderLog(title, prefix, rows)
-}
-
-// RenderObjectLog is the history of the one object at path, rendered as
-// the same document (design doc 0046 §3.5). It differs from RenderLog in
-// where the links point from: this document is not a file of the bundle,
-// but the object it is about is, so the links read from that object's own
-// directory — the same place a reader following them is standing.
-func RenderObjectLog(path string, rows []store.LogRow) []byte {
-	dir := ""
-	if i := strings.LastIndex(path, "/"); i >= 0 {
-		dir = path[:i]
-	}
-	return renderLog(path, dir, rows)
-}
-
-func renderLog(title, dir string, rows []store.LogRow) []byte {
 	lines := make([]okf.LogLine, 0, len(rows))
 	for _, r := range rows {
 		lines = append(lines, okf.LogLine{
 			At: r.ChangedAt, Change: r.Change, Path: r.Path, Title: r.Title, By: r.ChangedBy,
 		})
 	}
-	return okf.LogDocument(title, dir, lines)
+	return okf.LogDocument(title, prefix, lines)
 }
 
 // ObjectHistory is the changes to the one object at a bundle path — the

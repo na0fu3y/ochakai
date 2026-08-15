@@ -685,7 +685,23 @@ decision the product had outgrown; this one says the *cheapest* place to
 find them is a release audit, and that the corpus grows when somebody
 reads it against what shipped rather than when somebody builds.
 
-    RECORD-CORPUS-LINES: 7500
+7,500 → 8,000 is three records — 0100, 0101 and 0102 — and all three
+break the REST freeze, which is what this crossing is about. 0064 §11
+shipped with one reason a frozen contract may move (a security defect);
+these add two more (output that does not conform to OKF, and folding away
+a second spelling of something the format defines) and place two
+additions outside the freeze entirely (a response-only property was
+already there, an optional query parameter joins it). **A frozen contract
+does not stop generating records — it changes what they are about.**
+Before the freeze a record said what the wire would do next; after it, a
+record says why the wire may move at all, and that argument has to be
+written down at the length that makes it checkable, because the
+fingerprint cannot see two of these three changes. The 7,000 crossing
+said a corpus grows when somebody reads it against what shipped; this one
+says it also grows when the rule for changing something is worth more
+than the change.
+
+    RECORD-CORPUS-LINES: 8000
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

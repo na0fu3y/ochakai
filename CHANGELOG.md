@@ -43,6 +43,32 @@ last entry.
 
 ### Changed
 
+- **BREAKING: `?history` answers JSON, whatever the `Accept` says**
+  ([design doc 0102](docs/design/0102-one-history-in-one-spelling.md)).
+  The markdown rendering of one object's history is gone. OKF SPEC §9
+  defines one markdown history — the reserved `log.md` beside the
+  objects — and this address rendered a second one from the same ledger
+  rows, which is what left a single `?history&limit=500` on a concept
+  answering 400 as JSON and 200 as markdown (0064 §14.1 wrote that split
+  down rather than closing it). A concept's `?history` is now 50 rows by
+  default and 200 at most on every read.
+
+  What a client does about it: if you fetched `?history` without an
+  explicit `Accept: application/json`, you now receive JSON instead of a
+  markdown document — the same rows, in the representation the other
+  three surfaces already read. `log.md` is unchanged, and is still the
+  markdown history of a directory. Reading **one object's** history as
+  markdown is no longer available; nothing in ochakai used it (`ochakai
+  revisions` and the web UI's history panel both read JSON).
+
+  This is the third reason the freeze may be broken, added by 0102 §3:
+  folding away a second spelling of something OKF already defines,
+  admitted only when the spec defines the spelling, ochakai carries a
+  second one, and the one folded is ochakai's. `api/openapi.frozen.txt`
+  does not move — the `text/markdown` line is shared with the concept
+  export — so this entry and the record are where the change is written
+  down.
+
 - **BREAKING: a `.md` path holds a concept and nothing else**
   ([design doc 0100](docs/design/0100-md-is-how-a-concept-is-spelled.md)).
   A markdown document with no `type` used to be stored as a *file* at its
