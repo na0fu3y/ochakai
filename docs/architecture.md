@@ -295,10 +295,13 @@ rejection — レビューされて*受け入れられなかった*こと — �
 の段階ではなくこのインスタンスの裁定なので、status でもない。
 そしてこれはほとんどのストアが持たない記録である: エージェントは
 同じことを再提案する前にこれを確認できる。export では concept の
-本当の status の隣に `rejected_by` / `rejected_at` として現れ、
-import はそれを二度と読み戻さない — bundle が運ぶのはナレッジで
-あって、一つのインスタンスの判断ではないからである(設計ドキュメント
+本当の status の隣に `rejected_by` / `rejected_at` /
+`rejected_note` として現れ、import はそれを二度と読み戻さない —
+bundle が運ぶのはナレッジであって、一つのインスタンスの判断では
+ないからである(設計ドキュメント
 [0075](design/0075-the-bundle-is-the-address-space.md) §3.1)。
+理由まで書き出すのは、**裁定のうち次の書き手が使えるのは理由だけ**
+だからである([0102](design/0102-a-ruling-travels-with-its-reason.md))。
 
 ochakai はこれらを**記録する**だけで、決してそれをもとに動かない。
 source の `resource` を取得することも、その信頼性の信号を採点する
@@ -507,7 +510,7 @@ ochakai の不変条件のほとんどは Go の型システムでは表現で�
   分野別にまとめた索引。上のすべてについて権威ある情報源である。
 - [api/openapi.yaml](../api/openapi.yaml) — ワイヤサーフェス。
 - [examples/demo](../examples/demo) — このページが説明するレイアウト・
-  type・リンクを備えた、10 concept のナレッジベース。
+  type・リンクを備えた、11 concept のナレッジベース。
 - [deploy/cloudrun/README.md](../deploy/cloudrun/README.md) —
   デプロイの手順と hardening のチェックリスト。
 - [docs/guides/golden-query-canary.md](guides/golden-query-canary.md)

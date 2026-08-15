@@ -16,6 +16,36 @@ import (
 	"github.com/na0fu3y/ochakai/internal/service"
 )
 
+// answerOf decodes a tool result the way an agent reads one, and holds
+// the result to carrying exactly one copy of itself (design doc 0101):
+// JSON in a text block, and no structuredContent beside it saying the
+// same thing again. Every test that reads a result goes through here, so
+// the day something starts sending two the assertion is already
+// everywhere rather than in one test somebody has to remember to write.
+func answerOf[T any](t *testing.T, res *mcp.CallToolResult) T {
+	t.Helper()
+	if res.StructuredContent != nil {
+		t.Fatalf("the result carried a second copy under structuredContent: %v", res.StructuredContent)
+	}
+	var text *mcp.TextContent
+	for _, c := range res.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			if text != nil {
+				t.Fatalf("the result carried two text blocks:\n%s\n%s", text.Text, tc.Text)
+			}
+			text = tc
+		}
+	}
+	if text == nil {
+		t.Fatalf("the result carried no text block: %+v", res.Content)
+	}
+	var out T
+	if err := json.Unmarshal([]byte(text.Text), &out); err != nil {
+		t.Fatalf("decoding %T from the result: %v\n%s", out, err, text.Text)
+	}
+	return out
+}
+
 func connect(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 	ctx := context.Background()

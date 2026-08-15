@@ -123,7 +123,8 @@ Gather what to read before answering a data question, in one call:
 the full concepts behind the top search hits (verified concepts rank
 higher), expanded one hop through links so the insight explaining a
 metric travels with it. Markdown on stdout, ready for an agent's
-context window. No hits print nothing (exit 0).
+context window. No hits leave stdout empty and say so on stderr
+(exit 0).
 
 Flags:
   -budget int

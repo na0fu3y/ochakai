@@ -685,7 +685,21 @@ decision the product had outgrown; this one says the *cheapest* place to
 find them is a release audit, and that the corpus grows when somebody
 reads it against what shipped rather than when somebody builds.
 
-    RECORD-CORPUS-LINES: 7500
+7,500 → 8,000 is three records — 0100, 0101 and 0102 — and the last two
+name a third pressure, next to "a decision the product had outgrown" and
+"a release audit found a record wrong". Both came out of somebody using
+ochakai as a user and writing down what they hit: an MCP budget that was
+policed to 26 bytes of slack while measuring under half of what the wire
+carried (0101), and a rejection's reason that reached REST, MCP and the
+web UI but neither the CLI's own output nor the bundle it exports
+(0102). Neither is a decision the product outgrew; both are decisions
+that were **made once and then only half implemented**, and nothing in
+the corpus could see that, because a record is checked against the other
+records and never against the experience of using what they describe.
+The cheapest place to find these is not a release audit — it is the
+quick start, read by somebody who has not memorized the answer.
+
+    RECORD-CORPUS-LINES: 8000
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

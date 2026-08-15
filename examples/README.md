@@ -1,6 +1,6 @@
 # サンプル
 
-- **[demo/](demo)** — 10 concept のナレッジベース丸ごと。コマンド一つで
+- **[demo/](demo)** — 11 concept のナレッジベース丸ごと。コマンド一つで
   import できる。下で説明する。
 - **[bigquery-catalog/](bigquery-catalog)** — 空のベースを BigQuery から
   埋める二つのジョブ。テーブルのメタデータを毎日投影するものと、**ジョブ履歴
@@ -15,7 +15,7 @@
 
 ## demo/: import できるナレッジベース
 
-架空のオンラインショップの売上についての 10 concept を、
+架空のオンラインショップの売上についての 11 concept を、
 [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
 v0.2 バンドルとして書いたもの。ナレッジベース一つの姿が丸ごと見える程度の
 中身がある: メトリクスとその裏にある attested computation、両者が乗って
@@ -39,12 +39,21 @@ OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
 は `stale_after` を既に過ぎているので stale フィードにも住人がいる。
 一ヶ月使った本物のナレッジベースは、こう見える。
 
+**言語も均質ではない。** 定義は英語で書かれている — 倉庫の列名が英語だ
+からである — が、呼び名(`売上` / `純売上` / `GMV` の区別)と注文状態の
+和名は日本語で書かれており、[月末の着地見込み](demo/insights/着地見込み.md)
+は日本語にしか無い。日本語話者のチームのナレッジベースは実際にこうなる
+ので、デモもそうしてある。上の `ochakai context "なぜ売上が落ちているのか"`
+が答えを返すのはこのためで、`売上` のような二文字語が索引で引けることが
+何を意味するかは、ここで実際に見える(設計ドキュメント
+[0080](../docs/design/0080-search-and-how-a-deployment-embeds.md))。
+
 このファイルが `demo/` の中に無いのは意図的である。OKF 適合はバンドル内の
 予約名でない*すべて*の `.md` が `type` を持つ frontmatter を運ぶことを
 求めており(SPEC §11)、免除されるのは `index.md` と `log.md` だけである。
 バンドルの中に README があるとその規則を破り、`ochakai import` が毎回
 ファイルを一つスキップすることになる。`demo/` 以下のすべての `.md` は
-concept 文書なので、import は 10 concept を報告し、何もスキップしない。
+concept 文書なので、import は 11 concept を報告し、何もスキップしない。
 
 ### 数字はでっち上げである
 

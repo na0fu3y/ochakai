@@ -115,7 +115,7 @@ This runs with `OCHAKAI_MODE=dev`: authentication is off and every
 request acts as `human:anonymous` — never do this on a deployment
 ([every mode](docs/configuration.md#environment-variables) (Japanese)).
 
-Point the same CLI at it and load the demo knowledge base — [ten
+Point the same CLI at it and load the demo knowledge base — [eleven
 concepts](examples/demo) about one invented retail domain, linked to each
 other, some of them drafts. Everything goes through the API, so plain
 curl reaches it too:
@@ -124,7 +124,17 @@ curl reaches it too:
 ochakai use http://localhost:8080
 ochakai import examples/demo
 curl 'http://localhost:8080/api/v1/search?q=revenue'
+ochakai context "なぜ売上が落ちている?"   # the same base, asked in Japanese
 ```
+
+That last line is not a translation of the first: the base is bilingual
+the way a Japanese team's own is — English where the warehouse columns
+are, Japanese where the judgment is, and one insight (月末の着地見込み)
+that exists only in Japanese because the person who knows it wrote it
+there. `売上` is a two-character term, which is the shape a Japanese
+knowledge base is mostly made of and the shape a trigram index cannot
+look up; here it is an index lookup with nothing installed and nothing
+configured.
 
 An import writes documents; it does not rule on them. The bundle's own
 `verified:` keys arrive as what the document claims, so a base that was

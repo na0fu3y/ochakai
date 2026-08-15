@@ -32,3 +32,9 @@ says how much it moves.
 
 "Completed" is a state of the *order*, not of the shipment. A split shipment
 completes once, when the last parcel leaves.
+
+日本語では、この状態を **完了** と呼ぶ。会話に出てくる隣の語と混同しない
+こと — **受注** は注文が入った時点(`pending` を含む)、**出荷** は
+`shipped` の意味で使われることが多く、どちらも
+[売上](/metrics/revenue.md)が数える集合ではない。
+`cancelled` は **キャンセル**、`returned` は **返品**。

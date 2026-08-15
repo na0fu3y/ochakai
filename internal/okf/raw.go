@@ -42,7 +42,7 @@ import (
 // release can recover (design docs 0046 §2.2, 0043 §3.6).
 var serverOwnedKeys = map[string]bool{
 	"generated": true, "verified": true, "created_by": true,
-	"rejected_by": true, "rejected_at": true,
+	"rejected_by": true, "rejected_at": true, "rejected_note": true,
 	"timestamp": true, "verified_by": true, "verified_at": true,
 }
 
@@ -433,6 +433,7 @@ func serverKeysFor(k *domain.Knowledge) *serverKeysOnly {
 	if k.Rejection != nil {
 		own.RejectedBy = text(k.Rejection.By.String())
 		own.RejectedAt = text(k.Rejection.At.UTC().Format(time.RFC3339))
+		own.RejectedNote = text(k.Rejection.Note)
 	}
 	return own
 }
@@ -442,11 +443,12 @@ func serverKeysFor(k *domain.Knowledge) *serverKeysOnly {
 // a writer-owned key to the renderer cannot silently start appending it
 // to every stored document.
 type serverKeysOnly struct {
-	Generated  *event  `yaml:"generated,omitempty"`
-	Verified   []event `yaml:"verified,omitempty"`
-	CreatedBy  text    `yaml:"created_by,omitempty"`
-	RejectedBy text    `yaml:"rejected_by,omitempty"`
-	RejectedAt text    `yaml:"rejected_at,omitempty"`
+	Generated    *event  `yaml:"generated,omitempty"`
+	Verified     []event `yaml:"verified,omitempty"`
+	CreatedBy    text    `yaml:"created_by,omitempty"`
+	RejectedBy   text    `yaml:"rejected_by,omitempty"`
+	RejectedAt   text    `yaml:"rejected_at,omitempty"`
+	RejectedNote text    `yaml:"rejected_note,omitempty"`
 }
 
 // ReplaceBody swaps a stored document's body, leaving its frontmatter

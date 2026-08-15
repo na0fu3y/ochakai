@@ -20,7 +20,9 @@ import (
 // hand-written subset here, and the scripts had gone a release without
 // stale_after because of it.
 func TestCompletionScriptsStayInSync(t *testing.T) {
-	admin := []string{"serve", "serve-ui", "version"}
+	// The list main dispatches on, not a second copy of it: a copy is
+	// what let sort go a release without stale_after, one paragraph up.
+	admin := adminCommands
 	enums := []string{"zsh bash fish"} // completion <shell>
 	enums = append(enums, domain.ListSorts...)
 	enums = append(enums, domain.Outcomes...) // report <outcome>

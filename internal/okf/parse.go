@@ -294,7 +294,7 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		case "type", "resource", "id", "title", "description", "tags", "status", "status_note", "stale_after",
 			"sources", "usage_window", "runtime", "parameters", "computation", "executor", "attester":
 			// envelope, extracted above and below
-		case "generated", "verified", "created_by", "rejected_by", "rejected_at",
+		case "generated", "verified", "created_by", "rejected_by", "rejected_at", "rejected_note",
 			"timestamp", "verified_by", "verified_at":
 			// server-owned, never from the payload — the last three are the
 			// v0.1 spellings, still read (and still ignored) so bundles

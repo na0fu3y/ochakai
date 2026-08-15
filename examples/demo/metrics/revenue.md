@@ -36,11 +36,24 @@ Three things are true of it and are not obvious:
   settlement date, so the last two days of a month land differently in the two
   systems.[^rev-policy]
 
+## 呼び名
+
+この数字を社内で指す語は **売上** で、この concept が定義しているのはそれで
+ある。紛らわしい語が二つあり、どちらもこの指標ではない:
+
+- **純売上** — 経理が使う税抜きの数字。上の "Tax included" のとおり、この
+  指標より約 9% 低い。同じものだと思って突き合わせると必ず合わない。
+- **流通総額 / GMV** — キャンセルと返品を含む受注ベースの合計。
+  [受注が完了した注文](/glossary/completed-order.md)だけを数えていないので、
+  この指標とは別物である。
+
 The verified way to compute it is
 [monthly revenue](/queries/sales/monthly-revenue.md). Before reading a movement
 in it as good or bad, read
 [how to read the revenue series](/insights/reading-revenue.md) — the seasonal
-swing is larger than most of the changes anyone investigates.
+swing is larger than most of the changes anyone investigates — and
+[月末の着地見込み](/insights/着地見込み.md) for reading a month before it is
+over.
 
 Revenue says nothing about whether the customers came back. That is
 [repeat purchase rate](/metrics/repeat-purchase-rate.md), which is still a

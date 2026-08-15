@@ -660,8 +660,11 @@ func TestImportReportsAKeptClaim(t *testing.T) {
 	}
 
 	kept := run(t, true)
-	if !strings.Contains(kept, "note: generated, verified is not") &&
-		!strings.Contains(kept, "note: generated, verified are not") {
+	// The note names the concept it was true of: a bundle's notes are
+	// grouped by text, and a group of one is spelled as the line it
+	// replaced with the id in front of it.
+	if !strings.Contains(kept, "note: ochakai://metrics/foreign: generated, verified is not") &&
+		!strings.Contains(kept, "note: ochakai://metrics/foreign: generated, verified are not") {
 		t.Errorf("a kept claim was not reported:\n%s", kept)
 	}
 	if !strings.Contains(kept, "1 notes)") {
@@ -1330,5 +1333,202 @@ func TestStatsAnnouncesADisposableSandbox(t *testing.T) {
 	body = map[string]any{}
 	if out := run(t); strings.Contains(out, "sandbox") || strings.Contains(out, "insecure_dev") {
 		t.Errorf("ordinary deployment announced a posture:\n%s", out)
+	}
+}
+
+// TestGetPrintsTheRulingAndWhy pins design doc 0102 on the surface that
+// was missing it. `ochakai get` prints the document on stdout and what
+// this instance observed on stderr; a rejection is an observation, and
+// it used to be the one that never got printed — the command a body link
+// sends a reader to showed a turned-down concept as an ordinary draft,
+// with the note that says what would have to change reachable only
+// through --json.
+//
+// stdout is asserted too, and for the same reason the note is: the
+// document has to keep round-tripping through `ochakai put`, so nothing
+// about the ruling may land there.
+func TestGetPrintsTheRulingAndWhy(t *testing.T) {
+	at := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
+	doc := "---\ntype: Metric\ntitle: Repeat purchase rate\nstatus: draft\n---\n\nShare of buyers who bought before.\n"
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimSuffix(r.PathValue("path"), ".md")
+		_ = json.NewEncoder(w).Encode(domain.View{
+			ID: id, Document: doc,
+			Summary: domain.Summary{
+				Type: domain.TypeMetrics, ID: id, Status: domain.StatusDraft,
+				Title: "Repeat purchase rate", Rejected: true,
+			},
+			Observed: domain.Observed{
+				CreatedBy: domain.Actor{Kind: domain.ActorProcess, Name: "claude"},
+				Rejection: &domain.Rejection{By: human, At: at, Note: "lookback undecided; settle guest checkout first"},
+			},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	errR, errW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	origOut, origErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = outW, errW
+	getErr := cmdGet(context.Background(), []string{"metrics/repeat-purchase-rate", "--url", srv.URL})
+	outW.Close()
+	errW.Close()
+	os.Stdout, os.Stderr = origOut, origErr
+	stdout, err := io.ReadAll(outR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderr, err := io.ReadAll(errR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if getErr != nil {
+		t.Fatal(getErr)
+	}
+
+	if string(stdout) != doc {
+		t.Errorf("stdout must be the document and nothing else:\n%s", stdout)
+	}
+	for _, want := range []string{
+		"created by process:claude",
+		"rejected by human:na0 on 2026-08-01",
+		"rejection note: lookback undecided; settle guest checkout first",
+	} {
+		if !strings.Contains(string(stderr), want) {
+			t.Errorf("stderr misses %q:\n%s", want, stderr)
+		}
+	}
+}
+
+// A hit says nothing about a ruling — the columns are the concept's —
+// so the count of turned-down rows goes to stderr with the command that
+// prints the reason (design doc 0102 §3).
+func TestPrintHitsNamesTurnedDownRowsWithoutChangingThem(t *testing.T) {
+	page := &apiclient.SearchResult{Hits: []domain.SearchHit{
+		{Summary: domain.Summary{ID: "metrics/a", Status: domain.StatusDraft, Title: "A", Rejected: true}, Score: 1},
+		{Summary: domain.Summary{ID: "metrics/b", Status: domain.StatusStable, Title: "B"}, Score: 0.5},
+	}}
+	stdout, stderr := capture(t, func() { printHits(page, "") })
+	for _, want := range []string{"ochakai://metrics/a\tdraft\tA", "ochakai://metrics/b\tstable\tB"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("the row format must not change:\n%s", stdout)
+		}
+	}
+	if strings.Contains(stdout, "rejected") || strings.Contains(stdout, "turned down") {
+		t.Errorf("a ruling must not reach the row:\n%s", stdout)
+	}
+	if !strings.Contains(stderr, "1 concept was turned down") || !strings.Contains(stderr, "ochakai get") {
+		t.Errorf("stderr must name the turned-down row and where its reason is:\n%s", stderr)
+	}
+
+	// And an empty result says so, rather than leaving a reader unable to
+	// tell a miss from a command that did not run.
+	_, stderr = capture(t, func() { printHits(&apiclient.SearchResult{}, "") })
+	if !strings.Contains(stderr, "no concept matched") {
+		t.Errorf("an empty ranking must say so:\n%s", stderr)
+	}
+	_, stderr = capture(t, func() { printHits(&apiclient.SearchResult{}, "failed") })
+	if !strings.Contains(stderr, "the failed feed is empty") {
+		t.Errorf("an empty feed must name itself:\n%s", stderr)
+	}
+}
+
+// capture runs fn with stdout and stderr redirected, and returns what it
+// wrote to each.
+func capture(t *testing.T, fn func()) (stdout, stderr string) {
+	t.Helper()
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	errR, errW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	origOut, origErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = outW, errW
+	fn()
+	outW.Close()
+	errW.Close()
+	os.Stdout, os.Stderr = origOut, origErr
+	out, err := io.ReadAll(outR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	errs, err := io.ReadAll(errR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out), string(errs)
+}
+
+// A note is about how a document was read, so a bundle written by
+// another instance produces the same sentence once per concept in it.
+// Printing them as they arrive means the demo bundle's ten `created`
+// lines come back buried under ten identical forty-word notes, and a
+// seeded catalog buries them under one per table. Grouping keeps the
+// sentence and the concepts it was true of, and costs one line each.
+func TestNoteTallyPrintsARepeatedNoteOnce(t *testing.T) {
+	var tally noteTally
+	for _, id := range []string{"c", "a", "b", "e", "d", "g", "f"} {
+		tally.add("ochakai://metrics/"+id, []string{"a claim was kept"})
+	}
+	tally.add("ochakai://metrics/a", []string{"stale_after was dropped"})
+	if tally.n != 8 {
+		t.Errorf("tally.n = %d, want 8: --strict counts notes, not groups", tally.n)
+	}
+	_, stderr := capture(t, tally.report)
+	lines := strings.Split(strings.TrimSpace(stderr), "\n")
+	if len(lines) != 3 {
+		t.Errorf("want three lines — two groups, one of them with its concepts:\n%s", stderr)
+	}
+	// The group of one keeps the shape it had before there were groups.
+	if !strings.Contains(stderr, "note: ochakai://metrics/a: stale_after was dropped") {
+		t.Errorf("a note true of one concept must name it inline:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "7 concepts: ochakai://metrics/a, ochakai://metrics/b") {
+		t.Errorf("a group must be counted and listed in id order:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "and 2 more") {
+		t.Errorf("a group longer than five must say how many it did not list:\n%s", stderr)
+	}
+}
+
+// An unknown command answers with the one thing that is wrong, not with
+// the command list: forty lines for a mistyped letter said nothing about
+// the letter, and the same forty for a flag put before the command said
+// nothing about the flag.
+func TestUnknownCommandSaysWhatIsWrong(t *testing.T) {
+	for _, tc := range []struct {
+		cmd   string
+		want  string
+		avoid string
+	}{
+		{cmd: "serach", want: `Did you mean "search"?`},
+		{cmd: "improt", want: `Did you mean "import"?`},
+		{cmd: "--url", want: "A flag belongs to a command", avoid: "Did you mean"},
+		{cmd: "frobnicate", want: "unknown command", avoid: "Did you mean"},
+	} {
+		var b strings.Builder
+		unknownCommand(&b, tc.cmd)
+		if !strings.Contains(b.String(), tc.want) {
+			t.Errorf("%q: missing %q:\n%s", tc.cmd, tc.want, b.String())
+		}
+		if tc.avoid != "" && strings.Contains(b.String(), tc.avoid) {
+			t.Errorf("%q: must not say %q:\n%s", tc.cmd, tc.avoid, b.String())
+		}
+		// Never the whole list: that is the thing this replaced.
+		if strings.Contains(b.String(), "Client commands (talk to a server") {
+			t.Errorf("%q: printed the whole usage:\n%s", tc.cmd, b.String())
+		}
 	}
 }

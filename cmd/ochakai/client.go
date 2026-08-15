@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -413,6 +414,20 @@ func cmdList(ctx context.Context, args []string) error {
 // ordered by: the relevance score for a search, and the feed's own number
 // or date for a listing.
 func printHits(page *apiclient.SearchResult, feed string) {
+	// Nothing on stdout is the right answer and a bad message: a reader
+	// who gets a silent prompt back cannot tell an empty base from a
+	// query that missed from a command that did not run. So the fact
+	// goes to stderr, where it costs a pipeline nothing (design doc
+	// 0068 §2.2 keeps stdout the ranking, and this is not part of it).
+	if len(page.Hits) == 0 {
+		switch {
+		case feed != "":
+			fmt.Fprintf(os.Stderr, "the %s feed is empty\n", feed)
+		default:
+			fmt.Fprintln(os.Stderr, "no concept matched")
+		}
+		return
+	}
 	for _, h := range page.Hits {
 		lead := fmt.Sprintf("%.3f", h.Score)
 		switch feed {
@@ -447,6 +462,28 @@ func printHits(page *apiclient.SearchResult, feed string) {
 			line += " · " + h.Snippet
 		}
 		fmt.Println(line)
+	}
+	// A rejected row is spelled like any other: the columns are the
+	// concept's, and this instance's ruling is not one of them. So a
+	// reader who asked for --rejected — to find out whether a proposal
+	// was already turned down — got back rows that answered the question
+	// they had, and nothing about the one they were about to have.
+	// The reason lives on the concept, so this points at it rather than
+	// widening the row (design doc 0102).
+	rejected := 0
+	for i := range page.Hits {
+		if page.Hits[i].Rejected {
+			rejected++
+		}
+	}
+	if rejected > 0 {
+		were := "concept was"
+		if rejected > 1 {
+			were = "concepts were"
+		}
+		fmt.Fprintf(os.Stderr,
+			"%d %s turned down; `ochakai get <id>` prints who ruled and why, before proposing it again\n",
+			rejected, were)
 	}
 }
 
@@ -506,7 +543,7 @@ func cmdBrowse(ctx context.Context, args []string) error {
 func cmdContext(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"context",
-		"Usage: ochakai context [flags] <question>\n\nGather what to read before answering a data question, in one call:\nthe full concepts behind the top search hits (verified concepts rank\nhigher), expanded one hop through links so the insight explaining a\nmetric travels with it. Markdown on stdout, ready for an agent's\ncontext window. No hits print nothing (exit 0).",
+		"Usage: ochakai context [flags] <question>\n\nGather what to read before answering a data question, in one call:\nthe full concepts behind the top search hits (verified concepts rank\nhigher), expanded one hop through links so the insight explaining a\nmetric travels with it. Markdown on stdout, ready for an agent's\ncontext window. No hits leave stdout empty and say so on stderr\n(exit 0).",
 		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type 'Attested Computation' --trust human-reviewed --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n  ochakai context \"activation rate\" --prefix teams/growth --prefix company\n")
 	var types, statuses, tags, prefixes repeated
 	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
@@ -564,6 +601,20 @@ func cmdContext(ctx context.Context, args []string) error {
 // spent the remaining concepts are dropped with a note (the first concept
 // always renders); hits without a rendered concept become one-line pointers.
 func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
+	// The one call an agent makes before a data question, answering with
+	// a silent prompt, was the least readable thing this CLI did: the
+	// MCP surface returns the same emptiness with a hint attached
+	// (contextHint), and a hook that shells out to this command got
+	// neither the concepts nor the reason there were none. Stdout stays
+	// the pack — a hook pipes it straight into a prompt — so the sentence
+	// goes to stderr.
+	if len(res.Concepts) == 0 && len(res.Hits) == 0 {
+		fmt.Fprintln(os.Stderr,
+			"no concept matched — nothing to read before this question. "+
+				"Write what you learn answering it back with `ochakai put <id>`; "+
+				"`ochakai stats` counts the questions that came back empty.")
+		return
+	}
 	rendered := map[string]bool{}
 	written, omitted := 0, 0
 	for i := range res.Concepts {
@@ -592,6 +643,26 @@ func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
 	}
 }
 
+// printRejection writes this instance's ruling against a concept, with
+// the reason it was given. Nothing is printed for a concept nobody
+// turned down.
+//
+// The reason is not decoration on the ruling: an agent about to propose
+// the same thing needs to know what would have to change, and a reader
+// who only learns *that* it was rejected has to ask a person (design doc
+// 0102). It rode on `ochakai context` and on --json alone until then,
+// which left `ochakai get` — the command a body link sends you to —
+// printing a draft that read as if nobody had ruled on it at all.
+func printRejection(w io.Writer, r *domain.Rejection) {
+	if r == nil {
+		return
+	}
+	fmt.Fprintf(w, "rejected by %s on %s\n", r.By.String(), r.At.Format("2006-01-02"))
+	if r.Note != "" {
+		fmt.Fprintf(w, "rejection note: %s\n", r.Note)
+	}
+}
+
 // renderEntry writes one concept of a context pack: a heading, what this
 // instance observed about it, and then the concept itself — its document.
 //
@@ -614,12 +685,7 @@ func renderEntry(v *domain.View) string {
 		prov = verified + "; " + prov
 	}
 	fmt.Fprintln(&b, prov)
-	if r := v.Observed.Rejection; r != nil {
-		fmt.Fprintf(&b, "rejected by %s on %s\n", r.By.String(), r.At.Format("2006-01-02"))
-		if r.Note != "" {
-			fmt.Fprintf(&b, "rejection note: %s\n", r.Note)
-		}
-	}
+	printRejection(&b, v.Observed.Rejection)
 	if doc := strings.TrimSpace(v.Document); doc != "" {
 		fmt.Fprintf(&b, "\n%s\n", doc)
 	}
@@ -942,6 +1008,7 @@ func cmdGet(ctx context.Context, args []string) error {
 		prov = fmt.Sprintf("verified by %s on %s; ", lv.By.String(), lv.At.Format("2006-01-02")) + prov
 	}
 	fmt.Fprintln(os.Stderr, prov)
+	printRejection(os.Stderr, k.Observed.Rejection)
 	if *download == "" {
 		for _, att := range k.Files {
 			fmt.Fprintf(os.Stderr, "file: %s (%s, %d bytes) — `ochakai get %s --download DIR` to save\n",
@@ -1117,6 +1184,18 @@ func putFile(ctx context.Context, c *apiclient.Client, path string, data []byte,
 	}
 	f, err := c.PutBundleFile(ctx, path, data)
 	if err != nil {
+		// The write was refused, and the refusal is about files —
+		// typically that this instance stores none. If the argument was
+		// a concept's address, that is very likely not the write the
+		// caller meant: they wrote a concept and left out the
+		// frontmatter, and got back a sentence about GCS. The bytes
+		// decide which kind an object is, so the CLI cannot know; it can
+		// say what would have made this one a concept.
+		if conceptAddress(path) {
+			return fmt.Errorf("%w\n\t%s is a concept's address, and this input is not an OKF document: "+
+				"a concept opens with `---` frontmatter carrying a `type` (`ochakai put -h` lists them). "+
+				"For a file, give the path its extension", err, path)
+		}
 		return err
 	}
 	if asJSON {
@@ -1173,6 +1252,64 @@ func documentOf(k *domain.Knowledge) ([]byte, error) {
 func reportNotes(notes []string) {
 	for _, n := range notes {
 		fmt.Fprintln(os.Stderr, "note:", n)
+	}
+}
+
+// noteTally is reportNotes for a bundle: it groups the notes by their
+// text and prints each one once, with what it was true of.
+//
+// One write produces at most a couple of notes and reportNotes prints
+// them as they come. A bundle is where that stops working: the
+// commonest note — a document from somewhere else, whose trust family
+// stayed the claim it was — is true of *every* concept in the bundle,
+// so importing the ten-concept demo printed the same forty words ten
+// times, and a seeded catalog prints them once per table, with the
+// `created` lines they belong to scrolled off the top. The sentence is
+// worth reading once; which concepts it was true of is worth keeping.
+type noteTally struct {
+	byText map[string][]string
+	n      int
+}
+
+func (t *noteTally) add(uri string, notes []string) {
+	if t.byText == nil {
+		t.byText = map[string][]string{}
+	}
+	for _, n := range notes {
+		t.byText[n] = append(t.byText[n], uri)
+		t.n++
+	}
+}
+
+// report prints the groups, sorted. Not in arrival order: the writes run
+// concurrently, so two runs of the same bundle would order them
+// differently, and an import's output is something people diff.
+func (t *noteTally) report() {
+	texts := make([]string, 0, len(t.byText))
+	for text := range t.byText {
+		texts = append(texts, text)
+	}
+	sort.Strings(texts)
+	for _, text := range texts {
+		uris := t.byText[text]
+		sort.Strings(uris)
+		if len(uris) == 1 {
+			fmt.Fprintf(os.Stderr, "note: %s: %s\n", uris[0], text)
+			continue
+		}
+		// Enough to recognize which part of the bundle, not the whole
+		// list: a note true of every concept would otherwise print the
+		// bundle twice.
+		const show = 5
+		shown, more := uris, 0
+		if len(shown) > show {
+			shown, more = shown[:show], len(shown)-show
+		}
+		list := strings.Join(shown, ", ")
+		if more > 0 {
+			list += fmt.Sprintf(", and %d more", more)
+		}
+		fmt.Fprintf(os.Stderr, "note: %s\n      %d concepts: %s\n", text, len(uris), list)
 	}
 }
 
@@ -1547,6 +1684,7 @@ func cmdImport(ctx context.Context, args []string) error {
 	// two runs of the same bundle may print them differently — the
 	// summary line is the stable part.
 	var created, updated, unchanged int
+	var tally noteTally
 	refused := map[string]bool{}
 	// One mutex guards the counters, the skip list and the output; the
 	// network calls happen outside it.
@@ -1604,8 +1742,7 @@ func cmdImport(ctx context.Context, args []string) error {
 		notes = okf.NoteStoredClaim(notes, d.Claimed, stored.Document)
 		mu.Lock()
 		defer mu.Unlock()
-		noted += len(notes)
-		reportNotes(notes)
+		tally.add(k.URI(), notes)
 		switch {
 		case wasCreated:
 			created++
@@ -1622,6 +1759,11 @@ func cmdImport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	// After the loop rather than inside it: a note that is true of the
+	// whole bundle is one sentence about the bundle, and it cannot be
+	// grouped until every write has answered.
+	tally.report()
+	noted += tally.n
 	attached, orphaned := 0, 0
 	err = eachConcurrently(ctx, len(atts), func(ctx context.Context, i int) error {
 		a := atts[i]
@@ -1714,6 +1856,7 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 	// Concurrent for the same reason the real import is: the dry run is
 	// the same N round trips, and a CI gate pays for them on every push.
 	var created, updated, unchanged int
+	var tally noteTally
 	refused := map[string]bool{}
 	var mu sync.Mutex
 	skip := func(what, why string) {
@@ -1749,8 +1892,7 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 		notes = okf.NoteStoredClaim(notes, d.Claimed, planned.Document)
 		mu.Lock()
 		defer mu.Unlock()
-		noted += len(notes)
-		reportNotes(notes)
+		tally.add(k.URI(), notes)
 		switch plan {
 		case apiclient.PlanCreated:
 			created++
@@ -1767,6 +1909,8 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 	if err != nil {
 		return err
 	}
+	tally.report()
+	noted += tally.n
 	// A file's plan is a yes or a no: the counts the summary keeps for
 	// files are of the objects the bundle carries, not of the rows they
 	// would move, so ok=false means the server refused this one.
