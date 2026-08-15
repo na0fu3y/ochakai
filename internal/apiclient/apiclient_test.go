@@ -118,7 +118,7 @@ func TestBrowseReadsTheDirectorysIndex(t *testing.T) {
 			Concepts: []BrowseConcept{{Type: "queries", ID: "monthly-revenue", Title: "月次売上", Status: domain.StatusStable}},
 		})
 	})
-	res, err := c.Browse(context.Background(), "queries/")
+	res, err := c.Browse(context.Background(), "queries/", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestBrowseReadsTheDirectorysIndex(t *testing.T) {
 	}
 
 	// The root's own index.
-	if _, err := c.Browse(context.Background(), ""); err != nil {
+	if _, err := c.Browse(context.Background(), "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if path != "/api/v1/bundle/index.md" {

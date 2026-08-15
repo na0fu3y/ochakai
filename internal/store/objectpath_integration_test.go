@@ -253,7 +253,7 @@ func TestIntegrationBrowseListsTheFilesInADirectory(t *testing.T) {
 		}
 	}
 
-	lvl, err := s.Browse(ctx, root+"/")
+	lvl, err := s.Browse(ctx, root+"/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +274,7 @@ func TestIntegrationBrowseListsTheFilesInADirectory(t *testing.T) {
 	}
 
 	// Asked about directly, a directory of pure data lists what it holds.
-	lvl, err = s.Browse(ctx, root+"/seeds/")
+	lvl, err = s.Browse(ctx, root+"/seeds/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +286,7 @@ func TestIntegrationBrowseListsTheFilesInADirectory(t *testing.T) {
 	if err := s.DeleteFile(ctx, root+"/seed.csv", actor); err != nil {
 		t.Fatal(err)
 	}
-	lvl, err = s.Browse(ctx, root+"/")
+	lvl, err = s.Browse(ctx, root+"/", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

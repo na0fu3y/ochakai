@@ -170,7 +170,8 @@ _ochakai() {
         '--url[server URL]:url:'
       ;;
     browse)
-      _arguments '--json[print the raw JSON response]' '--url[server URL]:url:'
+      _arguments '--cursor[resume a level where the last page ended]:cursor:' \
+        '--json[print the raw JSON response]' '--url[server URL]:url:'
       ;;
     revisions)
       _arguments '--limit[max results]:limit:' '--json[print the raw JSON response]' '--url[server URL]:url:'
@@ -263,7 +264,7 @@ _ochakai() {
         return
       fi
       opts="--type --status --tag --prefix --source --links-to --trust --fm --rejected --limit --cursor --json --url" ;;
-    browse)        opts="--json --url" ;;
+    browse)        opts="--cursor --json --url" ;;
     context)       opts="--type --status --tag --prefix --trust --fm --limit --budget --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
@@ -363,6 +364,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search list context' -l trus
 complete -c ochakai -n '__fish_seen_subcommand_from search list context' -l fm -x -d 'filter by an OKF frontmatter key=value'
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l rejected -d 'only concepts a human turned down'
 complete -c ochakai -n '__fish_seen_subcommand_from list' -l cursor -x -d 'resume a listing where the last page ended'
+complete -c ochakai -n '__fish_seen_subcommand_from browse' -l cursor -x -d 'resume a level where the last page ended'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l note -x -d 'why it was not accepted'
 complete -c ochakai -n '__fish_seen_subcommand_from reject' -l withdraw -d 'take back the rejection'
 complete -c ochakai -n '__fish_seen_subcommand_from search list context revisions log' -l limit -x -d 'max results'

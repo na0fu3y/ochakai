@@ -453,9 +453,10 @@ func printHits(page *apiclient.SearchResult, feed string) {
 func cmdBrowse(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"browse",
-		"Usage: ochakai browse [flags] [prefix]\n\nList one level of the ID hierarchy (the folder view of design doc\n0075 §2, the CLI counterpart of the web UI's Browse tab).\nWithout an argument, the top-level directories with their concept\ncounts; with a prefix, the subdirectories and concepts directly under\nit. Directories print as \"name/\tcount\", concepts as\n\"segment\ttype\tstatus\ttitle\", and the files in the directory as\n\"name\tfile\tmedia-type\tbytes\". Rejected concepts are hidden, as in\nsearch.",
+		"Usage: ochakai browse [flags] [prefix]\n\nList one level of the ID hierarchy (the folder view of design doc\n0075 §2, the CLI counterpart of the web UI's Browse tab).\nWithout an argument, the top-level directories with their concept\ncounts; with a prefix, the subdirectories and concepts directly under\nit. Directories print as \"name/\tcount\", concepts as\n\"segment\ttype\tstatus\ttitle\", and the files in the directory as\n\"name\tfile\tmedia-type\tbytes\". Rejected concepts are hidden, as in\nsearch.\n\nA level is a listing, so it pages: a page with more behind it prints\nthe way on to stderr, and passing that back with --cursor reads the\nnext one. The subdirectories ride on the first page only — they are a\ngrouping rather than a run, so there is no position in them to resume\nfrom.",
 		"  ochakai browse\n  ochakai browse queries\n  ochakai browse ga4/tables\n")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
+	cursor := fs.String("cursor", "", "resume a level where the last page ended: the `cursor` the previous page printed, for the same prefix")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
 		return err
@@ -472,7 +473,7 @@ func cmdBrowse(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	res, err := c.Browse(ctx, prefix)
+	res, err := c.Browse(ctx, prefix, *cursor)
 	if err != nil {
 		return err
 	}
@@ -497,8 +498,10 @@ func cmdBrowse(ctx context.Context, args []string) error {
 	for _, f := range res.Files {
 		fmt.Printf("%s\tfile\t%s\t%d\n", f.Name, f.MediaType, f.Size)
 	}
-	if res.Truncated {
-		fmt.Fprintln(os.Stderr, "note: showing the first 1000 concepts at this level (server cap)")
+	// The cursor is what a caller acts on, so it is the note: "there is
+	// more" without the way on is the wall design doc 0101 removed.
+	if res.Cursor != "" {
+		fmt.Fprintf(os.Stderr, "note: more at this level — rerun with --cursor %s\n", res.Cursor)
 	}
 	return nil
 }

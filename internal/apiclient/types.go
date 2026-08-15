@@ -16,6 +16,10 @@ type BrowseResult struct {
 	Concepts  []BrowseConcept `json:"concepts,omitempty"`
 	Files     []BrowseFile    `json:"files,omitempty"`
 	Truncated bool            `json:"truncated,omitempty"`
+
+	// Cursor resumes the level where this page ended, and is absent on
+	// the last one (design doc 0101).
+	Cursor string `json:"cursor,omitempty"`
 }
 
 // BrowseDir is one subdirectory (ID segment) with the number of concepts
