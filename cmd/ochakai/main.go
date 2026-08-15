@@ -14,6 +14,8 @@ import (
 	"os"
 	"os/signal"
 	"runtime/debug"
+	"sort"
+	"strings"
 	"syscall"
 	"time"
 
@@ -78,14 +80,86 @@ func main() {
 	case "help", "-h", "--help":
 		usage(os.Stdout)
 	default:
-		fmt.Fprintf(os.Stderr, "ochakai: unknown command %q\n\n", cmd)
-		usage(os.Stderr)
+		unknownCommand(os.Stderr, cmd)
 		os.Exit(1)
 	}
 	if err != nil {
 		log.Error("ochakai failed", "command", cmd, "error", err)
 		os.Exit(1)
 	}
+}
+
+// adminCommands are the names the switch above dispatches on that are
+// not client commands. Spelled as a list because a switch is a statement
+// — nothing can read it — and two things need to: the suggestion below,
+// and TestCompletionScriptsStayInSync, which had its own copy.
+var adminCommands = []string{"serve", "serve-ui", "version", "help"}
+
+// unknownCommand answers a name that is not a command. It used to print
+// the whole command list — forty-odd lines for a mistyped letter, and
+// the same forty for `ochakai --url … whoami`, where the list is not
+// what the reader got wrong.
+//
+// So it says the one thing that is wrong. A leading dash is a flag put
+// where a command belongs, which is a mistake worth naming: this CLI has
+// no global flags (design doc 0004 §8) — --url is a flag of every client
+// command, and the usage line's "--url > $OCHAKAI_URL" describes which
+// wins, not where it goes. Anything else gets the nearest command, if
+// one is near enough to mean it.
+func unknownCommand(w io.Writer, cmd string) {
+	fmt.Fprintf(w, "ochakai: unknown command %q\n", cmd)
+	switch {
+	case strings.HasPrefix(cmd, "-"):
+		fmt.Fprintf(w, "\nA flag belongs to a command, so it goes after it:\n"+
+			"  ochakai whoami %s …\n", cmd)
+	default:
+		if near := nearestCommand(cmd); near != "" {
+			fmt.Fprintf(w, "\nDid you mean %q?\n", near)
+		}
+	}
+	fmt.Fprintln(w, "\nRun `ochakai help` for the command list.")
+}
+
+// nearestCommand is the command a name was most likely meant to be, or
+// "" when nothing is close enough. The bound scales with the name's own
+// length so that a short word is not "near" everything and a long one
+// can still carry a typo: `serach` reaches `search`, `frobnicate`
+// reaches nothing.
+func nearestCommand(cmd string) string {
+	best, bound := "", len(cmd)/3+1
+	names := append([]string{}, adminCommands...)
+	for name := range clientCommands {
+		names = append(names, name)
+	}
+	sort.Strings(names) // ties resolve to the first name alphabetically, not to map order
+	for _, name := range names {
+		if d := editDistance(cmd, name); d < bound {
+			best, bound = name, d
+		}
+	}
+	return best
+}
+
+// editDistance is Levenshtein, over bytes: every command name is ASCII,
+// and so is anything close enough to one to be worth suggesting.
+func editDistance(a, b string) int {
+	prev := make([]int, len(b)+1)
+	curr := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= len(a); i++ {
+		curr[0] = i
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			curr[j] = min(prev[j]+1, curr[j-1]+1, prev[j-1]+cost)
+		}
+		prev, curr = curr, prev
+	}
+	return prev[len(b)]
 }
 
 func usage(w io.Writer) {
@@ -283,8 +357,22 @@ func serve(log *slog.Logger) error {
 	// The server deliberately does not serve the web UI (design doc 0006
 	// §4) — but a bare 404 at / strands newcomers who just ran the compose
 	// file and opened the port. Point them at the real entry points.
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
+	//
+	// Everything unmatched, not only /: the stdlib's "404 page not found"
+	// is the same dead end one path over, and /healthz is the path people
+	// actually try (this server answers /health — Google Frontends
+	// intercept /healthz, which is why). The status still says not found;
+	// only the body is worth anything.
+	//
+	// Registered without a method. "GET /" would be the narrower pattern
+	// to want, and the stdlib refuses it: against "/mcp" neither is more
+	// specific — one wins on method, the other on path — which is a
+	// registration panic at startup rather than a routing surprise later.
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		if r.URL.Path != "/" {
+			w.WriteHeader(http.StatusNotFound)
+		}
 		_, _ = fmt.Fprintf(w, `ochakai %s — context provider for data agents
 
 This is the API server; it has no pages. Talk to it via:

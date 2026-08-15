@@ -340,6 +340,7 @@ complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell com
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
+complete -c ochakai -n __fish_use_subcommand -a help -d 'print the command list'
 
 complete -c ochakai -n '__fish_seen_subcommand_from search list browse context get put verify reject delete purge reembed move usage stats report revisions log export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'

@@ -69,6 +69,54 @@ last entry.
   export — so this entry and the record are where the change is written
   down.
 
+- **MCP hands back one copy of a tool's answer, and declares no output
+  schema** ([design doc
+  0103](docs/design/0103-the-tool-result-travels-once.md)). Every tool
+  result used to arrive twice — the same JSON in `content[0].text` and in
+  `structuredContent`, 10,384 and 10,439 bytes for one `get_context`, in
+  a 22,009-byte response — and the seven output schemas the tool list
+  carried came to 14,986 bytes, more than everything the MCP-BYTES
+  budget was counting. Both were go-sdk defaults following from the
+  handlers' return types rather than anything written by hand. A client
+  that read `structuredContent` now reads the text block instead; the
+  JSON is identical, and the budget counts both schemas from here on,
+  which does not move its number because the output side is empty.
+- **A rejection's reason travels with the ruling** ([design doc
+  0104](docs/design/0104-a-ruling-travels-with-its-reason.md)).
+  `ochakai get` prints who rejected a concept, when, and the `--note`
+  they left — on stderr, beside the provenance line, so stdout stays the
+  document. `ochakai search --rejected` (and `list`) says on stderr that
+  the rows were turned down and where the reason is. An exported bundle
+  carries `rejected_note` beside `rejected_by` / `rejected_at`; like
+  those two it is never read back on import, so nothing about a bundle's
+  meaning changes — the reason simply stops being the one part of a
+  ruling that could not leave.
+- **`ochakai import` prints a repeated note once.** A bundle written by
+  another instance produces the same sentence for every concept in it —
+  ten identical lines for `examples/demo`, one per table for a seeded
+  catalog. Notes are now grouped by text, with the concepts each one was
+  true of listed under it (up to five, then a count). The `N notes`
+  summary and what `--strict` fails on are unchanged.
+- **`ochakai context` and `ochakai search` say when nothing matched.**
+  They printed nothing at all and exited 0, which reads the same as a
+  server that did not answer. The line goes to stderr, so a pipeline is
+  unaffected, and `context` names the write-back that would fix it.
+- **An unknown command answers with a suggestion instead of the whole
+  command list.** `ochakai serach` now offers `search`; `ochakai --url X
+  whoami` says that a flag goes after the command rather than printing
+  forty lines that do not mention the problem.
+- **The demo knowledge base is bilingual, and gained an eleventh
+  concept.** `examples/demo` was entirely English, so a Japanese reader
+  following the quick start — including `examples/README.md`'s own
+  `ochakai context "なぜ売上が落ちているのか"` — got silence, and the
+  Japanese-search claim could not be tried without writing your own
+  concepts first. The metric now records what the number is called
+  (`売上`, and the two things it is not), the glossary carries the
+  order states' Japanese names, the seasonality table names お盆 and
+  年末商戦, and `insights/着地見込み` exists only in Japanese. The search
+  evaluation harness measures the shipped bundle for it, in place of the
+  inline Japanese fixture that stood in for it.
+
 - **BREAKING: a `.md` path holds a concept and nothing else**
   ([design doc 0100](docs/design/0100-md-is-how-a-concept-is-spelled.md)).
   A markdown document with no `type` used to be stored as a *file* at its

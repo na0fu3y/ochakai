@@ -76,6 +76,10 @@ type frontmatter struct {
 	CreatedBy   text        `yaml:"created_by,omitempty"` // ochakai extension: OKF records only who produced the current content
 	RejectedBy  text        `yaml:"rejected_by,omitempty"`
 	RejectedAt  text        `yaml:"rejected_at,omitempty"`
+	// The reason, which is the half of a rejection the next writer acts
+	// on (design doc 0104). text rather than string because a note is
+	// free prose and may span lines.
+	RejectedNote text `yaml:"rejected_note,omitempty"`
 }
 
 // The YAML spelling of the v0.2 families lives here rather than on the
@@ -260,7 +264,7 @@ func textify(v any) any {
 var reservedKeys = func() map[string]bool {
 	m := map[string]bool{
 		"generated": true, "verified": true,
-		"created_by": true, "rejected_by": true, "rejected_at": true,
+		"created_by": true, "rejected_by": true, "rejected_at": true, "rejected_note": true,
 		"timestamp": true, "verified_by": true, "verified_at": true,
 	}
 	for _, k := range domain.EnvelopeKeys {
@@ -533,9 +537,15 @@ func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 	// entry's real lifecycle value rather than deprecated, which is what
 	// the ruling used to be folded onto — an assertion ("this was once
 	// current") that a rejection specifically denies.
+	//
+	// All three keys, because a ruling without its reason is the half a
+	// reader cannot act on (design doc 0104): who and when say a
+	// proposal was turned down, and only the note says what would have
+	// to change for the next one to land.
 	if serverKeys && k.Rejection != nil {
 		fm.RejectedBy = text(k.Rejection.By.String())
 		fm.RejectedAt = text(k.Rejection.At.UTC().Format(time.RFC3339))
+		fm.RejectedNote = text(k.Rejection.Note)
 	}
 
 	fmYAML, err := yaml.Marshal(&fm)

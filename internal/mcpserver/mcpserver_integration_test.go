@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -219,15 +218,7 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 	// write that changed nothing without reading the concept back.
 	planOf := func(t *testing.T, res *mcp.CallToolResult) string {
 		t.Helper()
-		var out knowledgeOut
-		raw, err := json.Marshal(res.StructuredContent)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := json.Unmarshal(raw, &out); err != nil {
-			t.Fatal(err)
-		}
-		return out.Knowledge.Plan
+		return answerOf[knowledgeOut](t, res).Knowledge.Plan
 	}
 	if got := planOf(t, first); got != domain.PlanCreated {
 		t.Errorf("the first write answered plan = %q, want %q", got, domain.PlanCreated)
@@ -340,15 +331,7 @@ func TestIntegrationMCPAgentSeesTheRulingOnItsDraft(t *testing.T) {
 	}
 	conceptOf := func(t *testing.T, res *mcp.CallToolResult) domain.View {
 		t.Helper()
-		var out knowledgeOut
-		raw, err := json.Marshal(res.StructuredContent)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := json.Unmarshal(raw, &out); err != nil {
-			t.Fatal(err)
-		}
-		return out.Knowledge
+		return answerOf[knowledgeOut](t, res).Knowledge
 	}
 
 	// The agent drafts the replacement, naming what it would replace with
@@ -413,16 +396,9 @@ func TestIntegrationMCPAgentSeesTheRulingOnItsDraft(t *testing.T) {
 	if _, err := svc.Reject(ctx, replacement, "duplicate of the original", human); err != nil {
 		t.Fatal(err)
 	}
-	var rejected searchOut
-	raw, err := json.Marshal(call(t, "search_concepts", map[string]any{
+	rejected := answerOf[searchOut](t, call(t, "search_concepts", map[string]any{
 		"query": "mcp loop", "rejected": true, "prefixes": []string{run},
-	}).StructuredContent)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(raw, &rejected); err != nil {
-		t.Fatal(err)
-	}
+	}))
 	seen := false
 	for _, h := range rejected.Hits {
 		if h.ID == replacement {
@@ -495,15 +471,7 @@ func TestIntegrationListWalksAFeedAndSearchRefusesTo(t *testing.T) {
 		if res.IsError {
 			t.Fatalf("list_concepts failed: %+v", res.Content)
 		}
-		var out searchOut
-		raw, err := json.Marshal(res.StructuredContent)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := json.Unmarshal(raw, &out); err != nil {
-			t.Fatal(err)
-		}
-		return out
+		return answerOf[searchOut](t, res)
 	}
 
 	first := page(t, map[string]any{

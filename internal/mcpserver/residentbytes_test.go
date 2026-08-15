@@ -57,8 +57,16 @@ func declaredCap(t *testing.T, content []byte, re *regexp.Regexp, name string) i
 }
 
 // residentBytes is what a client keeps for the whole conversation: the
-// instructions, and every tool's name, description and input schema, as
-// the wire carries them.
+// instructions, and every tool's name, description and schemas, as the
+// wire carries them.
+//
+// *Both* schemas, because the wire carries both and a client holds what
+// the wire gave it. Counting the input schema alone is what let 14,986
+// bytes of output schema — more than everything this number did count —
+// sit outside a budget whose whole subject is what an agent holds
+// (design doc 0103). They are nil today; the loop reads them anyway, so
+// the next one to declare an output schema pays for it here rather than
+// discovering that the budget was never watching that half.
 //
 // Measured from a real session rather than from the source, for the
 // reason design doc 0035 gives: the schema a client receives is
@@ -78,7 +86,16 @@ func residentBytes(t *testing.T) (total int, perTool map[string]int) {
 		if err != nil {
 			t.Fatalf("marshal %s schema: %v", tool.Name, err)
 		}
-		n := len(tool.Name) + len(tool.Description) + len(schema)
+		out := 0
+		if tool.OutputSchema != nil {
+			outSchema, err := json.Marshal(tool.OutputSchema)
+			if err != nil {
+				t.Fatalf("marshal %s output schema: %v", tool.Name, err)
+			}
+			out = len(outSchema)
+			perTool[tool.Name+" (output schema)"] = out
+		}
+		n := len(tool.Name) + len(tool.Description) + len(schema) + out
 		perTool[tool.Name] = n
 		perTool[tool.Name+" (schema)"] = len(schema)
 		total += n

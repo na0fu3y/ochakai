@@ -579,9 +579,10 @@ paths:
         route. `index.md` files are generated and are not concepts.
         Frontmatter keys the server owns
         — `generated`, `verified`, `created_by`, `rejected_by`,
-        `rejected_at`, and the pre-v0.2 spellings `timestamp` /
-        `verified_by` / `verified_at` — are ignored on write; provenance
-        comes from the caller's identity (design docs 0009, 0075 §3.1).
+        `rejected_at`, `rejected_note`, and the pre-v0.2 spellings
+        `timestamp` / `verified_by` / `verified_at` — are ignored on
+        write; provenance comes from the caller's identity (design docs
+        0009, 0075 §3.1).
         There is no exception: a document's own `verified` key changes
         nothing about the write — it is kept under `received:` as the
         writer's claim, and this instance's trust ledger never reads it.

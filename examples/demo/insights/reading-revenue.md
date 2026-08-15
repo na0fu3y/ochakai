@@ -29,14 +29,19 @@ asked to investigate:
 
 | Period | Versus a normal month | Why |
 |---|---|---|
-| December | +30 to +40% | year-end gifting; the peak is Dec 10-20, not the 24th |
-| March | +10 to +15% | fiscal year-end, mostly B2B buyers spending budget |
-| August | **-15%** | Obon; the whole country stops buying for a week |
-| Golden Week | flat | traffic drops, order value rises, and the two cancel |
+| December | +30 to +40% | 年末商戦 — year-end gifting; the peak is Dec 10-20, not the 24th |
+| March | +10 to +15% | 年度末 — fiscal year-end, mostly B2B buyers spending budget |
+| August | **-15%** | お盆 (Obon); the whole country stops buying for a week |
+| Golden Week | flat | ゴールデンウィーク — traffic drops, order value rises, and the two cancel |
 
 August being down 15% is the single fact most worth knowing here. It comes back
 every year, it has never meant anything, and it generates a review every year
 anyway.
+
+日本語で訊かれたときのために: 上の四つは **お盆**・**年末商戦**・
+**年度末**・**ゴールデンウィーク** と呼ばれる。8月に売上が落ちているのは
+お盆であって、異常ではない。月の途中の数字から着地を読むのは別の話で、
+[月末の着地見込み](/insights/着地見込み.md) にある。
 
 ## Two artifacts that fake a move
 

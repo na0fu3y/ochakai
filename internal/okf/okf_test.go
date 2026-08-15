@@ -151,6 +151,12 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 		"status_note: revenue-seasonality と重複",
 		"rejected_by: human:na0",
 		`rejected_at: "2026-07-16T00:00:00Z"`,
+		// The reason travels with the ruling (design doc 0104): who and
+		// when are audit, and the note is the part the next writer acts
+		// on. It rode on the wire and never on the bundle until then, so
+		// a base moved to another instance said "somebody turned this
+		// down" and nothing about what would have to change.
+		"rejected_note: 重複",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("document missing %q:\n%s", want, s)
@@ -433,7 +439,7 @@ func TestCanonicalOmitsServerOwnedKeys(t *testing.T) {
 		Verifications: []domain.Verification{
 			{By: domain.Actor{Kind: "human", Name: "na0"}, At: at},
 		},
-		Rejection:        &domain.Rejection{By: domain.Actor{Kind: "human", Name: "na0"}, At: at},
+		Rejection:        &domain.Rejection{By: domain.Actor{Kind: "human", Name: "na0"}, At: at, Note: "重複"},
 		UpdatedAt:        at,
 		ContentChangedAt: at,
 	}
@@ -441,7 +447,10 @@ func TestCanonicalOmitsServerOwnedKeys(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, owned := range []string{"generated:", "verified:", "created_by:", "rejected_by:", "rejected_at:"} {
+	for _, owned := range []string{
+		"generated:", "verified:", "created_by:",
+		"rejected_by:", "rejected_at:", "rejected_note:",
+	} {
 		if strings.Contains(string(canon), owned) {
 			t.Errorf("canonical form carries the server-owned key %q:\n%s", owned, canon)
 		}

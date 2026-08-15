@@ -21,12 +21,21 @@ import (
 // with these numbers in the PR; the floors below pin the current
 // baseline so a regression fails instead of shipping quietly.
 //
-// The corpus is examples/demo — the same ten concepts the quick start
+// The corpus is examples/demo — the same eleven concepts the quick start
 // loads — imported under a run-unique prefix so a shared test database
 // neither collides nor pollutes, plus three Japanese concepts defined
-// inline: the demo bundle is English, and the two-character windows a
-// Japanese question is cut into (migration 0036) need Japanese text to
-// be exercised at all.
+// inline.
+//
+// The supplement used to be the only Japanese here, because the demo had
+// none and the two-character windows a Japanese question is cut into
+// (migration 0036) need Japanese text to be exercised at all. That is
+// the arrangement this file should be read as a warning about: what the
+// harness measured was a fixture nobody ships, while a Japanese reader
+// following the quick start typed a Japanese question at the demo and
+// got silence. The demo is bilingual now and the Japanese cases below
+// are against it; the supplement stays for the terms the invented shop
+// has no home for (解約率 — it sells no subscriptions), which is a
+// smaller claim than the one it was making.
 //
 // Both halves are measured. The lexical run is the search a deployment
 // without Vertex AI gets; the fused run adds a vector ranking from the
@@ -86,6 +95,16 @@ var evalCases = []evalCase{
 	{query: "where do orders live", want: "tables/shop-orders"},
 	{query: "total_price column", want: "tables/shop-orders"},
 	{query: "execute an attested computation", want: "skills/run-bigquery-query"},
+	// Japanese, against the shipped bundle. The demo is bilingual the way
+	// a Japanese team's own base is — English where the warehouse columns
+	// are, Japanese where the judgment is — and the README tells a reader
+	// to ask it a Japanese question, so these are the cases that check
+	// the claim rather than a fixture standing in for it.
+	{query: "なぜ売上が落ちているのか", want: "insights/reading-revenue"},
+	{query: "お盆", want: "insights/reading-revenue"},
+	{query: "月末の着地見込み", want: "insights/着地見込み"},
+	{query: "純売上との違い", want: "metrics/revenue"},
+	{query: "受注と完了の違い", want: "glossary/completed-order"},
 	// Japanese, against the inline supplement below. 売上 and 解約 are
 	// two-character terms — exactly the shape the trigram index cannot
 	// serve and the windowed scan answers.
@@ -165,12 +184,14 @@ const evalVerified = "policies/revenue-recognition"
 // scan produced. Those ties are now broken by verification recency and
 // then by id (store/search.go).
 //
-// The set grew from 14 cases to 36. Fourteen put MRR inside its own
-// noise: one case moving from rank 1 to rank 2 moved it by 0.036, which
-// is the size of the differences anybody was reading. The second pass
-// asks the same corpus the way somebody asks rather than the way a title
-// reads — "obon", "does revenue include tax", "guest checkout" — and
-// thirteen concepts do not honestly support many more than that.
+// The set grew from 14 cases to 36, and to 41 when the demo gained its
+// Japanese half. Fourteen put MRR inside its own noise: one case moving
+// from rank 1 to rank 2 moved it by 0.036, which is the size of the
+// differences anybody was reading. The second pass asks the same corpus
+// the way somebody asks rather than the way a title reads — "obon",
+// "does revenue include tax", "guest checkout" — and fourteen concepts
+// do not honestly support many more than that. The five added last are
+// the ones the README now tells a Japanese reader to type.
 //
 // The fused floors are separate. A stand-in that shares the lexical
 // side's vocabulary can only reorder a list the words already reached,
@@ -186,12 +207,23 @@ const (
 	evalRecallFloor = 0.92
 	evalMRRFloor    = 0.78
 	// Fused: the same questions with the stand-in encoder on, measured
-	// at 1.00 / 0.90. This floor sits above the 0.83 the fused ranking
+	// at 1.00 / 0.85. This floor sits above the 0.79 the fused ranking
 	// scores when the verified addend goes back to 0.002, which is the
 	// regression it exists to catch — that constant is the kind that gets
 	// nudged by whoever is looking at one query.
+	//
+	// It was 0.86 against 0.89 measured, and both numbers moved when the
+	// demo bundle gained its Japanese half: 0.89 → 0.878 over the same
+	// 36 cases, which is one more concept competing in a corpus of
+	// thirteen, and 0.878 → 0.85 from the five Japanese cases added
+	// beside them. Those five are rank 1 or 2 in the lexical run, which
+	// held at 0.90 — what they are low in is the *stand-in* encoder's
+	// ranking, and a fake that hashes the lexical side's vocabulary has
+	// no opinion about Japanese worth reading. The regression this floor
+	// guards was re-measured against the same corpus rather than assumed
+	// to have stayed at 0.83.
 	evalFusedRecallFloor = 0.92
-	evalFusedMRRFloor    = 0.86
+	evalFusedMRRFloor    = 0.83
 )
 
 // loadDemoBundle imports every document under examples/demo with the
@@ -238,8 +270,8 @@ func TestSearchEvalIntegration(t *testing.T) {
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "eval"}
 	prefix := uid(t, "svceval")
 
-	if n := loadDemoBundle(t, ctx, svc, prefix, actor); n < 10 {
-		t.Fatalf("demo bundle shrank to %d documents; the golden set assumes the quick-start ten", n)
+	if n := loadDemoBundle(t, ctx, svc, prefix, actor); n < 11 {
+		t.Fatalf("demo bundle shrank to %d documents; the golden set assumes the quick-start eleven", n)
 	}
 	for id, doc := range japaneseSupplement {
 		d, _, err := okf.Parse([]byte(doc))
@@ -360,6 +392,11 @@ func scoreFusedGoldenSet(t *testing.T, ctx context.Context, svc *Service, prefix
 		}
 		found++
 		mrr += 1.0 / float64(rank)
+		// Logged like the lexical half's hits: without the per-case rank
+		// on this side, a fused number that moves says only that
+		// something did, and the only way to find out which case was to
+		// add this line and run it again.
+		t.Logf("hit (fused): %q -> %s at rank %d", c.query, c.want, rank)
 	}
 	recall := float64(found) / float64(len(evalCases))
 	mrr /= float64(len(evalCases))

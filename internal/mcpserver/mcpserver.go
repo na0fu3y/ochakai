@@ -11,6 +11,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -128,17 +129,48 @@ func requestCtx(ctx context.Context, cfg *config.Config, req extraProvider) (con
 // first so the context the handler receives already carries the per-call
 // actor. Registering every tool through here is what makes the "handler
 // forgot requestCtx" failure impossible instead of merely convention.
+//
+// It is also where the answer becomes bytes, and it hands the SDK `any`
+// rather than the handler's own type so that no output schema is derived
+// from it (design doc 0103). Two things follow from that, and both are
+// the point: nothing declares a schema this deployment does not send —
+// the SDK derives one from the type parameter, so leaving it typed was
+// enough to publish 15KB nobody counted — and the result travels once,
+// because structuredContent is what the SDK fills in when there is a
+// schema, and the text copy beside it is its own compatibility fallback.
 func tool[In, Out any](svc *service.Service,
 	fn func(ctx context.Context, actor domain.Actor, in In) (*mcp.CallToolResult, Out, error),
-) func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error) {
-	return func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+) func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, any, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, any, error) {
 		ctx, actor, err := requestCtx(ctx, svc.Config, req)
 		if err != nil {
-			var zero Out
-			return nil, zero, err
+			return nil, nil, err
 		}
-		return fn(ctx, actor, in)
+		res, out, err := fn(ctx, actor, in)
+		if err != nil {
+			return nil, nil, err
+		}
+		return answer(res, out)
 	}
+}
+
+// answer renders a handler's own result as the one copy the wire carries:
+// JSON in a text block, which is the content type every MCP client can
+// read. get_file is the reason it appends rather than replaces — the
+// bytes it fetched are already a content block of their own, and the
+// metadata belongs beside them rather than instead of them.
+func answer(res *mcp.CallToolResult, out any) (*mcp.CallToolResult, any, error) {
+	b, err := json.Marshal(out)
+	if err != nil {
+		return nil, nil, fmt.Errorf("marshaling %T: %w", out, err)
+	}
+	if res == nil {
+		res = &mcp.CallToolResult{}
+	}
+	res.Content = append(res.Content, &mcp.TextContent{Text: string(b)})
+	// nil is what stops the SDK filling in structuredContent — with a
+	// non-nil value it marshals a second copy of exactly these bytes.
+	return res, nil, nil
 }
 
 // instructions is what a client holds for the whole conversation,
@@ -696,7 +728,7 @@ func view(k *domain.Knowledge, notes []string, plan string) (knowledgeOut, error
 
 type writeIn struct {
 	ID       string `json:"id" jsonschema:"where the concept lives: its full path, / separated (e.g. metrics/revenue, 用語/売上). The last segment must not be \"index\" or \"log\""`
-	Document string `json:"document" jsonschema:"the concept as an OKF document: YAML frontmatter, then markdown.\nFrontmatter: type (required, one line; the description lists the recommended ones), title (the id's last segment names it without one), description, tags, resource (the underlying asset's URI), status (draft | stable | deprecated; omitted reads as stable), status_note, stale_after (YYYY-MM-DD), sources (list of {resource, id, title, ...} — the material this derives from), usage_window ({from, to}). An Attested Computation also takes runtime (required), parameters, computation, executor, attester.\nProducer-defined keys sit beside these and are kept as written. Server-owned keys (generated, verified, created_by, rejected_by, rejected_at) are never read as truth: a document read back from ochakai can be returned as-is, and one from elsewhere keeps them as its own claim under received, which nothing derives trust from"`
+	Document string `json:"document" jsonschema:"the concept as an OKF document: YAML frontmatter, then markdown.\nFrontmatter: type (required, one line; the description lists the recommended ones), title (the id's last segment names it without one), description, tags, resource (the underlying asset's URI), status (draft | stable | deprecated; omitted reads as stable), status_note, stale_after (YYYY-MM-DD), sources (list of {resource, id, title, ...} — the material this derives from), usage_window ({from, to}). An Attested Computation also takes runtime (required), parameters, computation, executor, attester.\nProducer-defined keys sit beside these and are kept as written. Server-owned keys (generated, verified, created_by, rejected_*) are never read as truth: a document read back from ochakai can be returned as-is, and one from elsewhere keeps them as its own claim under received, which nothing derives trust from"`
 }
 
 // toKnowledge parses the document. Notes — values read differently than
