@@ -7,7 +7,7 @@ go 1.26
 // toolchain, so a corporate CI running GOTOOLCHAIN=local on 1.26.2
 // fails at `go install` rather than building. As `toolchain` it is a
 // preference the local setting may decline.
-toolchain go1.26.5
+toolchain go1.26.6
 
 // Pre-0.9.0 releases are unsupported: superseded by 0.9.0 (the first
 // release the deploy guide and docs are written against; earlier images
