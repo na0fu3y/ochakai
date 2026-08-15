@@ -21,7 +21,7 @@ Run デプロイガイドの
 | | Cloud SQL バックアップ | `ochakai export` |
 |---|---|---|
 | ナレッジ | yes | yes |
-| provenance — 誰が書き、誰が検証し、いつか | yes | **no** |
+| provenance — 誰が書き、誰が検証し、いつか | yes | **no** — 文書には書かれるが、取り込みが読み戻さない |
 | リビジョン履歴 | yes | **no** |
 | 利用回数と結果報告 | yes | **no** |
 | 添付ファイルのバイト列 | no — GCS にある | yes、ファイルとして |
@@ -105,6 +105,12 @@ disaster-recovery の runbook はここでは動かない。
 
 持ち帰る*のは*知識そのもの — 本文、type、status、envelope のフィールド、
 そして他のインスタンスが何を主張していたかの記録 — である。
+
+**読める記録としては残る。** export された .md は書いた側の `generated` /
+`verified` / `created_by` を frontmatter に持ったままなので、「誰がいつ
+確かめたか」はバンドルを開けば読める — リストアで復旧しないだけである。
+アーカイブとして要るのは export した木そのものであって、それを Git に
+置くかどうかは別の判断である([Git をレビュー経路にする](git-review.md))。
 
 つまり: **すべての concept 上で見えても構わない identity で import を
 実行せよ**。provenance が重要なら、データベースバックアップも合わせて
