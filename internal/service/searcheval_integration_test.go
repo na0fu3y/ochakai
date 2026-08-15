@@ -83,6 +83,10 @@ var evalCases = []evalCase{
 	{query: "bulk order faking a spike", want: "insights/reading-revenue"},
 	{query: "late partition", want: "insights/reading-revenue"},
 	{query: "does revenue include tax", want: "metrics/revenue"},
+	// The other names the writer gave the metric (design doc 0105).
+	// "net sales" appears nowhere in the bundle but the synonyms key, so
+	// this case answers only when the haystack reads it.
+	{query: "net sales", want: "metrics/revenue"},
 	{query: "which orders count as revenue", want: "policies/revenue-recognition"},
 	{query: "are refunds deducted", want: "policies/revenue-recognition"},
 	{query: "cancelled orders", want: "glossary/completed-order"},

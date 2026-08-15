@@ -425,3 +425,86 @@ func TestTheRecentWindowFitsInsideRetention(t *testing.T) {
 			"silently short of what they claim", window, eventRetention)
 	}
 }
+
+// A concept is found by the other names its writer gave it (design doc
+// 0105). The type vocabulary promises this of a Metric — "its definition
+// and synonyms" — and the examples bundle writes them the obvious way,
+// while nothing read the key: `synonyms: [net sales, 売上]` sat in attrs
+// and neither name found the metric. Both halves of the index are
+// exercised, because the Japanese half is where it mattered most: 売上 is
+// the word a reader has when `Revenue` is the word the warehouse has.
+func TestSynonymsAreSearchable(t *testing.T) {
+	ctx := context.Background()
+	s := newSearchStore(t, ctx)
+	run := testdb.Unique(t, "tsvsyn")
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+
+	k := &domain.Knowledge{
+		Type: domain.TypeMetrics, ID: run + "/revenue", Title: "Revenue",
+		Body:      "Tax-included value of completed orders.",
+		Status:    domain.StatusStable,
+		CreatedBy: actor,
+		Attrs:     map[string]any{"synonyms": []any{"net sales", "売上"}},
+	}
+	if err := s.Create(ctx, k, false); err != nil {
+		t.Fatal(err)
+	}
+	// One alias, written as the bare string somebody with one writes.
+	one := &domain.Knowledge{
+		Type: domain.TypeMetrics, ID: run + "/margin", Title: "Margin",
+		Status: domain.StatusStable, CreatedBy: actor,
+		Attrs: map[string]any{"synonyms": "粗利"},
+	}
+	if err := s.Create(ctx, one, false); err != nil {
+		t.Fatal(err)
+	}
+	// A producer key that is not a name. It says which model the concept
+	// is about; a search for that model must not return this concept,
+	// which is what --links-to and --source answer properly.
+	other := &domain.Knowledge{
+		Type: domain.TypeMetrics, ID: run + "/derived", Title: "Derived",
+		Status: domain.StatusStable, CreatedBy: actor,
+		Attrs: map[string]any{"model": "zzqqx-model-name"},
+	}
+	if err := s.Create(ctx, other, false); err != nil {
+		t.Fatal(err)
+	}
+
+	for query, want := range map[string]string{
+		"net sales": run + "/revenue",
+		"売上":        run + "/revenue",
+		"粗利":        run + "/margin",
+	} {
+		hits, err := s.SearchLexical(ctx, query, Filter{Prefixes: []string{run}}, 10)
+		if err != nil {
+			t.Fatalf("search %q: %v", query, err)
+		}
+		found := false
+		for _, h := range hits {
+			if h.ID == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%q did not find %s: a name the writer gave it is a name it answers to", query, want)
+		}
+	}
+	if hits, err := s.SearchLexical(ctx, "zzqqx-model-name", Filter{Prefixes: []string{run}}, 10); err != nil {
+		t.Fatal(err)
+	} else if len(hits) != 0 {
+		t.Errorf("a producer key that is not a name reached the haystack: %+v", hits)
+	}
+
+	// An edit that removes a name takes it out of the haystack too: the
+	// trigger recomputes from the row, so there is no second copy to go
+	// stale.
+	k.Attrs = map[string]any{"synonyms": []any{"net sales"}}
+	if err := s.Update(ctx, k, actor, nil); err != nil {
+		t.Fatal(err)
+	}
+	if hits, err := s.SearchLexical(ctx, "売上", Filter{Prefixes: []string{run}}, 10); err != nil {
+		t.Fatal(err)
+	} else if len(hits) != 0 {
+		t.Errorf("a removed name still answers: %+v", hits)
+	}
+}
