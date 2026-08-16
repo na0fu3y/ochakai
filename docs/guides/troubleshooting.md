@@ -82,8 +82,9 @@ credentials found)` になっているのが同じ状態の別の見え方であ
   ベクトルが無い。`ochakai reembed` を実行する。
 
 **スコアが無意味に見える。** それは尺度ではなく順序であり、lexical と
-hybrid のモード間で比較できない。レスポンスを絞るには、スコアの下限で
-はなく `budget` を使う。
+hybrid のモード間で比較できない。返る件数を絞るには、スコアの下限では
+なく `--limit` を使う([0068](../design/0068-how-a-face-is-added-and-removed.md)
+§3 がスコアの床を持たないと決めている)。
 
 ## concept の書き込み
 
