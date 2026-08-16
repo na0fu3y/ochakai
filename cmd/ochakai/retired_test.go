@@ -61,6 +61,15 @@ var retiredSpellings = []retiredSpelling{
 		instead: "[text](/metrics/revenue.md) or [text](./revenue.md), the SPEC §6 forms (design doc 0046 §3.6)",
 	},
 	{
+		// The context pack retired from every surface at once (design doc
+		// 0108): an agent's read is search → get, and the pack's reverse
+		// hop arrives as linked_from on the concept itself (0106). The
+		// command and tool spellings are caught by the command and tool
+		// walks; what this guards is prose teaching the address.
+		forms:   []string{"GET /api/v1/context", "`/api/v1/context`"},
+		instead: "GET /api/v1/search and GET /api/v1/bundle/{id}.md (design doc 0108)",
+	},
+	{
 		// Design doc 0064 dropped the "X-" prefix from both request
 		// headers with no dual-accept window (httpauth.OnBehalfOfHeader,
 		// httpauth.ProducerHeader). Functional code that has to name the

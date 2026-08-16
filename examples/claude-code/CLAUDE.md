@@ -23,17 +23,16 @@ ochakai はメトリクスの定義、attested computation(sanctioned な SQL。
 用語、テーブルカタログの項目を持つ。分析 SQL を書く前にここを検索し、
 学んだことを書き戻すこと。
 
-- `ochakai context "<question>"` — データの問いに答える前にする、唯一の
-  呼び出し。上位ヒットの背後にある concept を全文で印字し(検証済みの
-  concept が上位に来る)、リンクを一段展開するので、メトリクスを説明する
-  insight がそれと一緒に届く。まずここから。細かい参照には下の
-  search / get を使う。
 - `ochakai search "<question or keyword>" [--type '<Type>'] [--trust human-reviewed]`
-  — 1 行 1 ヒット: score、uri、status、title。検証済みの concept は信用
-  してよい。`draft` の concept は provenance で判断する(`--json` が
-  `created_by` を出す)。
+  — データの問いはここから始める。1 行 1 ヒット: score、uri、status、
+  title。検証済みの concept は信用してよい。`draft` の concept は
+  provenance で判断する(`--json` が `created_by` を出す)。読む価値の
+  ある hit は下の get で全文を取る。
 - `ochakai get <id>` — concept の全文を markdown(YAML frontmatter +
-  本文)で。本文の markdown リンクを辿ると関連する concept に行ける —
+  本文)で。stderr の `linked from:` 行は、この concept を本文から指す
+  concept — metric の読み方を言う insight はそこに出るので、数字を信じる
+  前にそれも get すること。本文の markdown リンクを辿ると関連する
+  concept に行ける —
   他の concept のパスへのリンク `[revenue](/metrics/revenue.md)` が
   concept どうしの関係であり、それを書くことが関係を作ることである。
   stderr がファイル(ダッシュボードのスクリーンショット、ER 図)を挙げた

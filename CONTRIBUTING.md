@@ -263,7 +263,7 @@ cards are not all zero:
 go run ./cmd/ochakai report tables/shop-orders failed --note "Ran the daily
   revenue check at 07:40 JST and the day came out 13% short; MAX(created_at)
   was 05:58, so the 06:00 partition had not landed yet."
-go run ./cmd/ochakai context "why is revenue down?"
+go run ./cmd/ochakai search "why is revenue down?"
 go run ./cmd/ochakai get metrics/revenue
 ```
 

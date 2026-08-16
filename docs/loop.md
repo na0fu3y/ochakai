@@ -17,8 +17,10 @@
 
 > 売上について既に分かっていることは? 答える前に ochakai を見て。
 
-`get_context` 一回で concept が全文返るので、エージェントはあなたの
-定義から始める — 自分で定義を作らない。
+検索が順位を返し、エージェントは読む価値のある concept を fetch して
+あなたの定義から始める — 自分で定義を作らない。取った concept には
+`linked_from` が付いてくるので、metric を読めばそれを説明する insight の
+存在も見える([0106](design/0106-a-read-carries-what-points-at-it.md))。
 
 **書き戻す。** 残す価値のあることを伝える:
 

@@ -110,8 +110,7 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error)
 	linkers, err := s.Store.ListByAddress(ctx, store.Filter{LinksTo: id}, nil, maxBacklinks)
 	if err != nil {
 		// A read without its backlink rows is worth more than no read;
-		// the entry itself is already in hand (the same trade Context
-		// makes when its backlink lookup fails).
+		// the entry itself is already in hand.
 		s.Log.Warn("backlink lookup failed", "id", id, "error", err)
 	}
 	for i := range linkers {

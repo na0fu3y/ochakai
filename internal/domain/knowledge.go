@@ -1457,10 +1457,11 @@ type SearchHit struct {
 
 // Backlink is one row of a read's linked_from: an entry whose body links
 // at the one being read. The fields are what a caller needs to decide
-// whether to spend a fetch on it — the same question a ContextOutline row
-// answers, and the description carries the weight for the same reason.
-// No score: the answer is a set, not a ranking (the LinksTo filter's own
-// rule), and rows arrive in address order.
+// whether to spend a fetch on it, and the description carries the weight
+// — an entry with an empty description is nearly invisible here, which
+// is one more reason curation pays. No score: the answer is a set, not a
+// ranking (the LinksTo filter's own rule), and rows arrive in address
+// order.
 type Backlink struct {
 	ID   string `json:"id"`
 	Type Type   `json:"type"`
@@ -1478,77 +1479,6 @@ func BacklinkOf(k *Knowledge) Backlink {
 		ID: k.ID, Type: k.Type, Title: k.Title, Description: k.Description,
 		Status: k.Lifecycle(), Trust: TrustOf(k.Verifications),
 	}
-}
-
-// ContextRank is what a hit is worth once the entries travel in the same
-// response: an ordering, not a second copy of the knowledge (design doc
-// 0033). A SearchHit embedded the whole Knowledge — body, attrs and all
-// — when this split was made, so a context pack that returned hits
-// verbatim sent every top entry twice and left the byte budget governing
-// one of the copies. A hit is a projection now (see SearchHit above), but
-// a rank stays narrower still: a pack that already ships the entries
-// needs no second description of them.
-//
-// The fields are the ones a caller needs to decide whether to spend a
-// round trip on an id it was not handed: search results below the pack's
-// own cut-off arrive only this way.
-type ContextRank struct {
-	ID   string `json:"id"`
-	Type Type   `json:"type"`
-	// Title is the concept's own, absent when the document declared none
-	// (design doc 0064; OKF SPEC §4.1).
-	Title  string `json:"title,omitempty"`
-	Status Status `json:"status"`
-	// Trust is the ledger's answer in OKF's vocabulary (SPEC §5.3), which
-	// the lifecycle status does not carry (design docs 0043 §3.2, 0046
-	// §3.10): a caller deciding whether to spend a round trip wants to
-	// know who confirmed the entry, not merely whether somebody did.
-	Trust Trust   `json:"trust"`
-	Score float64 `json:"score"`
-}
-
-// URI is the entry's canonical address, as on Knowledge: a rank is a
-// pointer, and the pointer should read the same everywhere.
-func (c *ContextRank) URI() string { return fmt.Sprintf("ochakai://%s", c.ID) }
-
-// ContextRanks projects search hits down to the ranking behind a pack.
-func ContextRanks(hits []SearchHit) []ContextRank {
-	out := make([]ContextRank, len(hits))
-	for i := range hits {
-		out[i] = ContextRank{
-			ID: hits[i].ID, Type: hits[i].Type, Title: hits[i].Title,
-			Status: hits[i].Status, Trust: hits[i].Trust, Score: hits[i].Score,
-		}
-	}
-	return out
-}
-
-// ContextOutline names an entry a context pack could not afford to deliver
-// in full: enough for the caller to decide whether to spend a round trip
-// fetching it by id, and nothing more. The description carries the weight
-// here — an entry with an empty description is nearly invisible in an
-// outline, which is one more reason curation pays. It is also the only
-// unbounded field, so the packer caps it: these rows are counted against
-// the same budget as the entries.
-type ContextOutline struct {
-	ID   string `json:"id"`
-	Type Type   `json:"type"`
-	// Title is the concept's own, absent when the document declared none
-	// (design doc 0064; OKF SPEC §4.1).
-	Title       string `json:"title,omitempty"`
-	Description string `json:"description,omitempty"`
-	Status      Status `json:"status"`
-	Bytes       int    `json:"bytes"`
-	// Excerpt is the opening of the body, and only the top-ranked row
-	// carries one, only when the budget could not hold that concept at
-	// all (design doc 0093). Bytes says how much more there is, and the
-	// id is the address the rest is fetched from.
-	//
-	// It is deliberately not the front of the document: the frontmatter
-	// is the fields above, and an excerpt that repeated them would spend
-	// itself saying what the row already says. It also stops before a
-	// code fence, so no caller is ever handed half a query.
-	Excerpt string `json:"excerpt,omitempty"`
 }
 
 // ConceptPath is the bundle path a concept lives at: its id with ".md"

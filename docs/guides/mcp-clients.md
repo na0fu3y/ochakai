@@ -42,10 +42,9 @@ JSON のキー名が違うだけなので、[その他のクライアント](#�
 
 | ツール | 説明 |
 |---|---|
-| `get_context` | データの質問に答える前に呼ぶ一回のコール: 上位ヒットの concept 全文を、双方向に展開したリンクとともに返す |
-| `search_concepts` | 型をまたいだ検索。verified な concept が上位に来る。順位なので `limit` で終わり、二ページ目は無い |
+| `search_concepts` | 型をまたいだ検索。verified な concept が上位に来る。順位なので `limit` で終わり、二ページ目は無い。データの質問はここから始める |
 | `list_concepts` | レビューのフィードを端まで歩く(`verified_at` / `usage` / `failed` / `stale_after`)。`cursor` で続きを引く。検索ではないので `query` は取らない(設計ドキュメント [0096](../design/0096-a-listing-is-not-a-search-here-either.md)) |
-| `get_concept` | concept を一件、OKF ドキュメントとして、リンクとファイルのメタデータ付きで取得する |
+| `get_concept` | concept を一件、OKF ドキュメントとして取得する。ファイルのメタデータと、この concept を本文から指す concept の行(`linked_from` — metric の読み方を言う insight はここに出る)が付く |
 | `get_file` | concept に添付されたファイルを取得する(ダッシュボードのスクリーンショット、ER 図、seeds ファイルなど) |
 | `put_concept` | 学びを書き戻す — id が空いていれば作成し、埋まっていれば置き換える。変更はすべてリビジョンとして残る |
 | `report_outcome` | ナレッジをもとに行動した後、worked/failed を報告する — failed の報告は verified な concept を再検証フィードに乗せる |
@@ -54,8 +53,9 @@ JSON のキー名が違うだけなので、[その他のクライアント](#�
 呼ばない。`compile_sql` — セマンティックモデルからの決定的な SQL 生成 —
 は 0.13.0 まで存在し、その後退役した(設計ドキュメント
 [0070](../design/0070-what-was-retired-and-why.md) §3): エージェントが実際に
-必要としているのは検証済みのクエリとそれに添う注意書きであり、両方とも
-`get_context` から届く。
+必要としているのは検証済みのクエリとそれに添う注意書きであり、検索が
+前者を見つけ、取った concept の `linked_from` が後者を名指す(設計
+ドキュメント [0106](../design/0106-a-read-carries-what-points-at-it.md))。
 
 **削除と利用回数の合計はこの表に無い。** `delete_concept` と
 `get_concept_usage` は設計ドキュメント
@@ -69,8 +69,7 @@ JSON のキー名が違うだけなので、[その他のクライアント](#�
 `ochakai://metrics/revenue` や `ochakai://queries/sales/top-customers`。
 リソース参照(`@` メンション)に対応するクライアントは、ツール呼び出し
 無しで concept を OKF ドキュメント — frontmatter と本文 — として引き
-込める。発見のための手段は引き続き `get_context`/`search_concepts`
-である。読み取り系のツールには `readOnly` の、書き込み系には
+込める。発見のための手段は引き続き `search_concepts` である。読み取り系のツールには `readOnly` の、書き込み系には
 `destructive: false` のアノテーションが付いているので、クライアントの
 自動承認ポリシーは説明文を解析しなくても機能する。破壊的なツールは
 一本も無い。

@@ -31,8 +31,8 @@ info:
     parameter after the freeze: a client built against an older version
     of this contract finds out at the point of the call, rather than
     having the parameter quietly ignored. The one exception is `fm.`, and
-    only on the operations that declare `fm.{key}` below (search,
-    context): there, its keys are validated against the concept's own OKF
+    only on the one operation that declares `fm.{key}` below (search):
+    there, its keys are validated against the concept's own OKF
     frontmatter (design doc 0074 §4) rather than against a fixed name list.
     Every other operation has no such downstream check and rejects `fm.*`
     like any other unrecognized parameter.
@@ -240,9 +240,9 @@ paths:
             of links (design doc 0074 §2): the insight that explains a
             metric links to the metric, not the other way round. This is
             what `/api/v1/backlinks/{id}` was, folded into the face that
-            already had the other reverse lookup (design doc 0075 §4),
-            and `get_context` follows the same edge when packing
-            companions.
+            already had the other reverse lookup (design doc 0075 §4).
+            A single concept's read carries the head of this same answer
+            as its `linked_from` rows (design doc 0106).
 
             Single-valued, like source. Composes with q and with any
             sort; on its own it lists in address order and answers with a
@@ -344,9 +344,7 @@ paths:
                   description: >
                     A hit names a concept and says what ranked it; it does
                     not hand the concept over. Read the ones worth reading
-                    with GET /api/v1/bundle/{id}.md, or ask
-                    GET /api/v1/context for the documents behind the top
-                    hits in one call.
+                    with GET /api/v1/bundle/{id}.md.
                     File metadata rides along (filled in one batch),
                     which is what lets a UI render thumbnails from a search.
                   value:
@@ -1205,307 +1203,6 @@ paths:
                   error: { type: string }
                   code: { type: string, enum: [precondition_failed] }
                 required: [error, code]
-        "405": { $ref: "#/components/responses/Error" }
-        "500": { $ref: "#/components/responses/Error" }
-  /api/v1/context:
-    get:
-      operationId: getContext
-      summary: The one-call read before answering a data question
-      description: >
-        Searches the knowledge base (verified concepts rank higher), returns
-        the full concepts behind the top hits, and expands one hop through
-        links so companion knowledge (the insight explaining a metric, the
-        golden query answering the question) arrives in the same response.
-        Rejected concepts never appear. limit caps the primary concepts
-        (default 5, max 20); linked companions share a 2×limit total cap.
-
-        `hits` carries the ranking only — id, type, title, status, score
-        (design doc 0067 §4). The concepts themselves are in `concepts`.
-      parameters:
-        - name: q
-          in: query
-          required: true
-          schema: { type: string }
-        - name: type
-          in: query
-          schema: { type: array, items: { $ref: "#/components/schemas/Type" } }
-          explode: true
-        - name: status
-          in: query
-          schema: { type: array, items: { $ref: "#/components/schemas/Status" } }
-          explode: true
-        - name: trust
-          in: query
-          description: >
-            Filter by OKF's trust tier (SPEC §5.3), repeatable and OR-ed;
-            omit to leave the question unasked. There is no rejected
-            parameter here: a context pack never carries knowledge
-            somebody turned down.
-          schema: { type: array, items: { $ref: "#/components/schemas/Trust" } }
-          explode: true
-        - name: fm.{key}
-          in: query
-          description: >
-            Filter by an OKF frontmatter key, exactly:
-            `fm.resource=bigquery://p.d.t` finds the concepts whose
-            frontmatter names that resource, matching a scalar or a
-            member of a list. Repeat with different keys to AND them.
-
-            A value is text, and one that spells a number or a boolean
-            also matches the typed value a document wrote: YAML types
-            frontmatter, so `fm.required=true` finds `required: true` and
-            `fm.usage_count=5` finds `usage_count: 5`, as well as the
-            concepts that quoted them. Text that only looks numeric stays
-            text — `fm.code=007` finds `code: "007"`.
-
-            This is the filter that does not need a migration. A key OKF
-            adds in a later version is askable as soon as ochakai knows
-            the spelling: the whole frontmatter is indexed, so there is
-            no column to add and no data to move (design doc 0074
-            §4). Exact match and list membership are the only two
-            comparisons: ranges and boolean expressions are the doorway
-            to a query language, and what ochakai returns is knowledge
-            rather than rows.
-
-            The filter vocabulary is OKF's, and `fm.` carries the OKF
-            keys nothing else asks about: `attester`, `computation`,
-            `description`, `executor`, `parameters`, `resource`,
-            `runtime`, `title`, `usage_window`. A key a producer
-            invented is stored and handed back exactly as written (SPEC
-            §4.1) but is not part of the query vocabulary — including
-            the two ochakai itself writes into a bundle, `id` and
-            `status_note`, which OKF does not define. `fm.type`,
-            `fm.status`, `fm.tags`, `fm.sources` and `fm.stale_after`
-            are read through columns that answer a different question —
-            `status=stable` matches a document that says nothing, since
-            OKF's default is stable, and `fm.status` never would. Use
-            `type`, `status`, `tag`, `source` and `sort=stale_after`
-            for those. Everything else is a 400 (design doc 0074 §4).
-          schema: { type: string }
-        - name: tag
-          in: query
-          schema: { type: array, items: { type: string } }
-          explode: true
-        - name: prefix
-          in: query
-          description: >
-            Only concepts addressed under this path, repeatable and OR-ed —
-            the same subtree filter GET /api/v1/search takes (design doc
-            0075 §6). It scopes the search that picks the hits, not the link
-            expansion: a concept inside the scope that cites a glossary term
-            outside it still arrives with the term, which is the reason
-            this endpoint follows links at all (design doc 0075 §6).
-          schema: { type: array, items: { type: string } }
-          explode: true
-          allowReserved: true
-        - name: limit
-          in: query
-          schema: { type: integer, default: 5, maximum: 20 }
-        - name: budget
-          in: query
-          description: >
-            Cap the serialized bytes of the response: `hits`, `outline` and
-            `concepts` together (design doc 0093). What the cap *buys* is
-            whole concepts — the ranking and the outline are the floor,
-            always sent, because a caller cannot raise a budget for
-            concepts it never heard about.
-
-            Concepts past the cap are listed under `outline` instead — a
-            concept is delivered whole or not at all, never truncated —
-            and those rows count against it too, because naming what was
-            left out is not free (an outline row carries a description).
-            Packing is greedy, so one oversized concept high in the ranking
-            does not starve the rest; when that concept is the top-ranked
-            one, its row carries an `excerpt` of the body so the best match
-            is not withheld behind a second round trip.
-
-            Defaults to 0 (no cap) here; the MCP get_context tool defaults
-            it on, because an agent's context window is the scarce resource
-            and an embedding host will not set it.
-          schema: { type: integer, default: 0 }
-      responses:
-        "200":
-          description: The ranking plus the full concepts behind the top hits.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hits:
-                    description: >
-                      The ranking behind the pack, not a second copy of it:
-                      the knowledge travels once, under `concepts`. A hit
-                      with no matching concept ranked below the pack's cut-off
-                      — fetch it by id if the ranking suggests it is worth a
-                      round trip.
-                    type: array
-                    items: { $ref: "#/components/schemas/ContextRank" }
-                  concepts:
-                    type: array
-                    items: { $ref: "#/components/schemas/View" }
-                  outline:
-                    description: >
-                      Concepts the budget dropped: named and sized, not
-                      delivered. Fetch any of them by id. Absent when
-                      nothing was dropped. The top-ranked row carries an
-                      `excerpt` when its concept was too large for any
-                      pack.
-                    type: array
-                    items: { $ref: "#/components/schemas/ContextOutline" }
-                required: [hits, concepts]
-              examples:
-                pack:
-                  summary: GET /api/v1/context?q=monthly+revenue&limit=2&budget=4000
-                  description: >
-                    Two concepts matched and one more arrived through their
-                    links — the metric the query rests on. The budget could
-                    not afford the glossary term the metric rests on, so it
-                    is named under outline with what it would have cost.
-                    `hits` is the ranking only: every document in this
-                    response appears exactly once, under `concepts`.
-                  value:
-                    hits:
-                      - id: queries/monthly-revenue
-                        type: Attested Computation
-                        status: stable
-                        trust: human-reviewed
-                        score: 1.35
-                      - id: metrics/revenue
-                        type: Metric
-                        title: Revenue
-                        status: stable
-                        trust: human-reviewed
-                        score: 0.48
-                      - id: insights/revenue-seasonality
-                        type: Insight
-                        title: Reading revenue month over month
-                        status: draft
-                        trust: unverified
-                        score: 0.43
-                    concepts:
-                      - id: queries/monthly-revenue
-                        document: |
-                          ---
-                          type: Attested Computation
-                          description: Monthly net revenue for the last 12 complete months.
-                          tags:
-                              - finance
-                          status: stable
-                          runtime: bigquery
-                          question: How much revenue did we make each month last year?
-                          ---
-
-                          Answers the question above against
-                          [Revenue](/metrics/revenue.md). Completed orders only;
-                          the month boundary is `order_date`, not the settlement
-                          date.
-
-                          # Computation
-
-                          ```sql
-                          SELECT DATE_TRUNC(order_date, MONTH) AS month,
-                                 SUM(net_amount) AS revenue
-                          FROM `example-analytics.shop.orders`
-                          WHERE status = 'completed'
-                            AND order_date >= DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH), MONTH)
-                            AND order_date < DATE_TRUNC(CURRENT_DATE(), MONTH)
-                          GROUP BY month
-                          ORDER BY month
-                          ```
-                        summary:
-                          id: queries/monthly-revenue
-                          type: Attested Computation
-                          description: Monthly net revenue for the last 12 complete months.
-                          tags: [finance]
-                          status: stable
-                          trust: human-reviewed
-                          verified_at: "2026-07-10T01:52:16.774301Z"
-                          rejected: false
-                          links:
-                            - { target: metrics/revenue, text: Revenue }
-                          content_hash: 4d1f0a86c3b25e97d0a41f6b8c2e5307ab9d4f61c8e30257ba9f1d6c4e820b73
-                          created_at: "2026-06-09T07:41:02.110945Z"
-                          updated_at: "2026-07-10T01:52:16.774301Z"
-                        observed:
-                          created_by: { kind: human, name: tanaka@example.co.jp }
-                          generated:
-                            by: { kind: human, name: tanaka@example.co.jp }
-                            at: "2026-07-10T01:52:16.774301Z"
-                          verified:
-                            - by: { kind: human, name: sato@example.co.jp }
-                              at: "2026-07-10T01:52:16.774301Z"
-                      - id: metrics/revenue
-                        document: |
-                          ---
-                          type: Metric
-                          resource: bigquery://example-analytics.shop.orders
-                          title: Revenue
-                          description: Net revenue from completed orders, excluding tax and shipping.
-                          tags:
-                              - finance
-                              - core
-                          sources:
-                              - resource: https://wiki.example.co.jp/finance/revenue-recognition
-                                id: revenue-policy
-                                title: Revenue recognition policy (FY2026)
-                                author: human:finance@example.co.jp
-                                usage_count: 24
-                                last_modified: "2026-05-30"
-                          usage_window:
-                              from: "2026-06-01"
-                              to: "2026-06-30"
-                          status: stable
-                          stale_after: "2026-12-31"
-                          unit: JPY
-                          grain: order
-                          ---
-
-                          Revenue is the sum of `net_amount` over every
-                          [completed order](/glossary/completed-order.md) in
-                          [shop.orders](/tables/shop-orders.md). Tax and
-                          shipping are excluded.
-
-                          A refund is subtracted in the month it settles, not
-                          the month of the order it reverses[^revenue-policy].
-
-                          [^revenue-policy]: Revenue recognition policy (FY2026).
-                        summary:
-                          id: metrics/revenue
-                          type: Metric
-                          title: Revenue
-                          description: Net revenue from completed orders, excluding tax and shipping.
-                          resource: bigquery://example-analytics.shop.orders
-                          tags: [finance, core]
-                          status: stable
-                          stale_after: "2026-12-31"
-                          trust: human-reviewed
-                          verified_at: "2026-07-14T02:33:41.019778Z"
-                          rejected: false
-                          links:
-                            - { target: glossary/completed-order, text: completed order }
-                            - { target: tables/shop-orders, text: shop.orders }
-                          content_hash: 8a3b71c0e5d24f96b1c8027ae4f35d6098b2c7e14d0a6f38b5c9e207d1a4f6b3
-                          created_at: "2026-06-02T04:11:38.201044Z"
-                          updated_at: "2026-07-14T02:33:41.019778Z"
-                        observed:
-                          created_by: { kind: human, name: tanaka@example.co.jp }
-                          generated:
-                            by: { kind: human, name: tanaka@example.co.jp }
-                            at: "2026-07-14T02:33:41.019778Z"
-                          verified:
-                            - by: { kind: human, name: sato@example.co.jp }
-                              at: "2026-07-14T02:33:41.019778Z"
-                    outline:
-                      - id: glossary/completed-order
-                        type: Glossary Term
-                        description: An order that shipped and was not refunded within the return window.
-                        status: draft
-                        bytes: 1104
-        "400": { $ref: "#/components/responses/Error" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/move:
@@ -3210,8 +2907,7 @@ components:
         **A hit does not carry the concept** (design doc 0067 §4) — a page
         of ten documents answering "which of these should I read" spends
         the caller's context on the nine it will not. The document is one
-        fetch away by id, and GET /api/v1/context is the call that
-        returns concepts.
+        fetch away by id.
 
         REST hits carry file metadata (filled in batch) so UIs can
         render image previews without a fetch per concept; MCP search
@@ -3253,68 +2949,6 @@ components:
                 concept rather than part of its projection, which is why it
                 is here and not in Summary. REST only.
           required: [score]
-    ContextRank:
-      type: object
-      description: >
-        One hit's place in the ranking behind a context pack. The knowledge
-        itself travels once, under `concepts` — a rank that repeated it would
-        double the response and leave the byte budget governing one of the
-        copies (design doc 0067 §4). Search results keep their full hits: there
-        the concepts are the answer, not a duplicate of one.
-      properties:
-        id: { type: string }
-        type: { $ref: "#/components/schemas/Type" }
-        title:
-          description: >
-            The concept's own title, absent when the document declared none
-            — a reader derives one from the id's last segment (OKF SPEC
-            §4.1, design doc 0074 §1).
-          type: string
-        status: { $ref: "#/components/schemas/Status" }
-        trust:
-          allOf: [{ $ref: "#/components/schemas/Trust" }]
-          description: >
-            The ledger's answer in OKF's vocabulary (SPEC §5.3), which the
-            lifecycle status does not carry (design doc 0075
-            §4.1). A caller deciding whether to spend a round trip on an
-            id below the pack's cut-off wants to know who confirmed the
-            concept, not merely whether somebody did.
-        score: { type: number }
-      required: [id, type, status, trust, score]
-    ContextOutline:
-      type: object
-      description: >
-        A concept a context pack could not afford to deliver in full:
-        enough to decide whether to spend a round trip fetching it by id,
-        and nothing more.
-      properties:
-        id: { type: string }
-        type: { $ref: "#/components/schemas/Type" }
-        title:
-          description: >
-            The concept's own title, absent when the document declared none
-            — a reader derives one from the id's last segment (OKF SPEC
-            §4.1, design doc 0074 §1).
-          type: string
-        description: { type: string }
-        status: { $ref: "#/components/schemas/Status" }
-        bytes:
-          description: What the full concept would have cost.
-          type: integer
-        excerpt:
-          description: >
-            The opening of the concept's body. Only the top-ranked row
-            carries one, and only when no budget-conforming pack could
-            have delivered that concept at all — the case where a caller
-            would otherwise be handed nothing but the name of its best
-            match (design doc 0093).
-
-            It is the body, not the front of the document: the
-            frontmatter is the fields above. It stops before any code
-            fence, so an excerpt never contains part of a query. `bytes`
-            says how much more there is, and `id` is where the rest is.
-          type: string
-      required: [id, type, status, bytes]
     Backlink:
       type: object
       description: >

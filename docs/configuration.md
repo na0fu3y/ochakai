@@ -32,7 +32,7 @@ CI と deploy ガイドはどちらも Postgres 17 で動かしている。
 
 **サーバーには Docker が要る。クライアントのコマンドにはバイナリが
 要る。** README のクイックスタートは `ochakai use`・`ochakai import`・
-`ochakai context` を手元で動かすので、compose の Docker に加えて CLI が
+`ochakai search` を手元で動かすので、compose の Docker に加えて CLI が
 要る — `go install github.com/na0fu3y/ochakai/cmd/ochakai@latest`
 (`go.mod` が名指す toolchain が要る。Go 1.21 以降ならそれを自動で
 取ってくる)か、

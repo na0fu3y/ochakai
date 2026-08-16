@@ -56,7 +56,7 @@ func TestReadOnlyServerOffersNoWriteTools(t *testing.T) {
 	if len(got) == 0 {
 		t.Fatal("read-only server offers no tools at all; it should still serve reads")
 	}
-	for _, want := range []string{"get_context", "search_concepts", "get_concept"} {
+	for _, want := range []string{"search_concepts", "get_concept"} {
 		found := false
 		for _, name := range got {
 			if name == want {

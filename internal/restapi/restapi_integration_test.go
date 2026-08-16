@@ -1006,73 +1006,6 @@ func TestUnimplementedPreconditionsAreNamed(t *testing.T) {
 	}
 }
 
-// TestRESTContextBudgetGovernsTheResponse pins the budget on the surface
-// an embedding host actually calls. The cap is a promise about what the
-// caller receives, and hits used to embed the whole entry: an entry the
-// packer refused to deliver arrived in full through hits anyway, so the
-// outline row pointed at knowledge the response had already spent the
-// budget on twice (design doc 0033).
-func TestRESTContextBudgetGovernsTheResponse(t *testing.T) {
-	srv, _ := newIntegrationServer(t)
-
-	typ := testdb.Unique(t, "ctxbudget")
-	body := strings.Repeat("x", 2000)
-	var ids []string
-	for i := range 4 {
-		id := fmt.Sprintf("%s/entry-%d", typ, i)
-		payload := docFrom(t, map[string]any{
-			"type": typ, "id": id, "title": typ + " budget",
-			"description": "an entry about " + typ, "body": body,
-		})
-		resp := putDoc(t, srv.URL, id, payload, true)
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusCreated {
-			t.Fatalf("create %s: status %d", id, resp.StatusCode)
-		}
-		ids = append(ids, id)
-	}
-	removeEntries(t, srv, ids...)
-
-	const budget = 2500
-	resp, err := http.Get(fmt.Sprintf("%s/api/v1/context?q=%s&limit=5&budget=%d", srv.URL, typ, budget))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("context status = %d", resp.StatusCode)
-	}
-	wire, err := io.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got struct {
-		Hits     []domain.ContextRank    `json:"hits"`
-		Concepts []domain.View           `json:"concepts"`
-		Outline  []domain.ContextOutline `json:"outline"`
-	}
-	if err := json.Unmarshal(wire, &got); err != nil {
-		t.Fatal(err)
-	}
-	if len(got.Outline) == 0 {
-		t.Fatalf("budget %d over 4 concepts of %d bytes truncated nothing", budget, len(body))
-	}
-	if len(got.Hits) == 0 {
-		t.Error("the ranking is gone; hits still have to say what matched")
-	}
-	if bytes.Count(wire, []byte(body)) > len(got.Concepts) {
-		t.Errorf("response carries %d copies of the body for %d delivered concepts",
-			bytes.Count(wire, []byte(body)), len(got.Concepts))
-	}
-	ranking, err := json.Marshal(got.Hits)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if over := len(wire) - len(ranking); over > budget {
-		t.Errorf("response carries %d bytes of knowledge over a %d budget", over, budget)
-	}
-}
-
 // TestRESTIntegrationUsageBacklinksAndMove covers what the REST
 // integration tests had never called — report_outcome, usage, the
 // links_to reverse lookup, and move — which also left them outside the
@@ -1298,34 +1231,17 @@ func TestRESTIntegrationPrefixScopesSearchNotLinks(t *testing.T) {
 		t.Errorf("malformed prefix status = %d, want 400", resp.StatusCode)
 	}
 
-	// Context: scoped to the team, the shared term still arrives, pulled
-	// in by the link rather than by the search.
-	cresp, err := http.Get(fmt.Sprintf("%s/api/v1/context?q=%s&limit=5&prefix=%s/teams/growth", srv.URL, root, root))
-	if err != nil {
-		t.Fatal(err)
+	// The shared term's own read names both metrics that cite it — the
+	// edge search scoping never touches (design doc 0106): a reader of
+	// the term sees what depends on it whatever subtree they searched.
+	var termRead domain.View
+	getJSON(t, srv.URL+"/api/v1/bundle/"+term+".md", &termRead)
+	linked := map[string]bool{}
+	for _, row := range termRead.LinkedFrom {
+		linked[row.ID] = true
 	}
-	defer cresp.Body.Close()
-	if cresp.StatusCode != http.StatusOK {
-		t.Fatalf("context status = %d", cresp.StatusCode)
-	}
-	var pack struct {
-		Hits     []domain.ContextRank `json:"hits"`
-		Concepts []domain.View        `json:"concepts"`
-	}
-	if err := json.NewDecoder(cresp.Body).Decode(&pack); err != nil {
-		t.Fatal(err)
-	}
-	got := map[string]bool{}
-	for _, e := range pack.Concepts {
-		got[e.ID] = true
-	}
-	if !got[term] {
-		t.Errorf("concepts = %v; the cited glossary term must travel with the scoped entry", got)
-	}
-	for _, h := range pack.Hits {
-		if h.ID == term {
-			t.Error("the out-of-scope term ranked as a hit; the scope must bound the search itself")
-		}
+	if !linked[root+"/teams/growth/metrics/activation"] {
+		t.Errorf("linked_from = %v; the citing metric must be named on the term's read", termRead.LinkedFrom)
 	}
 }
 
@@ -3264,35 +3180,23 @@ func TestRESTIntegrationTitlelessConceptCarriesNoTitleKey(t *testing.T) {
 		t.Errorf("search hit declares a title the document did not: %v", search.Hits[0]["title"])
 	}
 
-	// A context pack: the ranking rows and the packed concepts' summaries.
-	var pack struct {
-		Hits     []map[string]any `json:"hits"`
-		Concepts []struct {
-			Summary map[string]any `json:"summary"`
-		} `json:"concepts"`
+	// A linked_from row, the remaining projection with a title spelling
+	// of its own (design doc 0106): a titleless linker is named with the
+	// key absent, not resolved.
+	linker := typ + "/linker"
+	removeEntries(t, srv, linker)
+	resp = putDoc(t, srv.URL, linker,
+		[]byte(fmt.Sprintf("---\ntype: %s\n---\n\nsee [it](/%s.md)\n", typ, id)), true)
+	resp.Body.Close()
+	var linkedView struct {
+		LinkedFrom []map[string]any `json:"linked_from"`
 	}
-	getJSON(t, srv.URL+"/api/v1/context?q="+typ+"&type="+typ, &pack)
-	if len(pack.Hits) != 1 || len(pack.Concepts) != 1 {
-		t.Fatalf("context pack = %d hits, %d concepts", len(pack.Hits), len(pack.Concepts))
+	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &linkedView)
+	if len(linkedView.LinkedFrom) != 1 {
+		t.Fatalf("linked_from rows = %d, want 1", len(linkedView.LinkedFrom))
 	}
-	if hasTitle(pack.Hits[0]) {
-		t.Errorf("context rank declares a title the document did not: %v", pack.Hits[0]["title"])
-	}
-	if hasTitle(pack.Concepts[0].Summary) {
-		t.Errorf("packed summary declares a title the document did not: %v", pack.Concepts[0].Summary["title"])
-	}
-
-	// A budget too small for the document pushes the same concept into the
-	// outline, which carries the third spelling of the key.
-	var outlined struct {
-		Outline []map[string]any `json:"outline"`
-	}
-	getJSON(t, srv.URL+"/api/v1/context?q="+typ+"&type="+typ+"&budget=1", &outlined)
-	if len(outlined.Outline) != 1 {
-		t.Fatalf("outline rows = %d, want 1", len(outlined.Outline))
-	}
-	if hasTitle(outlined.Outline[0]) {
-		t.Errorf("outline row declares a title the document did not: %v", outlined.Outline[0]["title"])
+	if hasTitle(linkedView.LinkedFrom[0]) {
+		t.Errorf("linked_from row declares a title the document did not: %v", linkedView.LinkedFrom[0]["title"])
 	}
 
 	// A concept that does declare one still carries it.

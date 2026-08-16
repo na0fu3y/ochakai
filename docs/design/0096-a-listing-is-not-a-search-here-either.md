@@ -5,6 +5,9 @@ Status: Accepted(2026-08-10)。[0068](0068-how-a-face-is-added-and-removed.md)
 加え、§2 の「ワイヤは一本のままである」がこの面には及ばないことを決める。
 0068 が決めた規則は一つも動かない。**破壊的変更**
 ([#539](https://github.com/na0fu3y/ochakai/issues/539) の束)。
+**§3(hint の置き場所)は [0108](0108-the-context-pack-retires.md) が
+改訂した** — 乗り物だった pack が退役し、hint は `get_concept` の応答に
+移った。残す理由(0069 の機構、常駐ではない)はそのまま。
 Date: 2026-08-10
 
 ## 0. この記録が決めたこと

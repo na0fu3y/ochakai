@@ -6,9 +6,9 @@
 #
 # - write-back: whether anything the agent learned belongs in the team
 #   knowledge base.
-# - report_outcome: whether any concept ochakai-recall.sh handed this
-#   session (recorded to a per-session file under $TMPDIR) held up when
-#   acted on. `failed` reports are what moves a verified concept into the
+# - report_outcome: whether any concept ochakai-recall.sh pointed this
+#   session at (recorded to a per-session file under $TMPDIR) held up
+#   when acted on. `failed` reports are what moves a verified concept into the
 #   re-verification feed (design doc 0069 §2.1) — without them that feed stays
 #   at zero regardless of how stale the knowledge actually is.
 #
@@ -42,7 +42,7 @@ recalled=""
 
 outcome_reason=""
 if [ -n "$recalled" ]; then
-	outcome_reason="This session was handed these ochakai concepts: $recalled — if you acted on one (ran its SQL, followed its definition), report whether the result held up: \`ochakai report <id> worked\` or \`ochakai report <id> failed --note \"what went wrong\"\`. Skip any you only read but never acted on. Always report failed when a verified concept led you to a wrong number. "
+	outcome_reason="This session was pointed at these ochakai concepts: $recalled — if you fetched one and acted on it (ran its SQL, followed its definition), report whether the result held up: \`ochakai report <id> worked\` or \`ochakai report <id> failed --note \"what went wrong\"\`. Skip any you only read but never acted on. Always report failed when a verified concept led you to a wrong number. "
 fi
 
 jq -n --arg outcome "$outcome_reason" '{

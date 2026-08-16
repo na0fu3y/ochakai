@@ -32,14 +32,14 @@ func remoteMCP(t *testing.T) (base string, tools []string) {
 		func(ctx context.Context, _ *mcp.CallToolRequest, in args) (*mcp.CallToolResult, any, error) {
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "hit:" + in.Q}}}, nil, nil
 		})
-	mcp.AddTool(s, &mcp.Tool{Name: "get_context", Description: "context"},
+	mcp.AddTool(s, &mcp.Tool{Name: "get_pack", Description: "context"},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in args) (*mcp.CallToolResult, any, error) {
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ctx:" + in.Q}}}, nil, nil
 		})
 
 	srv := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s }, nil))
 	t.Cleanup(srv.Close)
-	return srv.URL, []string{"get_context", "search_concepts"}
+	return srv.URL, []string{"get_pack", "search_concepts"}
 }
 
 // The bridge carries whatever the remote offers. It must not hold a copy

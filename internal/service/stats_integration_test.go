@@ -45,10 +45,12 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 	} else if len(hits) != 0 {
 		t.Fatalf("the nonsense query matched %d entries", len(hits))
 	}
-	// get_context searches through the same function, so asking it the
-	// same way is the same miss rather than a second path to maintain.
-	if _, err := svc.Context(ctx, ContextRequest{Query: nonsense}); err != nil {
+	// A repeat of the same question is the same miss, counted once more
+	// rather than becoming a second row.
+	if hits, err := svc.Search(ctx, nonsense, store.Filter{}, 10); err != nil {
 		t.Fatal(err)
+	} else if len(hits) != 0 {
+		t.Fatalf("the nonsense query matched %d entries", len(hits))
 	}
 	if err := s.FlushUsage(ctx); err != nil {
 		t.Fatal(err)

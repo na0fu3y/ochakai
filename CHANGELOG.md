@@ -23,6 +23,21 @@ last entry.
 
 ### Added
 
+- **A read carries what points at it** ([design doc
+  0106](docs/design/0106-a-read-carries-what-points-at-it.md)). A
+  single-concept read — the REST JSON, MCP `get_concept`, `ochakai get`
+  — now carries `linked_from`: rows (id, type, title, description,
+  status, trust) for the concepts whose bodies link at the one being
+  read, in address order, capped at 20, rejected linkers excluded.
+  Links are derived from bodies, so the forward direction was always
+  visible in the document itself; the reverse lived in other people's
+  documents, and a reader of a metric could not see the insight
+  explaining it. The complete, pageable reverse lookup stays on
+  `?links_to=`. Rows are pointers, not delivery — nothing is recorded
+  as fetched for being named — and the addition is response-only,
+  outside the freeze (design doc 0082). `ochakai get` prints the rows
+  on stderr beside the file hints; the MCP schema does not move a byte.
+
 - **A concept is found by the other names its writer gave it** ([design
   doc 0105](docs/design/0105-a-concept-answers-to-its-other-names.md)).
   The lexical haystack reads `synonyms` from a concept's frontmatter, so
@@ -70,6 +85,30 @@ last entry.
   0064 §2 made an unrecognized query key a 400 precisely so that one could
   be added safely afterwards, and 0082 had written down only the response
   half of that. `api/openapi.frozen.txt` grows by two lines.
+
+### Removed
+
+- **BREAKING: the context pack is retired from every surface** ([design
+  doc 0108](docs/design/0108-the-context-pack-retires.md)). `GET
+  /api/v1/context`, the MCP tool `get_context` and `ochakai context`
+  are gone, and with them the `budget` parameter and flag. The pack was
+  built for a world where round trips were expensive for agents: it
+  made the server decide what should be read — greedy packing, outline,
+  excerpt, a two-direction link hop — and an agent that iterates
+  search → get on its own was having that judgment taken away from it.
+  What the pack bundled survives in primitives: the reverse hop arrives
+  as `linked_from` on the concept itself (design doc 0106), and the
+  write-back hint now rides on `get_concept`'s answer. What a client
+  does about it: call `GET /api/v1/search` and read the concepts worth
+  reading at `GET /api/v1/bundle/{id}.md` (MCP: `search_concepts` then
+  `get_concept`; CLI: `ochakai search` then `ochakai get`). The bundled
+  recall hook now injects search pointers instead of a pack, and
+  `OCHAKAI_RECALL_BUDGET` became `OCHAKAI_RECALL_LIMIT` (rows, default
+  8). This is a removal, not a rename, so no one-release window
+  applies; the REST removal rides on design doc 0107 having moved
+  `/context` outside the frozen core, so `api/openapi.frozen.txt` does
+  not move. MCP resident bytes drop 13,460 → 11,629 and the MCP-BYTES
+  ceiling goes down to 12,000.
 
 ### Changed
 
@@ -141,10 +180,9 @@ last entry.
   catalog. Notes are now grouped by text, with the concepts each one was
   true of listed under it (up to five, then a count). The `N notes`
   summary and what `--strict` fails on are unchanged.
-- **`ochakai context` and `ochakai search` say when nothing matched.**
-  They printed nothing at all and exited 0, which reads the same as a
-  server that did not answer. The line goes to stderr, so a pipeline is
-  unaffected, and `context` names the write-back that would fix it.
+- **`ochakai search` says when nothing matched.** It printed nothing at
+  all and exited 0, which reads the same as a server that did not
+  answer. The line goes to stderr, so a pipeline is unaffected.
 - **An unknown command answers with a suggestion instead of the whole
   command list.** `ochakai serach` now offers `search`; `ochakai --url X
   whoami` says that a flag goes after the command rather than printing
@@ -152,7 +190,7 @@ last entry.
 - **The demo knowledge base is bilingual, and gained an eleventh
   concept.** `examples/demo` was entirely English, so a Japanese reader
   following the quick start — including `examples/README.md`'s own
-  `ochakai context "なぜ売上が落ちているのか"` — got silence, and the
+  `ochakai search "なぜ売上が落ちているのか"` — got silence, and the
   Japanese-search claim could not be tried without writing your own
   concepts first. The metric now records what the number is called
   (`売上`, and the two things it is not), the glossary carries the
