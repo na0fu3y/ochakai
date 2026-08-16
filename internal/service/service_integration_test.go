@@ -667,10 +667,7 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 	var stable bool // an attempt whose corpus did hold still
 	var missing, left int
 	for range reembedPinAttempts {
-		base, err := svc.Store.CountUnembedded(ctx, model)
-		if err != nil {
-			t.Fatal(err)
-		}
+		base := unembeddedTotal(t, ctx, svc, model)
 		res, err := svc.Reembed(ctx, "", 2)
 		if err != nil {
 			t.Fatal(err)
@@ -683,10 +680,7 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 		// arithmetic on the baseline. The bug this covers is a two-off
 		// (subtracting the pass's work from a total that already excluded
 		// it), which no tolerance wide enough for the drift could catch.
-		after, err := svc.Store.CountUnembedded(ctx, model)
-		if err != nil {
-			t.Fatal(err)
-		}
+		after := unembeddedTotal(t, ctx, svc, model)
 		// The pass takes the oldest unembedded entries in the whole
 		// database, so a parallel package deleting one of its own
 		// candidates mid-pass leaves the pass short, and one writing
@@ -709,6 +703,31 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 	}
 	t.Errorf("Missing = %d, want %d — the pass must report what is left, not what is left minus its own work",
 		missing, left)
+}
+
+// unembeddedTotal counts what Reembed reports as Missing: the concepts
+// with no vector plus the files, which carry vectors of their own
+// (design doc 0020) and are counted into the same number. Measuring only
+// the concept half made the assertion fail on a row belonging to nobody
+// in this package — internal/store's attachment tests hold unembedded
+// file rows in the shared database, Missing saw them, and the count it
+// was compared against did not. The stability guard could not catch it
+// either, since it watched the same concept-only count.
+//
+// This is measurement, not tolerance: a file row is genuinely still
+// unembedded, so the equality is restored by counting it on both sides
+// rather than by allowing the two numbers to differ.
+func unembeddedTotal(t *testing.T, ctx context.Context, svc *Service, model string) int {
+	t.Helper()
+	concepts, err := svc.Store.CountUnembedded(ctx, model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := svc.Store.CountUnembeddedFiles(ctx, model, svc.embeddableFileTypes())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return concepts + files
 }
 
 // reembedPinAttempts is how many times TestReembedReportsWhatIsLeft will
