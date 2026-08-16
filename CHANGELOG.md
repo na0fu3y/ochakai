@@ -4,10 +4,12 @@ All notable changes to ochakai are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — while
 the major version is 0, a minor bump may break compatibility, and those
-breaks are marked **BREAKING** below. **REST is frozen at `/api/v1`**;
-MCP, the CLI and the stored shape are still unstable at 0.x, and only the
-latest release is supported: [docs/compatibility.md](docs/compatibility.md)
-states the policy in full.
+breaks are marked **BREAKING** below. **The OKF core of REST is frozen
+at `/api/v1`** — the bundle round trip and search; the rest of
+`/api/v1`, MCP, the CLI and the stored shape are still unstable at 0.x,
+and only the latest release is supported:
+[docs/compatibility.md](docs/compatibility.md) states the policy in
+full.
 
 Dates are the tag dates (JST). Each released version also has a GitHub
 release with longer prose; this file keeps what an operator upgrading
@@ -71,7 +73,21 @@ last entry.
 
 ### Changed
 
-- **BREAKING: `?history` answers JSON, whatever the `Accept` says**
+- **BREAKING: the REST freeze narrows to the OKF core** ([design doc
+  0107](docs/design/0107-the-freeze-holds-the-okf-core.md)). What stays
+  frozen is the bundle round trip — `GET`/`PUT`/`DELETE
+  /api/v1/bundle/{path}` — and `GET /api/v1/search`; the ruling, usage,
+  stats, move and reembed operations return to the 0.x-unstable regime
+  MCP and the CLI were already under, where a breaking change is marked
+  BREAKING here and carries a design record. **Not a byte of the wire
+  moves in this entry** — what changes is the promise: since 0.18.0 this
+  page and [docs/compatibility.md](docs/compatibility.md) said all of
+  `/api/v1` was frozen, and that scope is retracted, not reinterpreted.
+  The record says why the boundary was wrong (fourteen days of
+  corrections, all pointing at OKF) and why it cannot move again: the
+  core can only ever widen. If you built against a non-core endpoint,
+  nothing breaks today; from here on, watch the BREAKING entries the way
+  you already do for the CLI.
   ([design doc 0102](docs/design/0102-one-history-in-one-spelling.md)).
   The markdown rendering of one object's history is gone. OKF SPEC §9
   defines one markdown history — the reserved `log.md` beside the

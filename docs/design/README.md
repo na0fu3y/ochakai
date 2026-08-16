@@ -46,7 +46,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**export が却下の理由まで運ぶことは [0104](0104-a-ruling-travels-with-its-reason.md)**(読み戻さないのは同じ) |
 | 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
-| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
+| REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
@@ -639,8 +639,20 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   閉じられないことである)。遡らない(§5)。対象は名前だけで、フラグも
   出力の形も保存形も含まない。[0082](0082-what-the-freeze-holds-still.md) が
   REST 側で緩めたぶんとの釣り合いであり、面の数は動かない。
+- [0107 凍結が握るのは OKF コアである](0107-the-freeze-holds-the-okf-core.md)
+  — **Accepted**。凍結の範囲を bundle の往復(`GET` / `PUT` / `DELETE
+  /api/v1/bundle/{path}`)と `GET /api/v1/search` の 4 操作に狭め、残りの
+  `/api/v1` を 0.x の不安定な面(BREAKING + 記録 + minor)に戻す。
+  **公開した約束の撤回であり、この corpus で初めての種類の記録** — 0082 の
+  「解釈の訂正」の語り口は使えないので、そう呼ばない。根拠は二つ: 凍結は
+  14 日で免責を三つ持ち、その向きが全部 OKF だったこと(境界が間違った
+  場所に引かれていた)、そして 0082 §5 自身の「規則の欠陥を直す代金が
+  今より安いことは二度とない」。コアの判定は列挙ではなく基準 —
+  **ナレッジがそこに在ることに直接触れる操作**(住所空間の読み書き削除と、
+  見つける入口)。新しい約束は前より硬い: コアは広がる向きにしか動かず、
+  縮める記録はもう書けない。ワイヤは 1 バイトも動かない。
 - [0064 REST は /api/v1 で止まる](0064-rest-stops-at-api-v1.md) —
-  **Accepted**。**REST の安定性契約領域の現行ドキュメント**。REST を凍結
+  **Accepted**。REST を凍結
   する前の最後の一括破壊的変更(issue #379)。不明なクエリパラメータは
   全操作で 400(`fm.` を除く)、リクエストヘッダの `X-` 接頭辞を撤去、
   ファイルの住所が `Accept: application/json` でメタデータを返すように

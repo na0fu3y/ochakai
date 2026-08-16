@@ -2,16 +2,18 @@
 
 The short version, so nobody has to infer it:
 
-> **REST is frozen at `/api/v1`.** Everything else is still unstable while the
-> major version is 0: MCP, the CLI and the stored shape may all change in a
-> minor release. **A name gets one release** — an MCP tool or a CLI command a
-> release renames keeps answering under its old spelling until the next
-> release, and nothing else gets a window
-> ([0088](design/0088-a-retired-name-answers-for-one-release.md)). Only the
-> latest release is supported. Three things can still break REST — a
-> security defect, output that does not conform to OKF
-> ([0100](design/0100-md-is-how-a-concept-is-spelled.md)), and folding away
-> a second spelling of something OKF already defines
+> **The OKF core of REST is frozen at `/api/v1`**: the bundle round trip
+> — `GET`/`PUT`/`DELETE /api/v1/bundle/{path}` — and `GET
+> /api/v1/search`. Everything else is still unstable while the major
+> version is 0: the rest of `/api/v1`, MCP, the CLI and the stored shape
+> may all change in a minor release. **A name gets one release** — an MCP
+> tool or a CLI command a release renames keeps answering under its old
+> spelling until the next release, and nothing else gets a window
+> ([0088](design/0088-a-retired-name-answers-for-one-release.md)). Only
+> the latest release is supported. Three things can still break the core
+> — a security defect, output that does not conform to OKF
+> ([0100](design/0100-md-is-how-a-concept-is-spelled.md)), and folding
+> away a second spelling of something OKF already defines
 > ([0102](design/0102-one-history-in-one-spelling.md)) — though a *new
 > field in a response* and a *new optional query parameter* were never
 > breaks, and are allowed
@@ -22,21 +24,35 @@ That is the actual policy, not a disclaimer. If you are deciding whether
 to build on ochakai, decide against *this*, not against what "SemVer"
 usually implies at 0.x.
 
+**The core is narrower than the freeze first announced, and that is a
+retraction, not a reinterpretation.** From 2026-08-02
+([0064](design/0064-rest-stops-at-api-v1.md)) to this release, this page
+said all of `/api/v1` was frozen.
+[0107](design/0107-the-freeze-holds-the-okf-core.md) records why the
+scope moved — the promise the project actually makes is the OKF bundle
+and the way in to it, and the freeze had frozen whatever the
+implementation happened to carry that day — and why it will not move
+again: **the core can only ever widen.** An operation outside it freezes
+when it stops moving, as its own recorded decision, which is the same
+regime MCP, the CLI and the stored shape were already under.
+
 ## What "unstable" covers
 
-Everything a client can touch, except the one line below that no longer
+Everything a client can touch, except the core below that no longer
 moves:
 
-- **REST is frozen.** [0064](design/0064-rest-stops-at-api-v1.md) closed
+- **The OKF core of REST is frozen** — the four operations the top of
+  this page names ([0107](design/0107-the-freeze-holds-the-okf-core.md)).
+  [0064](design/0064-rest-stops-at-api-v1.md) closed
   the last batch of breaking changes — an unrecognized query parameter is
   now a 400 naming it rather than a silent no-op, which is what makes it
   safe to add one later without breaking a client that predates it. On
   that same footing, [0082](design/0082-what-the-freeze-holds-still.md)
   says what the freeze was never holding still: a property *added* to a
   schema that only ever travels in a response, which a client that
-  predates it ignores. What stays frozen is every address, everything a
-  client sends, and every removal, rename, retype or requiredness change
-  in what it receives. That
+  predates it ignores. What stays frozen is every core address,
+  everything a client sends to one, and every removal, rename, retype or
+  requiredness change in what it receives back. That
   batch is also where the last *value* changes had to go, because a
   response's shape is what a validating client holds: `title` became
   optional the way OKF SPEC §4.1 always had it,
@@ -52,10 +68,10 @@ moves:
   spellings it replaced (`/api/v1/knowledge/{id}`,
   `/api/v1/attachments/{id}/{name}`, `/api/v1/backlinks/{id}`,
   `/api/v1/export`) rather than deprecating them. That history does not
-  repeat: [api/openapi.yaml](../api/openapi.yaml) is now the address list
-  a client can hold onto. **The freeze is checked, not promised.**
+  repeat inside the core: its four operations are the address list a
+  client can hold onto. **The freeze is checked, not promised.**
   [api/openapi.frozen.txt](../api/openapi.frozen.txt) is a fingerprint of
-  everything that file lets a client observe — every operation and its
+  everything the core lets a client observe — every core operation and its
   `operationId`, parameter, header, status code, schema field and the
   constraints on it (`pattern`, `format`, `default`, `maximum`, and the
   rest) — and CI fails when the two disagree
@@ -85,6 +101,15 @@ moves:
   history (`log.md`) and this address rendered a second one — again with
   no fingerprint line moving, since the media type it drops is shared with
   the concept export.
+- **The rest of `/api/v1` is unstable** — the ruling
+  (`POST /api/v1/review/{id}`), the usage totals and outcome reports
+  (`/api/v1/usage/{id}`), `stats`, `move` and `reembed`
+  ([0107](design/0107-the-freeze-holds-the-okf-core.md)). They move the
+  way MCP and the CLI move: a breaking change is marked **BREAKING** in
+  the changelog, carries a design record, and ships in a minor release.
+  Each of them freezes when it stops moving, as its own recorded
+  decision — the regime the 1.0 section below already applied to every
+  other unstable surface.
 - **An error's sentence is unstable; its `code` is not.** Every error
   response carries both ([0083](design/0083-an-error-carries-a-code.md)):
   `error` is a sentence for a person and may be reworded in any release,
@@ -182,9 +207,11 @@ practices that make an unstable dependency survivable:
 
 ## 1.0
 
-Still not scheduled, but no longer "no criteria have been set" — REST
-reaching a frozen `/api/v1` is the first criterion actually met, recorded
-in [0064](design/0064-rest-stops-at-api-v1.md). MCP, the CLI and the
-stored shape are not there yet, so the paragraph at the top of this page
-still applies to them. When each of the rest stops moving, that will be
-its own decision, recorded the same way.
+Still not scheduled, but no longer "no criteria have been set" — the OKF
+core reaching a frozen state is the first criterion actually met,
+recorded in [0064](design/0064-rest-stops-at-api-v1.md) and scoped by
+[0107](design/0107-the-freeze-holds-the-okf-core.md). The rest of
+`/api/v1`, MCP, the CLI and the stored shape are not there yet, so the
+paragraph at the top of this page still applies to them. When each of
+the rest stops moving, that will be its own decision, recorded the same
+way.

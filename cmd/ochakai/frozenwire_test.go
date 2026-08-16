@@ -59,17 +59,34 @@ const frozenWireHeader = `# The frozen REST wire, read out of api/openapi.yaml b
 #
 #	go test ./cmd/ochakai -run TestFrozenWireHasNotMoved -update
 #
-# One line per thing a client can observe. Prose (description, summary,
-# example, examples) is left out on purpose: documentation stays free to
-# improve after the freeze. Moving any line below is a change to a contract
-# design doc 0064 froze at /api/v1, and §11 says the only reasons left are a
-# security defect and output that does not conform to OKF (design doc 0100)
+# One line per thing a client can observe, for the operations the freeze
+# holds still: the OKF core — the bundle round trip and the search beside
+# it (design doc 0107, narrowing the freeze design doc 0064 announced).
+# The rest of /api/v1 is 0.x-unstable the way MCP and the CLI are
+# (docs/compatibility.md) and is deliberately not in this file. Prose
+# (description, summary, example, examples) is left out on purpose:
+# documentation stays free to improve after the freeze. Moving any line
+# below is a change to the frozen core, and the only reasons left are a
+# security defect (0064 §11) and OKF conformance (design docs 0100, 0102)
 # — except for two additions the freeze was never holding still: a property
 # added under components/schemas for a schema no requestBody reaches
 # (design doc 0082), and an optional query parameter added to an operation
 # (design doc 0101).
 
 `
+
+// frozenCorePaths names the addresses whose operations the freeze holds
+// still (design doc 0107): the OKF core — the bundle round trip
+// (GET/PUT/DELETE, which is also the archive export, the derived
+// index.md/log.md and the file half of the address space) and the read
+// entry beside it. An operation outside this set is 0.x-unstable the way
+// MCP and the CLI are, and freezes when it stops moving, as its own
+// decision (docs/compatibility.md). Widening this set is widening the
+// promise; a PR that edits it is saying so out loud.
+var frozenCorePaths = map[string]bool{
+	"/api/v1/bundle/{path}": true,
+	"/api/v1/search":        true,
+}
 
 // TestFrozenWireHasNotMoved compares the fingerprint of api/openapi.yaml
 // with the golden file. The golden is regenerated deliberately, in the PR
@@ -111,10 +128,13 @@ same PR and say in the description what the addition is for:
 	t.Errorf(`the frozen REST wire moved:
 
 %s
-REST is frozen at /api/v1 (design doc 0064, docs/compatibility.md): this
-contract is the address list a client holds onto, and after the freeze the
-only reason to move a line above is a security defect (0064 §11). Prose is
-not fingerprinted, so a documentation edit never lands here.
+The OKF core of REST is frozen (design docs 0064 and 0107,
+docs/compatibility.md): these lines are the part of the contract a client
+holds onto forever, and after the freeze the only reasons to move one are
+a security defect (0064 §11) and OKF conformance (0100, 0102). Prose is
+not fingerprinted, so a documentation edit never lands here. An operation
+outside the core does not land here either — a diff showing one means
+frozenCorePaths itself was edited, which is a change to the promise.
 
 What 0082 and 0101 leave outside the freeze is narrower than this diff:
 properties *added* to a schema no `+"`requestBody`"+` can reach, and *optional query
@@ -396,8 +416,51 @@ func (f *wireFingerprint) walk() {
 	f.walkSecurity()
 }
 
+// coreComponents names the components the frozen core can reach — the
+// schemas, parameters, headers and responses that travel on a core
+// operation, directly or through a $ref. A component only a non-core
+// operation uses is that operation's shape, and fingerprinting it would
+// freeze half of an endpoint the freeze does not hold (design doc 0107).
+// Keys are "<kind>/<name>", matching the fingerprint's own locations.
+func (f *wireFingerprint) coreComponents() map[string]bool {
+	components := wireMap(f.doc["components"])
+	reachable := map[string]bool{}
+	var walk func(node any)
+	walk = func(node any) {
+		switch v := node.(type) {
+		case map[string]any:
+			if ref := wireStr(v["$ref"]); strings.HasPrefix(ref, "#/components/") {
+				key := strings.TrimPrefix(ref, "#/components/")
+				if !reachable[key] {
+					reachable[key] = true
+					kind, name, _ := strings.Cut(key, "/")
+					walk(wireMap(components[kind])[name])
+				}
+			}
+			for key, child := range v {
+				if key != "$ref" {
+					walk(child)
+				}
+			}
+		case []any:
+			for _, child := range v {
+				walk(child)
+			}
+		}
+	}
+	for path, item := range wireMap(f.doc["paths"]) {
+		if frozenCorePaths[path] {
+			walk(item)
+		}
+	}
+	return reachable
+}
+
 func (f *wireFingerprint) walkPaths() {
 	for path, item := range wireMap(f.doc["paths"]) {
+		if !frozenCorePaths[path] {
+			continue
+		}
 		pathItem := wireMap(item)
 		shared := wireSeq(pathItem["parameters"])
 		for method, node := range pathItem {
@@ -469,24 +532,41 @@ func (f *wireFingerprint) response(loc string, resp map[string]any) {
 }
 
 func (f *wireFingerprint) walkComponents() {
+	core := f.coreComponents()
 	components := wireMap(f.doc["components"])
 	for name, node := range wireMap(components["parameters"]) {
+		if !core["parameters/"+name] {
+			continue
+		}
 		p := wireMap(node)
 		loc := "components/parameters/" + name
 		f.add(loc, "name="+wireStr(p["name"]), "in="+wireStr(p["in"]), requiredToken(p["required"]))
 		f.schema(loc+" schema", p["schema"], "")
 	}
 	for name, node := range wireMap(components["headers"]) {
+		if !core["headers/"+name] {
+			continue
+		}
 		loc := "components/headers/" + name
 		f.add(loc)
 		f.schema(loc+" schema", wireMap(node)["schema"], "")
 	}
 	for name, node := range wireMap(components["responses"]) {
+		if !core["responses/"+name] {
+			continue
+		}
 		f.response("components/responses/"+name, wireMap(node))
 	}
 	for name, node := range wireMap(components["schemas"]) {
+		if !core["schemas/"+name] {
+			continue
+		}
 		f.schema("components/schemas/"+name, node, "")
 	}
+	// Security schemes are named from the document's top-level security
+	// requirements rather than by $ref, and those requirements govern the
+	// core operations too — so they are all part of what a core caller
+	// holds.
 	for name, node := range wireMap(components["securitySchemes"]) {
 		s := wireMap(node)
 		f.add("components/securitySchemes/"+name,

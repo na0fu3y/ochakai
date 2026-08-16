@@ -3,11 +3,15 @@
 #
 #	go test ./cmd/ochakai -run TestFrozenWireHasNotMoved -update
 #
-# One line per thing a client can observe. Prose (description, summary,
-# example, examples) is left out on purpose: documentation stays free to
-# improve after the freeze. Moving any line below is a change to a contract
-# design doc 0064 froze at /api/v1, and §11 says the only reasons left are a
-# security defect and output that does not conform to OKF (design doc 0100)
+# One line per thing a client can observe, for the operations the freeze
+# holds still: the OKF core — the bundle round trip and the search beside
+# it (design doc 0107, narrowing the freeze design doc 0064 announced).
+# The rest of /api/v1 is 0.x-unstable the way MCP and the CLI are
+# (docs/compatibility.md) and is deliberately not in this file. Prose
+# (description, summary, example, examples) is left out on purpose:
+# documentation stays free to improve after the freeze. Moving any line
+# below is a change to the frozen core, and the only reasons left are a
+# security defect (0064 §11) and OKF conformance (design docs 0100, 0102)
 # — except for two additions the freeze was never holding still: a property
 # added under components/schemas for a schema no requestBody reaches
 # (design doc 0082), and an optional query parameter added to an operation
@@ -90,36 +94,6 @@ GET /api/v1/bundle/{path} response 501 content application/json type=object
 GET /api/v1/bundle/{path} response 501 content application/json.code required=true type=string enum=["unsupported"]
 GET /api/v1/bundle/{path} response 501 content application/json.error required=true type=string
 GET /api/v1/bundle/{path} response 501 header Ochakai-Read-Only ref=ReadOnly
-GET /api/v1/context
-GET /api/v1/context operationId=getContext
-GET /api/v1/context query budget required=false type=integer default=0
-GET /api/v1/context query fm.{key} required=false type=string
-GET /api/v1/context query limit required=false type=integer default=5 maximum=20
-GET /api/v1/context query prefix required=false type=array
-GET /api/v1/context query prefix[] type=string
-GET /api/v1/context query q required=true type=string
-GET /api/v1/context query status required=false type=array
-GET /api/v1/context query status[] ref=Status
-GET /api/v1/context query tag required=false type=array
-GET /api/v1/context query tag[] type=string
-GET /api/v1/context query trust required=false type=array
-GET /api/v1/context query trust[] ref=Trust
-GET /api/v1/context query type required=false type=array
-GET /api/v1/context query type[] ref=Type
-GET /api/v1/context response 200
-GET /api/v1/context response 200 content application/json type=object
-GET /api/v1/context response 200 content application/json.concepts required=true type=array
-GET /api/v1/context response 200 content application/json.concepts[] ref=View
-GET /api/v1/context response 200 content application/json.hits required=true type=array
-GET /api/v1/context response 200 content application/json.hits[] ref=ContextRank
-GET /api/v1/context response 200 content application/json.outline required=false type=array
-GET /api/v1/context response 200 content application/json.outline[] ref=ContextOutline
-GET /api/v1/context response 200 header Ochakai-Read-Only ref=ReadOnly
-GET /api/v1/context response 400 ref=Error
-GET /api/v1/context response 401 ref=Unauthorized
-GET /api/v1/context response 403 ref=Forbidden
-GET /api/v1/context response 405 ref=Error
-GET /api/v1/context response 500 ref=Error
 GET /api/v1/search
 GET /api/v1/search operationId=searchConcepts
 GET /api/v1/search query cursor required=false type=string
@@ -155,114 +129,6 @@ GET /api/v1/search response 401 ref=Unauthorized
 GET /api/v1/search response 403 ref=Forbidden
 GET /api/v1/search response 405 ref=Error
 GET /api/v1/search response 500 ref=Error
-GET /api/v1/stats
-GET /api/v1/stats operationId=getStats
-GET /api/v1/stats query days required=false type=integer
-GET /api/v1/stats query prefix required=false type=array
-GET /api/v1/stats query prefix[] type=string
-GET /api/v1/stats response 200
-GET /api/v1/stats response 200 content application/json ref=Stats
-GET /api/v1/stats response 200 header Ochakai-Read-Only ref=ReadOnly
-GET /api/v1/stats response 400 ref=Error
-GET /api/v1/stats response 401 ref=Unauthorized
-GET /api/v1/stats response 403 ref=Forbidden
-GET /api/v1/stats response 405 ref=Error
-GET /api/v1/stats response 500 ref=Error
-GET /api/v1/usage/{id}
-GET /api/v1/usage/{id} operationId=getConceptUsage
-GET /api/v1/usage/{id} path id required=true type=string
-GET /api/v1/usage/{id} response 200
-GET /api/v1/usage/{id} response 200 content application/json ref=Usage
-GET /api/v1/usage/{id} response 200 header Ochakai-Read-Only ref=ReadOnly
-GET /api/v1/usage/{id} response 400 ref=Error
-GET /api/v1/usage/{id} response 401 ref=Unauthorized
-GET /api/v1/usage/{id} response 403 ref=Forbidden
-GET /api/v1/usage/{id} response 404 ref=Error
-GET /api/v1/usage/{id} response 405 ref=Error
-GET /api/v1/usage/{id} response 500 ref=Error
-POST /api/v1/move
-POST /api/v1/move body application/json required=true type=object
-POST /api/v1/move body application/json.from required=true type=string
-POST /api/v1/move body application/json.to required=true type=string
-POST /api/v1/move header Ochakai-On-Behalf-Of ref=OnBehalfOf
-POST /api/v1/move header Ochakai-Producer ref=Producer
-POST /api/v1/move operationId=moveConcept
-POST /api/v1/move response 200
-POST /api/v1/move response 200 content application/json ref=View
-POST /api/v1/move response 200 header ETag ref=ETag
-POST /api/v1/move response 200 header Ochakai-Read-Only ref=ReadOnly
-POST /api/v1/move response 400 ref=Error
-POST /api/v1/move response 401 ref=Unauthorized
-POST /api/v1/move response 403 ref=Forbidden
-POST /api/v1/move response 404 ref=Error
-POST /api/v1/move response 405 ref=Error
-POST /api/v1/move response 409 ref=Error
-POST /api/v1/move response 413 ref=Error
-POST /api/v1/move response 500 ref=Error
-POST /api/v1/reembed
-POST /api/v1/reembed operationId=reembedConcepts
-POST /api/v1/reembed query cursor required=false type=string
-POST /api/v1/reembed query limit required=false type=integer default=200 maximum=5000
-POST /api/v1/reembed response 200
-POST /api/v1/reembed response 200 content application/json type=object
-POST /api/v1/reembed response 200 content application/json.concepts required=true type=integer
-POST /api/v1/reembed response 200 content application/json.cursor required=false type=string
-POST /api/v1/reembed response 200 content application/json.failed required=true type=integer
-POST /api/v1/reembed response 200 content application/json.files required=true type=integer
-POST /api/v1/reembed response 200 content application/json.missing required=true type=integer
-POST /api/v1/reembed response 200 header Ochakai-Read-Only ref=ReadOnly
-POST /api/v1/reembed response 400 ref=Error
-POST /api/v1/reembed response 401 ref=Unauthorized
-POST /api/v1/reembed response 403 ref=Forbidden
-POST /api/v1/reembed response 405 ref=Error
-POST /api/v1/reembed response 500 ref=Error
-POST /api/v1/reembed response 501 ref=Error
-POST /api/v1/review/{id}
-POST /api/v1/review/{id} body application/json required=true type=object
-POST /api/v1/review/{id} body application/json.note required=false type=string maxLength=2000
-POST /api/v1/review/{id} body application/json.ruling required=true type=string enum=["verified" "rejected" "withdrawn"]
-POST /api/v1/review/{id} header Ochakai-On-Behalf-Of ref=OnBehalfOf
-POST /api/v1/review/{id} header Ochakai-Producer ref=Producer
-POST /api/v1/review/{id} operationId=reviewConcept
-POST /api/v1/review/{id} path id required=true type=string
-POST /api/v1/review/{id} response 200
-POST /api/v1/review/{id} response 200 content application/json ref=View
-POST /api/v1/review/{id} response 200 header ETag ref=ETag
-POST /api/v1/review/{id} response 200 header Ochakai-Read-Only ref=ReadOnly
-POST /api/v1/review/{id} response 400
-POST /api/v1/review/{id} response 400 content application/json type=object
-POST /api/v1/review/{id} response 400 content application/json.code required=true type=string enum=["invalid"]
-POST /api/v1/review/{id} response 400 content application/json.error required=true type=string
-POST /api/v1/review/{id} response 400 header Ochakai-Read-Only ref=ReadOnly
-POST /api/v1/review/{id} response 401 ref=Unauthorized
-POST /api/v1/review/{id} response 403 ref=Forbidden
-POST /api/v1/review/{id} response 404 ref=Error
-POST /api/v1/review/{id} response 405 ref=Error
-POST /api/v1/review/{id} response 409
-POST /api/v1/review/{id} response 409 content application/json type=object
-POST /api/v1/review/{id} response 409 content application/json.code required=true type=string enum=["no_rejection"]
-POST /api/v1/review/{id} response 409 content application/json.error required=true type=string
-POST /api/v1/review/{id} response 409 header Ochakai-Read-Only ref=ReadOnly
-POST /api/v1/review/{id} response 413 ref=Error
-POST /api/v1/review/{id} response 500 ref=Error
-POST /api/v1/usage/{id}
-POST /api/v1/usage/{id} body application/json required=true type=object
-POST /api/v1/usage/{id} body application/json.note required=false type=string maxLength=2000
-POST /api/v1/usage/{id} body application/json.outcome required=true type=string enum=["worked" "failed"]
-POST /api/v1/usage/{id} header Ochakai-On-Behalf-Of ref=OnBehalfOf
-POST /api/v1/usage/{id} header Ochakai-Producer ref=Producer
-POST /api/v1/usage/{id} operationId=reportOutcome
-POST /api/v1/usage/{id} path id required=true type=string
-POST /api/v1/usage/{id} response 200
-POST /api/v1/usage/{id} response 200 content application/json ref=Usage
-POST /api/v1/usage/{id} response 200 header Ochakai-Read-Only ref=ReadOnly
-POST /api/v1/usage/{id} response 400 ref=Error
-POST /api/v1/usage/{id} response 401 ref=Unauthorized
-POST /api/v1/usage/{id} response 403 ref=Forbidden
-POST /api/v1/usage/{id} response 404 ref=Error
-POST /api/v1/usage/{id} response 405 ref=Error
-POST /api/v1/usage/{id} response 413 ref=Error
-POST /api/v1/usage/{id} response 500 ref=Error
 PUT /api/v1/bundle/{path}
 PUT /api/v1/bundle/{path} body application/octet-stream required=true type=string format="binary"
 PUT /api/v1/bundle/{path} body text/markdown required=true type=string
@@ -393,22 +259,6 @@ components/schemas/Change.changed_at required=true type=string format="date-time
 components/schemas/Change.changed_by required=true ref=Actor
 components/schemas/Change.path required=true type=string
 components/schemas/Change.title required=false type=string
-components/schemas/ContextOutline type=object
-components/schemas/ContextOutline.bytes required=true type=integer
-components/schemas/ContextOutline.description required=false type=string
-components/schemas/ContextOutline.excerpt required=false type=string
-components/schemas/ContextOutline.id required=true type=string
-components/schemas/ContextOutline.status required=true ref=Status
-components/schemas/ContextOutline.title required=false type=string
-components/schemas/ContextOutline.type required=true ref=Type
-components/schemas/ContextRank type=object
-components/schemas/ContextRank.id required=true type=string
-components/schemas/ContextRank.score required=true type=number
-components/schemas/ContextRank.status required=true ref=Status
-components/schemas/ContextRank.title required=false type=string
-components/schemas/ContextRank.trust required=true
-components/schemas/ContextRank.trust/allOf/0 ref=Trust
-components/schemas/ContextRank.type required=true ref=Type
 components/schemas/File type=object
 components/schemas/File.created_at required=true type=string format="date-time" readOnly=true
 components/schemas/File.created_by required=true ref=Actor
@@ -433,10 +283,6 @@ components/schemas/Observed.rejection required=false
 components/schemas/Observed.rejection/allOf/0 ref=Rejection
 components/schemas/Observed.verified required=false type=array
 components/schemas/Observed.verified[] ref=Verification
-components/schemas/QueueCounts type=object
-components/schemas/QueueCounts.drafts required=true type=integer
-components/schemas/QueueCounts.failed required=true type=integer
-components/schemas/QueueCounts.stale_after required=true type=integer
 components/schemas/Rejection type=object
 components/schemas/Rejection.at required=true type=string format="date-time"
 components/schemas/Rejection.by required=true ref=Actor
@@ -456,47 +302,6 @@ components/schemas/SearchHit/allOf/1.score required=true type=number
 components/schemas/SearchHit/allOf/1.snippet required=false type=string
 components/schemas/SearchHit/allOf/1.usage required=false readOnly=true
 components/schemas/SearchHit/allOf/1.usage/allOf/0 ref=Usage
-components/schemas/Stats type=object
-components/schemas/Stats.at required=true type=string format="date-time"
-components/schemas/Stats.concepts required=true type=object
-components/schemas/Stats.concepts.created required=true type=integer
-components/schemas/Stats.concepts.rejected required=true type=integer
-components/schemas/Stats.concepts.status required=true type=object
-components/schemas/Stats.concepts.status.* type=integer
-components/schemas/Stats.concepts.total required=true type=integer
-components/schemas/Stats.concepts.trust required=true type=object
-components/schemas/Stats.concepts.trust.* type=integer
-components/schemas/Stats.dropped required=true type=object
-components/schemas/Stats.dropped.events required=true type=integer
-components/schemas/Stats.dropped.misses required=true type=integer
-components/schemas/Stats.embedding required=true type=object
-components/schemas/Stats.embedding.enabled required=true type=boolean
-components/schemas/Stats.embedding.truncated required=true type=integer
-components/schemas/Stats.embedding.vectors required=true type=integer
-components/schemas/Stats.insecure_dev required=false type=boolean
-components/schemas/Stats.misses required=true type=object
-components/schemas/Stats.misses.count required=true type=integer
-components/schemas/Stats.misses.queries required=true type=array
-components/schemas/Stats.misses.queries[] type=object
-components/schemas/Stats.misses.queries[].count required=true type=integer
-components/schemas/Stats.misses.queries[].last_at required=true type=string format="date-time"
-components/schemas/Stats.misses.queries[].query required=true type=string
-components/schemas/Stats.misses.recording required=true type=boolean
-components/schemas/Stats.outcomes required=true type=object
-components/schemas/Stats.outcomes.concepts_reported required=true type=integer
-components/schemas/Stats.outcomes.concepts_used required=true type=integer
-components/schemas/Stats.outcomes.failed required=true type=integer
-components/schemas/Stats.outcomes.worked required=true type=integer
-components/schemas/Stats.queues required=true
-components/schemas/Stats.queues/allOf/0 ref=QueueCounts
-components/schemas/Stats.review required=true type=object
-components/schemas/Stats.review.verifications required=true type=integer
-components/schemas/Stats.review.weekly required=false type=array
-components/schemas/Stats.review.weekly[] type=object
-components/schemas/Stats.review.weekly[].from required=true type=string format="date"
-components/schemas/Stats.review.weekly[].verifications required=true type=integer
-components/schemas/Stats.sandbox required=false type=boolean
-components/schemas/Stats.window_days required=true type=integer
 components/schemas/Status type=string enum=["draft" "stable" "deprecated"]
 components/schemas/Summary type=object
 components/schemas/Summary.content_hash required=true type=string
