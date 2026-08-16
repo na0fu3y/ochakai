@@ -21,7 +21,7 @@ last entry.
 
 ## [Unreleased]
 
-## [0.23.0] - 2026-08-17
+## [0.24.0] - 2026-08-17
 
 ### Added
 
@@ -39,6 +39,60 @@ last entry.
   as fetched for being named — and the addition is response-only,
   outside the freeze (design doc 0082). `ochakai get` prints the rows
   on stderr beside the file hints; the MCP schema does not move a byte.
+
+### Changed
+
+- **BREAKING: the REST freeze narrows to the OKF core** ([design doc
+  0107](docs/design/0107-the-freeze-holds-the-okf-core.md)). What stays
+  frozen is the bundle round trip — `GET`/`PUT`/`DELETE
+  /api/v1/bundle/{path}` — and `GET /api/v1/search`; the ruling, usage,
+  stats, move and reembed operations return to the 0.x-unstable regime
+  MCP and the CLI were already under, where a breaking change is marked
+  BREAKING here and carries a design record. **Not a byte of the wire
+  moves in this entry** — what changes is the promise: since 0.18.0 this
+  page and [docs/compatibility.md](docs/compatibility.md) said all of
+  `/api/v1` was frozen, and that scope is retracted, not reinterpreted.
+  The record says why the boundary was wrong (fourteen days of
+  corrections, all pointing at OKF) and why it cannot move again: the
+  core can only ever widen. If you built against a non-core endpoint,
+  nothing breaks today; from here on, watch the BREAKING entries the way
+  you already do for the CLI.
+  ([design doc 0102](docs/design/0102-one-history-in-one-spelling.md)).
+  The markdown rendering of one object's history is gone. OKF SPEC §9
+  defines one markdown history — the reserved `log.md` beside the
+  objects — and this address rendered a second one from the same ledger
+  rows, which is what left a single `?history&limit=500` on a concept
+  answering 400 as JSON and 200 as markdown (0064 §14.1 wrote that split
+  down rather than closing it). A concept's `?history` is now 50 rows by
+  default and 200 at most on every read.
+
+### Removed
+
+- **BREAKING: the context pack is retired from every surface** ([design
+  doc 0108](docs/design/0108-the-context-pack-retires.md)). `GET
+  /api/v1/context`, the MCP tool `get_context` and `ochakai context`
+  are gone, and with them the `budget` parameter and flag. The pack was
+  built for a world where round trips were expensive for agents: it
+  made the server decide what should be read — greedy packing, outline,
+  excerpt, a two-direction link hop — and an agent that iterates
+  search → get on its own was having that judgment taken away from it.
+  What the pack bundled survives in primitives: the reverse hop arrives
+  as `linked_from` on the concept itself (design doc 0106), and the
+  write-back hint now rides on `get_concept`'s answer. What a client
+  does about it: call `GET /api/v1/search` and read the concepts worth
+  reading at `GET /api/v1/bundle/{id}.md` (MCP: `search_concepts` then
+  `get_concept`; CLI: `ochakai search` then `ochakai get`). The bundled
+  recall hook now injects search pointers instead of a pack, and
+  `OCHAKAI_RECALL_BUDGET` became `OCHAKAI_RECALL_LIMIT` (rows, default
+  8). This is a removal, not a rename, so no one-release window
+  applies; the REST removal rides on design doc 0107 having moved
+  `/context` outside the frozen core, so `api/openapi.frozen.txt` does
+  not move. MCP resident bytes drop 13,460 → 11,629 and the MCP-BYTES
+  ceiling goes down to 12,000.
+
+## [0.23.0] - 2026-08-17
+
+### Added
 
 - **A concept is found by the other names its writer gave it** ([design
   doc 0105](docs/design/0105-a-concept-answers-to-its-other-names.md)).
@@ -88,47 +142,9 @@ last entry.
   be added safely afterwards, and 0082 had written down only the response
   half of that. `api/openapi.frozen.txt` grows by two lines.
 
-### Removed
-
-- **BREAKING: the context pack is retired from every surface** ([design
-  doc 0108](docs/design/0108-the-context-pack-retires.md)). `GET
-  /api/v1/context`, the MCP tool `get_context` and `ochakai context`
-  are gone, and with them the `budget` parameter and flag. The pack was
-  built for a world where round trips were expensive for agents: it
-  made the server decide what should be read — greedy packing, outline,
-  excerpt, a two-direction link hop — and an agent that iterates
-  search → get on its own was having that judgment taken away from it.
-  What the pack bundled survives in primitives: the reverse hop arrives
-  as `linked_from` on the concept itself (design doc 0106), and the
-  write-back hint now rides on `get_concept`'s answer. What a client
-  does about it: call `GET /api/v1/search` and read the concepts worth
-  reading at `GET /api/v1/bundle/{id}.md` (MCP: `search_concepts` then
-  `get_concept`; CLI: `ochakai search` then `ochakai get`). The bundled
-  recall hook now injects search pointers instead of a pack, and
-  `OCHAKAI_RECALL_BUDGET` became `OCHAKAI_RECALL_LIMIT` (rows, default
-  8). This is a removal, not a rename, so no one-release window
-  applies; the REST removal rides on design doc 0107 having moved
-  `/context` outside the frozen core, so `api/openapi.frozen.txt` does
-  not move. MCP resident bytes drop 13,460 → 11,629 and the MCP-BYTES
-  ceiling goes down to 12,000.
-
 ### Changed
 
-- **BREAKING: the REST freeze narrows to the OKF core** ([design doc
-  0107](docs/design/0107-the-freeze-holds-the-okf-core.md)). What stays
-  frozen is the bundle round trip — `GET`/`PUT`/`DELETE
-  /api/v1/bundle/{path}` — and `GET /api/v1/search`; the ruling, usage,
-  stats, move and reembed operations return to the 0.x-unstable regime
-  MCP and the CLI were already under, where a breaking change is marked
-  BREAKING here and carries a design record. **Not a byte of the wire
-  moves in this entry** — what changes is the promise: since 0.18.0 this
-  page and [docs/compatibility.md](docs/compatibility.md) said all of
-  `/api/v1` was frozen, and that scope is retracted, not reinterpreted.
-  The record says why the boundary was wrong (fourteen days of
-  corrections, all pointing at OKF) and why it cannot move again: the
-  core can only ever widen. If you built against a non-core endpoint,
-  nothing breaks today; from here on, watch the BREAKING entries the way
-  you already do for the CLI.
+- **BREAKING: `?history` answers JSON, whatever the `Accept` says**
   ([design doc 0102](docs/design/0102-one-history-in-one-spelling.md)).
   The markdown rendering of one object's history is gone. OKF SPEC §9
   defines one markdown history — the reserved `log.md` beside the
@@ -182,9 +198,10 @@ last entry.
   catalog. Notes are now grouped by text, with the concepts each one was
   true of listed under it (up to five, then a count). The `N notes`
   summary and what `--strict` fails on are unchanged.
-- **`ochakai search` says when nothing matched.** It printed nothing at
-  all and exited 0, which reads the same as a server that did not
-  answer. The line goes to stderr, so a pipeline is unaffected.
+- **`ochakai context` and `ochakai search` say when nothing matched.**
+  They printed nothing at all and exited 0, which reads the same as a
+  server that did not answer. The line goes to stderr, so a pipeline is
+  unaffected, and `context` names the write-back that would fix it.
 - **An unknown command answers with a suggestion instead of the whole
   command list.** `ochakai serach` now offers `search`; `ochakai --url X
   whoami` says that a flag goes after the command rather than printing
@@ -192,7 +209,7 @@ last entry.
 - **The demo knowledge base is bilingual, and gained an eleventh
   concept.** `examples/demo` was entirely English, so a Japanese reader
   following the quick start — including `examples/README.md`'s own
-  `ochakai search "なぜ売上が落ちているのか"` — got silence, and the
+  `ochakai context "なぜ売上が落ちているのか"` — got silence, and the
   Japanese-search claim could not be tried without writing your own
   concepts first. The metric now records what the number is called
   (`売上`, and the two things it is not), the glossary carries the
@@ -4458,7 +4475,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/na0fu3y/ochakai/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/na0fu3y/ochakai/compare/v0.22.1...v0.23.0
 [0.22.1]: https://github.com/na0fu3y/ochakai/compare/v0.22.0...v0.22.1
 [0.22.0]: https://github.com/na0fu3y/ochakai/compare/v0.21.1...v0.22.0
