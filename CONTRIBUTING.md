@@ -882,6 +882,17 @@ Two pieces of bookkeeping, both easy to forget:
 
 ## Pull requests
 
+Review is the scarce resource here, and code being cheap to write has
+made it scarcer rather than less important: a large unsolicited PR
+donates the half of the work that is now easy and creates the half that
+is not. Issues and pull requests are still welcome — this is about how a
+change should arrive, not whether. A small, self-contained fix is a PR.
+Anything larger is worth proposing first, in an issue or a
+[discussion](https://github.com/na0fu3y/ochakai/discussions): the default
+answer to a feature is no ("Proposing a feature" above), and finding that
+out from a review costs you the time you spent writing it, not only the
+time it takes to read.
+
 - Keep PRs small and focused; include tests for behavior changes.
 - A PR that widens a surface — a REST operation, an MCP tool, a CLI
   command, an environment variable — names which of
