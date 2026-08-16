@@ -125,13 +125,17 @@ it.
   ([0067 §5.2](docs/design/0067-four-faces-and-what-they-decline.md)). The same reasoning
   closed the `ochakai sync` / diff-only-import-from-CI request (issue #43).
 - **A one-to-one MCP mirror of REST.** Tool schemas cost the agent's context,
-  so the tool count is a budget: browse, revisions, backlinks, file
-  writes, bulk export/import, purge, and reembed stay off MCP
+  so the tool count is a budget: browse, revisions, the reverse-lookup
+  filter, file writes, bulk export/import, purge, and reembed stay off MCP
   ([0067 §5.1](docs/design/0067-four-faces-and-what-they-decline.md)), as does
   overwriting or deleting a concept a human has curated — an agent that finds a
   verified concept wrong reports the outcome or drafts a replacement
   ([0067 §6](docs/design/0067-four-faces-and-what-they-decline.md),
-  [0069](docs/design/0069-the-loop-and-what-measures-it.md)).
+  [0069](docs/design/0069-the-loop-and-what-measures-it.md)). A tool is what
+  stays off, not the answer: a fetched concept names what links at it in
+  `linked_from`, so an agent reaching a metric sees the insight explaining it
+  without a lookup of its own
+  ([0106](docs/design/0106-a-read-carries-what-points-at-it.md)).
 - **A publicly reachable MCP OAuth connector service.** It existed briefly and
   was retired in 0.9.0 ([0070 §2](docs/design/0070-what-was-retired-and-why.md));
   [0070 §5](docs/design/0070-what-was-retired-and-why.md) names revert as the starting point
