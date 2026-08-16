@@ -1101,6 +1101,26 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 	create(insight, "Reading revenue", "Seasonality caveats for [Revenue](/"+metric+".md).")
 	removeEntries(t, srv, metric, insight)
 
+	// The same edge arrives with the metric itself: a read of a concept
+	// carries the rows of what links at it, because the caveat points at
+	// the metric and a reader of the metric alone would never see it
+	// (design doc 0106). Rows, not documents — the insight's own read
+	// below shows the other side, an entry nothing links at carrying no
+	// linked_from at all.
+	var read domain.View
+	getJSON(t, srv.URL+"/api/v1/bundle/"+metric+".md", &read)
+	if len(read.LinkedFrom) != 1 || read.LinkedFrom[0].ID != insight {
+		t.Fatalf("linked_from of %s = %+v, want just %s", metric, read.LinkedFrom, insight)
+	}
+	if got := read.LinkedFrom[0]; got.Trust != domain.TrustUnverified || got.Status != domain.StatusStable {
+		t.Errorf("linked_from row = %+v, want the projection's trust and lifecycle", got)
+	}
+	read = domain.View{} // a decode leaves absent keys alone
+	getJSON(t, srv.URL+"/api/v1/bundle/"+insight+".md", &read)
+	if read.LinkedFrom != nil {
+		t.Errorf("linked_from of %s = %+v, want none — nothing links at the insight", insight, read.LinkedFrom)
+	}
+
 	// The reverse edge: the insight links to the metric, not the other
 	// way round. It is a filter on the search face (design doc 0046
 	// §3.5), and with no query it lists rather than ranks.

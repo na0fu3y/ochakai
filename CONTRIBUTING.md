@@ -716,7 +716,18 @@ said a corpus grows when somebody reads it against what shipped; this one
 says it also grows when the rule for changing something is worth more
 than the change.
 
-    RECORD-CORPUS-LINES: 8000
+8,000 → 8,500 is three records again — 0106, 0107 and 0108 — and this
+crossing is about the freeze from the other side. 0100–0102 wrote down
+why a frozen line may move; these write down that the freeze was drawn
+around the wrong set — 0107 narrows the promise to the OKF core and is
+the first record to retract a published promise rather than reinterpret
+one, which is exactly the kind of argument that has to be on file at the
+length that makes it checkable. 0108 retires the context pack from every
+surface and 0106 completes the primitive read it leaves behind; both
+lean on 0107 and neither could be a PR description, because all three
+move what a user can observe.
+
+    RECORD-CORPUS-LINES: 8500
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

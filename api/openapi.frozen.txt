@@ -355,6 +355,13 @@ components/schemas/Actor.kind required=true type=string enum=["human" "process"]
 components/schemas/Actor.name required=true type=string
 components/schemas/Actor.producer required=false type=string
 components/schemas/Actor.via required=false type=string
+components/schemas/Backlink type=object
+components/schemas/Backlink.description required=false type=string
+components/schemas/Backlink.id required=true type=string
+components/schemas/Backlink.status required=true ref=Status
+components/schemas/Backlink.title required=false type=string
+components/schemas/Backlink.trust required=true ref=Trust
+components/schemas/Backlink.type required=true ref=Type
 components/schemas/BundleListing type=object
 components/schemas/BundleListing.concepts required=false type=array
 components/schemas/BundleListing.concepts[] type=object
@@ -530,6 +537,8 @@ components/schemas/View.document required=true type=string
 components/schemas/View.files required=false type=array
 components/schemas/View.files[] ref=File
 components/schemas/View.id required=true type=string
+components/schemas/View.linked_from required=false type=array
+components/schemas/View.linked_from[] ref=Backlink
 components/schemas/View.observed required=true ref=Observed
 components/schemas/View.plan required=false type=string enum=["created" "updated" "unchanged"]
 components/schemas/View.summary required=true ref=Summary

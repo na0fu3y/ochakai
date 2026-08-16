@@ -2836,6 +2836,17 @@ components:
             File metadata (no bytes — fetch them via
             /api/v1/bundle/{path}, which is also where they are written).
             Absent when the concept has none.
+        linked_from:
+          type: array
+          items: { $ref: "#/components/schemas/Backlink" }
+          description: >
+            The concepts whose bodies link at this one — the one thing a
+            concept's own document cannot say, because the insight that
+            explains a metric points at the metric, not the other way
+            round (design doc 0106). Rows in address order, capped at
+            20; the complete, pageable reverse lookup is
+            /api/v1/search?links_to=. Absent when nothing links here,
+            and on the answer to a write.
         plan:
           type: string
           enum: [created, updated, unchanged]
@@ -3304,6 +3315,27 @@ components:
             says how much more there is, and `id` is where the rest is.
           type: string
       required: [id, type, status, bytes]
+    Backlink:
+      type: object
+      description: >
+        One row of a read's `linked_from`: a concept whose body links at
+        the one being read — the fields a caller needs to decide whether
+        to spend a fetch on it, the description carrying the weight
+        (design doc 0106). No score: the answer is a set, not a ranking,
+        which is the links_to filter's own rule.
+      properties:
+        id: { type: string }
+        type: { $ref: "#/components/schemas/Type" }
+        title:
+          description: >
+            The concept's own title, absent when the document declared none
+            — a reader derives one from the id's last segment (OKF SPEC
+            §4.1, design doc 0074 §1).
+          type: string
+        description: { type: string }
+        status: { $ref: "#/components/schemas/Status" }
+        trust: { $ref: "#/components/schemas/Trust" }
+      required: [id, type, status, trust]
     BundleListing:
       type: object
       description: >

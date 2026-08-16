@@ -261,6 +261,16 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   — **Superseded by 0057**。MCP のツール名 5 本の `knowledge` を OKF
   SPEC §2 の語 `concept` に改めた最初の決定。0057 §0 に吸収された。
 
+- [0106 読みは、自分を指すものを連れて返る](0106-a-read-carries-what-points-at-it.md)
+  — **Accepted**。concept の単読(REST の JSON・`get_concept`・
+  `ochakai get`)が `linked_from` を運ぶ — その concept を本文から指す
+  concept の行(住所順、上限 20、却下済みは出ない)。リンクは本文からの
+  導出なので順方向は文書に見えているが、**逆方向だけが他人の文書に住む**:
+  metric を読む者に、それを explains する insight の存在は見えなかった。
+  `links_to` は畳まない — 尋ね方を知っている者の完全でページングできる
+  逆引きはあちら、尋ねなかった者に届く先頭 20 行がこちら。行はポインタで
+  あって配達ではないので fetched は記録せず、応答専用の追加なので凍結の
+  外である(0082)。MCP のスキーマは 1 バイトも動かない(0103)。
 - [0024 リンクは本文から導出する](0024-links-from-body.md) — **Superseded by 0074**。
 
 ## 添付ファイル(0046 でバンドルのオブジェクトになった)

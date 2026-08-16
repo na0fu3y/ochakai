@@ -882,9 +882,15 @@ type Knowledge struct {
 	// Files is read-only metadata (no bytes), populated on single-
 	// entry reads. Files are managed through their own endpoints,
 	// never through create/update payloads.
-	Files     []File    `json:"files,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Files []File `json:"files,omitempty"`
+	// LinkedFrom is read-only like Files and populated the same way, on
+	// single-entry reads: the rows okf.ViewOf carries into
+	// View.LinkedFrom. Never accepted from a payload — links are derived
+	// from bodies (design doc 0024), and this is the same edge read the
+	// other way round.
+	LinkedFrom []Backlink `json:"linked_from,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 	// ContentChangedAt is when what the entry says last changed, which is
 	// what OKF's generated.at means (SPEC §5.2). It parted ways with
 	// UpdatedAt when the document became the writer's own bytes:
@@ -1357,6 +1363,13 @@ type View struct {
 	Summary  Summary  `json:"summary"`
 	Observed Observed `json:"observed"`
 	Files    []File   `json:"files,omitempty"`
+	// LinkedFrom is the one thing about an entry its own document cannot
+	// say: what links at it (design doc 0106). The insight that explains
+	// a metric points at the metric, so a read of the metric alone would
+	// never surface it. Rows, not documents — each is a pointer the
+	// caller can spend a fetch on — and only on single-entry reads, like
+	// Files. The complete, pageable reverse lookup is search's links_to.
+	LinkedFrom []Backlink `json:"linked_from,omitempty"`
 	// Plan is what the write did, on the response to a write: created,
 	// updated, or unchanged. Absent on a read, which did none of them.
 	//
@@ -1440,6 +1453,31 @@ type SearchHit struct {
 	// doc 0015). It is not part of Summary: a row is a projection of the
 	// entry, and a file is an object beside it.
 	Files []File `json:"files,omitempty"`
+}
+
+// Backlink is one row of a read's linked_from: an entry whose body links
+// at the one being read. The fields are what a caller needs to decide
+// whether to spend a fetch on it — the same question a ContextOutline row
+// answers, and the description carries the weight for the same reason.
+// No score: the answer is a set, not a ranking (the LinksTo filter's own
+// rule), and rows arrive in address order.
+type Backlink struct {
+	ID   string `json:"id"`
+	Type Type   `json:"type"`
+	// Title is the concept's own, absent when the document declared none
+	// (design doc 0064; OKF SPEC §4.1).
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	Status      Status `json:"status"`
+	Trust       Trust  `json:"trust"`
+}
+
+// BacklinkOf projects an entry down to a backlink row.
+func BacklinkOf(k *Knowledge) Backlink {
+	return Backlink{
+		ID: k.ID, Type: k.Type, Title: k.Title, Description: k.Description,
+		Status: k.Lifecycle(), Trust: TrustOf(k.Verifications),
+	}
 }
 
 // ContextRank is what a hit is worth once the entries travel in the same
