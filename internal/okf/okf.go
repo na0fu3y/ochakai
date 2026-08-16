@@ -607,11 +607,12 @@ func ViewOf(k *domain.Knowledge) (domain.View, error) {
 		}
 	}
 	return domain.View{
-		ID:       k.ID,
-		Document: string(doc),
-		Summary:  domain.SummaryOf(k),
-		Observed: domain.ObservedOf(k),
-		Files:    k.Files,
+		ID:         k.ID,
+		Document:   string(doc),
+		Summary:    domain.SummaryOf(k),
+		Observed:   domain.ObservedOf(k),
+		Files:      k.Files,
+		LinkedFrom: k.LinkedFrom,
 	}, nil
 }
 

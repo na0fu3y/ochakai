@@ -33,8 +33,10 @@ ochakai import kb/bundle   # 初回だけ。回すのは人(README の re-stamp 
 ## 日々のループ
 
 - **想起は自動。** `.claude/hooks/ochakai-recall.sh` が
-  UserPromptSubmit で `ochakai context` を引き、関連 concept を注入
-  する。セッションが読んだ concept は記録され、Stop 時に
+  UserPromptSubmit で `ochakai search` を引き、関連 concept への
+  ポインタ行を注入する。読むかどうかはエージェントの選択で、fetch は
+  MCP の `get_concept` から行う(identity 規律)。指された concept は
+  記録され、Stop 時に
   write-back フックが「使った知識は持ちこたえたか(report_outcome)、
   新しく学んだことは無いか(put_concept で draft)」を一度だけ訊く。
 - **AI の書き込みは draft で入る。** レビューキューは

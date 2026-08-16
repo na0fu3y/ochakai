@@ -43,10 +43,6 @@
   },
   "tools": [
     {
-      "name": "get_context",
-      "description": "The one call before answering a data question: the concepts that bear on it, in full."
-    },
-    {
       "name": "search_concepts",
       "description": "Search the knowledge base; verified concepts rank higher."
     },

@@ -101,9 +101,30 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error)
 	if k.Files, err = s.Store.ListAttachments(ctx, id); err != nil {
 		return nil, err
 	}
+	// What links at this entry — the one question its own document cannot
+	// answer (design doc 0106). Rows, not documents: each is a pointer the
+	// caller decides to spend a fetch on, so nothing here is recorded as
+	// fetched. The complete, pageable reverse lookup stays on search's
+	// links_to; these are the first maxBacklinks rows of the same answer,
+	// in the same address order.
+	linkers, err := s.Store.ListByAddress(ctx, store.Filter{LinksTo: id}, nil, maxBacklinks)
+	if err != nil {
+		// A read without its backlink rows is worth more than no read;
+		// the entry itself is already in hand.
+		s.Log.Warn("backlink lookup failed", "id", id, "error", err)
+	}
+	for i := range linkers {
+		k.LinkedFrom = append(k.LinkedFrom, domain.BacklinkOf(&linkers[i]))
+	}
 	s.recordUsage(ctx, domain.EventFetched, []string{id})
 	return k, nil
 }
+
+// maxBacklinks caps the linked_from rows a single read carries. A hub
+// concept — a glossary term half the base links at — would otherwise make
+// its own read unboundedly large; past the cap, the rest of the set is
+// what ?links_to= pages through.
+const maxBacklinks = 20
 
 func (s *Service) Create(ctx context.Context, k *domain.Knowledge, actor domain.Actor) (*domain.Knowledge, error) {
 	if err := s.readOnly(); err != nil {

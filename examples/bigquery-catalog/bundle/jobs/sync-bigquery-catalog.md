@@ -139,8 +139,9 @@ column added next month will not appear in it. If what you wrote is *about*
 the table rather than *of* it — a caveat, a baseline, the filter everyone
 forgets — the better home is a separate `Insight` that links to the catalog
 entry and cites the same source. Then the projection stays machine-owned
-and current, your knowledge stays yours, and one `get_context` call returns
-both, because links expand in each direction.
+and current, your knowledge stays yours, and a read of the catalog entry
+names the insight in its `linked_from` rows, because links are one edge
+read from either end.
 
 This is also the answer to "can an entry be locked to its owner?" — it can,
 with no owner field and no authorization anywhere in the server. Status and

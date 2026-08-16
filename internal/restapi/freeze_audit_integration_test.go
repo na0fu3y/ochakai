@@ -185,7 +185,7 @@ func TestRESTIntegrationStatusAndTrustOutsideTheVocabularyAre400(t *testing.T) {
 		"/api/v1/search?q=revenue&status=Draft",
 		"/api/v1/search?q=revenue&status=verified",
 		"/api/v1/search?q=revenue&trust=verified",
-		"/api/v1/context?q=revenue&trust=Human-Reviewed",
+		"/api/v1/search?q=revenue&trust=Human-Reviewed",
 	} {
 		resp, err := http.Get(srv.URL + q)
 		if err != nil {
@@ -241,22 +241,6 @@ func TestRESTIntegrationReembedRefusesABody(t *testing.T) {
 	}
 	if !strings.Contains(e.Error, "no request body") {
 		t.Errorf("error = %q, want it to say the operation takes no body", e.Error)
-	}
-}
-
-// A negative budget is a 400, not an accidental "no cap": 0 or omission
-// is the spelling for no cap, and a sign mistake must not be answered
-// with everything (design doc 0064, the same shape as limit and days).
-func TestRESTIntegrationNegativeBudgetIs400(t *testing.T) {
-	srv, _ := newIntegrationServer(t)
-
-	resp, err := http.Get(srv.URL + "/api/v1/context?q=revenue&budget=-1")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("budget=-1 = %d, want 400", resp.StatusCode)
 	}
 }
 

@@ -119,13 +119,11 @@ func TestBadRequestValidation(t *testing.T) {
 		{"bad search limit", "/api/v1/search?limit=abc", "invalid limit"},
 		{"bad log limit", "/api/v1/bundle/metrics/log.md?limit=abc", "invalid limit"},
 		{"bad links_to limit", "/api/v1/search?links_to=metrics/revenue&limit=1.5", "invalid limit"},
-		{"bad context limit", "/api/v1/context?q=x&limit=1.5", "invalid limit"},
 		{"bad index prefix", "/api/v1/bundle/..%2Fescape/index.md", "invalid prefix"},
 		// A limit in range is a well-formed number that is still refused:
 		// design doc 0064 unifies every endpoint on reject-over-clamp, the
 		// policy `days` already had.
 		{"search limit too large", "/api/v1/search?q=x&limit=51", "between 1 and 50"},
-		{"context limit too large", "/api/v1/context?q=x&limit=21", "between 1 and 20"},
 		{"log limit too large", "/api/v1/bundle/metrics/log.md?limit=1001", "between 1 and 1000"},
 		// A concept's ?history is 50/200 whatever the Accept says, because
 		// there is one representation of it now (design doc 0102). It
@@ -141,10 +139,8 @@ func TestBadRequestValidation(t *testing.T) {
 		{"fm.tags while listing", "/api/v1/search?sort=usage&fm.tags=core", "use tag="},
 		{"fm.sources", "/api/v1/search?q=x&fm.sources=bq://t", "use source=URI"},
 		{"fm.stale_after", "/api/v1/search?q=x&fm.stale_after=2026-12-31", "use sort=stale_after"},
-		{"fm.type on a context pack", "/api/v1/context?q=x&fm.type=Metric", "use type="},
 		{"producer key", "/api/v1/search?q=x&fm.owner=finance", "OKF does not define"},
 		{"producer key while listing", "/api/v1/search?sort=usage&fm.owner=finance", "OKF does not define"},
-		{"producer key on a context pack", "/api/v1/context?q=x&fm.owner=finance", "OKF does not define"},
 		// A scalar key sent twice is a contradiction, not a question
 		// (design doc 0064 §20.2). It used to be answered silently and in
 		// two directions: the first value won everywhere except fm.{key},
@@ -178,7 +174,6 @@ func TestBadRequestValidation(t *testing.T) {
 // per test.
 var restOperations = []struct{ name, method, url, spec string }{
 	{"search", http.MethodGet, "/api/v1/search", "GET /api/v1/search"},
-	{"context", http.MethodGet, "/api/v1/context", "GET /api/v1/context"},
 	{"bundle get", http.MethodGet, "/api/v1/bundle/metrics/revenue.md", "GET /api/v1/bundle/{path}"},
 	{"bundle put", http.MethodPut, "/api/v1/bundle/metrics/revenue.md", "PUT /api/v1/bundle/{path}"},
 	{"bundle delete", http.MethodDelete, "/api/v1/bundle/metrics/revenue.md", "DELETE /api/v1/bundle/{path}"},
@@ -239,7 +234,7 @@ func TestFrontmatterParamsAreNotUnknown(t *testing.T) {
 // dropped the filter it asked for.
 func TestFrontmatterEmptyKeyIsRejected(t *testing.T) {
 	h := Handler(&service.Service{})
-	for _, url := range []string{"/api/v1/search?q=x&fm.=x", "/api/v1/context?q=x&fm.=x"} {
+	for _, url := range []string{"/api/v1/search?q=x&fm.=x"} {
 		t.Run(url, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, url, nil))

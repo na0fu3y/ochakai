@@ -5,8 +5,8 @@
 // bundle path, the derived index.md and log.md, the reverse lookup
 // (search's links_to=), the human's ruling, deletion, the usage totals and
 // file writes (design doc 0067 §5.1 keeps those off MCP — agents use
-// search/get_context; tool schemas cost agent context, so the tool count
-// is a budget, and design doc 0076 returned two of it).
+// search_concepts/get_concept; tool schemas cost agent context, so the
+// tool count is a budget, and design doc 0076 returned two of it).
 package mcpserver
 
 import (
@@ -181,8 +181,10 @@ const instructions = "ochakai serves human-curated knowledge for data work: metr
 	"knowledge (how to read a metric), glossary terms, dataset and table catalog " +
 	"entries, and references. Those types are recommendations; any single-line string " +
 	"is a type. It runs no SQL and no LLM.\n" +
-	"Before answering a data question, call get_context once — it returns the relevant " +
-	"concepts in full, links expanded.\n" +
+	"Before answering a data question, search_concepts, then get_concept the hits worth " +
+	"reading. A fetched concept carries linked_from — the concepts pointing at it, which " +
+	"is where the insight that says how to read a metric lives — so fetch those too " +
+	"before trusting a number.\n" +
 	"A concept's id is its path (metrics/revenue, ga4/tables/orders). Place together " +
 	"what should be read together; the type is metadata, not a location.\n" +
 	"Judge trust from provenance, not from status: status is the lifecycle (draft, " +
@@ -233,7 +235,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 	// Expose concepts as MCP resources so clients can @-mention them by their
 	// canonical ochakai:// URI. Only the template is advertised — enumerating
 	// every concept in resources/list would flood the client, so discovery stays
-	// with search_concepts/get_context and the URI is the addressing scheme.
+	// with search_concepts and the URI is the addressing scheme.
 	// {+id} (RFC 6570 reserved expansion) lets the slash-separated id match;
 	// a plain {id} would stop at the first slash.
 	s.AddResourceTemplate(&mcp.ResourceTemplate{
@@ -244,7 +246,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			"status, provenance, type-specific attrs) followed by the markdown body and its " +
 			"links. Address by canonical URI — the scheme plus the concept's id (its path), " +
 			"e.g. ochakai://metrics/revenue or ochakai://queries/sales/top-customers. Discover " +
-			"URIs with search_concepts or get_context; get_concept returns the same concept " +
+			"URIs with search_concepts; get_concept returns the same concept " +
 			"as JSON.",
 		URITemplate: "ochakai://{+id}",
 	}, func(ctx context.Context, req *mcp.ReadResourceRequest) (*mcp.ReadResourceResult, error) {
@@ -336,43 +338,21 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 		return nil, searchOut{Hits: page.Hits, Cursor: page.Cursor}, nil
 	}))
 
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get_context",
-		Annotations: readOnly,
-		Description: "The one call to make before answering a data question: searches (verified " +
-			"concepts rank higher), returns the full concepts behind the top hits, and expands " +
-			"one hop through links so the insight explaining a metric and the computation " +
-			"answering the question arrive together. Prefer it over search+get chains; fall " +
-			"back to search_concepts/get_concept for precise lookups. \"concepts\" is the " +
-			"knowledge, \"hits\" only the ranking behind it; concepts past the byte budget are " +
-			"named under \"outline\", fetchable by id with get_concept.",
-	}, tool(svc, func(ctx context.Context, _ domain.Actor, in contextIn) (*mcp.CallToolResult, contextOut, error) {
-		budget := in.Budget
-		if budget <= 0 {
-			budget = defaultContextBudget
-		}
-		res, err := svc.Context(ctx, service.ContextRequest{
-			Query: in.Query,
-			Filter: store.Filter{
-				Types: domain.ToTypes(in.Types), Statuses: domain.ToStatuses(in.Statuses), Tags: in.Tags,
-				Prefixes: in.Prefixes, Trust: domain.ToTrusts(in.Trusts),
-			},
-			Limit: in.Limit, Budget: budget,
-		})
-		if err != nil {
-			return nil, contextOut{}, err
-		}
-		return nil, contextOut{
-			Hits: res.Hits, Concepts: res.Concepts, Outline: res.Outline,
-			Hint: contextHint(res.Outline),
-		}, nil
-	}))
+	// get_context is not a tool (design doc 0108). The one-call pack —
+	// search, fetch, one hop through links, all inside a byte budget —
+	// retired from every surface at once: an agent's read is
+	// search_concepts → get_concept, and the reverse hop the pack
+	// bundled now arrives as linked_from rows on the concept itself
+	// (design doc 0106).
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_concept",
 		Annotations: readOnly,
-		Description: "Get one concept by id: its full markdown body, structured attrs, links, and " +
-			"the files its body references (fetch their bytes with get_file).",
+		Description: "Get one concept by id: its full markdown body, structured attrs, links, the " +
+			"files its body references (fetch their bytes with get_file), and linked_from — " +
+			"rows for the concepts whose bodies link at this one, which is where the caveat " +
+			"that says how to read a metric lives. Fetch the linked_from rows that matter " +
+			"before trusting a number.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in getIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Get(ctx, in.ID)
 		if err != nil {
@@ -382,7 +362,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 		if err != nil {
 			return nil, knowledgeOut{}, err
 		}
-		return nil, knowledgeOut{Knowledge: v}, nil
+		return nil, knowledgeOut{Knowledge: v, Hint: conceptHint}, nil
 	}))
 
 	// put_concept is the one write face (design doc 0046 §3.14). It was
@@ -608,64 +588,17 @@ type searchOut struct {
 	Cursor string `json:"cursor,omitempty"`
 }
 
-// contextIn omits fm: a frontmatter key filter is the vocabulary of
-// somebody who already knows which key they mean, and the schema that
-// teaches an agent the nine askable spellings costs more context than
-// the filter has ever saved (design doc 0058 §2.2). It stays on REST and
-// the CLI, where the caller is a program somebody wrote or a person at a
-// shell. What bounds a response for an agent is budget.
-//
-// min_score is not omitted here — it no longer exists anywhere (0058
-// §2.1).
-type contextIn struct {
-	Query    string   `json:"query" jsonschema:"the data question to gather context for"`
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type, case-insensitive: Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type"`
-	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated — confirmation is a separate question, ask it with trusts"`
-	Trusts   []string `json:"trusts,omitempty" jsonschema:"filter by who confirmed it: unverified, machine-confirmed, human-reviewed; several are OR-ed, omit to not ask. Independent of status"`
-	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes to a subtree; several are OR-ed. It scopes the search, not the link expansion: a concept in scope still arrives with the term it cites outside"`
-	Limit    int      `json:"limit,omitempty" jsonschema:"max primary concepts: default 5, max 20 (out-of-range is an error); linked companions share a 2x total cap"`
-	Budget   int      `json:"budget,omitempty" jsonschema:"max bytes of the whole response — hits, outline and concepts together (default 12000). The ranking and the outline always come back, so what this buys is whole concepts. Raise it when you need them, lower it when context is tight"`
-}
-
-type contextOut struct {
-	Hits     []domain.ContextRank    `json:"hits"`
-	Concepts []domain.View           `json:"concepts"`
-	Outline  []domain.ContextOutline `json:"outline,omitempty"`
-	Hint     string                  `json:"hint"`
-}
-
-// defaultContextBudget bounds an unparameterized get_context. It is on by
-// default because the callers that most need it — hosts that embed ochakai
-// and never touch the tool arguments — are exactly the ones that will not
-// set it. Roughly 3000 tokens of concepts, English or Japanese.
-const defaultContextBudget = 12000
-
-// contextHint rides along with every context pack. Claude Code sites can
-// install the write-back habit with a Stop hook; a browser-based host has
-// no shell to hang one on, so the server supplies it — same words for
-// every host, no LLM involved (the MCP server's Instructions field carries
-// the same habit, but hosts are free to drop instructions and many do).
-func contextHint(outline []domain.ContextOutline) string {
-	hint := "After acting on this knowledge, call report_outcome (worked/failed) on the concepts you " +
-		"used — failed reports are how stale verified knowledge gets caught. If this session " +
-		"produced reusable knowledge, write it back with put_concept as a draft; search " +
-		"rejected=true first so you do not re-propose something already turned down."
-	if len(outline) == 0 {
-		return hint
-	}
-	hint += fmt.Sprintf(" %d concepts did not fit the budget and are listed under \"outline\" — "+
-		"fetch any of them by id with get_concept.", len(outline))
-	// Said here rather than in the tool schema, because it is true of one
-	// response rather than of every one: the schema is resident in the
-	// agent's context for the whole conversation, this sentence is not.
-	if outline[0].Excerpt != "" {
-		hint += " The first of them was your best match and was too large for any budget," +
-			" so its row carries an \"excerpt\" of its opening — read that before deciding" +
-			" whether to fetch the rest."
-	}
-	return hint
-}
+// conceptHint rides along with every get_concept answer — the point where
+// knowledge is actually delivered. Claude Code sites can install the
+// write-back habit with a Stop hook; a browser-based host has no shell to
+// hang one on, so the server supplies it — same words for every host, no
+// LLM involved (the MCP server's Instructions field carries the same
+// habit, but hosts are free to drop instructions and many do; design docs
+// 0069, 0096 §3). Per-response, so it costs no resident bytes.
+const conceptHint = "After acting on this knowledge, call report_outcome (worked/failed) on the concepts you " +
+	"used — failed reports are how stale verified knowledge gets caught. If this session " +
+	"produced reusable knowledge, write it back with put_concept as a draft; search " +
+	"rejected=true first so you do not re-propose something already turned down."
 
 type getIn struct {
 	ID string `json:"id" jsonschema:"the concept's id — its path: slug segments separated by / (e.g. metrics/revenue, ga4/tables/orders)"`
@@ -678,6 +611,9 @@ type knowledgeOut struct {
 	// §3.4), and an agent that gets one back can fix the document rather
 	// than discover the change on the next read.
 	Notes []string `json:"notes,omitempty"`
+	// Hint is the write-back habit, on reads only (conceptHint): a write
+	// is already the habit being exercised.
+	Hint string `json:"hint,omitempty"`
 }
 
 type fileIn struct {

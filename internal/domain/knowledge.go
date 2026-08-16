@@ -882,9 +882,15 @@ type Knowledge struct {
 	// Files is read-only metadata (no bytes), populated on single-
 	// entry reads. Files are managed through their own endpoints,
 	// never through create/update payloads.
-	Files     []File    `json:"files,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Files []File `json:"files,omitempty"`
+	// LinkedFrom is read-only like Files and populated the same way, on
+	// single-entry reads: the rows okf.ViewOf carries into
+	// View.LinkedFrom. Never accepted from a payload — links are derived
+	// from bodies (design doc 0024), and this is the same edge read the
+	// other way round.
+	LinkedFrom []Backlink `json:"linked_from,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 	// ContentChangedAt is when what the entry says last changed, which is
 	// what OKF's generated.at means (SPEC §5.2). It parted ways with
 	// UpdatedAt when the document became the writer's own bytes:
@@ -1357,6 +1363,13 @@ type View struct {
 	Summary  Summary  `json:"summary"`
 	Observed Observed `json:"observed"`
 	Files    []File   `json:"files,omitempty"`
+	// LinkedFrom is the one thing about an entry its own document cannot
+	// say: what links at it (design doc 0106). The insight that explains
+	// a metric points at the metric, so a read of the metric alone would
+	// never surface it. Rows, not documents — each is a pointer the
+	// caller can spend a fetch on — and only on single-entry reads, like
+	// Files. The complete, pageable reverse lookup is search's links_to.
+	LinkedFrom []Backlink `json:"linked_from,omitempty"`
 	// Plan is what the write did, on the response to a write: created,
 	// updated, or unchanged. Absent on a read, which did none of them.
 	//
@@ -1442,57 +1455,14 @@ type SearchHit struct {
 	Files []File `json:"files,omitempty"`
 }
 
-// ContextRank is what a hit is worth once the entries travel in the same
-// response: an ordering, not a second copy of the knowledge (design doc
-// 0033). A SearchHit embedded the whole Knowledge — body, attrs and all
-// — when this split was made, so a context pack that returned hits
-// verbatim sent every top entry twice and left the byte budget governing
-// one of the copies. A hit is a projection now (see SearchHit above), but
-// a rank stays narrower still: a pack that already ships the entries
-// needs no second description of them.
-//
-// The fields are the ones a caller needs to decide whether to spend a
-// round trip on an id it was not handed: search results below the pack's
-// own cut-off arrive only this way.
-type ContextRank struct {
-	ID   string `json:"id"`
-	Type Type   `json:"type"`
-	// Title is the concept's own, absent when the document declared none
-	// (design doc 0064; OKF SPEC §4.1).
-	Title  string `json:"title,omitempty"`
-	Status Status `json:"status"`
-	// Trust is the ledger's answer in OKF's vocabulary (SPEC §5.3), which
-	// the lifecycle status does not carry (design docs 0043 §3.2, 0046
-	// §3.10): a caller deciding whether to spend a round trip wants to
-	// know who confirmed the entry, not merely whether somebody did.
-	Trust Trust   `json:"trust"`
-	Score float64 `json:"score"`
-}
-
-// URI is the entry's canonical address, as on Knowledge: a rank is a
-// pointer, and the pointer should read the same everywhere.
-func (c *ContextRank) URI() string { return fmt.Sprintf("ochakai://%s", c.ID) }
-
-// ContextRanks projects search hits down to the ranking behind a pack.
-func ContextRanks(hits []SearchHit) []ContextRank {
-	out := make([]ContextRank, len(hits))
-	for i := range hits {
-		out[i] = ContextRank{
-			ID: hits[i].ID, Type: hits[i].Type, Title: hits[i].Title,
-			Status: hits[i].Status, Trust: hits[i].Trust, Score: hits[i].Score,
-		}
-	}
-	return out
-}
-
-// ContextOutline names an entry a context pack could not afford to deliver
-// in full: enough for the caller to decide whether to spend a round trip
-// fetching it by id, and nothing more. The description carries the weight
-// here — an entry with an empty description is nearly invisible in an
-// outline, which is one more reason curation pays. It is also the only
-// unbounded field, so the packer caps it: these rows are counted against
-// the same budget as the entries.
-type ContextOutline struct {
+// Backlink is one row of a read's linked_from: an entry whose body links
+// at the one being read. The fields are what a caller needs to decide
+// whether to spend a fetch on it, and the description carries the weight
+// — an entry with an empty description is nearly invisible here, which
+// is one more reason curation pays. No score: the answer is a set, not a
+// ranking (the LinksTo filter's own rule), and rows arrive in address
+// order.
+type Backlink struct {
 	ID   string `json:"id"`
 	Type Type   `json:"type"`
 	// Title is the concept's own, absent when the document declared none
@@ -1500,17 +1470,15 @@ type ContextOutline struct {
 	Title       string `json:"title,omitempty"`
 	Description string `json:"description,omitempty"`
 	Status      Status `json:"status"`
-	Bytes       int    `json:"bytes"`
-	// Excerpt is the opening of the body, and only the top-ranked row
-	// carries one, only when the budget could not hold that concept at
-	// all (design doc 0093). Bytes says how much more there is, and the
-	// id is the address the rest is fetched from.
-	//
-	// It is deliberately not the front of the document: the frontmatter
-	// is the fields above, and an excerpt that repeated them would spend
-	// itself saying what the row already says. It also stops before a
-	// code fence, so no caller is ever handed half a query.
-	Excerpt string `json:"excerpt,omitempty"`
+	Trust       Trust  `json:"trust"`
+}
+
+// BacklinkOf projects an entry down to a backlink row.
+func BacklinkOf(k *Knowledge) Backlink {
+	return Backlink{
+		ID: k.ID, Type: k.Type, Title: k.Title, Description: k.Description,
+		Status: k.Lifecycle(), Trust: TrustOf(k.Verifications),
+	}
 }
 
 // ConceptPath is the bundle path a concept lives at: its id with ".md"

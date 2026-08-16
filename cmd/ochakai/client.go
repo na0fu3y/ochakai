@@ -33,7 +33,6 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"search":    cmdSearch,
 	"list":      cmdList,
 	"browse":    cmdBrowse,
-	"context":   cmdContext,
 	"get":       cmdGet,
 	"put":       cmdPut,
 	"verify":    cmdVerify,
@@ -543,109 +542,6 @@ func cmdBrowse(ctx context.Context, args []string) error {
 	return nil
 }
 
-func cmdContext(ctx context.Context, args []string) error {
-	fs, url := newFlagSet(
-		"context",
-		"Usage: ochakai context [flags] <question>\n\nGather what to read before answering a data question, in one call:\nthe full concepts behind the top search hits (verified concepts rank\nhigher), expanded one hop through links so the insight explaining a\nmetric travels with it. Markdown on stdout, ready for an agent's\ncontext window. No hits leave stdout empty and say so on stderr\n(exit 0).",
-		"  ochakai context \"why did revenue drop in March?\"\n  ochakai context \"monthly revenue\" --type 'Attested Computation' --trust human-reviewed --json\n  ochakai context \"$PROMPT\" --budget 4000   # hooks: cap the injected bytes\n  ochakai context \"activation rate\" --prefix teams/growth --prefix company\n")
-	var types, statuses, tags, prefixes repeated
-	fs.Var(&types, "type", "filter by type: "+typeList()+", or any custom type (repeatable)")
-	fs.Var(&statuses, "status", "filter by status: "+statusList()+" (repeatable)")
-	fs.Var(&tags, "tag", "filter by tag (repeatable)")
-	fs.Var(&prefixes, "prefix", "only concepts under this `path`, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands")
-	var trust repeated
-	fs.Var(&trust, "trust", "filter by who confirmed the concept: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
-	var fm repeated
-	fs.Var(&fm, "fm", fmUsage)
-	limit := fs.Int("limit", 0, "max full concepts (server default 5, max 20)")
-	budget := fs.Int("budget", 0, "cap the response at ~this many bytes (0 = no cap); the rendered output stops printing concepts, --json asks the server to cap and list what did not fit under \"outline\"")
-	asJSON := fs.Bool("json", false, "print the raw JSON response")
-	pos, err := parseArgs(fs, args)
-	if err != nil {
-		return err
-	}
-	if len(pos) == 0 {
-		fs.Usage()
-		return errReported
-	}
-	c, err := newClient(ctx, *url)
-	if err != nil {
-		return err
-	}
-	// The budget goes to the server only for --json: the rendered path
-	// asks for everything and caps while printing, where it can name what
-	// it dropped. JSON has no such layer, so an unsent budget was silently
-	// doing nothing.
-	serverBudget := 0
-	if *asJSON {
-		serverBudget = *budget
-	}
-	pairs, err := fmPairs(fm)
-	if err != nil {
-		return err
-	}
-	res, err := c.Context(ctx, apiclient.ContextParams{
-		Query: strings.Join(pos, " "), Types: types, Statuses: statuses, Tags: tags,
-		Prefixes: prefixes, Trust: trust, FM: pairs, Limit: *limit, Budget: serverBudget,
-	})
-	if err != nil {
-		return err
-	}
-	if *asJSON {
-		return printJSON(res)
-	}
-	renderContext(os.Stdout, res, *budget)
-	return nil
-}
-
-// renderContext prints the pack as compact markdown: per concept a heading
-// with URI, status, and title, a provenance line, then the concept's
-// document. Once the byte budget is
-// spent the remaining concepts are dropped with a note (the first concept
-// always renders); hits without a rendered concept become one-line pointers.
-func renderContext(w io.Writer, res *apiclient.ContextResult, budget int) {
-	// The one call an agent makes before a data question, answering with
-	// a silent prompt, was the least readable thing this CLI did: the
-	// MCP surface returns the same emptiness with a hint attached
-	// (contextHint), and a hook that shells out to this command got
-	// neither the concepts nor the reason there were none. Stdout stays
-	// the pack — a hook pipes it straight into a prompt — so the sentence
-	// goes to stderr.
-	if len(res.Concepts) == 0 && len(res.Hits) == 0 {
-		fmt.Fprintln(os.Stderr,
-			"no concept matched — nothing to read before this question. "+
-				"Write what you learn answering it back with `ochakai put <id>`; "+
-				"`ochakai stats` counts the questions that came back empty.")
-		return
-	}
-	rendered := map[string]bool{}
-	written, omitted := 0, 0
-	for i := range res.Concepts {
-		k := &res.Concepts[i]
-		sec := renderEntry(k)
-		if budget > 0 && written > 0 && written+len(sec) > budget {
-			omitted = len(res.Concepts) - i
-			break
-		}
-		fmt.Fprint(w, sec)
-		written += len(sec)
-		rendered[k.ID] = true
-	}
-	if omitted > 0 {
-		fmt.Fprintf(w, "(%d more concepts beyond --budget; raise it or `ochakai get` them)\n", omitted)
-	}
-	var rest []string
-	for i := range res.Hits {
-		h := &res.Hits[i]
-		if !rendered[h.ID] {
-			rest = append(rest, fmt.Sprintf("- %s (%s) — %s", h.URI(), h.Status, domain.DisplayTitle(h.Title, h.ID)))
-		}
-	}
-	if len(rest) > 0 {
-		fmt.Fprintf(w, "\nAlso relevant (`ochakai get <id>` for the full concept):\n%s\n", strings.Join(rest, "\n"))
-	}
-}
-
 // printRejection writes this instance's ruling against a concept, with
 // the reason it was given. Nothing is printed for a concept nobody
 // turned down.
@@ -664,36 +560,6 @@ func printRejection(w io.Writer, r *domain.Rejection) {
 	if r.Note != "" {
 		fmt.Fprintf(w, "rejection note: %s\n", r.Note)
 	}
-}
-
-// renderEntry writes one concept of a context pack: a heading, what this
-// instance observed about it, and then the concept itself — its document.
-//
-// It used to assemble a curated summary of selected fields, which was the
-// only way to show a concept when a concept was a bag of fields. Now that
-// a concept is a document, printing the document is both simpler and more
-// faithful: the agent reading this pack sees the same shape it will see
-// from `ochakai get`, from MCP, and in a git-tracked bundle, and nothing
-// the writer wrote is left out because this function did not know to look
-// for it.
-func renderEntry(v *domain.View) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "## %s (%s) — %s\n", v.URI(), v.Summary.Status, domain.DisplayTitle(v.Summary.Title, v.Summary.ID))
-	prov := "created by " + v.Observed.CreatedBy.String()
-	if lv := v.Observed.LastVerified(); lv != nil {
-		verified := fmt.Sprintf("verified by %s on %s", lv.By.String(), lv.At.Format("2006-01-02"))
-		if n := len(v.Observed.Verified); n > 1 {
-			verified += fmt.Sprintf(" (%d verifications)", n)
-		}
-		prov = verified + "; " + prov
-	}
-	fmt.Fprintln(&b, prov)
-	printRejection(&b, v.Observed.Rejection)
-	if doc := strings.TrimSpace(v.Document); doc != "" {
-		fmt.Fprintf(&b, "\n%s\n", doc)
-	}
-	b.WriteString("\n")
-	return b.String()
 }
 
 func cmdUsage(ctx context.Context, args []string) error {
@@ -964,7 +830,7 @@ func cmdLog(ctx context.Context, args []string) error {
 func cmdGet(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"get",
-		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge concept as an OKF document (YAML frontmatter +\nmarkdown body), and nothing else, so the output round-trips through\n`ochakai put`. Who wrote and confirmed it is an observation rather\nthan part of the document, so it goes to stderr, as file metadata\ndoes; --download saves the files themselves (an agent can\nthen read them from disk). --json prints the whole read instead: the\ndocument, the projection under .summary, and the provenance under\n.observed.",
+		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge concept as an OKF document (YAML frontmatter +\nmarkdown body), and nothing else, so the output round-trips through\n`ochakai put`. Who wrote and confirmed it, the files beside it, and\nwhat links at it (linked_from) are observations rather than part of\nthe document, so they go to stderr; --download saves the files themselves (an agent can\nthen read them from disk). --json prints the whole read instead: the\ndocument, the projection under .summary, and the provenance under\n.observed.",
 		"  ochakai get metrics/revenue\n  ochakai get queries/sales/monthly-revenue --json | jq -r '.summary.content_hash'\n  ochakai get insights/reading-revenue --download ./img\n")
 	asJSON := fs.Bool("json", false, "print the whole read as JSON (document, summary, observed) instead of the document alone")
 	download := fs.String("download", "", "save the concept's files into this directory")
@@ -1017,6 +883,18 @@ func cmdGet(ctx context.Context, args []string) error {
 			fmt.Fprintf(os.Stderr, "file: %s (%s, %d bytes) — `ochakai get %s --download DIR` to save\n",
 				att.Name, att.MediaType, att.Size, id)
 		}
+	}
+	// The one thing the document cannot say about itself (design doc
+	// 0106): what links at it. Pointers, so they ride beside the file
+	// hints rather than in the document.
+	for i := range k.LinkedFrom {
+		row := &k.LinkedFrom[i]
+		desc := row.Description
+		if desc != "" {
+			desc = " — " + desc
+		}
+		fmt.Fprintf(os.Stderr, "linked from: %s (%s, %s)%s\n",
+			row.ID, row.Type, row.Trust, desc)
 	}
 	return nil
 }

@@ -16,6 +16,13 @@ Status: Accepted(2026-08-02)。**面の配分の現行ドキュメント。**
 §4 は [0093](0093-the-budget-governs-the-whole-response.md) が改訂する —
 「`hits` はバイト予算の外」を撤回し、予算は応答全体を縛る。順位が順位に
 徹することは変わらない。
+§5.1 の「被リンク」の項は [0106](0106-a-read-carries-what-points-at-it.md)
+が改訂する — 結論(ツールを持たない)は動かず、理由が「`get_context` が
+同梱済み」から「単読が `linked_from` の行を運ぶ」に替わる。
+§1・§4・§5.1 の `get_context` を名指す行は
+[0108](0108-the-context-pack-retires.md) が改訂する — pack は全面から
+退役し、エージェントの読みは search → get になる。§4 の「順位は順位に
+徹する」は search の hits の規則として残る。
 Date: 2026-08-02
 
 ## 0. この記録が決めたこと

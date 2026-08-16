@@ -2,8 +2,8 @@
 # ochakai-write-back: Stop hook — once per session, before the agent
 # stops, ask the two write-side questions of the loop:
 #
-# - report_outcome: did the concepts ochakai-recall.sh handed this
-#   session hold up when acted on?
+# - report_outcome: did the concepts ochakai-recall.sh pointed this
+#   session at hold up when acted on?
 # - write-back: did the session learn something durable about ochakai
 #   that belongs in the knowledge base?
 #
@@ -45,7 +45,7 @@ recalled=""
 
 outcome_reason=""
 if [ -n "$recalled" ]; then
-	outcome_reason="This session was handed these ochakai concepts: $recalled — if you acted on one (followed its procedure, relied on its claim), report whether it held up with the report_outcome MCP tool (worked, or failed with a note saying what went wrong). Skip any you only read but never acted on. "
+	outcome_reason="This session was pointed at these ochakai concepts: $recalled — if you acted on one (followed its procedure, relied on its claim), report whether it held up with the report_outcome MCP tool (worked, or failed with a note saying what went wrong). Skip any you only read but never acted on. "
 fi
 
 jq -n --arg outcome "$outcome_reason" '{

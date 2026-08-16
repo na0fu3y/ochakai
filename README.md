@@ -44,7 +44,8 @@ account and nothing to configure:
 ```sh
 go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
 ochakai use https://demo.ochak.ai
-ochakai context "why is revenue down?"
+ochakai search "why is revenue down?"
+ochakai get insights/reading-revenue
 ```
 
 It is also the one deployment where plain curl works — nothing to sign:
@@ -58,13 +59,15 @@ would be taking your work ([design doc
 0087](docs/design/0087-a-sandbox-says-it-is-one.md) §3). `ochakai whoami`
 says it on the `posture:` line, and `ochakai stats` on its first.
 
-#### What that one call is worth
+#### What those two calls are worth
 
-`ochakai context` is the read an agent makes before a data question: it
-returns the concepts that bear on it in full and names the rest. Here is
-part of what comes back above, condensed — the quoted sentences are
-verbatim, and `ochakai get insights/reading-revenue` prints the whole
-entry:
+Search ranks what bears on the question; `get` hands one concept over in
+full, and its `linked_from` rows name what points back at it — which is
+how the caveat that says *how to read* a metric reaches whoever reads the
+metric ([design doc
+0106](docs/design/0106-a-read-carries-what-points-at-it.md)). Here is
+part of what the insight above holds, condensed — the quoted sentences
+are verbatim:
 
 > **Seasonality.** The shape repeats every year and is larger than almost
 > anything you will be asked to investigate. December, +30 to +40%; March,
@@ -85,7 +88,7 @@ reads exactly like a bad day and has caused more false alarms than any
 real decline. Those are somebody's conclusions about their own data, and
 they are the difference between *revenue is down 15%* and *it is August*.
 
-The same response hands back what is **not** settled, which is the half a
+The same search hands back what is **not** settled, which is the half a
 retrieval system usually drops. The repeat-purchase-rate metric comes back
 marked `draft`, carrying the three questions nobody has answered yet — the
 lookback window, guest checkout, the denominator — and its frontmatter says
@@ -124,7 +127,7 @@ curl reaches it too:
 ochakai use http://localhost:8080
 ochakai import examples/demo
 curl 'http://localhost:8080/api/v1/search?q=revenue'
-ochakai context "なぜ売上が落ちている?"   # the same base, asked in Japanese
+ochakai search "なぜ売上が落ちている?"   # the same base, asked in Japanese
 ```
 
 That last line is not a translation of the first: the base is bilingual
@@ -193,7 +196,7 @@ does:
 ```sh
 ochakai use https://your-service.run.app   # or back to http://localhost:8080
 ochakai whoami                      # which server, as whom, reachable?
-ochakai context "why is revenue down?"  # the one-call read before a data question
+ochakai search "why is revenue down?"   # the read an agent starts a data question with
 ochakai verify metrics/revenue      # a human confirmed it; status and ETag stay put
 ochakai search "revenue" --type Metric --trust human-reviewed   # what that verify put there
 ochakai ui                          # web UI at http://127.0.0.1:8098, acting as you

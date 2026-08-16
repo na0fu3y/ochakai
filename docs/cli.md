@@ -30,8 +30,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   list [feed]             list a review feed or a reverse lookup, page by page
                           (usage, verified_at, failed, stale_after)
   browse [prefix]         list one level of the ID hierarchy (folder view)
-  context <question>      the one-call read before a data question (full concepts)
-  get <id>                print one concept as an OKF document
+  get <id>                print one concept as an OKF document (stderr notes
+                          what links at it)
   put <path> [-f file]    write one object of the bundle: a concept from OKF
                           markdown or JSON at <id>, or a file at its own path
                           (every change kept as a revision)
@@ -122,47 +122,6 @@ Examples:
   ochakai completion fish > ~/.config/fish/completions/ochakai.fish
 ```
 
-## ochakai context
-
-```
-Usage: ochakai context [flags] <question>
-
-Gather what to read before answering a data question, in one call:
-the full concepts behind the top search hits (verified concepts rank
-higher), expanded one hop through links so the insight explaining a
-metric travels with it. Markdown on stdout, ready for an agent's
-context window. No hits leave stdout empty and say so on stderr
-(exit 0).
-
-Flags:
-  -budget int
-    	cap the response at ~this many bytes (0 = no cap); the rendered output stops printing concepts, --json asks the server to cap and list what did not fit under "outline"
-  -fm key=value
-    	filter by an OKF frontmatter key=value, exactly (repeatable, AND-ed) — the OKF keys with no flag of their own (attester, computation, description, executor, parameters, resource, runtime, title, usage_window); a value spelling a number or a boolean matches the typed one too (--fm required=true). A producer's own key is kept and handed back as written but is not part of the query vocabulary, and type, status, tags, sources and stale_after have filters of their own that answer from a column instead
-  -json
-    	print the raw JSON response
-  -limit int
-    	max full concepts (server default 5, max 20)
-  -prefix path
-    	only concepts under this path, e.g. teams/growth (repeatable, OR-ed); scopes the search, not the links it expands
-  -status value
-    	filter by status: draft|stable|deprecated (repeatable)
-  -tag value
-    	filter by tag (repeatable)
-  -trust value
-    	filter by who confirmed the concept: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
-  -type value
-    	filter by type: Metric|Attested Computation|Skill|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|Reference, or any custom type (repeatable)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
-
-Examples:
-  ochakai context "why did revenue drop in March?"
-  ochakai context "monthly revenue" --type 'Attested Computation' --trust human-reviewed --json
-  ochakai context "$PROMPT" --budget 4000   # hooks: cap the injected bytes
-  ochakai context "activation rate" --prefix teams/growth --prefix company
-```
-
 ## ochakai delete
 
 ```
@@ -217,9 +176,9 @@ Usage: ochakai get [flags] <id>
 
 Print one knowledge concept as an OKF document (YAML frontmatter +
 markdown body), and nothing else, so the output round-trips through
-`ochakai put`. Who wrote and confirmed it is an observation rather
-than part of the document, so it goes to stderr, as file metadata
-does; --download saves the files themselves (an agent can
+`ochakai put`. Who wrote and confirmed it, the files beside it, and
+what links at it (linked_from) are observations rather than part of
+the document, so they go to stderr; --download saves the files themselves (an agent can
 then read them from disk). --json prints the whole read instead: the
 document, the projection under .summary, and the provenance under
 .observed.

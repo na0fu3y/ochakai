@@ -73,14 +73,14 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 ない。ここがその調節器である — 面ごとに天井を宣言し、超えたら CI が
 落ちる。
 
-- REST: 11
-- PARAM: 19
+- REST: 10
+- PARAM: 18
 - HEADER: 13
-- MCP: 7
-- MCP-BYTES: 13500
+- MCP: 6
+- MCP-BYTES: 12000
 - MCP-BYTES-SLACK: 500
-- CLI: 25
-- FLAG: 29
+- CLI: 24
+- FLAG: 28
 - ENV: 13
 - VOCAB: 49
 - DOC: 27
@@ -147,11 +147,10 @@ PR がまたこの行に戻ってくるからで、慣行として書くだけ�
 規則の下で動く運用であって、規則の変更ではない。増やしたくないものを
 数える仕組みが、自分の数え先を増やすのでは筋が通らない。
 
-## REST (11)
+## REST (10)
 
 - `DELETE /api/v1/bundle/{path}`
 - `GET /api/v1/bundle/{path}`
-- `GET /api/v1/context`
 - `GET /api/v1/search`
 - `GET /api/v1/stats`
 - `GET /api/v1/usage/{id}`
@@ -180,6 +179,16 @@ PR がまたこの行に戻ってくるからで、慣行として書くだけ�
 面に載り MCP には載らない — 違うのは記録される値だけで、それは
 「パラメータを持つ一つの操作」の定義である(§3.4)。
 
+11 → 10 は [0108](design/0108-the-context-pack-retires.md) が
+`/context` を退役させたぶんである。**畳み込みではなく削除で、落ちるのは
+全面から同時に**である — pack(検索 + 上位の全文 + リンク一 hop +
+バイト予算)はどの面にも残らない。エージェントの読みは search → get に
+なり、pack が同梱していた逆向きの hop は concept 自身の `linked_from`
+([0106](design/0106-a-read-carries-what-points-at-it.md))が運ぶ。
+凍結との関係は [0107](design/0107-the-freeze-holds-the-okf-core.md) が
+先に整えた — `/context` はコアの外なので、この削除は 0.x の BREAKING
+として届く。
+
 `report_outcome`(`POST /api/v1/usage/{id}`)はそこに畳んでいない。
 人の裁定ではなく機械の観測であり、[0067 §5.4](design/0067-four-faces-and-what-they-decline.md)
 が Web UI に載せないと決めている当のものである。数のためだけの畳み込み
@@ -198,7 +207,7 @@ PR がまたこの行に戻ってくるからで、慣行として書くだけ�
 一度覚えれば済むが、読むことは行で払う。単位が行なのは、`MCP-BYTES` の
 バイトと違ってここでは**読む人が単位**だからである。
 
-## PARAM (19)
+## PARAM (18)
 
 クエリパラメータも表面である。**操作の数だけを数えていた間、圧力は
 ここへ逃げていた** — エンドポイントをパラメータや content type に
@@ -233,10 +242,15 @@ PR がまたこの行に戻ってくるからで、慣行として書くだけ�
 
 19 のまま、PR [#407](https://github.com/na0fu3y/ochakai/issues/407)
 (design doc [0064](design/0064-rest-stops-at-api-v1.md)) が `attachments`
-を `files` に改めた。下の MCP の `get_attachment` → `get_file` と同じ
+を `files` に改めた。
+
+19 → 18 は [0108](design/0108-the-context-pack-retires.md) の `budget` で
+ある。予算は pack の語彙であり、pack と一緒に落ちた — 応答の大きさを
+呼び出し側の窓に合わせる機構は、読みがプリミティブになった面では
+`limit` と行の上限([0106](design/0106-a-read-carries-what-points-at-it.md))
+が担う。下の MCP の `get_attachment` → `get_file` と同じ
 改名で、**変わったのは利用者が知る語そのもの**である。
 
-- `budget`
 - `cursor`
 - `days`
 - `dry_run`
@@ -317,10 +331,9 @@ PR がまたこの行に戻ってくるからで、慣行として書くだけ�
 - `Ochakai-Unchanged`
 - `X-Content-Type-Options`
 
-## MCP (7)
+## MCP (6)
 
 - `get_concept`
-- `get_context`
 - `get_file`
 - `list_concepts`
 - `put_concept`
@@ -402,6 +415,18 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 あって frontmatter のキーではなく、応答が運ぶ `trust`(段は一つなので
 単数)も三つの段の綴りもそのままである。
 
+7 → 6 は [0108](design/0108-the-context-pack-retires.md) で、
+`get_context` を降ろした。0076 の二本と違い**通行量はあった** — 同梱の
+フックも配布 CLAUDE.md もここを通っていた — ので、根拠も別である:
+エージェントは search → get の反復が得意になり、サーバが「何を読むべき
+か」を先に詰めて渡す pack は、その判断をエージェントから取り上げる
+機構になっていた。pack が同梱していた逆向きの hop は `get_concept` の
+`linked_from` が運び([0106](design/0106-a-read-carries-what-points-at-it.md))、
+書き戻しの習慣を運ぶ hint は pack の応答から `get_concept` の応答へ
+移った(0096 §3 の改訂)。常駐は 13,460 → 11,629 バイトで、
+`MCP-BYTES` は 13,500 → 12,000 に**下がる** — 上げるのが決定なら、
+下げるのも同じ幅で効く。
+
 6 → 7 は [0096](design/0096-a-listing-is-not-a-search-here-either.md) で、
 `search_concepts` から `list_concepts` を割った。**能力は一つも増えて
 いない** — 割ったのは、一つのスキーマが「`query` は `sort` が無いとき
@@ -412,11 +437,10 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 この面で天井が上がったのは初めてで、`MCP-BYTES` はそれを言うために
 在る。
 
-## CLI (25)
+## CLI (24)
 
 - `ochakai browse`
 - `ochakai completion`
-- `ochakai context`
 - `ochakai delete`
 - `ochakai export`
 - `ochakai get`
@@ -439,6 +463,12 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 - `ochakai use`
 - `ochakai verify`
 - `ochakai whoami`
+
+25 → 24 は [0108](design/0108-the-context-pack-retires.md) が
+`context` コマンドを退役させたぶんである。フック(`examples/claude-code/hooks/`)は
+`ochakai search --json` の順位を注入するポインタ注入器になり、取りに
+行くのはエージェント自身になった — 配られた pack より、選ばれた fetch の
+ほうが需要シグナルとして正直である(0106 §3)。
 
 25 → 26 は [0062](design/0062-a-listing-is-not-a-search.md) の
 `ochakai list` である。**天井を上げる決定**であり、そう言って上げて
@@ -477,7 +507,7 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 なった以上(0075 §5)、誰もリンクしないファイルは誰にも見つからない。
 `--name` は `ochakai use` にも付いているので FLAG は 28 のままである。
 
-## FLAG (29)
+## FLAG (28)
 
 コマンド数を数えることは、**REST で操作数だけを数えていたのと同じ形の
 見落とし**だった。PARAM の節が書いているとおり、操作をパラメータに畳めば
@@ -505,11 +535,13 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 `serve` / `serve-ui` のフラグは数えない。CLI の節が `serve` を数えないのと
 同じ理由で、バイナリの動かし方であって ochakai が知っていることではない。
 
+29 → 28 は [0108](design/0108-the-context-pack-retires.md) の `budget`
+で、PARAM の同名と同じ一つの決定の片割れである。
+
 28 のまま、PR [#407](https://github.com/na0fu3y/ochakai/issues/407) が
 `ochakai export` の一本を `no-files` に改めた — PARAM の `attachments`
 → `files` に揃えただけで、ワイヤの外で名前だけ遅れていた。
 
-- `budget`
 - `cursor`
 - `days`
 - `download`
@@ -922,7 +954,8 @@ PR も自分の tree では正しく、落ちたのは合流点だった。100 �
 いるのはエージェント向け semantic layer の側だけで、そこでの収束形は
 「投入したら、それに当たるはずの問いを撃って呼ばれることを確認し、外れた
 問いを評価セットに還流させる」である。ochakai はその材料を全部持っていた
-— `ochakai context` がエージェントの読み取りそのもので、`ochakai stats`
+— 当時の `context` コマンドがエージェントの読み取りそのもので(いまは
+search → get がその読みである)、`ochakai stats`
 の gap 行が**返らなかった問いを訊かれた回数順に**並べ、`Attested
 Computation` が canary としてそれを継続実行する — が、**三つを一つの手順
 として並べた文がどこにも無かった**。500 行のうち一番の値打ちはこの §3 で

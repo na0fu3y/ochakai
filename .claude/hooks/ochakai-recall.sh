@@ -1,14 +1,20 @@
 #!/bin/sh
-# ochakai-recall: UserPromptSubmit hook — inject relevant knowledge from
-# this repository's own dogfood instance (kb/README.md) into the agent's
-# context. Adapted from examples/claude-code/hooks/ochakai-recall.sh; the
-# changes are the default server (the compose harness, so a fresh clone
-# needs no `ochakai use`) and a reachability marker the write-back hook
-# reads, so it never nudges a session whose knowledge base was down.
+# ochakai-recall: UserPromptSubmit hook — surface pointers to relevant
+# knowledge from this repository's own dogfood instance (kb/README.md).
+# Adapted from examples/claude-code/hooks/ochakai-recall.sh; the changes
+# are the default server (the compose harness, so a fresh clone needs no
+# `ochakai use`), a reachability marker the write-back hook reads, and
+# the fetch instruction pointing at the MCP tool — on the dev instance
+# CLI reads are the anonymous human, while the MCP connection carries
+# the agent's process identity
+# (kb/bundle/policies/ai-human-identity.md).
 #
-# Whatever this prints on stdout is added to the context; printing
-# nothing adds nothing. Failures are silent by design: a knowledge base
-# being down must never block the user's prompt.
+# What this injects is the search ranking, not the knowledge itself
+# (design doc 0108): the fetch is the agent's own move, and the fetched
+# concept names what links at it under linked_from. Whatever this prints
+# on stdout is added to the context; printing nothing adds nothing.
+# Failures are silent by design: a knowledge base being down must never
+# block the user's prompt.
 set -eu
 
 command -v ochakai >/dev/null 2>&1 || exit 0
@@ -23,22 +29,22 @@ case $prompt in
 /*) exit 0 ;; # slash commands are not knowledge questions
 esac
 
-pack=$(ochakai context "$prompt" --budget "${OCHAKAI_RECALL_BUDGET:-4000}" 2>/dev/null) || exit 0
+hits=$(ochakai search "$prompt" --limit "${OCHAKAI_RECALL_LIMIT:-8}" --json 2>/dev/null) || exit 0
 
 session=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || session=""
 if [ -n "$session" ]; then
-	# The context call answered, so the write-back nudge has somewhere
-	# to send the agent — even when the answer was empty.
+	# The search answered, so the write-back nudge has somewhere to send
+	# the agent — even when the answer was empty.
 	: >"${TMPDIR:-/tmp}/ochakai-up-$session" 2>/dev/null || true
 fi
-[ -z "$pack" ] && exit 0
+
+rows=$(printf '%s' "$hits" | jq -r '.hits[]? |
+	"- ochakai://\(.id) [\(.type), \(.trust)]\(if .description and .description != "" then " — " + .description elif .snippet and .snippet != "" then " — " + .snippet else "" end)"' 2>/dev/null) || exit 0
+[ -z "$rows" ] && exit 0
 
 if [ -n "$session" ]; then
-	# Only concepts rendered in full ("## ochakai://…" headings) count as
-	# recalled — the "Also relevant" one-liners are pointers, not knowledge
-	# the agent was actually handed.
-	{ printf '%s\n' "$pack" | grep -o '^## ochakai://[^ ]*' | sed 's/^## //' \
+	{ printf '%s' "$hits" | jq -r '.hits[]?.id | "ochakai://" + .' \
 		>>"${TMPDIR:-/tmp}/ochakai-recalled-$session"; } 2>/dev/null || true
 fi
 
-printf 'Team knowledge from ochakai relevant to this request (trust verified concepts; judge drafts by created_by):\n\n%s\n' "$pack"
+printf 'Knowledge in this repository'"'"'s ochakai instance that may bear on this request — pointers, not the knowledge itself. Fetch what you rely on with the ochakai MCP get_concept tool (never the CLI, per the identity policy); a fetched concept lists what links at it under linked_from. Trust verified concepts; judge drafts by created_by:\n\n%s\n' "$rows"

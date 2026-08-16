@@ -3,7 +3,6 @@ package apiclient
 import (
 	"encoding/json"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -46,30 +45,5 @@ func TestBrowseResultMatchesServerWire(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("client decoded:\n%+v\nwant:\n%+v", got, want)
-	}
-}
-
-func TestContextResultMatchesServerWire(t *testing.T) {
-	server := service.ContextResult{
-		Hits: []domain.ContextRank{
-			{Type: domain.TypeMetrics, ID: "revenue", Title: "Revenue", Score: 0.9},
-		},
-		Concepts: []domain.View{
-			{ID: "revenue-seasonality", Document: "---\ntype: Insight\ntitle: Seasonality\n---\n\nQ4 peaks.\n",
-				Summary: domain.Summary{Type: domain.TypeInsights, ID: "revenue-seasonality", Title: "Seasonality"}},
-		},
-	}
-	data, err := json.Marshal(server)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got ContextResult
-	if err := json.Unmarshal(data, &got); err != nil {
-		t.Fatalf("client cannot decode the server response: %v", err)
-	}
-	if len(got.Hits) != 1 || got.Hits[0].ID != "revenue" || len(got.Concepts) != 1 ||
-		!strings.Contains(got.Concepts[0].Document, "Q4 peaks.") ||
-		got.Concepts[0].Summary.Title != "Seasonality" {
-		t.Errorf("client decoded: %+v", got)
 	}
 }

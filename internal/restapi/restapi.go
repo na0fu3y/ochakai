@@ -714,54 +714,9 @@ func Handler(svc *service.Service) http.Handler {
 		})
 	}
 
-	// GET /api/v1/context?q=...&type=...&status=...&tag=...&prefix=...&limit=...&budget=...
-	// The one-call read before answering a data question: full concepts
-	// behind the top hits, expanded one hop through links.
-	//
-	// prefix scopes the search that picks those hits, not the link
-	// expansion: a scoped concept citing a glossary term outside the scope
-	// still arrives with the term, which is the whole reason this endpoint
-	// follows links (design doc 0041 §2.6).
-	//
-	// budget defaults to 0 (no cap) here, unlike MCP where it is on by
-	// default: a REST caller is a program with a pipe, not an agent with a
-	// context window, and `ochakai context` does its own rendering-side
-	// capping.
-	mux.HandleFunc("GET /api/v1/context", func(w http.ResponseWriter, r *http.Request) {
-		q := r.URL.Query()
-		if err := rejectUnknownParams(q,
-			"q", "type", "status", "tag", "prefix", "trust", "limit", "budget", "fm."); err != nil {
-			writeError(w, err)
-			return
-		}
-		limit, err := queryInt(q, "limit")
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		budget, err := queryInt(q, "budget")
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		res, err := svc.Context(r.Context(), service.ContextRequest{
-			Query: q.Get("q"),
-			Filter: store.Filter{
-				Types:       domain.ToTypes(q["type"]),
-				Statuses:    domain.ToStatuses(q["status"]),
-				Tags:        q["tag"],
-				Prefixes:    q["prefix"],
-				Trust:       domain.ToTrusts(q["trust"]),
-				Frontmatter: frontmatterFilter(q),
-			},
-			Limit: limit, Budget: budget,
-		})
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, res)
-	})
+	// The context-pack address is gone (design doc 0108): an agent's
+	// read is search → get, with the concept's linked_from rows carrying
+	// what the pack's reverse hop used to (design doc 0106).
 
 	// POST /api/v1/review/{id...} {"ruling": ...} — a human's ruling on
 	// the concept (design doc 0055 §3.1). It replaced three endpoints:

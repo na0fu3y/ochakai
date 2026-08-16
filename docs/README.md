@@ -97,7 +97,7 @@ otherwise have to hunt for. Not a translation; a way in.
 - [examples/demo](../examples/demo) — import して触れる 11 concept の
   ナレッジベース(`ochakai import examples/demo`)。リンクした concept、
   混在する status、宣言された期限を過ぎた concept があり、フィードと
-  `get_context` に何か表示するものがある。
+  検索に何か表示するものがある。
 - [examples/claude-code](../examples/claude-code) — そのまま使える
   エージェント向けの指示と、思い出す/書き戻すのフック。
 - [REST API を組み込む](guides/rest-integration.md) — 認証の方法、

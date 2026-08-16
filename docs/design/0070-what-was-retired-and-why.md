@@ -5,6 +5,10 @@ Status: Accepted(2026-08-03)。**「やらないと決めたこと」の現行
 し、[0018](0018-semantic-model-as-knowledge.md) を Superseded にし、
 [0028](0028-retire-compile-sql.md) を Superseded にする。
 **三つが決めたことは何一つ変えない**(§0)
+**§3 の「エージェントに要るのは verified query とその周りの caveat で、
+両方 `get_context` から届く」という綴りは
+[0108](0108-the-context-pack-retires.md) が search → get(と
+`linked_from`)に読み替えた** — compile_sql を置かない結論は動かない。
 Date: 2026-08-03
 
 ## 0. この記録が決めたこと

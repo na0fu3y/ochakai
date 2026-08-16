@@ -29,7 +29,7 @@ semantic layer も持たないナレッジを運ぶ型である。
 OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
 ```
 
-そのあと `ochakai context "なぜ売上が落ちているのか"`、
+そのあと `ochakai search "なぜ売上が落ちているのか"`、
 `ochakai list --links-to glossary/completed-order`、
 `ochakai list stale_after` を試すとよい。concept は普通の markdown リンク
 で互いを指しているので、グラフは既にそこにある — 何も宣言していない。
@@ -43,7 +43,7 @@ OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
 からである — が、呼び名(`売上` / `純売上` / `GMV` の区別)と注文状態の
 和名は日本語で書かれており、[月末の着地見込み](demo/insights/着地見込み.md)
 は日本語にしか無い。日本語話者のチームのナレッジベースは実際にこうなる
-ので、デモもそうしてある。上の `ochakai context "なぜ売上が落ちているのか"`
+ので、デモもそうしてある。上の `ochakai search "なぜ売上が落ちているのか"`
 が答えを返すのはこのためで、`売上` のような二文字語が索引で引けることが
 何を意味するかは、ここで実際に見える(設計ドキュメント
 [0080](../docs/design/0080-search-and-how-a-deployment-embeds.md))。

@@ -94,7 +94,9 @@ it.
   executes. `compile_sql` — deterministic SQL generation from a semantic model,
   which was as close as this ever came — existed until 0.13.0 and was retired
   ([0070 §3](docs/design/0070-what-was-retired-and-why.md)): what an agent needs is the
-  verified query and the caveat around it, and both arrive from `get_context`.
+  verified query and the caveat around it — search finds the one, and the
+  concept's own `linked_from` names the other
+  ([0106](docs/design/0106-a-read-carries-what-points-at-it.md)).
 - **Connector ingestion.** Knowledge is curated by humans and agents, not
   harvested by pipelines. Trust density over volume.
 - **A chat UI or dashboards.** The bundled web UI is a curation surface, not a

@@ -375,47 +375,6 @@ func TestNewRejectsBadURLs(t *testing.T) {
 		}
 	}
 }
-
-func TestContextBuildsQueryAndDecodesPack(t *testing.T) {
-	var got url.Values
-	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet || r.URL.Path != "/api/v1/context" {
-			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
-		}
-		got = r.URL.Query()
-		_ = json.NewEncoder(w).Encode(ContextResult{
-			Hits: []domain.ContextRank{{Type: "metrics", ID: "revenue", Score: 0.8}},
-			Concepts: []domain.View{{ID: "revenue", Document: "---\ntype: metrics\n---\n",
-				Summary: domain.Summary{Type: "metrics", ID: "revenue", Title: "売上"}}},
-		})
-	})
-	res, err := c.Context(context.Background(), ContextParams{
-		Query: "why did revenue drop", Types: []string{"metrics"},
-		Statuses: []string{"stable"}, Tags: []string{"core"},
-		Prefixes: []string{"teams/growth", "company"}, Limit: 7,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(res.Hits) != 1 || len(res.Concepts) != 1 || res.Concepts[0].Summary.Title != "売上" {
-		t.Errorf("result = %+v", res)
-	}
-	if got.Get("q") != "why did revenue drop" || got.Get("type") != "metrics" ||
-		got.Get("status") != "stable" || got.Get("tag") != "core" ||
-		got.Get("limit") != "7" {
-		t.Errorf("query = %v", got)
-	}
-	// Every scope travels as its own repeated parameter: joining them into
-	// one value would ask the server for a single path with a comma in it.
-	if want := []string{"teams/growth", "company"}; !slices.Equal(got["prefix"], want) {
-		t.Errorf("prefix = %v, want %v", got["prefix"], want)
-	}
-}
-
-// A file goes to the address it lives at, with nothing beside it saying
-// where it really lives (design doc 0046 §3.3), and the stored object
-// comes back — the media type is what the bytes sniffed as, not what the
-// caller called them.
 func TestPutBundleFileSendsBytesToTheAddress(t *testing.T) {
 	body := []byte("file bytes")
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
@@ -544,30 +503,5 @@ func TestPutSendsIfMatchAndMapsConflict(t *testing.T) {
 	}
 	if apiErr.Message != "knowledge changed since it was read" {
 		t.Errorf("Message = %q", apiErr.Message)
-	}
-}
-
-// A positive budget reaches the server, so --json gets the server's
-// budget semantics (entries that do not fit come back as outline). 0
-// sends nothing: the rendered CLI path asks for everything and caps
-// while printing.
-func TestContextSendsBudgetOnlyWhenSet(t *testing.T) {
-	var got []string
-	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
-		v := r.URL.Query().Get("budget")
-		if v == "" {
-			v = "(absent)"
-		}
-		got = append(got, v)
-		_ = json.NewEncoder(w).Encode(ContextResult{})
-	})
-	for _, budget := range []int{0, 4000} {
-		if _, err := c.Context(context.Background(), ContextParams{Query: "q", Budget: budget}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	want := []string{"(absent)", "4000"}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("budget on the wire = %q, want %q", got, want)
 	}
 }

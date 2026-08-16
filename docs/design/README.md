@@ -46,7 +46,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**export が却下の理由まで運ぶことは [0104](0104-a-ruling-travels-with-its-reason.md)**(読み戻さないのは同じ) |
 | 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
-| REST の安定性契約 | [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの範囲は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
+| REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
@@ -261,6 +261,16 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   — **Superseded by 0057**。MCP のツール名 5 本の `knowledge` を OKF
   SPEC §2 の語 `concept` に改めた最初の決定。0057 §0 に吸収された。
 
+- [0106 読みは、自分を指すものを連れて返る](0106-a-read-carries-what-points-at-it.md)
+  — **Accepted**。concept の単読(REST の JSON・`get_concept`・
+  `ochakai get`)が `linked_from` を運ぶ — その concept を本文から指す
+  concept の行(住所順、上限 20、却下済みは出ない)。リンクは本文からの
+  導出なので順方向は文書に見えているが、**逆方向だけが他人の文書に住む**:
+  metric を読む者に、それを explains する insight の存在は見えなかった。
+  `links_to` は畳まない — 尋ね方を知っている者の完全でページングできる
+  逆引きはあちら、尋ねなかった者に届く先頭 20 行がこちら。行はポインタで
+  あって配達ではないので fetched は記録せず、応答専用の追加なので凍結の
+  外である(0082)。MCP のスキーマは 1 バイトも動かない(0103)。
 - [0024 リンクは本文から導出する](0024-links-from-body.md) — **Superseded by 0074**。
 
 ## 添付ファイル(0046 でバンドルのオブジェクトになった)
@@ -453,25 +463,19 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   `get_concept` に既に載っている。**能力が落ちるのは MCP からだけ**で、
   REST・CLI(`ochakai delete` / `ochakai usage`)・Web UI には一つも
   欠けない。0067 §5.1・§6・§7 を改訂する。
-- [0093 予算は応答全体を縛り、一位は名前だけでは返らない](0093-the-budget-governs-the-whole-response.md)
-  — **Accepted**。0067 §4 の「`hits` はバイト予算の外」を撤回する。理由
-  (本文を持たず件数にも上限がある)はどちらも本当で、それでも足りない —
-  `hits` は最大 40 行・約 5 KB あり、**`budget=12000` と言った呼び出し側が
-  受け取るのは 12,000 + 自分では計算できない量**で、窓を見積もる数として
-  機能しない。同じ議論は `outline` を内側に入れたときに一度通っている。
-  予算は応答全体を縛り、**買うのは丸ごとの concept**、`hits` と `outline` は
-  **床**として常に返る(在ったと知っている呼び出し側しか予算を上げられ
-  ない)。順位は削らない。床が予算を超えるときは concept をゼロ個配る —
-  減算をそのまま渡すと「最も小さい予算が最も大きい応答を返す」になる。
-  既定の `limit` は 5 なので、実際の変化は 12,000 の約 10% である。
-  もう半分は**一位が予算に収まらなかったときの `excerpt`** で、
-  [0033](0033-context-hits-are-a-ranking.md) の「半分の SQL は実行できる
-  ように見える」に**反論せず満たす**: 切るのは文書ではなく本文(frontmatter は
-  行が既に運んでいる)、最初のコードフェンスの手前で止まり、段落境界を
-  優先し、`bytes` と `id` が残りの量と在処を言う。一位だけ、予算の四分の一
-  まで — 抜粋が下の全部を飢えさせるのは greedy packing が防いでいる形
-  そのものだからである。近似重複の除去はしない(§4)。
-
+- [0108 context pack は退役する](0108-the-context-pack-retires.md)
+  — **Accepted**。**BREAKING(REST 非コア・MCP・CLI)**。
+  REST の `/context`・MCP `get_context`・CLI の context コマンドを
+  全面から同時に退役させる。0076 と違い通行量はあった — 降ろす根拠は前提の古びで
+  ある: pack は「往復は高価」という前提の機構で、何を読むべきかを
+  サーバが先に決めるが、search → get を自前で反復できるエージェントから
+  その判断を取り上げていた。pack が同梱していた逆向きの hop は concept
+  自身の `linked_from`(0106)が、書き戻しの hint は `get_concept` の
+  応答(0096 §3 の改訂)が引き継ぐ。需要シグナルは配られた pack より
+  選ばれた fetch のほうが正直になる。縮小版の pack は作らない。
+  見直す条件: シェルも MCP の反復も持たないホストが一回の HTTP で
+  「読むべき一式」を要すると実際に詰まった一件。
+- [0093 予算は応答全体を縛り、一位は名前だけでは返らない](0093-the-budget-governs-the-whole-response.md) — **Superseded by 0108**。
 - [0098 ジェネレータは動く。欠けていたのは宣言だった](0098-the-generator-works-what-was-missing-was-the-declaration.md)
   — **Accepted**。0064 §11 の「どんなジェネレータもこの一つの住所に
   ついては動くクライアントを生成しない」を取り下げる。`/api/v1/bundle/{path}`
@@ -629,8 +633,20 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   閉じられないことである)。遡らない(§5)。対象は名前だけで、フラグも
   出力の形も保存形も含まない。[0082](0082-what-the-freeze-holds-still.md) が
   REST 側で緩めたぶんとの釣り合いであり、面の数は動かない。
+- [0107 凍結が握るのは OKF コアである](0107-the-freeze-holds-the-okf-core.md)
+  — **Accepted**。凍結の範囲を bundle の往復(`GET` / `PUT` / `DELETE
+  /api/v1/bundle/{path}`)と `GET /api/v1/search` の 4 操作に狭め、残りの
+  `/api/v1` を 0.x の不安定な面(BREAKING + 記録 + minor)に戻す。
+  **公開した約束の撤回であり、この corpus で初めての種類の記録** — 0082 の
+  「解釈の訂正」の語り口は使えないので、そう呼ばない。根拠は二つ: 凍結は
+  14 日で免責を三つ持ち、その向きが全部 OKF だったこと(境界が間違った
+  場所に引かれていた)、そして 0082 §5 自身の「規則の欠陥を直す代金が
+  今より安いことは二度とない」。コアの判定は列挙ではなく基準 —
+  **ナレッジがそこに在ることに直接触れる操作**(住所空間の読み書き削除と、
+  見つける入口)。新しい約束は前より硬い: コアは広がる向きにしか動かず、
+  縮める記録はもう書けない。ワイヤは 1 バイトも動かない。
 - [0064 REST は /api/v1 で止まる](0064-rest-stops-at-api-v1.md) —
-  **Accepted**。**REST の安定性契約領域の現行ドキュメント**。REST を凍結
+  **Accepted**。REST を凍結
   する前の最後の一括破壊的変更(issue #379)。不明なクエリパラメータは
   全操作で 400(`fm.` を除く)、リクエストヘッダの `X-` 接頭辞を撤去、
   ファイルの住所が `Accept: application/json` でメタデータを返すように

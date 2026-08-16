@@ -4,10 +4,12 @@ All notable changes to ochakai are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) — while
 the major version is 0, a minor bump may break compatibility, and those
-breaks are marked **BREAKING** below. **REST is frozen at `/api/v1`**;
-MCP, the CLI and the stored shape are still unstable at 0.x, and only the
-latest release is supported: [docs/compatibility.md](docs/compatibility.md)
-states the policy in full.
+breaks are marked **BREAKING** below. **The OKF core of REST is frozen
+at `/api/v1`** — the bundle round trip and search; the rest of
+`/api/v1`, MCP, the CLI and the stored shape are still unstable at 0.x,
+and only the latest release is supported:
+[docs/compatibility.md](docs/compatibility.md) states the policy in
+full.
 
 Dates are the tag dates (JST). Each released version also has a GitHub
 release with longer prose; this file keeps what an operator upgrading
@@ -22,6 +24,21 @@ last entry.
 ## [0.23.0] - 2026-08-17
 
 ### Added
+
+- **A read carries what points at it** ([design doc
+  0106](docs/design/0106-a-read-carries-what-points-at-it.md)). A
+  single-concept read — the REST JSON, MCP `get_concept`, `ochakai get`
+  — now carries `linked_from`: rows (id, type, title, description,
+  status, trust) for the concepts whose bodies link at the one being
+  read, in address order, capped at 20, rejected linkers excluded.
+  Links are derived from bodies, so the forward direction was always
+  visible in the document itself; the reverse lived in other people's
+  documents, and a reader of a metric could not see the insight
+  explaining it. The complete, pageable reverse lookup stays on
+  `?links_to=`. Rows are pointers, not delivery — nothing is recorded
+  as fetched for being named — and the addition is response-only,
+  outside the freeze (design doc 0082). `ochakai get` prints the rows
+  on stderr beside the file hints; the MCP schema does not move a byte.
 
 - **A concept is found by the other names its writer gave it** ([design
   doc 0105](docs/design/0105-a-concept-answers-to-its-other-names.md)).
@@ -71,9 +88,47 @@ last entry.
   be added safely afterwards, and 0082 had written down only the response
   half of that. `api/openapi.frozen.txt` grows by two lines.
 
+### Removed
+
+- **BREAKING: the context pack is retired from every surface** ([design
+  doc 0108](docs/design/0108-the-context-pack-retires.md)). `GET
+  /api/v1/context`, the MCP tool `get_context` and `ochakai context`
+  are gone, and with them the `budget` parameter and flag. The pack was
+  built for a world where round trips were expensive for agents: it
+  made the server decide what should be read — greedy packing, outline,
+  excerpt, a two-direction link hop — and an agent that iterates
+  search → get on its own was having that judgment taken away from it.
+  What the pack bundled survives in primitives: the reverse hop arrives
+  as `linked_from` on the concept itself (design doc 0106), and the
+  write-back hint now rides on `get_concept`'s answer. What a client
+  does about it: call `GET /api/v1/search` and read the concepts worth
+  reading at `GET /api/v1/bundle/{id}.md` (MCP: `search_concepts` then
+  `get_concept`; CLI: `ochakai search` then `ochakai get`). The bundled
+  recall hook now injects search pointers instead of a pack, and
+  `OCHAKAI_RECALL_BUDGET` became `OCHAKAI_RECALL_LIMIT` (rows, default
+  8). This is a removal, not a rename, so no one-release window
+  applies; the REST removal rides on design doc 0107 having moved
+  `/context` outside the frozen core, so `api/openapi.frozen.txt` does
+  not move. MCP resident bytes drop 13,460 → 11,629 and the MCP-BYTES
+  ceiling goes down to 12,000.
+
 ### Changed
 
-- **BREAKING: `?history` answers JSON, whatever the `Accept` says**
+- **BREAKING: the REST freeze narrows to the OKF core** ([design doc
+  0107](docs/design/0107-the-freeze-holds-the-okf-core.md)). What stays
+  frozen is the bundle round trip — `GET`/`PUT`/`DELETE
+  /api/v1/bundle/{path}` — and `GET /api/v1/search`; the ruling, usage,
+  stats, move and reembed operations return to the 0.x-unstable regime
+  MCP and the CLI were already under, where a breaking change is marked
+  BREAKING here and carries a design record. **Not a byte of the wire
+  moves in this entry** — what changes is the promise: since 0.18.0 this
+  page and [docs/compatibility.md](docs/compatibility.md) said all of
+  `/api/v1` was frozen, and that scope is retracted, not reinterpreted.
+  The record says why the boundary was wrong (fourteen days of
+  corrections, all pointing at OKF) and why it cannot move again: the
+  core can only ever widen. If you built against a non-core endpoint,
+  nothing breaks today; from here on, watch the BREAKING entries the way
+  you already do for the CLI.
   ([design doc 0102](docs/design/0102-one-history-in-one-spelling.md)).
   The markdown rendering of one object's history is gone. OKF SPEC §9
   defines one markdown history — the reserved `log.md` beside the
@@ -127,10 +182,9 @@ last entry.
   catalog. Notes are now grouped by text, with the concepts each one was
   true of listed under it (up to five, then a count). The `N notes`
   summary and what `--strict` fails on are unchanged.
-- **`ochakai context` and `ochakai search` say when nothing matched.**
-  They printed nothing at all and exited 0, which reads the same as a
-  server that did not answer. The line goes to stderr, so a pipeline is
-  unaffected, and `context` names the write-back that would fix it.
+- **`ochakai search` says when nothing matched.** It printed nothing at
+  all and exited 0, which reads the same as a server that did not
+  answer. The line goes to stderr, so a pipeline is unaffected.
 - **An unknown command answers with a suggestion instead of the whole
   command list.** `ochakai serach` now offers `search`; `ochakai --url X
   whoami` says that a flag goes after the command rather than printing
@@ -138,7 +192,7 @@ last entry.
 - **The demo knowledge base is bilingual, and gained an eleventh
   concept.** `examples/demo` was entirely English, so a Japanese reader
   following the quick start — including `examples/README.md`'s own
-  `ochakai context "なぜ売上が落ちているのか"` — got silence, and the
+  `ochakai search "なぜ売上が落ちているのか"` — got silence, and the
   Japanese-search claim could not be tried without writing your own
   concepts first. The metric now records what the number is called
   (`売上`, and the two things it is not), the glossary carries the

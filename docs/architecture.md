@@ -223,8 +223,9 @@ vocabulary の隣にあるチーム独自の vocabulary のように、ディレ
 **関係は本文から来る。** links フィールドは無い。本文中の markdown
 リンク — `[revenue](/metrics/revenue.md)` や相対パス
 (`./gross.md`)— この二つが OKF SPEC §6 が定義する形式であり、それが
-すべてである — が edge になる。リンク先は backlink を得て、
-`get_context` はその edge を両方向に展開する。どんな種類の関係かは
+すべてである — が edge になる。リンク先は backlink を得て、concept の
+読みはその逆向きの edge を `linked_from` の行として連れて返る
+([0106](design/0106-a-read-carries-what-points-at-it.md))。どんな種類の関係かは
 その周りの文が語るので、ochakai は自分自身の関係 vocabulary を一切
 保存しない(設計ドキュメント [0074](design/0074-the-document-and-the-vocabulary-that-asks-it.md) §2)。
 フェンスされたコードブロック(``` や ~~~)の中のリンクとインラインの
@@ -324,16 +325,15 @@ REST、MCP、CLI、web UI は一つのルールに従う: 機能はこのすべ�
 | Surface | 役目 |
 |---|---|
 | REST `/api/v1` | 唯一の契約。機能はまずここに現れるか、どこにも現れない。limit・enum・既定値はすべてサーバー側にある。[api/openapi.yaml](../api/openapi.yaml) が公開されたワイヤサーフェスである |
-| MCP `/mcp` | エージェント専用に作られた入口。tool schema はエージェントの context を消費するので、tool の数は予算である — REST の写しではない。`get_context` はその極端な例で、一回の呼び出しでループが必要とするすべてを返す |
+| MCP `/mcp` | エージェント専用に作られた入口。tool schema はエージェントの context を消費するので、tool の数は予算である — REST の写しではない。読みは search → get の二本で、fetch した concept が `linked_from` まで運ぶ |
 | CLI | 完全性のサーフェス。すべての操作をカバーする、純粋な REST クライアント。人間にも、シェルを持つエージェントにも |
 | Web UI | ループの人間側の半分。検索・browse・review・履歴 — curation のためのサーフェスであって BI ツールではない。このページは認証について何も知らず、それが一枚のページを二通りに出荷できる理由である |
 
 役目を書き出すことの価値は、それが省略を review 可能にすることで
-ある。MCP には `browse` が無く(木を歩くことは `get_context` の
-対極にある、何往復もの探索である)、`revisions` も `links_to` の
-逆引きも無い(重複するか token として重すぎる — concept を指して
-いるものが欲しいエージェントは、同じ edge をたどる `get_context` の
-中でそれを得る)、ファイルの書き込みも無く(tool の引数の中の
+ある。MCP には `browse` が無く(発見は検索の仕事である)、
+`revisions` も `links_to` の逆引きも無い(重複するか token として
+重すぎる — concept を指しているものが欲しいエージェントは、
+`get_concept` の `linked_from` でそれを得る)、ファイルの書き込みも無く(tool の引数の中の
 base64 は token の無駄であり、エージェントの書き戻しは検索可能な
 テキストであるべきである)、一括の export も import も無く、
 `verify` も `delete` も無い — 裁定は人間が下すものだからである
@@ -447,11 +447,8 @@ producer キーは索引しない: concept の別名ではなく concept につ�
 
 score は較正されておらず、二つのモード間で比較できるものでもない。
 順序として扱うこと。返ってくるものを絞るには、score の閾値ではなく
-バイト予算を使う: `get_context` は予算の範囲まで concept を丸ごと
-返し、残りは outline の行として名指すだけであり、`hits` が運ぶのは
-ranking だけである — id、type、title、status、verified かどうか、
-score — ナレッジそのものの二つ目のコピーではない(設計ドキュメント
-[0067](design/0067-four-faces-and-what-they-decline.md) §4)。検索の hit も
+`limit` を使う(設計ドキュメント
+[0068](design/0068-how-a-face-is-added-and-removed.md) §3)。検索の hit も
 同じ種類のものである: 一行が concept を名指し、何がそれを ranking
 したかを言い、文書自体は id で一回取得すれば手に入る(設計
 ドキュメント [0075](design/0075-the-bundle-is-the-address-space.md) §4)。
