@@ -57,14 +57,6 @@ last entry.
   core can only ever widen. If you built against a non-core endpoint,
   nothing breaks today; from here on, watch the BREAKING entries the way
   you already do for the CLI.
-  ([design doc 0102](docs/design/0102-one-history-in-one-spelling.md)).
-  The markdown rendering of one object's history is gone. OKF SPEC §9
-  defines one markdown history — the reserved `log.md` beside the
-  objects — and this address rendered a second one from the same ledger
-  rows, which is what left a single `?history&limit=500` on a concept
-  answering 400 as JSON and 200 as markdown (0064 §14.1 wrote that split
-  down rather than closing it). A concept's `?history` is now 50 rows by
-  default and 200 at most on every read.
 
 ### Removed
 
