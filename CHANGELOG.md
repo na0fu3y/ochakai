@@ -21,6 +21,30 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (CLI): `ochakai search` no longer prints a score column**
+  (design doc 0110). A hit is now `uri, status, title — description`,
+  and the order of the lines is the ranking. The number that used to
+  lead each line was on a different scale depending on the deployment:
+  a base with no embeddings scores a hit on weighted fragment coverage,
+  roughly 0 to 3, while a hybrid one scores it by reciprocal rank
+  fusion, which `rrfK = 60` caps near 0.049 — so the same query printed
+  `1.730` against one deployment and `0.033` against another, with
+  nothing on the line saying which, and a deployment whose query
+  embedding fails degrades to lexical with only a server-side warning.
+  0068 §3 removed `min_score` from the wire for exactly this reason and
+  the printed column outlived it. `ochakai list --source` and
+  `--links-to` lose the column too, where it was always `0.000`: a
+  reverse lookup orders by address. **The feeds keep theirs** —
+  `ochakai list usage|verified_at|failed|stale_after` still lead with
+  the date or count they ordered by, so those pipelines are unaffected.
+  **What breaks**: `ochakai search q | cut -f2` for the id becomes
+  `cut -f1`; `cut -f1` for the score has no replacement on the human
+  output. `--json` and the REST `score` field are unchanged, so a
+  caller that has calibrated one still reads it with
+  `--json | jq '.hits[].score'`.
+
 ## [0.24.1] - 2026-08-17
 
 ### Added
