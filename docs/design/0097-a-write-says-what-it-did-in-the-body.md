@@ -5,7 +5,10 @@ Status: Accepted(2026-08-10)。[0074](0074-the-document-and-the-vocabulary-that-
 0074 が決めたこと(dry run の意味、三つの語、ヘッダを二本に割らないこと、
 plan が書き込み経路と同じ判断から出ること)は一つも動かない。
 [0082](0082-what-the-freeze-holds-still.md) §2 の下での**追加**であって、
-ヘッダの移設ではない(§2)。
+ヘッダの移設ではない(§2)。§4 が「別の記録で決める」と残した
+`Ochakai-Note` は
+[0113](0113-a-reinterpretation-says-itself-in-the-body.md) が決めた —
+同じ取引で本文に乗り、ヘッダも同じく残る。
 Date: 2026-08-10
 
 ## 0. この記録が決めたこと

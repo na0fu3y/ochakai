@@ -3500,3 +3500,80 @@ func TestIntegrationAWriteSaysWhatItDidInTheBody(t *testing.T) {
 		t.Errorf("a read carries a plan: %q", read.Plan)
 	}
 }
+
+// TestIntegrationAWriteSaysWhatItReadDifferently is 0113's half of the
+// same shape: the strings Ochakai-Note has always carried are in the body
+// too, so a caller reading `curl | jq` — and the web UI, which is the
+// surface that never read the header — learns that the document it sent
+// was not read the way it was written.
+//
+// The header is asserted beside the body for 0097's reason: both are
+// answers to the same question, and the failure worth catching is the two
+// disagreeing. Two reinterpretations, not one, because the field is a
+// list: one note that arrived as a bare string would pass a test written
+// against a single value.
+func TestIntegrationAWriteSaysWhatItReadDifferently(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+	typ := testdb.Unique(t, "noteit")
+	id := typ + "/metrics/revenue"
+
+	// A status outside the OKF lifecycle and a date that is not one: both
+	// are accepted, neither is stored as written, and until 0113 the only
+	// place either was said was a header.
+	doc := []byte("---\ntype: " + typ + "\ntitle: Revenue\n" +
+		"status: retired\nstale_after: いつか\n---\n\n受注合計。\n")
+
+	resp := putDoc(t, srv.URL, id, doc, true)
+	var created domain.View
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", resp.StatusCode)
+	}
+	header := resp.Header.Values("Ochakai-Note")
+	if len(created.Notes) != 2 {
+		t.Fatalf("notes = %q, want the status and the date", created.Notes)
+	}
+	if !slices.Equal(created.Notes, header) {
+		t.Errorf("body notes %q and Ochakai-Note %q are two answers to one question",
+			created.Notes, header)
+	}
+	if !strings.Contains(created.Notes[0], "retired") ||
+		!strings.Contains(created.Notes[1], "stale_after") {
+		t.Errorf("notes = %q, want each to name the value it read differently", created.Notes)
+	}
+
+	// A dry run parses the same document, so it reports the same notes —
+	// which is the point of the dry run being the write withheld rather
+	// than a second implementation of it (design doc 0061).
+	resp = dryRunDoc(t, srv.URL, id, doc)
+	var planned domain.View
+	if err := json.NewDecoder(resp.Body).Decode(&planned); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if !slices.Equal(planned.Notes, created.Notes) {
+		t.Errorf("dry run notes = %q, want the write's %q", planned.Notes, created.Notes)
+	}
+
+	// A clean document has nothing to report, and a read parsed no
+	// document at all: `notes` is absent from both, so a client that sees
+	// the key sees a reinterpretation.
+	clean := docFrom(t, map[string]any{"type": typ, "id": id, "title": "Revenue"})
+	resp = putDoc(t, srv.URL, id, clean, false)
+	var rewritten domain.View
+	if err := json.NewDecoder(resp.Body).Decode(&rewritten); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	resp.Body.Close()
+	if len(rewritten.Notes) != 0 {
+		t.Errorf("a document read as written carries notes: %q", rewritten.Notes)
+	}
+	var read domain.View
+	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &read)
+	if len(read.Notes) != 0 {
+		t.Errorf("a read carries notes: %q", read.Notes)
+	}
+}
