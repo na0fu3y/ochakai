@@ -222,6 +222,52 @@ func TestTypeVocabularyMatchesDomain(t *testing.T) {
 	}
 }
 
+// A grant names a principal the ledger can spell (design doc 0109 §2),
+// and the page checks the spelling before it sends one. A page that
+// accepted a kind the server does not know turns a typo into a 400 the
+// operator has to read backwards from — on the one document where a
+// silently wrong row is a boundary that is not there.
+func TestPrincipalSpellingMatchesDomain(t *testing.T) {
+	policy := asset(t, "js/policy.js")
+	kinds := section(t, policy, "export const ACTOR_KINDS = [", "]")
+	for _, kind := range []string{domain.ActorHuman, domain.ActorProcess} {
+		if !strings.Contains(kinds, "'"+kind+"'") {
+			t.Errorf("policy.js does not accept the actor kind %q: %s", kind, kinds)
+		}
+	}
+	if n := strings.Count(kinds, "'") / 2; n != 2 {
+		t.Errorf("policy.js names %d actor kinds and domain has 2: %s", n, kinds)
+	}
+	if want := "ANY_PRINCIPAL = '" + domain.AnyPrincipal + "'"; !strings.Contains(policy, want) {
+		t.Errorf("the wildcard the page sends is not the one the server matches on (%s)", want)
+	}
+}
+
+// Reading the access policy is an administrator's operation, so the tab
+// that leads to it is absent until the server has answered for this
+// caller — the same rule as a write affordance on a read-only
+// deployment, and for the same reason: a control that can only ever 403
+// is a lie.
+//
+// The CSS rule is half of it. `.topnav a` sets a display, which beats
+// the [hidden] attribute's own, so without the rule below the tab ships
+// visible to everybody it is meant to be hidden from and nothing here
+// looks wrong.
+func TestTheAccessTabWaitsForTheServerToAnswer(t *testing.T) {
+	if tag := section(t, asset(t, "index.html"), `id="nav-access"`, ">"); !strings.Contains(tag, "hidden") {
+		t.Errorf("the access tab ships visible: %s", tag)
+	}
+	if !strings.Contains(asset(t, "app.css"), ".topnav a[hidden] { display: none; }") {
+		t.Error("nothing hides a hidden tab; .topnav a sets a display, which the attribute alone does not beat")
+	}
+	body := section(t, asset(t, "js/views/access.js"), "export async function markAccessTab", "\n}")
+	shown := strings.Index(body, "hidden = false")
+	asked := strings.Index(body, "await api('/api/v1/access')")
+	if shown < 0 || asked < 0 || asked > shown {
+		t.Errorf("the tab is not shown by the server's answer to a policy read:\n%s", body)
+	}
+}
+
 // The editor's type dropdown shipped inert from v0.16.0 to v0.19.1: the
 // reseed was gated on the form's dirty flag, and a <select> fires `input`
 // before its `change`, so the flag the select itself raised was always up
@@ -286,6 +332,11 @@ func TestWriteAffordancesAreHiddenOnAReadOnlyDeployment(t *testing.T) {
 		{"the status picker on an entry", `id="act-status"`},
 		{"Remove on a file", "data-remove-file="},
 		{"the editor's save button", `type="submit"`},
+		// The whole access editor, container and all: a read-only
+		// deployment refuses a policy write like any other (design doc
+		// 0109 §5), and a boundary is the one thing whose editor must
+		// not look available where it is frozen.
+		{"the access policy editor", `id="access-edit"`},
 	} {
 		if _, tag := tagAt(t, page, indexOf(t, page, aff.marker)); !hidesOnReadOnly(tag) {
 			t.Errorf("%s is not hidden on a read-only deployment:\n%s", aff.what, tag)

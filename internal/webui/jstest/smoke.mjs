@@ -326,6 +326,22 @@ try {
   await check('the current tab says so to a reader who cannot see it',
     await waitFor(`!!document.querySelector('#topnav a[data-route="review"][aria-current="page"]')`), shown);
 
+  // The access policy (design doc 0109 §5). The tab is absent until the
+  // server answers for it, so this is also the check that the probe ran
+  // at all: CI's deployment has no policy and names no administrators,
+  // which leaves every caller unscoped and the tab visible.
+  await check('the access tab appears once the server answers for it',
+    await waitFor(`(() => { const a = document.querySelector('#nav-access');
+      return !!a && !a.hidden && getComputedStyle(a).display !== 'none'; })()`), shown);
+  await go('#/access');
+  await check('the access policy renders', await waitFor(`${textOf('#view')}.includes('境界はまだありません')`), shown);
+  // The editor is the document the CLI's -f takes, seeded from what the
+  // server just sent — closed in a disclosure, which is why this asks
+  // the textarea's value rather than what is on screen.
+  await check('the policy is offered as the document `ochakai access -f` takes',
+    await waitFor(`(() => { const t = document.querySelector('#access-doc');
+      return !!t && t.value.includes('"rules"'); })()`), shown);
+
   await go('#/new');
   await check('the editor renders', await waitFor(`!!document.querySelector('#view textarea')`), shown);
 

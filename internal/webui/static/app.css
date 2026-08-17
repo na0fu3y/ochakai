@@ -70,6 +70,11 @@ pre code { background: none; padding: 0; }
 }
 .topnav a:hover { color: var(--text); text-decoration: none; }
 .topnav a.active { color: var(--accent-strong); border-bottom-color: var(--accent); }
+/* A tab the server has not answered for yet — the access policy, which
+   only an administrator may read. The rule is needed because the display
+   above beats the [hidden] attribute's own, and a tab that shipped
+   visible would 403 for everybody it is hidden from. */
+.topnav a[hidden] { display: none; }
 /* How much is waiting, on the tab that leads to it (design doc 0049).
    Absent rather than zero when there is nothing: a badge that is always
    there is scenery, and the point is to be noticed. */
@@ -310,6 +315,25 @@ table.kv td.k { color: var(--muted); width: 11rem; white-space: nowrap; }
   table.kv td { border-bottom: none; padding: .1rem 0; }
   table.kv td.k { padding-top: .55rem; }
   table.kv tr { border-bottom: 1px solid var(--border); padding-bottom: .45rem; }
+}
+/* The access policy as the set it is read as (design doc 0109 §5). Five
+   narrow columns, so on a phone the table scrolls inside its own box
+   rather than stretching the page — stacking it the way table.kv does
+   would lose the alignment that makes "who else has this" answerable at
+   a glance. */
+.scroll-x { overflow-x: auto; }
+table.rules { border-collapse: collapse; width: 100%; margin: .2rem 0 1rem; }
+table.rules th, table.rules td {
+  border-bottom: 1px solid var(--border); padding: .45rem .6rem .45rem 0;
+  text-align: left; vertical-align: top; white-space: nowrap;
+}
+table.rules th { color: var(--muted); font-weight: 500; font-size: .84rem; }
+table.rules .flag { text-align: center; width: 3.2rem; padding-right: 0; }
+/* A warning no server field turns on or off: the page cannot know which
+   way it is being served (design doc 0072 §1), so it names both. */
+.caution {
+  background: var(--rejected-bg); border: 1px solid var(--rejected-bd); color: var(--rejected-fg);
+  border-radius: 8px; padding: .6rem .9rem; margin: .8rem 0; font-size: .92rem; max-width: 48rem;
 }
 .stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .8rem; max-width: 42rem; }
 .stat-tiles .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1rem; }

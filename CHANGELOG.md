@@ -21,6 +21,39 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **A directory can have readers and writers** (design doc 0109).
+  An access policy of grants: one row says a principal —
+  `human:<name>`, `process:<name>`, or `*` for every authenticated
+  caller — may read under one directory prefix, and write there when
+  `may_write` is true. Prefixes match on segment boundaries, so `sales`
+  covers `sales/orders` and does not cover `sales-legacy/orders`. There
+  are no deny rules and grants only add up, so a rule on `sales/sample`
+  cannot take back what a rule on `sales` gave. **A deployment with no
+  rules behaves exactly as it did before**; writing the first rule turns
+  the boundary on for everybody at once. Set `OCHAKAI_ADMINS` first —
+  administrators come from the deployment's configuration rather than
+  from the policy, and a deployment holding rules that names no
+  administrator refuses to start. The operations that take the bundle as
+  a whole (`stats`, export, `move`, `reembed`, and the policy itself)
+  are an administrator's. A read outside a caller's scope answers 404
+  rather than 403, and one gap is stated rather than closed: a readable
+  concept whose prose names a hidden id leaks that id.
+  [docs/guides/operating.md](docs/guides/operating.md#access-boundaries)
+  has the procedure.
+- **The policy is on three surfaces**: `GET|PUT /api/v1/access`,
+  `ochakai access` (show, and `-f` to replace), and the web UI's
+  アクセス tab at `#/access` — the table, and the same whole document
+  replaced in one go. The tab appears only for a caller the server let
+  read the policy. MCP does not carry it: a tool schema is paid for out
+  of an agent's context window, and since enforcement sits in the
+  service layer, what an agent can reach narrows on its own. The web
+  UI's editor says who a save is recorded as, because `serve-ui`
+  without IAP in front folds every caller into one service account —
+  where that account is an administrator, everyone who can reach the
+  URL can edit the boundary.
+
 ### Changed
 
 - **The demo knowledge base is written in Japanese.** ochak.ai's demo is
