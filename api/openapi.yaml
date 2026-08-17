@@ -1699,6 +1699,106 @@ paths:
         "413": { $ref: "#/components/responses/Error" }
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
+  /api/v1/access:
+    get:
+      operationId: getAccessPolicy
+      summary: Who may read and write under which directory
+      description: >
+        The access policy: one rule per grant, saying that a principal may
+        read under a directory and — when `may_write` — write there too
+        (design doc 0109).
+
+
+        ochakai holds no authorization by default, and a deployment that
+        has written no rule still holds none: every caller that reaches it
+        reads and writes everything, which is what every deployment did
+        before this address existed. The first rule turns the boundary on
+        for everybody at once.
+
+
+        Reading the policy is an administrator's operation, because the
+        rules name people and the directories they may see. Administrators
+        are named by the deployment's own configuration
+        (`OCHAKAI_ADMINS`), not by a rule here — whoever may edit the
+        policy may grant themselves anything, so the answer to who that is
+        cannot live in the thing they are editing.
+
+
+        What no rule grants is not readable, and a read of it answers
+        **404 rather than 403**: whether something exists at an address is
+        the boundary itself. A write to a directory the caller may read
+        but not write is a 403, which says nothing they did not already
+        know.
+      responses:
+        "200":
+          description: The policy as stored.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessPolicy" }
+              examples:
+                twoTeams:
+                  summary: GET /api/v1/access
+                  description: >
+                    Two teams that curate their own subtree, a company
+                    glossary everybody reads, and an application that
+                    writes nowhere.
+                  value:
+                    rules:
+                      - prefix: glossary
+                        principal: "*"
+                        may_write: false
+                        granted_at: "2026-08-14T09:12:00Z"
+                        granted_by: human:ops@example.co.jp
+                      - prefix: teams/growth
+                        principal: human:tanaka@example.co.jp
+                        may_write: true
+                        granted_at: "2026-08-14T09:12:00Z"
+                        granted_by: human:ops@example.co.jp
+                      - prefix: teams/sales
+                        principal: human:sato@example.co.jp
+                        may_write: true
+                        granted_at: "2026-08-14T09:12:00Z"
+                        granted_by: human:ops@example.co.jp
+        "403": { $ref: "#/components/responses/Error" }
+    put:
+      operationId: putAccessPolicy
+      summary: Replace the access policy
+      description: >
+        Replaces every rule with the document sent, and answers with the
+        policy as stored.
+
+
+        Whole-document replacement rather than an operation per rule: a
+        policy is read as a set — "who can see personnel/" is answered by
+        looking at all of it — and an operator edits what they just read.
+        It also keeps in version control, which is the review path a
+        boundary deserves.
+
+
+        `granted_at` and `granted_by` are the server's own record of who
+        changed the policy and are ignored on the way in.
+
+
+        Sending `{"rules": []}` removes every boundary and returns the
+        deployment to the default, where whoever reaches it reads and
+        writes everything. A deployment that names no administrator
+        refuses to accept a first rule at all: a policy nobody could undo
+        is one nobody should be able to write.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AccessPolicy" }
+      responses:
+        "200":
+          description: The policy as stored.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AccessPolicy" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Error" }
   /api/v1/stats:
     get:
       operationId: getStats
@@ -2190,6 +2290,57 @@ components:
                 error: "auth: Ochakai-On-Behalf-Of: app@example.iam.gserviceaccount.com is not permitted to act on behalf of others (add it to OCHAKAI_DELEGATING_CALLERS)"
                 code: forbidden
   schemas:
+    AccessPolicy:
+      type: object
+      description: >
+        The whole access policy. One key, so a rule can gain a field
+        without the document changing shape.
+      properties:
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/AccessRule" }
+      required: [rules]
+    AccessRule:
+      type: object
+      description: >
+        One grant. There are no deny rules: what no rule grants is not
+        readable, and a rule that had to be evaluated against an order
+        nobody can see in the document would make "why can Tanaka not
+        read this" a question about precedence rather than about a row
+        that is present or absent.
+      properties:
+        prefix:
+          type: string
+          description: >
+            A bundle path with no trailing slash, matched on segment
+            boundaries as the search filter is (design doc 0075 §6):
+            `sales` covers `sales/orders` and does not cover
+            `sales-legacy/orders`. The empty string is the whole bundle.
+          example: teams/growth
+        principal:
+          type: string
+          description: >
+            An actor as the ledger spells one — `human:<name>` or
+            `process:<name>` (design doc 0065 §2) — or `*` for every
+            authenticated caller. A delegated write resolves to the end
+            user it names, so an application forwarding somebody gets
+            that person's scope.
+          example: human:tanaka@example.co.jp
+        may_write:
+          type: boolean
+          description: >
+            Grants writing as well as reading. Writing implies reading: a
+            caller that could change a concept it cannot read would be
+            writing blind, and the If-Match read it needs to do that
+            safely would be the thing refused.
+        granted_at:
+          type: string
+          format: date-time
+          description: Server-recorded; ignored on write.
+        granted_by:
+          type: string
+          description: Server-recorded; ignored on write.
+      required: [prefix, principal, may_write]
     Type:
       type: string
       description: >

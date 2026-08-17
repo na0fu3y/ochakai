@@ -54,7 +54,20 @@ func (s *Service) Browse(ctx context.Context, prefix, cursor string) (*BrowseRes
 	if err != nil {
 		return nil, err
 	}
-	lvl, err := s.Store.Browse(ctx, prefix, after)
+	// A level is three lists assembled by three queries, none of which
+	// takes the search filter, so the scope goes down into them (design
+	// doc 0109 §4). A directory the caller can see nothing under
+	// disappears rather than showing as empty — its name is part of what
+	// a boundary hides — and a directory they can see part of is counted
+	// by that part.
+	sc, err := s.scope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !sc.Everything() && len(sc.Read) == 0 {
+		return &BrowseResult{}, nil
+	}
+	lvl, err := s.Store.Browse(ctx, prefix, after, sc.Read)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +229,7 @@ func (s *Service) LogDocument(ctx context.Context, prefix string, limit int) ([]
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.Store.ListRevisionsUnder(ctx, prefix, limit)
+	rows, err := s.scopedRevisionsUnder(ctx, prefix, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +255,7 @@ func (s *Service) LogRows(ctx context.Context, prefix string, limit int) ([]stor
 	if err != nil {
 		return nil, err
 	}
-	return s.Store.ListRevisionsUnder(ctx, prefix, limit)
+	return s.scopedRevisionsUnder(ctx, prefix, limit)
 }
 
 // RenderLog is the log.md of one directory, given the ledger rows under
@@ -279,7 +292,11 @@ func (s *Service) ObjectHistory(ctx context.Context, path string, limit int) ([]
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.Store.ListRevisionsAt(ctx, domain.Normalize(path), limit)
+	path = domain.Normalize(path)
+	if err := s.mayRead(ctx, path); err != nil {
+		return nil, err
+	}
+	rows, err := s.Store.ListRevisionsAt(ctx, path, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -287,6 +304,28 @@ func (s *Service) ObjectHistory(ctx context.Context, path string, limit int) ([]
 		return nil, store.ErrNotFound
 	}
 	return rows, nil
+}
+
+// scopedRevisionsUnder is the ledger under a directory with the rows the
+// caller may not read removed. A log line names a path and a title, so
+// the generated log.md is a listing like any other and is narrowed like
+// one (design doc 0109 §4).
+//
+// The limit is applied by the store before the scope is, so a caller
+// with a narrow grant under a busy directory can see fewer than limit
+// lines while more exist. That is the same shape as the truncation the
+// document already carries, and closing it would mean paging the ledger
+// in the store on behalf of a filter the store does not have.
+func (s *Service) scopedRevisionsUnder(ctx context.Context, prefix string, limit int) ([]store.LogRow, error) {
+	rows, err := s.Store.ListRevisionsUnder(ctx, prefix, limit)
+	if err != nil {
+		return nil, err
+	}
+	sc, err := s.scope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return scopeRows(sc, rows, func(r store.LogRow) string { return r.Path }), nil
 }
 
 // MaxLogLines bounds a generated history the way the tree listing is

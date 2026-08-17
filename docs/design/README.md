@@ -29,7 +29,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない) |
-| 認証と identity | [0065](0065-identity-and-provenance.md) |
+| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
 | 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5。**`.md` が concept の住所であり、そこに座れるものは concept だけであることは [0100](0100-md-is-how-a-concept-is-spelled.md)**(0075 §3.3 を改訂) |
@@ -463,6 +463,21 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   `get_concept` に既に載っている。**能力が落ちるのは MCP からだけ**で、
   REST・CLI(`ochakai delete` / `ochakai usage`)・Web UI には一つも
   欠けない。0067 §5.1・§6・§7 を改訂する。
+- [0109 ディレクトリに閲覧者と編集者を持つ](0109-a-directory-has-readers-and-writers.md)
+  — **Accepted**。0065 §1 が自分で置いた改訂条件
+  (「『読めるが書けない人』が要るようになったら」)が満たされ、
+  **prefix ごとの閲覧・編集の付与**を持つ。同じ一つのバンドルの中に
+  「見せてはいけない知識」と「変えられては困る知識」が同時にある利用者が
+  現れ、デプロイを分ける既存の答えは共有語彙を `unverified` のコピーに
+  落とす(0075 §3.1)ので使えなかった。表は**付与だけ**で deny を持たず、
+  セグメント境界の照合は 0075 §6 の規則をそのまま使う。**付与が一つも
+  無いデプロイは 0065 のままである** — 最初の一行が全員に対して同時に
+  境界を入れる。管理者は `OCHAKAI_ADMINS`(ポリシーを編集できる者を
+  ポリシーの中で決めることはできない)で、バンドル全体を取る操作
+  (stats・export・move・reembed・ポリシー自身)は管理者に寄せる。
+  スコープ外の読みは **404**。**塞げないものが一つあり、そう書いてある**:
+  可視な concept の本文が隠した id を名指していれば読める(0075 §3 が
+  サーバによる文書の書き換えを禁じている)。
 - [0108 context pack は退役する](0108-the-context-pack-retires.md)
   — **Accepted**。**BREAKING(REST 非コア・MCP・CLI)**。
   REST の `/context`・MCP `get_context`・CLI の context コマンドを

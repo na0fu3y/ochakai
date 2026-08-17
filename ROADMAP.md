@@ -114,9 +114,16 @@ it.
   ([0065](docs/design/0065-identity-and-provenance.md),
   [0003](docs/design/0003-gcp-only.md)) — not Google Cloud, and not one
   authentication path, for their own sake.
-- **Authorization, and a user database.** Whoever can reach a deployment can
-  read and write; identity is recorded as provenance, and trust is judged from
-  provenance by whoever reads the concept (0065 §1).
+- **A user database, roles, and per-concept permissions.** Identity is recorded
+  as provenance, and trust is judged from provenance by whoever reads the
+  concept (0065 §1). This declined authorization outright until 2026-08, when
+  [0109](docs/design/0109-a-directory-has-readers-and-writers.md) took the
+  narrowest form of it that 0065 §1's own revision condition asked for: grants
+  of read and write under a **directory prefix**, held in the database, off by
+  default, and enforced in one place. What stays declined is everything around
+  it — deny rules, roles, group registries, per-concept or per-type grants, and
+  a policy history. A deployment that writes no grant is the deployment 0065
+  describes, unchanged.
 - **A server-side bulk OKF import endpoint.** Loading a bundle is a loop over
   endpoints that already exist, and a second server-side path to the same
   outcome buys convenience rather than capability. Re-examined in July 2026 at

@@ -55,10 +55,13 @@ flowchart LR
 同じコンテナイメージに、違う引数を渡すだけである(設計ドキュメント
 [0072](design/0072-the-web-ui-serves-and-edits-documents.md) §1)。
 
-## Identity と provenance、そして認可は無い
+## Identity と provenance、そして既定では認可は無い
 
-**デプロイに届く者は誰でも読み書きできる — concept ごとの権限は無く、
-それが一部の組織にとっては致命的な欠格事由になる。** それが運用上
+**デプロイに届く者は誰でも読み書きできる。** ディレクトリごとに閲覧者と
+編集者を持たせる任意のアクセスポリシー(設計ドキュメント
+[0109](design/0109-a-directory-has-readers-and-writers.md))を書かない
+かぎり、これが全部である — そして**書かないのが既定であり、既定のままの
+デプロイにとってこの節は一字も変わっていない。** それが運用上
 何を意味するか、そしてそれを狭める姿勢は
 [要件と設定](configuration.md#authentication-has-no-configuration)
 (設計ドキュメント [0065](design/0065-identity-and-provenance.md) §1)にある。この
@@ -117,8 +120,8 @@ ochakai が identity に対してすることは*記録*だけであり、目的
 [要件と設定](configuration.md#environment-variables)
 (設計ドキュメント [0066](design/0066-four-postures-one-word.md) §2・§3)にある。
 
-「認可は無い」には一つだけ狭い例外があり、それは意図して認可では
-ないと位置づけられている: MCP は、人間が裁定した concept —
+「認可は無い」には、アクセスポリシー(0109)のほかにもう一つ狭い例外が
+あり、そちらは意図して認可ではないと位置づけられている: MCP は、人間が裁定した concept —
 verified・rejected・deprecated — を上書き・変更することを
 拒み、そうした concept のソフトデリートされた tombstone を create
 で蘇らせることも拒む(削除はそもそもツールが無い — 設計ドキュメント

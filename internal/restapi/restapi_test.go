@@ -166,10 +166,10 @@ func TestBadRequestValidation(t *testing.T) {
 	}
 }
 
-// restOperations pairs each of REST's eleven operations with a concrete
+// restOperations pairs each of REST's twelve operations with a concrete
 // address that reaches it through Handler's router and the
 // api/openapi.yaml operation (method + path template) it implements.
-// Shared by every test below that needs to address all eleven, so there
+// Shared by every test below that needs to address all twelve, so there
 // is one list of URLs to keep in sync with the router rather than one
 // per test.
 var restOperations = []struct{ name, method, url, spec string }{
@@ -183,6 +183,8 @@ var restOperations = []struct{ name, method, url, spec string }{
 	{"stats", http.MethodGet, "/api/v1/stats", "GET /api/v1/stats"},
 	{"move", http.MethodPost, "/api/v1/move", "POST /api/v1/move"},
 	{"reembed", http.MethodPost, "/api/v1/reembed", "POST /api/v1/reembed"},
+	{"access get", http.MethodGet, "/api/v1/access", "GET /api/v1/access"},
+	{"access put", http.MethodPut, "/api/v1/access", "PUT /api/v1/access"},
 }
 
 // TestUnknownQueryParamsAreRejected pins design doc 0064's strict

@@ -11,6 +11,7 @@ import (
 
 	"cloud.google.com/go/compute/metadata"
 
+	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
 )
 
@@ -42,6 +43,24 @@ type Config struct {
 	// recorded, not what anyone may do. Every caller that reaches ochakai
 	// can already read and write everything (design doc 0002).
 	Delegators []string
+
+	// Admins names the principals that may do anything: read and write
+	// the whole bundle, run the operations that take it as a whole, and
+	// edit the access policy itself (design doc 0109 §3).
+	//
+	// This one is authorization, and it is configuration rather than
+	// data for the reason a policy needs a floor: the rules live in the
+	// database, and whoever may edit them may grant themselves anything,
+	// so the answer to "who may edit them" cannot also live there. It
+	// arrives from the deployment's own configuration, which is the one
+	// place inside ochakai nobody can reach through ochakai.
+	//
+	// Spelled as principals — human:name, process:name, or "*" — the
+	// same way the policy's rows and the ledger's actors are spelled
+	// (0065 §2). Empty is the default, and a deployment with a policy
+	// but no administrators refuses to start rather than lock its
+	// operator out of it (0109 §3).
+	Admins []string
 
 	// OIDCIssuer and OIDCAudience configure the second way a deployment
 	// can say who is calling: an OpenID Connect issuer of its own, for a
@@ -222,6 +241,7 @@ func FromEnv() (*Config, error) {
 		Addr:        ":" + envOr("PORT", "8080"),
 		DatabaseURL: os.Getenv("OCHAKAI_DATABASE_URL"),
 		DBIAMAuth:   os.Getenv("OCHAKAI_DB_IAM_AUTH") == "true",
+		Admins:      splitList(os.Getenv("OCHAKAI_ADMINS")),
 		Delegators:  splitList(os.Getenv("OCHAKAI_DELEGATING_CALLERS")),
 		GCSBucket:   os.Getenv("OCHAKAI_GCS_BUCKET"),
 		OIDCIssuer:  os.Getenv("OCHAKAI_OIDC_ISSUER"),
@@ -270,6 +290,17 @@ func FromEnv() (*Config, error) {
 	}
 	if cfg.DatabaseURL == "" {
 		return nil, fmt.Errorf("OCHAKAI_DATABASE_URL is required")
+	}
+	for _, a := range cfg.Admins {
+		// Refused at startup rather than left to never match: an
+		// administrator spelled "tanaka@example.co.jp" instead of
+		// "human:tanaka@example.co.jp" is a deployment whose operator
+		// believes they have access and finds out from a 404 (design
+		// doc 0109 §3).
+		if !domain.ValidPrincipal(a) {
+			return nil, fmt.Errorf("OCHAKAI_ADMINS has %q; spell each one human:<name>, process:<name>, or %q",
+				a, domain.AnyPrincipal)
+		}
 	}
 
 	switch v := os.Getenv("OCHAKAI_EMBEDDINGS"); v {

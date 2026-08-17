@@ -34,6 +34,17 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 	if err != nil {
 		return nil, err
 	}
+	// Search is reachable without SearchOrList (MCP's search_concepts,
+	// and get_context before it retired), so the narrowing is here as
+	// well as there. Doing it twice is free — an intersection of a set
+	// with itself.
+	f, ok, err := s.narrow(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
 	hits, err := s.search(ctx, query, f, limit)
 	if err != nil {
 		return nil, err

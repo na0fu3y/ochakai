@@ -45,6 +45,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   usage <id>              show usage totals (search hits, fetches, outcomes)
   stats                   the whole loop: what is stored, what each queue holds,
                           what review did, what came back empty
+  access [-f file]        show or replace the access policy: who may read and
+                          write under which directory (administrators only)
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
   revisions <id>          list a concept's change history (newest first)
   log [path]              print the history under a path as OKF's log.md
@@ -65,6 +67,46 @@ Server commands (run as deployed services, configured by environment):
   completion <shell>      print a completion script (zsh, bash, fish)
 
 Run "ochakai <command> -h" for flags and examples.
+```
+
+## ochakai access
+
+```
+Usage: ochakai access [flags]
+
+Show the access policy, or replace it with the document from -f or
+stdin. Only an administrator (OCHAKAI_ADMINS) may do either.
+
+Each rule grants one principal — human:<name>, process:<name>, or *
+for every authenticated caller — the right to read under one directory,
+and to write there when may_write is true. Prefixes match on segment
+boundaries, so sales covers sales/orders and does not cover
+sales-legacy/orders; the empty prefix is the whole bundle. There are no
+deny rules: what no rule grants is not readable, and a caller sees a
+404 rather than a refusal, because whether something is there is the
+boundary itself.
+
+A deployment with no rules has no boundary — every caller reads and
+writes everything, which is what ochakai does by default. Writing the
+first rule turns the boundary on for everybody at once, so read the
+policy back before you close the terminal.
+
+The operations that take the bundle as a whole — stats, export, move,
+reembed, and this command — stay with the administrators.
+
+Flags:
+  -f -
+    	replace the policy with the JSON document in this file (- or unset with a pipe: stdin). Without it, the policy is printed
+  -json
+    	print the policy as JSON — the same document -f takes back
+  -url ochakai use
+    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+
+Examples:
+  ochakai access
+  ochakai access --json > policy.json
+  ochakai access -f policy.json
+  echo '{"rules":[]}' | ochakai access -f -   # remove every boundary
 ```
 
 ## ochakai browse

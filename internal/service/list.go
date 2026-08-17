@@ -30,6 +30,19 @@ import (
 // on a search: a listing has a total order to resume from, a ranking has
 // a window (design doc 0050 §2.2).
 func (s *Service) SearchOrList(ctx context.Context, query, sort, cursor string, f store.Filter, limit int) (*Listing, error) {
+	// Every listing and every search leaves through here or through
+	// Search, and both narrow the filter to the caller's scope before
+	// the store sees it (design doc 0109 §4). Narrowing the filter
+	// rather than filtering the rows is what keeps a scoped listing
+	// pageable: rows dropped after the fact would make a page of ten
+	// arrive as three and a cursor point past what the caller saw.
+	f, ok, err := s.narrow(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return &Listing{}, nil
+	}
 	if sort != "" {
 		if !domain.ValidListSort(sort) {
 			return nil, Invalidf("invalid sort %q (valid: %s)", sort, strings.Join(domain.ListSorts, ", "))

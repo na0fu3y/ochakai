@@ -598,6 +598,81 @@ Console で Cloud SQL の Data Access 監査ログを有効にせよ — admin �
 575)。唯一の例外は Binary Authorization であり、これは今もポインタの
 ままである; 書かれた通りに動かないものがあれば報告してほしい。
 
+<a id="access-boundaries"></a>
+
+## ディレクトリごとの閲覧者と編集者
+
+既定では、デプロイに届いた者が全部を読み書きする。境界が要るときの
+**最初の**答えはいまもデプロイを分けることで、Cloud Run のサービスと
+同じ Cloud SQL インスタンスの中の別データベースで済み、到達と DB の
+二層で効く([faq](../faq.md#誰が読み書きできるか))。
+
+分割が効かないのは、**チームどうしが語彙を共有しているとき**である —
+全社の用語集をコピーすると取り込みは provenance を読み戻さないので、
+コピーは `unverified` で着地する。そのときだけ、同じバンドルの中に
+ディレクトリ単位の付与を置く(設計ドキュメント
+[0109](../design/0109-a-directory-has-readers-and-writers.md))。
+
+**順序を間違えないこと。** 管理者を先に置く。
+
+```sh
+gcloud run services update ochakai --region "$REGION" \
+  --update-env-vars OCHAKAI_ADMINS=human:ops@example.co.jp
+```
+
+ポリシーは JSON 文書一枚で、表示と置き換えだけがある。**git に入れて
+レビューする**のが想定した使い方である。
+
+```sh
+ochakai access --json > policy.json   # いまの姿(最初は空)
+$EDITOR policy.json
+ochakai access -f policy.json         # 置き換え、置いた結果が印字される
+```
+
+```json
+{"rules": [
+  {"prefix": "glossary",     "principal": "*",                          "may_write": false},
+  {"prefix": "teams/growth", "principal": "human:tanaka@example.co.jp", "may_write": true},
+  {"prefix": "personnel",    "principal": "human:hr@example.co.jp",     "may_write": true}
+]}
+```
+
+読み方は一行ずつで足りる — 「この principal はこのディレクトリ以下を
+読める、`may_write` なら書ける」。拒否規則は無く、**どの規則も付与しな
+かったものは読めない**。照合はセグメント境界なので `sales` は
+`sales/orders` に当たり `sales-legacy/orders` には当たらない。
+principal は台帳と同じ綴り(`human:` / `process:`、`*` は全認証済み
+呼び出し元)で、生のメールアドレスは受け付けない — 綴りが割れると片方
+だけが一致するからである。
+
+**最初の一行が、全員に対して同時に境界を入れる。** 段階的に効かせる
+仕組みは無いので、置いたら別の identity で `ochakai get` と
+`ochakai search` を撃って読み返すこと。全部戻すのは空のポリシーである:
+
+```sh
+echo '{"rules": []}' | ochakai access -f -
+```
+
+**知っておくべきことが三つある。**
+
+1. **バンドル全体を取る操作は管理者のものになる** — `ochakai stats`・
+   `ochakai export`・`ochakai move`・`ochakai reembed`。部分集合の
+   stats は数に二つ目の意味を与え、欠けた export もバックアップと呼ばれ
+   てしまうからで、絞るのではなく断っている。cron の `stats --exit-code`
+   を回しているなら、その呼び出し元を管理者にする。
+2. **スコープ外は 404 で、403 ではない。** 「そこに何かあるか」への
+   答えが境界そのものである。書けるが読めない、は起こらない。
+3. **本文の散文は塞げない。** 読める concept の本文が隠した id を名指し
+   ていれば、その id は本文の中に現れる — サーバーは受け取った文書を
+   書き換えないと決めており、そこにバンドルの往復が乗っている。約束して
+   いるのは一覧・検索・取得・エクスポート・index から出てこないこと
+   である。秘匿する対象を、公開側の concept が引用していないかは
+   キュレーションの問題として残る。
+
+管理者を空にしたまま行が残っているデプロイは**起動しない** — 誰も
+ポリシーを編集できない状態だからである。その状態から抜けるには
+`OCHAKAI_ADMINS` を設定して再デプロイする。
+
 <a id="the-team-web-ui"></a>
 
 ## チーム向け web UI

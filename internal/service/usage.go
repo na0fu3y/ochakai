@@ -22,12 +22,19 @@ func (s *Service) Revisions(ctx context.Context, id string, limit int) ([]domain
 	if err != nil {
 		return nil, err
 	}
-	return s.Store.ListRevisions(ctx, domain.Normalize(id), limit)
+	id = domain.Normalize(id)
+	if err := s.mayRead(ctx, id); err != nil {
+		return nil, err
+	}
+	return s.Store.ListRevisions(ctx, id, limit)
 }
 
 // Usage returns usage totals for one concept (404 when the concept is gone).
 func (s *Service) Usage(ctx context.Context, id string) (*domain.Usage, error) {
 	id = domain.Normalize(id)
+	if err := s.mayRead(ctx, id); err != nil {
+		return nil, err
+	}
 	if _, err := s.Store.Get(ctx, id); err != nil {
 		return nil, err
 	}
@@ -54,6 +61,13 @@ func (s *Service) ReportOutcome(ctx context.Context, id, outcome, note string) (
 		return nil, err
 	}
 	id = domain.Normalize(id)
+	// A read grant is enough. Reporting an outcome is the machine's
+	// observation of a concept it used, not a change to what the concept
+	// says (design doc 0069), and an agent that may read a golden query
+	// and run it is exactly the caller whose report is worth having.
+	if err := s.mayRead(ctx, id); err != nil {
+		return nil, err
+	}
 	if !domain.ValidOutcome(outcome) {
 		return nil, Invalidf("invalid outcome %q (valid: %s)", outcome, strings.Join(domain.Outcomes, ", "))
 	}
@@ -146,6 +160,14 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 	if days < 0 || days > maxStatsWindow {
 		return nil, Invalidf("days must be between 1 and %d: raw events and misses are pruned after %d days, "+
 			"so nothing answers for the time before that", maxStatsWindow, maxStatsWindow)
+	}
+	// The numbers describe the whole base — the queues the loop is
+	// measured by, and the totals a deployment reports on itself — so a
+	// scoped caller does not get a partial version of them (design doc
+	// 0109 §3). Narrowing was the other option and it would have given
+	// the same words two meanings.
+	if err := s.RequireAdmin(ctx, "stats"); err != nil {
+		return nil, err
 	}
 	f, err := checkedFilter(store.Filter{Prefixes: prefixes})
 	if err != nil {

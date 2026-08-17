@@ -63,6 +63,14 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 		writeError(w, err)
 		return
 	}
+	// The archive is the bundle as a whole, so it is an administrator's
+	// operation wherever a policy exists (design doc 0109 §3): an export
+	// that quietly omitted what the caller cannot see would still be
+	// called a backup, and restoring it would lose the rest.
+	if err := svc.RequireAdmin(r.Context(), "export"); err != nil {
+		writeError(w, err)
+		return
+	}
 	snap, err := svc.Store.BeginExport(r.Context())
 	if err != nil {
 		writeError(w, err)
@@ -874,6 +882,47 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, st)
 	})
 
+	// GET|PUT /api/v1/access — the policy that says which principals may
+	// read and write under which directories (design doc 0109). One
+	// address and one document rather than an endpoint per rule: a
+	// policy is read as a set, an operator edits what they just read,
+	// and three operations over rows would still have needed the whole
+	// document to be reviewable.
+	//
+	// Not under /api/v1/bundle: the bundle is the knowledge, and the
+	// policy is about who may reach it. A rule stored at a bundle path
+	// would export with the knowledge, import into an instance whose
+	// identities mean nothing to it, and be editable by whoever could
+	// write that path.
+	mux.HandleFunc("GET /api/v1/access", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+			writeError(w, err)
+			return
+		}
+		rules, err := svc.Policy(r.Context())
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, accessBody{Rules: rules})
+	})
+	mux.HandleFunc("PUT /api/v1/access", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+			writeError(w, err)
+			return
+		}
+		var in accessBody
+		if !readJSON(w, r, &in) {
+			return
+		}
+		rules, err := svc.SetPolicy(r.Context(), in.Rules, httpauth.Actor(r.Context()))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, accessBody{Rules: rules})
+	})
+
 	// A file has one address, and it is the path it lives at:
 	// /api/v1/bundle/{path} reads, writes and deletes it (design doc 0046
 	// §§3.3, 3.5). /api/v1/attachments/{id}/{name} is gone with the
@@ -1640,6 +1689,12 @@ func writeError(w http.ResponseWriter, err error) {
 	var inputErr *service.InvalidInputError
 	var unsupportedErr *service.UnsupportedError
 	switch {
+	case errors.Is(err, service.ErrForbidden):
+		// A caller inside the bundle asking for more than their grant
+		// (design doc 0109). A read outside the grant never reaches
+		// here: it is store.ErrNotFound below, because the answer to
+		// "is there anything at this address" is the boundary itself.
+		status, code = http.StatusForbidden, domain.CodeForbidden
 	case errors.Is(err, service.ErrReadOnly):
 		// 403, not 404: the route exists and the request was understood.
 		// This deployment declines to write (design doc 0040).
@@ -1922,4 +1977,12 @@ func serveDefensively(w http.ResponseWriter, mediaType, name string) {
 	// end the quoted string early is the quote itself.
 	w.Header().Set("Content-Disposition",
 		disposition+`; filename="`+strings.ReplaceAll(name, `"`, `\"`)+`"`)
+}
+
+// accessBody is the access policy on the wire: a document with one key,
+// so the rules can grow a field without the body changing shape, and so
+// the response is an object rather than a bare array (design doc 0064
+// keeps every /api/v1 body an object).
+type accessBody struct {
+	Rules []domain.AccessRule `json:"rules"`
 }

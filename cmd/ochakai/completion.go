@@ -88,6 +88,7 @@ _ochakai() {
     'move:move (rename) a concept; references are rewritten'
     'usage:show usage totals for a concept'
     'stats:the whole loop: what is stored, what each queue holds, what review did'
+    'access:show or replace the access policy (administrators only)'
     'report:report an outcome (worked/failed) for a concept'
     'revisions:list the change history of a concept (newest first)'
     'log:print the history under a path as OKF log.md'
@@ -152,6 +153,11 @@ _ochakai() {
         '--days[flow window in days, 1-180]:days:' \
         '*--prefix[measure only this subtree]:path:' \
         '--exit-code[exit 2 while any review queue is non-empty]' \
+        '--json[print JSON]' \
+        '--url[server URL]:url:'
+      ;;
+    access)
+      _arguments '-f[replace the policy with this JSON document]:file:_files' \
         '--json[print JSON]' \
         '--url[server URL]:url:'
       ;;
@@ -231,7 +237,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search list browse get put verify reject delete purge reembed move usage stats report revisions export import seed use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search list browse get put verify reject delete purge reembed move usage stats access report revisions export import seed use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -254,6 +260,7 @@ _ochakai() {
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
     stats)         opts="--days --prefix --exit-code --json --url" ;;
+    access)        opts="-f --json --url" ;;
     revisions)     opts="--limit --json --url" ;;
     log)           opts="--limit --url" ;;
     report)
@@ -310,6 +317,7 @@ complete -c ochakai -n __fish_use_subcommand -a reembed -d 'embed concepts that 
 complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) a concept; references are rewritten'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for a concept'
 complete -c ochakai -n __fish_use_subcommand -a stats -d 'the whole loop: what is stored, what each queue holds, what review did'
+complete -c ochakai -n __fish_use_subcommand -a access -d 'show or replace the access policy (administrators only)'
 complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for a concept'
 complete -c ochakai -n __fish_use_subcommand -a revisions -d 'list the change history of a concept (newest first)'
 complete -c ochakai -n __fish_use_subcommand -a log -d 'print the history under a path as OKF log.md'
@@ -326,12 +334,12 @@ complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web 
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 complete -c ochakai -n __fish_use_subcommand -a help -d 'print the command list'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify reject delete purge reembed move usage stats report revisions log export import whoami ui mcp-stdio' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify reject delete purge reembed move usage stats access report revisions log export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify reject reembed usage stats report revisions whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify reject reembed usage stats access report revisions whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l days -x -d 'flow window in days, 1-180'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l prefix -x -d 'measure only this subtree'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'

@@ -40,6 +40,11 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 		"FillFiles": true, "RefuseIfCurated": true,
 		"RefuseIfRevivingCurated": true, "Close": true,
 		"LogRows": true, "ObjectHistory": true,
+		// Reading the policy is a read, and asking whether this caller
+		// is an administrator is a question rather than a change
+		// (design doc 0109). SetPolicy is the write here, and it is
+		// guarded like every other one.
+		"Policy": true, "RequireAdmin": true,
 	}
 	// Zero arguments of the right type for each parameter, so every method
 	// can be called far enough to hit (or miss) the guard.
