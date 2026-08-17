@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"cloud.google.com/go/compute/metadata"
@@ -236,7 +237,92 @@ var Modes = []string{ModeReadOnly, ModePublic, ModeDev, ModeSandbox}
 // (design doc 0060).
 func (c *Config) Anonymous() bool { return c.PublicReadOnly || c.Sandbox }
 
+// Known is every OCHAKAI_-prefixed variable ochakai reads, the server's
+// and the CLI's in one list: unknownVars below reads a process
+// environment, which does not say which half of the binary is about to
+// run, and a shell that exported OCHAKAI_URL for the client is not a
+// misconfigured server.
+//
+// Written out here and checked against the source rather than trusted —
+// TestConfigKnowsEveryVariableTheSourceReads reads the os.Getenv calls
+// back out of the non-test Go and fails when the two disagree (design
+// doc 0035). PORT and NO_COLOR are absent on purpose: this list is
+// ochakai's own namespace, and the two spellings it borrows belong to
+// Cloud Run and to every program that reads NO_COLOR.
+var Known = []string{
+	"OCHAKAI_ADMINS",
+	"OCHAKAI_DATABASE_URL",
+	"OCHAKAI_DB_IAM_AUTH",
+	"OCHAKAI_DELEGATING_CALLERS",
+	"OCHAKAI_EMBEDDINGS",
+	"OCHAKAI_GCS_BUCKET",
+	"OCHAKAI_IAP_AUDIENCE",
+	"OCHAKAI_MODE",
+	"OCHAKAI_OIDC_AUDIENCE",
+	"OCHAKAI_OIDC_ISSUER",
+	"OCHAKAI_PRODUCER",
+	"OCHAKAI_RECORD_MISSES",
+	"OCHAKAI_URL",
+}
+
+// namespace is the prefix ochakai claims, and testPrefix is the part of
+// it this repository's own harness keeps: OCHAKAI_TEST_DATABASE_URL is
+// exported across `scripts/check --db`, so a process started under it
+// must not read it as a misconfiguration. Nothing the program ships
+// reads anything under testPrefix, which TestNothingShippedReadsATestVariable
+// holds — the exception is checked rather than named and trusted.
+const (
+	namespace  = "OCHAKAI_"
+	testPrefix = "OCHAKAI_TEST_"
+)
+
+// unknownVars names every variable in ochakai's namespace that ochakai
+// does not read, in the order they would be listed back to an operator.
+// environ is passed in rather than read here so a test can hand it one.
+func unknownVars(environ []string) []string {
+	known := make(map[string]bool, len(Known))
+	for _, name := range Known {
+		known[name] = true
+	}
+	var unknown []string
+	for _, kv := range environ {
+		name, _, ok := strings.Cut(kv, "=")
+		if !ok || !strings.HasPrefix(name, namespace) ||
+			strings.HasPrefix(name, testPrefix) || known[name] {
+			continue
+		}
+		unknown = append(unknown, name)
+	}
+	sort.Strings(unknown)
+	return unknown
+}
+
+// CheckEnv fails when the environment carries a variable in ochakai's
+// namespace that ochakai does not read, for the reason design doc 0064
+// §2 refuses an unrecognized query parameter: until now a deployment
+// that misspelled a variable, or kept one a fold retired, started in the
+// posture it had not asked for and said nothing. Every name is listed at
+// once, so a deployment carrying two of them is one redeploy rather than
+// two (design doc 0112).
+//
+// Exported because the two commands configured by environment are two
+// processes: serve reaches it through FromEnv below, and serve-ui — which
+// has no Config — calls it directly. The CLI does not: a client reads a
+// wrong OCHAKAI_URL and says which instance it is talking to, where a
+// server reads a wrong posture and serves it for months.
+func CheckEnv() error {
+	unknown := unknownVars(os.Environ())
+	if len(unknown) == 0 {
+		return nil
+	}
+	return fmt.Errorf("ochakai does not read %s; it reads %s",
+		strings.Join(unknown, ", "), strings.Join(Known, " / "))
+}
+
 func FromEnv() (*Config, error) {
+	if err := CheckEnv(); err != nil {
+		return nil, err
+	}
 	cfg := &Config{
 		Addr:        ":" + envOr("PORT", "8080"),
 		DatabaseURL: os.Getenv("OCHAKAI_DATABASE_URL"),

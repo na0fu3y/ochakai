@@ -357,3 +357,78 @@ func TestSandboxRefusesAnIssuer(t *testing.T) {
 		t.Error("a sandbox with an OIDC issuer was accepted; it reads no identity")
 	}
 }
+
+// A variable ochakai does not read used to be read by nobody and said so
+// to nobody: OCHAKAI_RECORD_MISSES typed one letter short left the
+// recording on, and a deployment that kept OCHAKAI_VERTEX_PROJECT after
+// design doc 0078 folded it away kept a value nothing consulted. The
+// refusal is the one design doc 0064 §2 already makes for a query
+// parameter, moved to the other surface an operator spells by hand
+// (design doc 0112).
+func TestAVariableNobodyReadsStopsTheStart(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x")
+
+	t.Run("named, with what ochakai does read", func(t *testing.T) {
+		t.Setenv("OCHAKAI_VERTEX_PROJECT", "my-project")
+		_, err := FromEnv()
+		if err == nil {
+			t.Fatal("OCHAKAI_VERTEX_PROJECT was accepted; a value nothing reads must not be silent")
+		}
+		if !strings.Contains(err.Error(), "OCHAKAI_VERTEX_PROJECT") {
+			t.Errorf("err = %v, want the variable named", err)
+		}
+		if !strings.Contains(err.Error(), "OCHAKAI_EMBEDDINGS") {
+			t.Errorf("err = %v, want the list of what ochakai does read", err)
+		}
+	})
+
+	// Both at once, because an operator fixing one variable per redeploy
+	// finds the second one from a second failed revision.
+	t.Run("every one of them at once", func(t *testing.T) {
+		t.Setenv("OCHAKAI_VERTEX_MODEL", "gemini-embedding-001")
+		t.Setenv("OCHAKAI_READ_ONLY", "true")
+		_, err := FromEnv()
+		if err == nil {
+			t.Fatal("two variables nothing reads were accepted")
+		}
+		for _, want := range []string{"OCHAKAI_READ_ONLY", "OCHAKAI_VERTEX_MODEL"} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("err = %v, want %s named too", err, want)
+			}
+		}
+	})
+}
+
+// The half of the namespace this repository's own harness keeps.
+// OCHAKAI_TEST_DATABASE_URL is exported across the whole of
+// `scripts/check --db`, so every test in this file runs under it in CI —
+// a check that read it as a misconfiguration would fail the run that
+// introduced it.
+func TestTheHarnessNamespaceIsNotAMisconfiguration(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x")
+	t.Setenv("OCHAKAI_TEST_DATABASE_URL", "postgres://t:t@localhost:55433/t")
+	if _, err := FromEnv(); err != nil {
+		t.Errorf("err = %v, want a start: %s is the harness's, not a deployment's", err, "OCHAKAI_TEST_DATABASE_URL")
+	}
+}
+
+// What the check reads is a process environment, which carries every
+// other program's variables and, on some systems, an entry with no "=".
+func TestUnknownVarsReadsOnlyOchakaisNamespace(t *testing.T) {
+	got := unknownVars([]string{
+		"PATH=/usr/bin",
+		"NO_COLOR=1",
+		"PORT=8080",
+		"OCHAKAI_MODE=sandbox",
+		"OCHAKAI_TEST_DATABASE_URL=postgres://t",
+		"OCHAKAI_TYPO",
+		"OCHAKAI_ZZZ=1",
+		"OCHAKAI_AAA=1",
+	})
+	// Sorted, so the operator reading a Cloud Run revision's logs gets
+	// the same sentence every time rather than the environment's order.
+	want := []string{"OCHAKAI_AAA", "OCHAKAI_ZZZ"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Errorf("unknownVars = %v, want %v", got, want)
+	}
+}

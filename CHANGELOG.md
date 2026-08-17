@@ -21,6 +21,32 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING (deployment): a variable ochakai does not read stops the
+  start** (design doc 0112). `ochakai serve` and `ochakai serve-ui` now
+  refuse to start when the environment carries a variable beginning
+  `OCHAKAI_` that ochakai does not read, naming every one of them and
+  listing what it does read. **What to do about it**: if a deployment
+  sets an `OCHAKAI_*` variable that is not in
+  [docs/configuration.md](docs/configuration.md)'s table — a typo, or an
+  old spelling a fold retired, such as the `OCHAKAI_VERTEX_*` and
+  `OCHAKAI_EMBEDDING_DIM` variables `OCHAKAI_EMBEDDINGS` replaced in
+  `0.18.0` or the `OCHAKAI_READ_ONLY` /
+  `OCHAKAI_PUBLIC_READ_ONLY` / `OCHAKAI_INSECURE_DEV` booleans
+  `OCHAKAI_MODE` replaced in `0.17.0` — remove it before upgrading, or
+  read its name off the failed revision's startup log. On Cloud Run a
+  revision that does not start takes no traffic, so the previous one
+  goes on answering. Until now those variables were read by nobody and
+  said so to nobody: `OCHAKAI_RECORD_MISSES` typed one letter short left
+  the recording on, with nowhere to see that it had. The refusal is the
+  one design doc 0064 §2 already makes for an unrecognized query
+  parameter, on the other surface an operator spells by hand.
+  `OCHAKAI_TEST_*` is this repository's own harness namespace and is
+  ignored; the client commands are not checked, since a wrong
+  `OCHAKAI_URL` announces itself at once. No variable was added or
+  removed.
+
 ### Fixed
 
 - **The compatibility policy said a new error `code` could be added,
