@@ -1,10 +1,10 @@
 ---
 type: Attested Computation
-title: Monthly recognized revenue
-description: Monthly revenue from completed orders (example)
+title: 月次の計上売上
+description: 完了した注文の月次売上(例)
 status: draft
 runtime: bigquery
-question: What is our monthly revenue this year?
+question: 今年度の月次売上は?
 tags: [sales, revenue]
 ---
 
@@ -21,12 +21,12 @@ GROUP BY month
 ORDER BY month
 ```
 
-# Caveats
+# 注意
 
-- **Completed orders only.** Anything other than `status = 'completed'` —
-  cancelled, or held pending a return — is excluded. Use a different query
-  if you want a same-day preliminary figure.
-- Amounts are JPY, tax included. Refunds are not deducted, so a month with
-  a high return rate reads higher than it settled.
-- The month boundary is the order creation time (`created_at`, UTC), which
-  can be a few hours off from the accounting close.
+- **完了した注文だけ。** `status = 'completed'` 以外 — キャンセル、返品
+  待ちで保留のもの — は除いている。当日の速報値が要るなら、別のクエリを
+  使うこと。
+- 金額は円、税込。返金は引いていないので、返品率の高い月は締めた数字より
+  高く出る。
+- 月の境目は注文の作成時刻(`created_at`、UTC)であり、経理の締めとは
+  数時間ずれることがある。

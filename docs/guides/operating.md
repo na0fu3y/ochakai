@@ -875,7 +875,7 @@ Google アカウントを持たない人が、curl だけでなく CLI でも到
 ```sh
 go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
 ochakai use https://demo.example      # デモの URL
-ochakai search "why is revenue down?"
+ochakai search "なぜ売上が落ちているのか"
 ```
 
 `ochakai whoami` はこのとき `human:anonymous (no Google credentials

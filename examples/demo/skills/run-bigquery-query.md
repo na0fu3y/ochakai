@@ -1,7 +1,7 @@
 ---
 type: Skill
-title: Run a BigQuery computation
-description: How to execute an Attested Computation with runtime bigquery here, and what a run has to bring back
+title: BigQuery の計算を実行する
+description: このバンドルで runtime bigquery の Attested Computation をどう動かすか、そして実行が何を持ち帰るか
 tags: [bigquery, executor, runbook]
 generated: { by: human:sato@example.co.jp, at: 2026-07-17T07:40:00Z }
 verified:
@@ -9,40 +9,40 @@ verified:
 status: stable
 ---
 
-The procedure every `runtime: bigquery` entry in this bundle names as its
-`executor`. There are two of them:
-[monthly revenue](/queries/sales/monthly-revenue.md) and the draft
-[revenue by channel](/queries/sales/revenue-by-channel.md).
+このバンドルの `runtime: bigquery` の concept が `executor` として名指す
+手順である。名指しているのは二つ:
+[月次売上](/queries/sales/monthly-revenue.md)と、draft の
+[チャネル別売上](/queries/sales/revenue-by-channel.md)。
 
-## Run it
+## 実行する
 
-1. Read the SQL out of the entry's `# Computation` fence. **Verbatim** — do not
-   add a filter, a limit, or a column. A rewritten query is a different
-   computation and the attester will say so.
-2. Bind every entry in `parameters` as a query parameter of the declared type.
-   `revenue-by-channel` needs `from_date` and `to_date`; `monthly-revenue` takes
-   none and derives its own window.
-3. Run it in the `demo-shop` project as the `analytics-reader` service account,
-   which has BigQuery Job User there and read access to nothing but the
-   `shop` dataset. Location `asia-northeast1`.
-4. Return the receipt (below) with the result.
+1. concept の `# Computation` フェンスから SQL を読む。**そのまま** —
+   フィルタも LIMIT も列も足さない。書き換えたクエリは別の計算であり、
+   attester がそう言う。
+2. `parameters` の各項目を、宣言された型のクエリパラメータとして束縛する。
+   `revenue-by-channel` は `from_date` と `to_date` を要る。
+   `monthly-revenue` は取らず、期間を自分で決める。
+3. `demo-shop` プロジェクトで、`analytics-reader` サービスアカウントとして
+   実行する。このアカウントはそこで BigQuery Job User を持ち、読めるのは
+   `shop` データセットだけである。ロケーションは `asia-northeast1`。
+4. 結果と一緒に、下の receipt を返す。
 
-## The receipt
+## receipt
 
-Both entries declare `receipt: [job_id, executed_sql, row_count]`, and all three
-fields have to come back:
+どちらの concept も `receipt: [job_id, executed_sql, row_count]` を宣言して
+おり、三つとも返ってこなければならない:
 
-| Field | Where it comes from |
+| フィールド | どこから来るか |
 |---|---|
-| `job_id` | the BigQuery job — the audit trail, and how a run is re-read later |
-| `executed_sql` | the query as it was sent, not as it was meant |
-| `row_count` | rows returned; a zero row count is a result, not a failure |
+| `job_id` | BigQuery のジョブ。監査の跡であり、あとから実行を読み直す手段 |
+| `executed_sql` | 送られたとおりのクエリ。送るつもりだったものではない |
+| `row_count` | 返った行数。0 行は結果であって、失敗ではない |
 
-`executed_sql` is the one the attester actually reads. Sending the SQL and
-reporting something else is the failure this whole arrangement exists to catch.
+attester が実際に読むのは `executed_sql` である。SQL を送っておいて別の
+ものを報告する — この仕掛け全体が捕まえようとしている失敗がそれである。
 
-## What this is not
+## これは何ではないか
 
-Running the computation and checking the receipt belong to whoever runs the
-query. ochakai stores this procedure and the contract that points at it, and
-executes neither — no SQL runs inside the knowledge base.
+計算を実行することも、receipt を確かめることも、クエリを走らせる側の仕事で
+ある。ochakai はこの手順と、それを指す契約を保存するだけで、どちらも実行
+しない。ナレッジベースの中で SQL は動かない。

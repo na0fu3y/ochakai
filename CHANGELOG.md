@@ -21,6 +21,52 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The demo knowledge base is written in Japanese.** ochak.ai's demo is
+  a Japanese demo, and [demo.ochak.ai](https://demo.ochak.ai) serves
+  `examples/demo`, so the bundle a reader meets first is now written the
+  way the team it is pretending to be would write it: titles,
+  descriptions, bodies, `question` fields and `status_note` in Japanese,
+  and the names that come out of the warehouse — `total_price`,
+  `status = 'completed'`, the `channel_code` values, the SQL in the
+  `# Computation` fence, the type vocabulary and the tag slugs — left in
+  English, because that is where they came from. It was bilingual by
+  halves before, with English definitions and Japanese naming notes; the
+  halves are now drawn where a real base draws them, between the
+  warehouse and the judgment. The eleven concepts, their ids, their links
+  and the deliberate unevenness (two drafts, one deprecated reference,
+  one draft already past its `stale_after`) are unchanged, so anything
+  addressing them by id still works, and `insights/着地見込み` keeps the
+  id it always had. `examples/golden-query.md` — the single document the
+  quick start registers with `ochakai put -f`, about the same invented
+  shop — went with it.
+- **`metrics/revenue` no longer claims "net sales" as a synonym.** The
+  concept spends a paragraph saying 純売上 — net sales — is a different,
+  ex-tax number that will not reconcile with it, and then listed it as
+  another name for itself. The synonyms are now `トップライン`,
+  `top line` and `revenue`, which are names for this metric, and the
+  search-evaluation harness keeps a case on the one of them that appears
+  nowhere else in the bundle (design doc 0105).
+- **The web UI screenshots were re-shot** against the Japanese bundle,
+  and are Japanese-dated now that the page around them is (CONTRIBUTING,
+  *Web UI screenshots*, which carries the new heights and the locale to
+  force).
+- **The search-evaluation golden set is asked in Japanese**, against the
+  shipped bundle, and the two inline fixtures that had come to duplicate
+  it (売上の読み方, 受注) are gone; 解約率 stays, because the invented
+  shop sells no subscriptions. Four English cases stay for the words the
+  warehouse supplies. Recall reaches 1.00 on both halves — nothing falls
+  out of the top ten — while MRR reads 0.78 lexical and 0.77 fused,
+  against 0.90 and 0.85 for the bilingual corpus and a different set of
+  questions. The floors moved with them. Both effects behind the drop
+  are the corpus rather than the ranking: a monolingual Japanese base
+  about one shop shares 売上 across every concept, so the concept *named*
+  売上 takes the name rule for 「なぜ売上が落ちているのか」 and the
+  insight that answers it lands second; and an English keyword now sits
+  in Japanese prose, so `total_price` ties seven concepts and is settled
+  by the tie-breaks.
+
 ## [0.24.0] - 2026-08-17
 
 ### Added
