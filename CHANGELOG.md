@@ -90,6 +90,16 @@ last entry.
   0101 place outside the freeze. Nothing in the product changes; a
   client that already treats an unrecognized code as its status alone
   keeps doing exactly the right thing.
+- **On a phone, opening an entry from the tree looked like it did
+  nothing.** Where the layout is one column, the knowledge tree is a
+  disclosure that sits above the view in the document, so an entry
+  opened with the tree left open put the page it asked for a screenful
+  below the tap that asked for it. It now closes on navigation, the way
+  a drawer does, and the entry starts under the top bar. In the same
+  pass the search row wraps instead of sharing one line: the query
+  field and a feed's banner were down to half a phone's width beside
+  the create button, which left the banner reading a word to the line.
+  Wide screens are unchanged.
 
 ## [0.25.0] - 2026-08-17
 
