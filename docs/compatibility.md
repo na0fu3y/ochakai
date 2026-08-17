@@ -119,8 +119,20 @@ moves:
   `no_rejection`) and two that share 412 (a stale `If-Match`, and an
   occupied path under `If-None-Match: *`), which is what made a
   string match the only way to tell them apart and this policy's
-  permission to reword them a trap. New codes may be added, so treat an
-  unrecognized one as the status alone would be treated.
+  permission to reword them a trap. **The vocabulary is closed at
+  twelve words, and the freeze holds it there** — the enum is written
+  into `components/responses/Error`, which the core operations reach, so
+  it is a line of the fingerprint, and a thirteenth code *moves* that
+  line rather than adding one, which is not what
+  [0082](design/0082-what-the-freeze-holds-still.md) and
+  [0101](design/0101-a-level-can-be-walked.md) left outside the freeze.
+  Nor is there a way in through a side door: `surface_test.go` requires
+  that enum and the server's own list to be the same list, and every
+  error response anywhere in the contract to draw from it. A thirteenth
+  code needs one of the three reasons above, the way any other change to
+  the core does. Treat an unrecognized code as the status alone would be
+  treated anyway — that costs nothing until the day one of those three
+  lands.
 - **MCP** — tool names, arguments, and which tools exist at all.
   `compile_sql` existed until `0.13.0` and does not now, and the five
   tools that said `knowledge` say `concept`. **A tool a release renames

@@ -21,6 +21,19 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The compatibility policy said a new error `code` could be added,
+  and it cannot.** [docs/compatibility.md](docs/compatibility.md) now
+  says what the checks have enforced since the freeze: the twelve-word
+  `code` vocabulary (design doc 0083) is written into the `Error`
+  response the frozen core operations reach, so a thirteenth word moves
+  a line of [api/openapi.frozen.txt](api/openapi.frozen.txt) — a change
+  to the core rather than one of the two additions design docs 0082 and
+  0101 place outside the freeze. Nothing in the product changes; a
+  client that already treats an unrecognized code as its status alone
+  keeps doing exactly the right thing.
+
 ## [0.25.0] - 2026-08-17
 
 ### Added
