@@ -100,6 +100,13 @@ func (s *Service) Reembed(ctx context.Context, cursor string, limit int) (*Reemb
 	if err := s.readOnly(); err != nil {
 		return nil, err
 	}
+	// A pass over every concept in the base, which is an administrator's
+	// operation for the reason the tar is (design doc 0109 §3): it is
+	// the bundle as a whole, and there is no partial version of it that
+	// means the same thing.
+	if err := s.RequireAdmin(ctx, "reembed"); err != nil {
+		return nil, err
+	}
 	if s.Embedder == nil {
 		return nil, Unsupportedf("semantic search is not enabled on this deployment: it is the default on Google Cloud once the service identity may call Vertex AI (design doc 0080 §1)")
 	}

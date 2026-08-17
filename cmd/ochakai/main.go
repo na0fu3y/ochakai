@@ -187,6 +187,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   usage <id>              show usage totals (search hits, fetches, outcomes)
   stats                   the whole loop: what is stored, what each queue holds,
                           what review did, what came back empty
+  access [-f file]        show or replace the access policy: who may read and
+                          write under which directory (administrators only)
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
   revisions <id>          list a concept's change history (newest first)
   log [path]              print the history under a path as OKF's log.md
@@ -262,6 +264,23 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 		}
 		log.Warn("semantic search is off: this database cannot hold vectors", "err", err)
 		embedder, cfg.Embedding = nil, nil
+	}
+	// A deployment carrying an access policy but naming no administrator
+	// is one nobody can edit the policy of, and refusing to start is the
+	// only moment that can still be said out loud (design doc 0109 §3).
+	// The same shape as OCHAKAI_MODE's unreadable spelling: a boundary
+	// that locked its operator out would be discovered from the
+	// knowledge rather than from the logs.
+	if len(cfg.Admins) == 0 {
+		p, err := st.AccessPolicy(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		if p.Active {
+			return nil, nil, fmt.Errorf("this database holds %d access rules and OCHAKAI_ADMINS is empty: "+
+				"nobody could read or edit the policy, so set it to the principals that administer this "+
+				"deployment (design doc 0109 §3)", len(p.Rules))
+		}
 	}
 	return &service.Service{Store: st, Embedder: embedder, Config: cfg, Log: log}, cfg, nil
 }

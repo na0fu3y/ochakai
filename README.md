@@ -304,7 +304,7 @@ ochakai loses, and says who should pick something else.
 | connector ingestion | knowledge is curated, not harvested. Trust density over volume — and a harvester would need warehouse credentials the server does not hold, so a catalog projection runs as an ordinary client under your own service account ([example](examples/bigquery-catalog) (Japanese)) |
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
 | secrets | Cloud Run IAM decides who reaches it and Cloud SQL authenticates the service account — nothing to issue or rotate |
-| authorization | reachability is the access model — see [requirements and configuration](docs/configuration.md#authentication-has-no-configuration) (Japanese) |
+| roles, a user database, per-concept permissions | reachability is the access model, and the one boundary ochakai does hold is grants of read and write **under a directory**, off unless you write one ([0109](docs/design/0109-a-directory-has-readers-and-writers.md), Japanese) — see [requirements and configuration](docs/configuration.md#authentication-has-no-configuration) (Japanese) |
 | telemetry | nothing is reported anywhere. The only hosts ochakai contacts are Google Cloud APIs in your own project |
 
 ## Requirements
@@ -325,8 +325,11 @@ ochakai loses, and says who should pick something else.
   drops. It stays a requirement for that, and for nothing else. `vector`
   (pgvector) as well where semantic search is on, which on Google Cloud
   is the default.
-- **No authorization**, as above. Deciding who may reach a deployment is
-  Cloud Run IAM's job.
+- **No authorization by default**, as above: deciding who may reach a
+  deployment is Cloud Run IAM's job. A deployment that needs a boundary
+  inside one bundle can grant read and write under a directory prefix
+  ([0109](docs/design/0109-a-directory-has-readers-and-writers.md),
+  Japanese), which is off until the first grant is written.
 
 Details, and every environment variable:
 [requirements and configuration](docs/configuration.md) (Japanese).

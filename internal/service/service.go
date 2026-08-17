@@ -92,6 +92,18 @@ func checkedLimit(limit, def, max int) (int, error) {
 
 func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error) {
 	id = domain.Normalize(id)
+	sc, err := s.scope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Outside the caller's scope the address holds nothing, which is the
+	// whole of what a read boundary is (design doc 0109 §4). Checked
+	// before the store so that a 404 costs the same whether or not the
+	// concept is there: a refusal that took longer when the answer
+	// existed would say so.
+	if !sc.MayRead(id) {
+		return nil, store.ErrNotFound
+	}
 	k, err := s.Store.Get(ctx, id)
 	if err != nil {
 		return nil, err
@@ -101,6 +113,12 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error)
 	if k.Files, err = s.Store.ListAttachments(ctx, id); err != nil {
 		return nil, err
 	}
+	// A concept's files are derived from its body (0075 §5), so they can
+	// name paths outside the caller's scope. The row is dropped rather
+	// than the read refused — the concept itself is readable, and what
+	// its prose says about a file nobody here can fetch is the limit
+	// this feature has (0109 §4.1), not a reason to refuse the concept.
+	k.Files = scopeRows(sc, k.Files, func(f domain.File) string { return f.Path })
 	// What links at this entry — the one question its own document cannot
 	// answer (design doc 0106). Rows, not documents: each is a pointer the
 	// caller decides to spend a fetch on, so nothing here is recorded as
@@ -113,6 +131,12 @@ func (s *Service) Get(ctx context.Context, id string) (*domain.Knowledge, error)
 		// the entry itself is already in hand.
 		s.Log.Warn("backlink lookup failed", "id", id, "error", err)
 	}
+	// The reverse lookup runs unfiltered in the store and is narrowed
+	// here: what points at a concept can sit anywhere in the bundle, and
+	// a backlink row names an id. This is the surface 0106 added, and it
+	// is the one a scope has to be told about by hand — the filter that
+	// narrows a search does not pass through it.
+	linkers = scopeRows(sc, linkers, func(k domain.Knowledge) string { return k.ID })
 	for i := range linkers {
 		k.LinkedFrom = append(k.LinkedFrom, domain.BacklinkOf(&linkers[i]))
 	}
@@ -202,6 +226,9 @@ func (s *Service) explainOccupiedID(ctx context.Context, id string, err error) e
 }
 
 func (s *Service) create(ctx context.Context, k *domain.Knowledge, actor domain.Actor, keepCuratedTombstones bool) (*domain.Knowledge, error) {
+	if err := s.mayWrite(ctx, domain.Normalize(k.ID)); err != nil {
+		return nil, err
+	}
 	normalizeKeys(k)
 	if err := validate(k); err != nil {
 		return nil, err
@@ -273,6 +300,9 @@ func (s *Service) Update(ctx context.Context, k *domain.Knowledge, actor domain.
 // write path would be a second opinion, and the two would drift.
 func (s *Service) settleUpdate(ctx context.Context, k *domain.Knowledge, ifMatch *string) (old *domain.Knowledge, changed bool, err error) {
 	if err := s.readOnly(); err != nil {
+		return nil, false, err
+	}
+	if err := s.mayWrite(ctx, domain.Normalize(k.ID)); err != nil {
 		return nil, false, err
 	}
 	normalizeKeys(k)
@@ -374,6 +404,14 @@ func (s *Service) Put(ctx context.Context, k *domain.Knowledge, actor domain.Act
 // out is the concept as the write would leave it, so the caller can read
 // the claim off it exactly as it reads it off a real write (okf.NoteClaim).
 func (s *Service) Plan(ctx context.Context, k *domain.Knowledge, actor domain.Actor, ifMatch *string) (out *domain.Knowledge, created, changed bool, err error) {
+	// Checked here as well as inside settleUpdate, because this function
+	// reads ErrNotFound as "the id is free, so the write would create" —
+	// and a scope refusal is spelled ErrNotFound on purpose (design doc
+	// 0109 §4). Without this, a dry run outside the caller's scope
+	// answered that the write was fine.
+	if err := s.mayWrite(ctx, domain.Normalize(k.ID)); err != nil {
+		return nil, false, false, err
+	}
 	old, changed, err := s.settleUpdate(ctx, k, ifMatch)
 	if err == nil {
 		if !changed {
@@ -517,7 +555,11 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor, ifM
 	if err := s.readOnly(); err != nil {
 		return err
 	}
-	return s.Store.SoftDelete(ctx, domain.Normalize(id), actor, ifMatch)
+	id = domain.Normalize(id)
+	if err := s.mayWrite(ctx, id); err != nil {
+		return err
+	}
+	return s.Store.SoftDelete(ctx, id, actor, ifMatch)
 }
 
 // Verify appends a verification against the concept as it stands, whether
@@ -535,9 +577,12 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor, ifM
 // edit by a writer; confirming and publishing are different acts, and a
 // draft somebody checked is a state OKF can express (SPEC §§5.3-5.4).
 //
-// There is no promotion restriction (design doc 0002): anyone who can
-// reach ochakai may verify, and the ledger records who did — trust is
-// judged from provenance.
+// There is no promotion restriction: anyone who may write the concept
+// may verify it, and the ledger records who did — trust is judged from
+// provenance rather than gated on a role (design doc 0065 §1). Where a
+// deployment has drawn a write boundary, that boundary is the one this
+// follows too (design doc 0109 §4): a ruling is a change to the ledger
+// of a concept, so it takes the same grant an edit takes.
 //
 // Not an MCP tool. Verification is the human ruling the write-back loop
 // turns on; an agent that finds a concept wrong reports the outcome or
@@ -547,6 +592,9 @@ func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*d
 		return nil, err
 	}
 	id = domain.Normalize(id)
+	if err := s.mayWrite(ctx, id); err != nil {
+		return nil, err
+	}
 	k, err := s.Store.Verify(ctx, id, actor)
 	if err != nil {
 		return nil, err
@@ -572,6 +620,9 @@ func (s *Service) Reject(ctx context.Context, id, note string, actor domain.Acto
 		return nil, Invalidf("rejection note exceeds %d bytes", maxRejectionNote)
 	}
 	id = domain.Normalize(id)
+	if err := s.mayWrite(ctx, id); err != nil {
+		return nil, err
+	}
 	k, err := s.Store.Reject(ctx, id, actor, note)
 	if err != nil {
 		return nil, err
@@ -590,6 +641,9 @@ func (s *Service) WithdrawRejection(ctx context.Context, id string, actor domain
 		return nil, err
 	}
 	id = domain.Normalize(id)
+	if err := s.mayWrite(ctx, id); err != nil {
+		return nil, err
+	}
 	k, err := s.Store.WithdrawRejection(ctx, id, actor)
 	if err != nil {
 		return nil, err
@@ -603,16 +657,21 @@ func (s *Service) WithdrawRejection(ctx context.Context, id string, actor domain
 // can). Not an MCP tool: this is the one operation that destroys history,
 // so it belongs to the human surfaces (design doc 0015).
 //
-// Which surface exposes it is not the same as who can reach it — ochakai
-// has no authorization, so any caller that reaches the REST API can purge.
-// The actor is therefore recorded twice over: in knowledge_purge, the one
-// table a purge does not touch, and in the log. An operation that leaves
-// no trace has no place in a product whose value is provenance.
+// Which surface exposes it is not the same as who can reach it: on a
+// deployment with no access policy, any caller that reaches the REST API
+// can purge, and on one with a policy it takes a write grant over the id
+// (design doc 0109). The actor is therefore recorded twice over: in
+// knowledge_purge, the one table a purge does not touch, and in the log.
+// An operation that leaves no trace has no place in a product whose
+// value is provenance.
 func (s *Service) Purge(ctx context.Context, id string, actor domain.Actor) error {
 	if err := s.readOnly(); err != nil {
 		return err
 	}
 	id = domain.Normalize(id)
+	if err := s.mayWrite(ctx, id); err != nil {
+		return err
+	}
 	if err := s.Store.Purge(ctx, id, actor); err != nil {
 		return err
 	}
@@ -628,8 +687,20 @@ func (s *Service) Purge(ctx context.Context, id string, actor domain.Actor) erro
 // (revisions, usage, attachments, embeddings) and rewriting inbound
 // references so nothing breaks (design doc 0021). Moving to the current
 // id is a no-op read.
+//
+// An administrator's operation where a policy exists (design doc 0109
+// §3). Not because renaming is grander than editing, but because of the
+// inbound rewrite: a move writes an update revision into every live
+// concept whose body names the old id, and those sit anywhere in the
+// bundle. A scoped writer moving their own concept would be writing
+// outside their scope, and narrowing the rewrite instead would leave the
+// links it skipped pointing at nothing — which is the one thing move
+// exists to prevent.
 func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor) (*domain.Knowledge, error) {
 	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
+	if err := s.RequireAdmin(ctx, "move"); err != nil {
 		return nil, err
 	}
 	id, newID = domain.Normalize(id), domain.Normalize(newID)

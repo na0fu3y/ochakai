@@ -14,8 +14,13 @@
 離れるかに依存しない。`deploy/compose.yaml` は同じバイナリを認証オフで
 ローカルに動かす — 本番の縮小版ではなく、開発用のハーネスである。
 
-**認可は無い。** 到達できるかどうかがアクセスモデルのすべてである —
-下の[認証に設定はない](#authentication-has-no-configuration)を見よ。
+**既定では認可は無い。** 到達できるかどうかがアクセスモデルのすべてで
+ある — 下の[認証に設定はない](#authentication-has-no-configuration)を
+見よ。ディレクトリごとに閲覧者と編集者を持たせる**任意の**アクセス
+ポリシーは、設計ドキュメント
+[0109](design/0109-a-directory-has-readers-and-writers.md) が足した
+(`OCHAKAI_ADMINS` と `ochakai access`)。**付与を一つも書いていない
+デプロイの挙動は、この段落の一行目のままである。**
 
 **PostgreSQL、それに `pg_trgm`。** 最初のマイグレーションがこの拡張を
 作るので、`CREATE EXTENSION` の権限を持たないユーザーで動かすデータ
@@ -54,6 +59,7 @@ CI と deploy ガイドはどちらも Postgres 17 で動かしている。
 | `OCHAKAI_DB_IAM_AUTH` | `true` で Cloud SQL IAM データベース認証を有効にする: 接続パスワードは短命の IAM トークンになるので、接続文字列は秘密を運ばない |
 | `OCHAKAI_GCS_BUCKET` | ファイルの実体を置くバケット(認証は ADC — キーは無い)。既定: 未設定 — このインスタンスは markdown の concept だけを保存し、ファイルの書き込みはエラーを返す |
 | `OCHAKAI_EMBEDDINGS` | このデプロイが**どう埋め込むか**を一語で言う(設計ドキュメント [0080](design/0080-search-and-how-a-deployment-embeds.md))。未設定 / `on`: Google Cloud 上で動いていれば、ochakai はメタデータサーバーから自分の**プロジェクトとリージョン**を読み、製品既定のモデル(`gemini-embedding-001`)で埋め込みを有効にする — 設定することは何も無く、**埋め込みは動いているリージョンで行われる**ので、asia-northeast1 に立てたデプロイの本文と検索クエリは asia-northeast1 の Vertex AI に送られる(設計ドキュメント [0080](design/0080-search-and-how-a-deployment-embeds.md) §1.2)。リージョンが読めなかったときは埋め込みを有効にしない — 誰も選んでいないリージョンにテキストを送るより、字句検索で動くほうを選ぶ。そのリージョンにモデルが無ければ起動時の問い合わせがそう答え、同じく字句検索に落ちる。実際に Vertex AI を呼べるかどうかは設定ではなく IAM(`roles/aiplatform.user`)が決め、起動時に一度だけ問い合わせる(設計ドキュメント [0080](design/0080-search-and-how-a-deployment-embeds.md))。Google Cloud の外にはメタデータサーバーが無く、何も有効にならない。`off`: 放っておけばハイブリッドになるデプロイを字句検索だけで動かす — Vertex AI は一度も呼ばれない。**Vertex AI のモデル resource name**(`projects/<project>/locations/<location>/publishers/google/models/<model>`): そのモデル・リージョン・プロジェクトで埋め込む。画像・PDF のファイル検索には model を `gemini-embedding-2`、location を `global`(または `us`/`eu`)にする。名指したデプロイはセマンティック検索を**要求した**ことになり、Vertex AI か pgvector が無ければ起動を拒否する(検出しただけのデプロイが字句検索へフォールバックするのと対照的である)。ベクトルの次元は設定ではなくモデルごとの定数で(現在はどちらのモデルも 768)、ochakai が知らないモデルは起動エラーにする — 幅を推測すれば、保存済みのベクトルと比べられないものを書くことになる。ベクトルは concept が書かれたときに書かれるので、埋め込みが届く前に読み込んだベースや、model を変えた後のベースは、`ochakai reembed` を走らせるまで埋め込まれないままになる。三つのどれでもない綴りは、推測せず起動エラーにする。既定: 検出できた場所では on |
+| `OCHAKAI_ADMINS` | このデプロイを管理する principal をカンマ区切りで並べる — `human:<name>` / `process:<name>`、または全認証済み呼び出し元を指す `*`(台帳の actor と同じ綴り、設計ドキュメント [0065](design/0065-identity-and-provenance.md) §2)。管理者は全部を読み書きでき、アクセスポリシー(`ochakai access`)を編集でき、バンドル全体を取る操作 — `stats`・export の tar・`move`・`reembed` — を撃てる。**これがデータではなく設定なのは、ポリシーを編集できる者をポリシーの中で決められないからである**(編集できる者は自分に何でも付与できる)。secret は増えない: 増えるのは名前の一覧である。**空(既定)なら認可は存在しない** — ただしアクセスポリシーの行が既にあるのに空だと、誰もそれを編集できないので**起動を断る**(設計ドキュメント [0109](design/0109-a-directory-has-readers-and-writers.md) §3)。綴りが principal として読めない値も起動エラーである。既定: 空 |
 | `OCHAKAI_DELEGATING_CALLERS` | `Ochakai-On-Behalf-Of: human:tanaka@example.co.jp` でエンドユーザーの identity を転送してよい呼び出し元 identity を、カンマ区切りで並べる(`*` で認証済みの呼び出し元すべて)。ochakai を組み込み、多くの人に使わせるアプリケーションのためのもので — これが無いと、そのアプリの利用者は全員アプリの一つのサービスアカウントに潰れてしまう。記録されるのは常に両方の identity であり(`human:tanaka@… via process:app-sa@…`)、転送された側だけになることは無い。既定: 空、委譲は off。一覧に無い呼び出し元からのヘッダは、黙って無視せず 403 にする(設計ドキュメント [0065](design/0065-identity-and-provenance.md) §3) |
 | `OCHAKAI_PRODUCER` | `ochakai` CLI 専用: CLI を動かしているソフトウェアを `<producer>/<version>` の形で名乗る — 例 `claude-code/2026.07`。`Ochakai-Producer` として送られ、行為者の**隣に**記録される(`human:tanaka@… using claude-code/2026.07`)のであって、行為者に取って代わることは無い — CLI をシェルアウトで叩くエージェントが、操作者の名前だけの下に書き込むことをやめさせるためのものである。認証済みの呼び出し元は誰でもこのヘッダを送ってよい — 名乗るのは呼び出し元自身のビルドであって他人の identity ではないので、許可リストで絞る必要が無い — 不正な値は黙って捨てず 400 にする。MCP の面では、ヘッダが無ければ同じ値をクライアントの `initialize` 情報から取る。既定: 未設定、何も宣言しない(設計ドキュメント [0065](design/0065-identity-and-provenance.md) §4) |
 | `OCHAKAI_IAP_AUDIENCE` | `ochakai serve-ui` 専用: 検証する IAP JWT の audience。これにより、ブラウザからの編集が `process:<webui-sa>` ではなく、サインインした本人(`human:tanaka@… via process:<webui-sa>`)として記録されるようになる。サーバー側の `OCHAKAI_DELEGATING_CALLERS` に webui のサービスアカウントを入れておく必要がある。設定すると、IAP が署名していないリクエストはサービスアカウントとして記録せず、拒否するようになる。既定: 空、利用者ごとの provenance は off(設計ドキュメント [0065](design/0065-identity-and-provenance.md) §5) |
@@ -71,9 +77,21 @@ CI と deploy ガイドはどちらも Postgres 17 で動かしている。
 
 ## 認証に設定はない
 
-デプロイに届く者は誰でも、すべてを読み書きできる。concept ごとの権限が
-要るなら、これは向いていないツールである — それで何が買えるかは
+デプロイに届く者は誰でも、すべてを読み書きできる。それで何が買えるかは
 [README の refusal 表](../README.md#what-it-refuses)にある。
+
+**境界が要るなら、二つの答えがある。** 一つは変わらず**デプロイを分ける**
+ことで、Cloud Run のサービスと同じ Cloud SQL インスタンスの中の別データ
+ベースを足すだけで済み、到達(Cloud Run IAM)と DB(Cloud SQL IAM)の
+二層で効く([faq](faq.md#誰が読み書きできるか))。もう一つは、**同じ
+バンドルの中にディレクトリ単位の閲覧者と編集者を置く**ことである(設計
+ドキュメント [0109](design/0109-a-directory-has-readers-and-writers.md))
+— 部門ごとに秘匿しつつ全社の用語集を検証済みのまま共有する、という
+分割では買えないものが要るときの答えで、`ochakai access` が
+ポリシーの表示と置き換えを行う。管理者は `OCHAKAI_ADMINS` が名指し、
+バンドル全体を取る操作(`stats`・export・`move`・`reembed`・ポリシー
+自身)はそこに寄せてある。**塞げないものが一つある**: 読める concept の
+本文が隠した id を名指していれば、その id は本文の中で読める(0109 §4.1)。
 
 **Google Cloud の外では、認証だけが第二の経路を持つ**(設計ドキュメント
 [0086](design/0086-a-second-way-to-say-who-is-calling.md))。
@@ -90,7 +108,8 @@ identity(人には `human:<email>`、サービスアカウントには
 決めること — は完全に Cloud Run IAM の仕事である。上の `OCHAKAI_MODE`
 は、届いた呼び出し元にできることを絞る(`read-only`)か、誰であるかの
 記録自体をやめる(`public`)かのどちらかであり、どちらも認可ではない —
-どちらも、尋ねているのが誰かを見ていないからである。
+どちらも、尋ねているのが誰かを見ていないからである。呼び出し元を見る
+仕組みはアクセスポリシー一つだけで、それは既定では空である(0109)。
 
 コストを切り詰めたデプロイの完全な手順(月 $10 程度)は
 [deploy/cloudrun/README.md](../deploy/cloudrun/README.md) にある。

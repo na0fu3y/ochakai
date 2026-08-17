@@ -64,6 +64,7 @@ application embedding it needs.
 [configuration.md](configuration.md); this is the list, so you know what
 to look up.
 
+- `OCHAKAI_ADMINS`
 - `OCHAKAI_DATABASE_URL`
 - `OCHAKAI_DB_IAM_AUTH`
 - `OCHAKAI_DELEGATING_CALLERS`
@@ -99,12 +100,16 @@ expiry — against the issuer's published keys. No secret is introduced,
 which is the property that made Google Cloud a requirement in the first
 place. Search there is lexical-only: embeddings are Vertex AI or nothing.
 
-**There is no authorization.** Whoever can reach a deployment can read
-and write everything; identity is recorded as provenance, and trust is
-judged from provenance by whoever reads the concept. If you need
-per-concept permissions, this is the wrong tool — said plainly here
-because it is a disqualifying requirement for some teams and it is not
-going to change.
+**There is no authorization by default.** Whoever can reach a deployment
+can read and write everything; identity is recorded as provenance, and
+trust is judged from provenance by whoever reads the concept. A
+deployment that needs a boundary inside one bundle can grant read and
+write **under a directory prefix** — `ochakai access`, off until the
+first grant is written (design doc 0109, Japanese). What is still not
+here, and is not going to be: roles, a user database, deny rules, and
+per-concept permissions. One limit is worth knowing before you rely on
+the boundary: a readable concept whose prose names a hidden concept's id
+leaks that id, because the server never rewrites a stored document.
 
 **Connecting an MCP client** takes one of two forms, whichever client it
 is: a URL for clients that speak HTTP MCP, or the `ochakai mcp-stdio`

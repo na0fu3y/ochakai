@@ -43,6 +43,7 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"move":      cmdMove,
 	"usage":     cmdUsage,
 	"stats":     cmdStats,
+	"access":    cmdAccess,
 	"report":    cmdReport,
 	"revisions": cmdRevisions,
 	"log":       cmdLog,
@@ -2048,4 +2049,68 @@ func extractTarGz(dir string, r io.Reader) (int, error) {
 		}
 		n++
 	}
+}
+
+// cmdAccess reads and replaces the access policy (design doc 0109).
+//
+// One command with one document rather than grant and revoke verbs:
+// the policy is small, an operator edits what they just read, and a
+// document keeps in git — which is the review path a boundary deserves
+// and the one a pair of imperative commands would have no place for.
+// It reuses -f for the same reason `put` has it, so the surface grows
+// by a command and by no flags at all.
+func cmdAccess(ctx context.Context, args []string) error {
+	fs, url := newFlagSet(
+		"access",
+		"Usage: ochakai access [flags]\n\nShow the access policy, or replace it with the document from -f or\nstdin. Only an administrator (OCHAKAI_ADMINS) may do either.\n\nEach rule grants one principal — human:<name>, process:<name>, or *\nfor every authenticated caller — the right to read under one directory,\nand to write there when may_write is true. Prefixes match on segment\nboundaries, so sales covers sales/orders and does not cover\nsales-legacy/orders; the empty prefix is the whole bundle. There are no\ndeny rules: what no rule grants is not readable, and a caller sees a\n404 rather than a refusal, because whether something is there is the\nboundary itself.\n\nA deployment with no rules has no boundary — every caller reads and\nwrites everything, which is what ochakai does by default. Writing the\nfirst rule turns the boundary on for everybody at once, so read the\npolicy back before you close the terminal.\n\nThe operations that take the bundle as a whole — stats, export, move,\nreembed, and this command — stay with the administrators.",
+		"  ochakai access\n  ochakai access --json > policy.json\n  ochakai access -f policy.json\n  echo '{\"rules\":[]}' | ochakai access -f -   # remove every boundary\n")
+	file := fs.String("f", "", "replace the policy with the JSON document in this file (`-` or unset with a pipe: stdin). Without it, the policy is printed")
+	asJSON := fs.Bool("json", false, "print the policy as JSON — the same document -f takes back")
+	if _, err := parseArgs(fs, args); err != nil {
+		return err
+	}
+	c, err := newClient(ctx, *url)
+	if err != nil {
+		return err
+	}
+	// Reading is the default and writing is asked for by name: a
+	// command that replaced the policy because stdin happened not to be
+	// a terminal would be one an operator could run by pipeline accident.
+	var rules []domain.AccessRule
+	if *file == "" {
+		if rules, err = c.Policy(ctx); err != nil {
+			return err
+		}
+	} else {
+		data, err := readInput(*file)
+		if err != nil {
+			return err
+		}
+		var body apiclient.AccessBody
+		if err := json.Unmarshal(data, &body); err != nil {
+			return fmt.Errorf("the policy document is not the JSON `ochakai access --json` prints: %w", err)
+		}
+		if rules, err = c.SetPolicy(ctx, body.Rules); err != nil {
+			return err
+		}
+	}
+	if *asJSON {
+		return printJSON(apiclient.AccessBody{Rules: rules})
+	}
+	if len(rules) == 0 {
+		fmt.Println("no rules: every caller that reaches this deployment reads and writes everything")
+		return nil
+	}
+	for _, r := range rules {
+		access := "read"
+		if r.MayWrite {
+			access = "read,write"
+		}
+		prefix := r.Prefix
+		if prefix == "" {
+			prefix = "/"
+		}
+		fmt.Printf("%s\t%s\t%s\n", prefix, r.Principal, access)
+	}
+	return nil
 }

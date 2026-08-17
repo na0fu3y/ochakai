@@ -128,7 +128,13 @@ type Level struct {
 // a directory holding nothing but files is not a subdirectory here: OKF
 // says nothing about such a directory, and a count that mixed the kinds
 // would misdescribe every directory that has both.
-func (s *Store) Browse(ctx context.Context, prefix string, after *BrowseAfter) (*Level, error) {
+// scope, when non-empty, restricts every row and every count to the
+// subtrees the caller may read (design doc 0109 §4). It is applied here
+// rather than to the rows the service gets back because one of the three
+// answers is a count: a directory row that survived a filter in Go would
+// still be carrying the number of concepts underneath it, including the
+// ones the caller may not see.
+func (s *Store) Browse(ctx context.Context, prefix string, after *BrowseAfter, scope []string) (*Level, error) {
 	var lvl Level
 	// The subdirectories ride on the first page only. They are a grouping
 	// rather than a run — one row per name, bounded by how many names a
@@ -136,13 +142,15 @@ func (s *Store) Browse(ctx context.Context, prefix string, after *BrowseAfter) (
 	// repeating them on every page would make a walk report the same
 	// directory N times.
 	if after == nil {
+		args := []any{prefix}
 		rows, err := s.pool.Query(ctx, `
 			SELECT split_part(substr(id, length($1::text)+1), '/', 1) AS dir, count(*)
 			FROM object
 			WHERE `+browseNotRejected+`
 			  AND left(id, length($1::text)) = $1
 			  AND strpos(substr(id, length($1::text)+1), '/') > 0
-			GROUP BY dir ORDER BY dir`, prefix)
+			  `+browseScope("id", scope, &args)+`
+			GROUP BY dir ORDER BY dir`, args...)
 		if err != nil {
 			return nil, err
 		}
@@ -167,9 +175,9 @@ func (s *Store) Browse(ctx context.Context, prefix string, after *BrowseAfter) (
 			WHERE `+browseNotRejected+`
 			  AND left(id, length($1::text)) = $1
 			  AND strpos(substr(id, length($1::text)+1), '/') = 0
-			  %s
+			  %s%s
 			ORDER BY id LIMIT %d`, afterKey("id", after, func(a *BrowseAfter) *string { return a.Concepts }, &args),
-			MaxBrowseEntries+1), args...)
+			browseScope("id", scope, &args), MaxBrowseEntries+1), args...)
 		if err != nil {
 			return nil, err
 		}
@@ -200,9 +208,9 @@ func (s *Store) Browse(ctx context.Context, prefix string, after *BrowseAfter) (
 		WHERE id IS NULL AND deleted_at IS NULL
 		  AND left(path, length($1::text)) = $1
 		  AND strpos(substr(path, length($1::text)+1), '/') = 0
-		  %s
+		  %s%s
 		ORDER BY path LIMIT %d`, afterKey("path", after, func(a *BrowseAfter) *string { return a.Files }, &args),
-		MaxBrowseEntries+1), args...)
+		browseScope("path", scope, &args), MaxBrowseEntries+1), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -243,4 +251,16 @@ func afterKey(col string, after *BrowseAfter, key func(*BrowseAfter) *string, ar
 	}
 	*args = append(*args, *key(after))
 	return fmt.Sprintf("AND %s > $%d", col, len(*args))
+}
+
+// browseScope is prefixScope as a WHERE fragment appended to a browse
+// query, with the array bound as the next argument. Empty scope adds
+// nothing, which is every deployment without an access policy.
+func browseScope(column string, scope []string, args *[]any) string {
+	cond, extra := prefixScope(column, scope, len(*args)+1)
+	if cond == "" {
+		return ""
+	}
+	*args = append(*args, extra...)
+	return " AND " + cond
 }

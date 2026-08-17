@@ -828,3 +828,36 @@ func (c *Client) PutBundleFile(ctx context.Context, path string, data []byte) (*
 	}
 	return &f, nil
 }
+
+// AccessBody is the access policy document at /api/v1/access (design
+// doc 0109): one key, so a rule can grow a field without the body
+// changing shape.
+type AccessBody struct {
+	Rules []domain.AccessRule `json:"rules"`
+}
+
+// Policy reads the whole access policy. An administrator's read: 403
+// for anyone else, because the rules name who may see what.
+func (c *Client) Policy(ctx context.Context) ([]domain.AccessRule, error) {
+	var b AccessBody
+	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/access", nil, nil, &b); err != nil {
+		return nil, err
+	}
+	return b.Rules, nil
+}
+
+// SetPolicy replaces the whole access policy and returns it as stored.
+func (c *Client) SetPolicy(ctx context.Context, rules []domain.AccessRule) ([]domain.AccessRule, error) {
+	if rules == nil {
+		// An explicit empty policy — the way a deployment turns the
+		// boundary off again — must travel as [] and not as null: the
+		// server reads the key, and null would be a document that says
+		// nothing rather than one that says "no rules".
+		rules = []domain.AccessRule{}
+	}
+	var out AccessBody
+	if err := c.doJSON(ctx, http.MethodPut, "/api/v1/access", nil, AccessBody{Rules: rules}, &out); err != nil {
+		return nil, err
+	}
+	return out.Rules, nil
+}

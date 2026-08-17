@@ -94,8 +94,15 @@ func (s *Service) FillFiles(ctx context.Context, ks []*domain.Knowledge) error {
 	if err != nil {
 		return err
 	}
+	// Narrowed like the files on a single read (Get): attribution is
+	// derived from the body, so a hit inside the caller's scope can carry
+	// the path of a file outside it (design doc 0109 §4.1).
+	sc, err := s.scope(ctx)
+	if err != nil {
+		return err
+	}
 	for _, k := range ks {
-		k.Files = atts[k.ID]
+		k.Files = scopeRows(sc, atts[k.ID], func(f domain.File) string { return f.Path })
 	}
 	return nil
 }
@@ -115,6 +122,9 @@ func (s *Service) FillFiles(ctx context.Context, ks []*domain.Knowledge) error {
 func (s *Service) PutFile(ctx context.Context, p string, data []byte, actor domain.Actor) (att *domain.File, created bool, err error) {
 	p, mediaType, err := s.settleFile(p, data)
 	if err != nil {
+		return nil, false, err
+	}
+	if err := s.mayWrite(ctx, p); err != nil {
 		return nil, false, err
 	}
 	att, created, err = s.Store.PutFile(ctx, p, mediaType, data, actor)
@@ -181,6 +191,9 @@ func (s *Service) PlanFile(ctx context.Context, p string, data []byte, actor dom
 	if err != nil {
 		return nil, false, false, err
 	}
+	if err := s.mayWrite(ctx, p); err != nil {
+		return nil, false, false, err
+	}
 	sum := sha256.Sum256(data)
 	hash := hex.EncodeToString(sum[:])
 	old, err := s.Store.GetFileMeta(ctx, p)
@@ -208,7 +221,11 @@ func (s *Service) GetFile(ctx context.Context, p string) (*domain.File, []byte, 
 	if !s.Store.HasBlobStore() {
 		return nil, nil, Unsupportedf("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0075 §1)")
 	}
-	return s.Store.GetFile(ctx, domain.Normalize(p))
+	p = domain.Normalize(p)
+	if err := s.mayRead(ctx, p); err != nil {
+		return nil, nil, err
+	}
+	return s.Store.GetFile(ctx, p)
 }
 
 // GetFileMeta returns a file's metadata without its bytes — the only way
@@ -219,13 +236,20 @@ func (s *Service) GetFileMeta(ctx context.Context, p string) (*domain.File, erro
 	if !s.Store.HasBlobStore() {
 		return nil, Unsupportedf("files are not supported without GCS: set OCHAKAI_GCS_BUCKET (design doc 0075 §1)")
 	}
-	return s.Store.GetFileMeta(ctx, domain.Normalize(p))
+	p = domain.Normalize(p)
+	if err := s.mayRead(ctx, p); err != nil {
+		return nil, err
+	}
+	return s.Store.GetFileMeta(ctx, p)
 }
 
 // DeleteFile removes the file at a bundle path, and then whatever bytes
 // the removal left unreferenced.
 func (s *Service) DeleteFile(ctx context.Context, p string, actor domain.Actor) error {
 	if err := s.readOnly(); err != nil {
+		return err
+	}
+	if err := s.mayWrite(ctx, domain.Normalize(p)); err != nil {
 		return err
 	}
 	if err := s.Store.DeleteFile(ctx, domain.Normalize(p), actor); err != nil {

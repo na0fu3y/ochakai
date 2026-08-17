@@ -61,7 +61,7 @@ func TestIntegrationBrowse(t *testing.T) {
 
 	// The root is the top-level segments of the shared test DB; our
 	// directory must be there with its subtree count.
-	root, err := s.Browse(ctx, "", nil)
+	root, err := s.Browse(ctx, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestIntegrationBrowse(t *testing.T) {
 		t.Errorf("root dir counts wrong: %v", rootCounts)
 	}
 
-	lvl, err := s.Browse(ctx, "it-br-sales/", nil)
+	lvl, err := s.Browse(ctx, "it-br-sales/", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +90,7 @@ func TestIntegrationBrowse(t *testing.T) {
 	}
 
 	// The underscore ID lives in its own directory, not under it-br-sales.
-	lvl, err = s.Browse(ctx, "it-br_x/", nil)
+	lvl, err = s.Browse(ctx, "it-br_x/", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestIntegrationBrowse(t *testing.T) {
 	}
 
 	// Root level: the rejected entry is invisible.
-	lvl, err = s.Browse(ctx, "", nil)
+	lvl, err = s.Browse(ctx, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestBrowsePagesPastTheCap(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first, err := s.Browse(ctx, dir+"/", nil)
+	first, err := s.Browse(ctx, dir+"/", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestBrowsePagesPastTheCap(t *testing.T) {
 	}
 
 	last := first.Concepts[len(first.Concepts)-1].ID
-	next, err := s.Browse(ctx, dir+"/", &BrowseAfter{Concepts: &last})
+	next, err := s.Browse(ctx, dir+"/", &BrowseAfter{Concepts: &last}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestBrowsePagesPastTheCap(t *testing.T) {
 	}
 	// A kind the cursor marked finished is not asked again — the files
 	// query does not run, which is what a nil position means.
-	files, err := s.Browse(ctx, dir+"/", &BrowseAfter{Concepts: &last, Files: nil})
+	files, err := s.Browse(ctx, dir+"/", &BrowseAfter{Concepts: &last, Files: nil}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
