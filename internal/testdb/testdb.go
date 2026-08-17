@@ -18,7 +18,9 @@ package testdb
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -87,6 +89,78 @@ func Unique(t *testing.T, name string) string {
 	token := fmt.Sprintf("%s%d", name, time.Now().UnixNano())
 	t.Cleanup(func() { Sweep(t, token) })
 	return token
+}
+
+// Private hands the test a database of its own on the same server and
+// drops it when the test ends, for state that Unique cannot isolate.
+//
+// Unique is what almost everything here wants: rows carry a token, the
+// sweep takes them back, and one shared database is what keeps the suite
+// quick. It works because every row has an address to put the token in.
+//
+// The access policy has none. It is one document for the whole
+// deployment (design doc 0109 §5), and a single rule anywhere in a
+// database puts *every* caller of that database inside a boundary —
+// reads outside the granted prefixes become ErrNotFound and the
+// whole-bundle operations become ErrForbidden. `go test ./...` runs the
+// packages in parallel against one database, so while a test holds a
+// policy, the integration tests in restapi, mcpserver and store are
+// callers of a scoped deployment without knowing it. That is a race
+// nobody can see in the failing test: it surfaces as a 403 on an export
+// three packages away.
+//
+// So a test that writes a policy takes a database with it. Call this
+// before the store the test writes through — cleanups run
+// last-registered-first, so the drop registered here runs after that
+// pool has closed.
+func Private(t *testing.T, name string) string {
+	t.Helper()
+	shared := URL(t) // skips the test when there is no database
+	// net/url rather than pgx.ParseConfig, because the config's
+	// ConnString reports the string it was parsed from: changing the
+	// database on the struct would hand back a URL still naming the
+	// shared one, and the test would pass while isolating nothing.
+	u, err := url.Parse(shared)
+	if err != nil || u.Scheme == "" {
+		t.Fatalf("testdb: OCHAKAI_TEST_DATABASE_URL is not a URL, so a private database cannot be named from it: %q", shared)
+	}
+	// Lowercase and digits only: an unquoted identifier is folded, and a
+	// name that needed quoting everywhere it appears is a trap for the
+	// next person to write one of these by hand.
+	db := fmt.Sprintf("%s_%d", strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			return r
+		}
+		return '_'
+	}, strings.ToLower(name)), time.Now().UnixNano())
+
+	// Outlives t.Context(), which is cancelled before cleanups run.
+	ctx := context.Background()
+	exec := func(sql string) error {
+		conn, err := pgx.Connect(ctx, shared)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = conn.Close(ctx) }()
+		_, err = conn.Exec(ctx, sql)
+		return err
+	}
+	quoted := pgx.Identifier{db}.Sanitize()
+	if err := exec("CREATE DATABASE " + quoted); err != nil {
+		t.Fatalf("testdb: creating %s: %v", db, err)
+	}
+	t.Cleanup(func() {
+		// FORCE because a pool that failed to close would otherwise keep
+		// the database alive and the next run would find it: a leaked
+		// database is worse than a leaked row, since nothing sweeps it.
+		if err := exec("DROP DATABASE IF EXISTS " + quoted + " WITH (FORCE)"); err != nil {
+			t.Errorf("testdb: dropping %s: %v", db, err)
+		}
+	})
+
+	private := *u
+	private.Path = "/" + db
+	return private.String()
 }
 
 // Sweep removes every row whose object, ledger or measurement key
