@@ -68,6 +68,7 @@ CI と deploy ガイドはどちらも Postgres 17 で動かしている。
 | `OCHAKAI_OIDC_ISSUER` | Google Cloud の外で**誰が呼んでいるかを言う二つ目の方法**(設計ドキュメント [0086](design/0086-a-second-way-to-say-who-is-calling.md))。OpenID Connect 発行者の URL(`https://` のみ)を書くと、ochakai が Bearer トークンの**署名・発行者・audience・有効期限を自分で検証する** — Cloud Run ではプロセスの手前で IAM が済ませているチェックを、ここでは中で行う。**secret は増えない**: 検証に使うのは発行者が公開している公開鍵であり、共有鍵系のアルゴリズムは受け付けない。`OCHAKAI_OIDC_AUDIENCE` と必ず対で設定する(片方だけは起動時エラー)。`OCHAKAI_MODE=dev` / `public` とは併用できない — どちらも「identity を読まない」と言っている姿勢だからである。既定: 未設定(Cloud Run が検証したものを読む) |
 | `OCHAKAI_OIDC_AUDIENCE` | このデプロイが答える `aud` クレーム。省略できないのは、audience を見ない検証が、**同じ発行者が別のサービスのために発行したトークン**を受け入れてしまうからである(`aud` が存在する理由)。記録される名前は、発行者が verified と言った email なら人として、そうでなければ `sub` を process として記録する — 発行者が請け合わないアドレスで provenance を作れば、それは誰でも名乗れる名前になる |
 | `PORT` | 待ち受けポート(既定 `8080`) |
+| `NO_COLOR` | 空でない値が入っていると、CLI は端末でも太字・dim を出さない(設計ドキュメント [0111](design/0111-weight-for-the-eye-and-only-for-an-eye.md))。ochakai が定義した名前ではなく、多くのプログラムが同じ意味で読む既存の綴りを読んでいる — 値は見ず、**在ることだけ**を見る。既定では、標準出力が端末のときだけ太字と dim が付き、パイプ・リダイレクト・`--json` には一切出ない。サーバー側の設定ではない |
 
 クライアント側のコマンドは `OCHAKAI_URL` を読む — 話しかけるサーバーを、
 `ochakai use` で選んだものより優先する。残りは
