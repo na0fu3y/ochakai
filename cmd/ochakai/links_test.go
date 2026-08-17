@@ -72,8 +72,8 @@ func TestManualLinksResolve(t *testing.T) {
 	// CLAUDE.md and CONTRIBUTING.md are changer-facing and so excluded
 	// from userDocs, but they are living pages whose links are meant to
 	// keep resolving — and a broken one survives review the same way a
-	// dead fragment does. CHANGELOG.md and IMPROVEMENT_PLAN.md stay out:
-	// each of their entries records the tree as it stood when written.
+	// dead fragment does. CHANGELOG.md stays out: each of its entries
+	// records the tree as it stood when written.
 	pages = append(pages, root+"CLAUDE.md", root+"CONTRIBUTING.md")
 	if len(pages) == 0 {
 		t.Fatal("no pages to read: this check now guards nothing")
