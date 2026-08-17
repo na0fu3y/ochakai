@@ -22,12 +22,12 @@
     "type": "binary",
     "entry_point": "server/ochakai",
     "mcp_config": {
-      "command": "server/ochakai",
+      "command": "${__dirname}/server/ochakai",
       "args": ["mcp-stdio", "--url", "${user_config.url}"],
       "env": {},
       "platform_overrides": {
         "win32": {
-          "command": "server/ochakai.exe"
+          "command": "${__dirname}/server/ochakai.exe"
         }
       }
     }

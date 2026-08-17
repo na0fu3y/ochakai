@@ -49,6 +49,20 @@ last entry.
 
 ### Fixed
 
+- **The MCP bundle could not start the server it carries.** The
+  `.mcpb` manifest named its command `server/ochakai` — a path relative
+  to whatever directory the desktop app happens to run from, not to the
+  unpacked bundle — so the bundle installed, appeared in the app's
+  settings, and died at the first message with
+  `Failed to spawn process: No such file or directory`. The command is
+  now `${__dirname}/server/ochakai`, the token the format defines for
+  the bundle's own directory. **What to do about it**: reinstall the
+  bundle from a release carrying this fix; nothing else about it
+  changes, and the configured server URL is kept. Every released
+  `.mcpb` up to and including `0.25.0` is affected — the manual's
+  hand-written Claude Desktop JSON
+  ([docs/guides/mcp-clients.md](docs/guides/mcp-clients.md)) was never
+  affected, since it already tells the reader to use an absolute path.
 - **The compatibility policy said a new error `code` could be added,
   and it cannot.** [docs/compatibility.md](docs/compatibility.md) now
   says what the checks have enforced since the freeze: the twelve-word

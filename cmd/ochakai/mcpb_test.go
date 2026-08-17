@@ -101,8 +101,19 @@ func TestMCPBManifestRunsACommandTheBinaryHas(t *testing.T) {
 	if got, _ := server["entry_point"].(string); got != "server/ochakai" {
 		t.Errorf("entry_point = %q, want server/ochakai (scripts/mcpb writes it there)", got)
 	}
-	if got, _ := cfg["command"].(string); got != "server/ochakai" {
-		t.Errorf("command = %q, want server/ochakai", got)
+	// A command is spawned from whatever directory the desktop app happens
+	// to be in, not from the unpacked bundle, so a bare relative path
+	// installs fine and then dies with "No such file or directory" the
+	// first time the app starts the server. ${__dirname} is the bundle's
+	// own directory, and it is the only thing that makes the path absolute
+	// at spawn time.
+	commands := map[string]any{"command": cfg["command"], "platform_overrides.win32.command": win["command"]}
+	for where, v := range commands {
+		command, _ := v.(string)
+		if !strings.HasPrefix(command, "${__dirname}/server/ochakai") {
+			t.Errorf("%s = %q, want it under ${__dirname}/server/: a relative command is "+
+				"resolved against the desktop app's own directory and fails to spawn", where, command)
+		}
 	}
 
 	// scripts/mcpb stamps the release version over this exact string.
