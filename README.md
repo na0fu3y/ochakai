@@ -44,12 +44,20 @@ account and nothing to configure:
 ```sh
 go install github.com/na0fu3y/ochakai/cmd/ochakai@latest
 ochakai use https://demo.ochak.ai
-ochakai search "why is revenue down?"
+ochakai search "なぜ売上が落ちているのか"
 ochakai get insights/reading-revenue
 ```
 
+**The demo knowledge base is written in Japanese**, because that is what
+a knowledge base a Japanese team keeps looks like and this demo is one
+(the eight conditions in [docs/surface.md](docs/surface.md), C8). What
+stays English is what comes from the warehouse — `total_price`,
+`status = 'completed'`, the SQL in the `# Computation` fence — so
+`ochakai search channel_code` still lands on the concept that lists the
+codes.
+
 It is also the one deployment where plain curl works — nothing to sign:
-`curl 'https://demo.ochak.ai/api/v1/search?q=revenue'`.
+`curl 'https://demo.ochak.ai/api/v1/search?q=売上'`.
 
 **It is a sandbox, and it takes writes.** That is what makes the loop
 below — an agent drafts, a human rules — something you can try without
@@ -67,19 +75,22 @@ how the caveat that says *how to read* a metric reaches whoever reads the
 metric ([design doc
 0106](docs/design/0106-a-read-carries-what-points-at-it.md)). Here is
 part of what the insight above holds, condensed — the quoted sentences
-are verbatim:
+are verbatim, and the English beside them is this page's rendering of
+what the demo actually says:
 
-> **Seasonality.** The shape repeats every year and is larger than almost
-> anything you will be asked to investigate. December, +30 to +40%; March,
-> +10 to +15%; **August, -15%** — Obon, the whole country stops buying for
-> a week. "August being down 15% is the single fact most worth knowing
-> here. It comes back every year, it has never meant anything, and it
-> generates a review every year anyway."
+> **季節性 (seasonality).** The shape repeats every year and is larger
+> than almost anything you will be asked to investigate. December, +30 to
+> +40%; March, +10 to +15%; **August, -15%** — お盆 (Obon), the whole
+> country stops buying for a week. 「8月が 15% 落ちることは、ここで知って
+> おく価値がいちばん高い一つの事実である。毎年戻ってくるし、一度も何かを
+> 意味したことがないし、それでも毎年調査が立つ」 — it comes back every
+> year, it has never meant anything, and a review is opened over it every
+> year anyway.
 >
-> **Threshold.** "Escalate when two consecutive months are more than 8%
-> below the same months last year […] One month below, however far below,
-> has never been" — including the month a payment provider outage cost a
-> full day.
+> **しきい値 (threshold).** 「前年同月を 8% 以上下回る月が2か月続いた
+> ときに上へ上げる […] 1か月だけなら、どれだけ下でも問題だったことは
+> ない」 — one month below has never been a problem, however far below,
+> including the month a payment provider outage cost a full day.
 
 An agent with warehouse access alone can see that August fell. Nothing in
 the schema says the fall arrives every year, that a month-over-month move
@@ -126,18 +137,17 @@ curl reaches it too:
 ```sh
 ochakai use http://localhost:8080
 ochakai import examples/demo
-curl 'http://localhost:8080/api/v1/search?q=revenue'
-ochakai search "なぜ売上が落ちている?"   # the same base, asked in Japanese
+curl 'http://localhost:8080/api/v1/search?q=shop.orders'
+ochakai search "なぜ売上が落ちている?"   # the judgment, asked in Japanese
 ```
 
-That last line is not a translation of the first: the base is bilingual
-the way a Japanese team's own is — English where the warehouse columns
-are, Japanese where the judgment is, and one insight (月末の着地見込み)
-that exists only in Japanese because the person who knows it wrote it
-there. `売上` is a two-character term, which is the shape a Japanese
-knowledge base is mostly made of and the shape a trigram index cannot
-look up; here it is an index lookup with nothing installed and nothing
-configured.
+The two searches are not translations of each other. The base is written
+the way a Japanese team writes its own — Japanese where the judgment is,
+English where the warehouse columns are — so the first reaches the table
+and the second reaches the insight that says how to read it. `売上` is a
+two-character term, which is the shape a Japanese knowledge base is
+mostly made of and the shape a trigram index cannot look up; here it is
+an index lookup with nothing installed and nothing configured.
 
 An import writes documents; it does not rule on them. The bundle's own
 `verified:` keys arrive as what the document claims, so a base that was
@@ -196,7 +206,7 @@ does:
 ```sh
 ochakai use https://your-service.run.app   # or back to http://localhost:8080
 ochakai whoami                      # which server, as whom, reachable?
-ochakai search "why is revenue down?"   # the read an agent starts a data question with
+ochakai search "なぜ売上が落ちているのか"  # the read an agent starts a data question with
 ochakai verify metrics/revenue      # a human confirmed it; status and ETag stay put
 ochakai search "revenue" --type Metric --trust human-reviewed   # what that verify put there
 ochakai ui                          # web UI at http://127.0.0.1:8098, acting as you

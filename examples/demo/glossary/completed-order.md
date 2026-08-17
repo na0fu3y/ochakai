@@ -1,7 +1,7 @@
 ---
 type: Glossary Term
-title: Completed order
-description: The order state every revenue figure here counts, and the states it leaves out
+title: 完了した注文
+description: ここに出てくる売上が数える注文の状態と、数えない三つの状態
 tags: [sales, orders, glossary]
 generated: { by: analysis_agent/gemini-2.5-pro, at: 2026-07-17T04:20:00Z }
 verified:
@@ -9,32 +9,30 @@ verified:
 status: stable
 ---
 
-An order is **completed** when it has shipped and its payment has settled.
-In [shop.orders](/tables/shop-orders.md) that is `status = 'completed'`, and
-it is the only state [revenue](/metrics/revenue.md) counts.
+注文は、出荷され、かつ入金が確定した時点で **完了** になる。
+[shop.orders](/tables/shop-orders.md) では `status = 'completed'` がそれで、
+[売上](/metrics/revenue.md)が数えるのはこの状態だけである。
 
-Three other states exist, and none of them is revenue:
+状態は他に三つあり、どれも売上ではない:
 
-| State | Meaning | Why it is not revenue |
+| 状態 | 意味 | 売上でない理由 |
 |---|---|---|
-| `pending` | placed, payment not settled | may still fail authorization |
-| `cancelled` | withdrawn before shipping | nothing was delivered |
-| `returned` | shipped, then returned in full | the money went back |
+| `pending` | 注文は入ったが入金が未確定 | 与信が通らないことがある |
+| `cancelled` | 出荷前に取り消された | 何も届いていない |
+| `returned` | 出荷後に全品返品された | 代金が戻っている |
 
-**A partial return is not a state.** An order with one item of three sent back
-stays `completed` and keeps its original `total_price`, so an order that shipped
-at 10,000 JPY and came back a third returned is still counted whole. That is a
-deliberate choice of
-[the revenue recognition policy](/policies/revenue-recognition.md), not a bug in
-the query, and it is the single biggest reason this number sits above what
-finance settled. [How to read the revenue series](/insights/reading-revenue.md)
-says how much it moves.
+**一部返品は状態ではない。** 3点のうち1点が返ってきた注文は `completed` の
+ままで、`total_price` も元のままである。10,000 円で出荷して3分の1が返品
+された注文も、まるごと数えられる。これは
+[売上計上ポリシー](/policies/revenue-recognition.md)が決めたことであって、
+クエリの不具合ではない。経理が締めた数字よりこの数字が大きい最大の理由が
+これで、どれくらい動くかは[売上の読み方](/insights/reading-revenue.md)に
+ある。
 
-"Completed" is a state of the *order*, not of the shipment. A split shipment
-completes once, when the last parcel leaves.
+「完了」は*注文*の状態であって、出荷の状態ではない。分割出荷の注文が完了
+するのは一度、最後の荷物が出たときである。
 
-日本語では、この状態を **完了** と呼ぶ。会話に出てくる隣の語と混同しない
-こと — **受注** は注文が入った時点(`pending` を含む)、**出荷** は
-`shipped` の意味で使われることが多く、どちらも
-[売上](/metrics/revenue.md)が数える集合ではない。
-`cancelled` は **キャンセル**、`returned` は **返品**。
+会話に出てくる隣の語と混同しないこと。**受注**は注文が入った時点
+(`pending` を含む)を、**出荷**は `shipped` を指して使われることが多く、
+どちらも売上が数える集合ではない。`cancelled` は **キャンセル**、
+`returned` は **返品** と呼ぶ。

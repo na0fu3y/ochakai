@@ -1,7 +1,7 @@
 ---
 type: Metric
-title: Repeat purchase rate
-description: Share of a month's buyers who had bought at least once before (draft — the lookback is not settled)
+title: リピート購入率
+description: その月に買った客のうち、以前にも買ったことがある客の割合(draft — 遡る期間が決まっていない)
 tags: [sales, retention, customers]
 generated: { by: analysis_agent/gemini-2.5-pro, at: 2026-07-14T07:05:00Z }
 status: draft
@@ -9,24 +9,22 @@ grain: customer-month
 unit: ratio
 ---
 
-Of the customers with a [completed order](/glossary/completed-order.md) in a
-month, the share that had a completed order at any earlier date. Drafted by an
-agent while looking into why [revenue](/metrics/revenue.md) held up in a month
-with fewer new customers.
+その月に[完了した注文](/glossary/completed-order.md)を持つ客のうち、それ
+より前にも完了した注文を持っていた客の割合。新規客が減った月に
+[売上](/metrics/revenue.md)が落ちなかったのはなぜか、をエージェントが調べる
+過程で下書きした。
 
-**Not verified, and here is what is unsettled.** Do not quote this number in a
-report until somebody decides:
+**未検証であり、決まっていないのは次の三つである。** 誰かが決めるまで、
+この数字をレポートに書かないこと:
 
-1. **The lookback.** "At any earlier date" makes the rate rise forever as the
-   store ages. A 365-day lookback is the usual choice and would make FY2025 and
-   FY2026 comparable; it would also cut the current figure by about a third.
-2. **Guest checkout.** Guests have no customer id, so every guest purchase
-   looks like a first purchase. Guests are roughly 12% of orders, which is
-   enough to matter.
-3. **The denominator.** Buyers, not orders — so a customer who ordered four
-   times in a month counts once. That part is not controversial, but it is
-   worth writing down because the obvious SQL gets it wrong.
+1. **遡る期間。** 「それより前」のままだと、店が古くなるほど率が上がり
+   続ける。365 日で切るのが普通の選択で、そうすれば FY2025 と FY2026 が
+   比べられるようになる。同時に、今の数字は3分の1ほど下がる。
+2. **ゲスト購入。** ゲストには顧客 ID がないので、ゲストの購入はすべて初回
+   に見える。ゲストは注文の 12% 程度あり、無視できる量ではない。
+3. **分母。** 注文ではなく客を数える。月に4回買った客は1として数える。
+   ここは揉めていないが、素直に書いた SQL はここを間違えるので、書いて
+   おく価値がある。
 
-There is no verified computation for this yet. The draft
-[revenue by channel](/queries/sales/revenue-by-channel.md) is a closer look at
-the same question from the acquisition side.
+この指標にはまだ検証済みの計算がない。同じ問いを獲得の側から見た draft と
+して、[チャネル別売上](/queries/sales/revenue-by-channel.md)がある。

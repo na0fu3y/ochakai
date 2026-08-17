@@ -23,7 +23,7 @@ import (
 //
 // The corpus is examples/demo — the same eleven concepts the quick start
 // loads — imported under a run-unique prefix so a shared test database
-// neither collides nor pollutes, plus three Japanese concepts defined
+// neither collides nor pollutes, plus one Japanese concept defined
 // inline.
 //
 // The supplement used to be the only Japanese here, because the demo had
@@ -32,10 +32,18 @@ import (
 // the arrangement this file should be read as a warning about: what the
 // harness measured was a fixture nobody ships, while a Japanese reader
 // following the quick start typed a Japanese question at the demo and
-// got silence. The demo is bilingual now and the Japanese cases below
-// are against it; the supplement stays for the terms the invented shop
-// has no home for (解約率 — it sells no subscriptions), which is a
-// smaller claim than the one it was making.
+// got silence. The demo is written in Japanese now — that is what
+// ochak.ai's demo is — so the questions below are asked of the shipped
+// bundle in the language it is written in. The supplement is down to the
+// one term the invented shop has no home for (解約率 — it sells no
+// subscriptions); the two that stood in for 売上 and 受注 are gone,
+// because the bundle says both itself and a fixture competing with the
+// concept it stands in for measures nothing.
+//
+// The English cases that remain are the ones that stayed English in the
+// bundle: column names, enum values, the words the warehouse supplies.
+// They are here because a Japanese knowledge base is asked those in
+// English and has to answer.
 //
 // Both halves are measured. The lexical run is the search a deployment
 // without Vertex AI gets; the fused run adds a vector ranking from the
@@ -59,66 +67,65 @@ type evalCase struct {
 // title matches (those are pinned separately by the name-bonus tests in
 // the store).
 var evalCases = []evalCase{
-	// Questions against the demo bundle.
-	{query: "why is revenue down", want: "insights/reading-revenue"},
-	{query: "monthly revenue", want: "queries/sales/monthly-revenue"},
-	{query: "revenue by channel", want: "queries/sales/revenue-by-channel"},
-	{query: "what does revenue mean", want: "metrics/revenue"},
-	{query: "completed order", want: "glossary/completed-order"},
-	{query: "repeat purchase rate", want: "metrics/repeat-purchase-rate"},
-	{query: "channel codes", want: "references/order-channel-codes"},
-	{query: "revenue recognition", want: "policies/revenue-recognition"},
-	{query: "orders table schema", want: "tables/shop-orders"},
-	{query: "how to run a bigquery query", want: "skills/run-bigquery-query"},
-	{query: "when should a revenue drop be escalated", want: "insights/reading-revenue"},
+	// Questions against the demo bundle, in the language it is written
+	// in.
+	{query: "なぜ売上が落ちているのか", want: "insights/reading-revenue"},
+	{query: "月次売上", want: "queries/sales/monthly-revenue"},
+	{query: "チャネル別の売上", want: "queries/sales/revenue-by-channel"},
+	{query: "売上とは何か", want: "metrics/revenue"},
+	{query: "完了した注文とは", want: "glossary/completed-order"},
+	{query: "リピート購入率", want: "metrics/repeat-purchase-rate"},
+	{query: "チャネルコードの一覧", want: "references/order-channel-codes"},
+	{query: "売上計上のルール", want: "policies/revenue-recognition"},
+	{query: "注文テーブルのスキーマ", want: "tables/shop-orders"},
+	{query: "BigQuery のクエリはどう実行するか", want: "skills/run-bigquery-query"},
+	{query: "月末の着地見込み", want: "insights/着地見込み"},
 	// A second pass over the same corpus, phrased the way somebody asks
 	// rather than the way a title reads. Fourteen cases put MRR inside
 	// its own noise — one case moving from rank 1 to 2 moved it by 0.036
-	// — so the set is widened as far as thirteen concepts honestly
+	// — so the set is widened as far as twelve concepts honestly
 	// support. Beyond that a case stops being a question anybody has and
 	// becomes a restatement of a title, which measures the fixture.
-	{query: "august is down 15 percent", want: "insights/reading-revenue"},
-	{query: "obon", want: "insights/reading-revenue"},
-	{query: "what is a normal month", want: "insights/reading-revenue"},
-	{query: "bulk order faking a spike", want: "insights/reading-revenue"},
-	{query: "late partition", want: "insights/reading-revenue"},
-	{query: "does revenue include tax", want: "metrics/revenue"},
-	// The other names the writer gave the metric (design doc 0105).
-	// "net sales" appears nowhere in the bundle but the synonyms key, so
-	// this case answers only when the haystack reads it.
-	{query: "net sales", want: "metrics/revenue"},
-	{query: "which orders count as revenue", want: "policies/revenue-recognition"},
-	{query: "are refunds deducted", want: "policies/revenue-recognition"},
-	{query: "cancelled orders", want: "glossary/completed-order"},
+	{query: "売上が下がった理由", want: "insights/reading-revenue"},
+	{query: "お盆", want: "insights/reading-revenue"},
+	{query: "普通の月はいくらか", want: "insights/reading-revenue"},
+	{query: "大口の注文で山ができた", want: "insights/reading-revenue"},
+	{query: "パーティションの遅れ", want: "insights/reading-revenue"},
+	{query: "季節性", want: "insights/reading-revenue"},
+	{query: "売上に税は含まれるか", want: "metrics/revenue"},
+	{query: "純売上との違い", want: "metrics/revenue"},
+	{query: "どの注文を売上として数えるか", want: "policies/revenue-recognition"},
+	{query: "返金は引くのか", want: "policies/revenue-recognition"},
+	{query: "キャンセルした注文", want: "glossary/completed-order"},
+	{query: "受注と完了の違い", want: "glossary/completed-order"},
+	{query: "売上が伸びているチャネル", want: "queries/sales/revenue-by-channel"},
+	{query: "今年度の売上を月ごとに", want: "queries/sales/monthly-revenue"},
+	{query: "買い直した客の割合", want: "metrics/repeat-purchase-rate"},
+	{query: "ゲスト購入", want: "metrics/repeat-purchase-rate"},
+	{query: "注文はどこに入っているか", want: "tables/shop-orders"},
+	{query: "receipt には何を返すのか", want: "skills/run-bigquery-query"},
+	{query: "今月はどうなりそうか", want: "insights/着地見込み"},
+	// English, and still against the shipped bundle: the names the
+	// warehouse supplies stayed English when the prose became Japanese,
+	// which is what a Japanese team's own base looks like. A base that
+	// could not be asked `total_price` would have translated the wrong
+	// half.
+	{query: "total_price column", want: "tables/shop-orders"},
 	{query: "web_direct", want: "references/order-channel-codes"},
 	{query: "channel_code enum", want: "references/order-channel-codes"},
-	{query: "split revenue by channel", want: "queries/sales/revenue-by-channel"},
-	{query: "revenue for the fiscal year by month", want: "queries/sales/monthly-revenue"},
-	{query: "how many customers bought again", want: "metrics/repeat-purchase-rate"},
-	{query: "guest checkout", want: "metrics/repeat-purchase-rate"},
-	{query: "where do orders live", want: "tables/shop-orders"},
-	{query: "total_price column", want: "tables/shop-orders"},
-	{query: "execute an attested computation", want: "skills/run-bigquery-query"},
-	// Japanese, against the shipped bundle. The demo is bilingual the way
-	// a Japanese team's own base is — English where the warehouse columns
-	// are, Japanese where the judgment is — and the README tells a reader
-	// to ask it a Japanese question, so these are the cases that check
-	// the claim rather than a fixture standing in for it.
-	{query: "なぜ売上が落ちているのか", want: "insights/reading-revenue"},
-	{query: "お盆", want: "insights/reading-revenue"},
-	{query: "月末の着地見込み", want: "insights/着地見込み"},
-	{query: "純売上との違い", want: "metrics/revenue"},
-	{query: "受注と完了の違い", want: "glossary/completed-order"},
-	// Japanese, against the inline supplement below. 売上 and 解約 are
-	// two-character terms — exactly the shape the trigram index cannot
-	// serve and the windowed scan answers.
-	{query: "売上が下がった理由", want: "ja/insights/uriage-yomikata"},
+	{query: "status completed", want: "glossary/completed-order"},
+	// The other names the writer gave the metric (design doc 0105).
+	// "top line" appears nowhere in the bundle but the synonyms key, so
+	// this case answers only when the haystack reads it — and unlike the
+	// "net sales" it replaced, it is a name for this metric rather than
+	// for the 純売上 the concept spends a paragraph saying it is not.
+	{query: "top line", want: "metrics/revenue"},
+	// Japanese, against the inline supplement below. 解約 is a
+	// two-character term — exactly the shape the trigram index cannot
+	// serve and the windowed scan answers — in a corpus that has no other
+	// home for it.
 	{query: "解約率", want: "ja/metrics/kaiyakuritsu"},
-	{query: "受注とは", want: "ja/glossary/juchu"},
-	{query: "八月の売上", want: "ja/insights/uriage-yomikata"},
-	{query: "季節性", want: "ja/insights/uriage-yomikata"},
 	{query: "解約の分母", want: "ja/metrics/kaiyakuritsu"},
-	{query: "支払いが確定した注文", want: "ja/glossary/juchu"},
 }
 
 // japaneseSupplement holds the inline Japanese concepts, keyed by id
@@ -126,15 +133,6 @@ var evalCases = []evalCase{
 // has to find the terms inside sentences the way it would in a real
 // concept.
 var japaneseSupplement = map[string]string{
-	"ja/insights/uriage-yomikata": "---\n" +
-		"type: Insight\n" +
-		"title: 売上の読み方\n" +
-		"description: 季節性と、下がって見えるが問題ではない月\n" +
-		"tags: [sales, seasonality]\n" +
-		"status: stable\n" +
-		"---\n\n" +
-		"売上は毎年8月に下がるが、これは季節性であって異常ではない。\n" +
-		"二か月連続で前年同月を大きく割ったときだけ調べる価値がある。\n",
 	"ja/metrics/kaiyakuritsu": "---\n" +
 		"type: Metric\n" +
 		"title: 解約率\n" +
@@ -143,14 +141,6 @@ var japaneseSupplement = map[string]string{
 		"status: draft\n" +
 		"---\n\n" +
 		"解約率は月初時点の有効契約数を分母に取る。日割りはしない。\n",
-	"ja/glossary/juchu": "---\n" +
-		"type: Glossary Term\n" +
-		"title: 受注\n" +
-		"description: 支払いが確定した注文\n" +
-		"tags: [sales]\n" +
-		"status: stable\n" +
-		"---\n\n" +
-		"受注は支払い確定時点で数える。キャンセルは受注から差し引く。\n",
 }
 
 // evalVerified is the one concept the harness confirms before scoring.
@@ -188,14 +178,34 @@ const evalVerified = "policies/revenue-recognition"
 // scan produced. Those ties are now broken by verification recency and
 // then by id (store/search.go).
 //
-// The set grew from 14 cases to 36, and to 41 when the demo gained its
-// Japanese half. Fourteen put MRR inside its own noise: one case moving
-// from rank 1 to rank 2 moved it by 0.036, which is the size of the
-// differences anybody was reading. The second pass asks the same corpus
-// the way somebody asks rather than the way a title reads — "obon",
-// "does revenue include tax", "guest checkout" — and fourteen concepts
-// do not honestly support many more than that. The five added last are
-// the ones the README now tells a Japanese reader to type.
+// The set grew from 14 cases to 36, then to 41 when the demo gained a
+// Japanese half, and stands at 37 now that the demo is Japanese and the
+// two supplement concepts the bundle had come to duplicate are gone.
+// Fourteen put MRR inside its own noise: one case moving from rank 1 to
+// rank 2 moved it by 0.036, which is the size of the differences anybody
+// was reading. The second pass asks the same corpus the way somebody
+// asks rather than the way a title reads — 「お盆」「ゲスト購入」
+// 「返金は引くのか」 — and twelve concepts do not honestly support many
+// more than that.
+//
+// **The numbers moved when the demo became Japanese, and the two runs
+// are not comparable.** Both the corpus and the questions changed:
+// lexical went 0.90 → 0.78 and fused 0.85 → 0.77, while recall went to
+// 1.00 on both halves — nothing fell out of the top ten. What the MRR
+// is made of is 24 of 37 cases at rank 1 and two at rank 7. The drop is
+// the corpus, not the ranking, and it is two effects worth naming:
+//
+//   - A monolingual Japanese corpus about one shop shares 売上 across
+//     every concept, and the concept whose name *is* 売上 takes the name
+//     rule (store/search.go) from the insight that answers the question.
+//     「なぜ売上が落ちているのか」 puts metrics/revenue first and
+//     insights/reading-revenue second, which is the rule working: the
+//     README's next line is `ochakai get insights/reading-revenue`.
+//   - An English keyword now lands in prose that is Japanese around it,
+//     so "total_price column" ties seven concepts at the same score and
+//     is settled by verification recency and id. Rank 7 of 10 is what a
+//     Japanese base gives an English keyword, and measuring it is why
+//     the English cases stayed.
 //
 // The fused floors are separate. A stand-in that shares the lexical
 // side's vocabulary can only reorder a list the words already reached,
@@ -207,27 +217,25 @@ const evalVerified = "policies/revenue-recognition"
 // teeth. What a trained encoder buys is matching text that shares no
 // vocabulary at all, and no number on this page says how much that is.
 const (
-	evalK           = 10
-	evalRecallFloor = 0.92
-	evalMRRFloor    = 0.78
+	evalK = 10
+	// Lexical, measured at 1.00 / 0.78. The MRR floor is two cases'
+	// worth under it: one case slipping from rank 1 to rank 2 is 0.014
+	// here, so a floor closer than that fails on noise.
+	evalRecallFloor = 0.95
+	evalMRRFloor    = 0.75
 	// Fused: the same questions with the stand-in encoder on, measured
-	// at 1.00 / 0.85. This floor sits above the 0.79 the fused ranking
-	// scores when the verified addend goes back to 0.002, which is the
-	// regression it exists to catch — that constant is the kind that gets
-	// nudged by whoever is looking at one query.
+	// at 1.00 / 0.77. This floor is the one that catches the verified
+	// addend going back to 0.002 — that constant is the kind that gets
+	// nudged by whoever is looking at one query — so it was re-measured
+	// against this corpus rather than carried over: at 0.002 the fused
+	// run scores 0.73, and the floor sits between.
 	//
-	// It was 0.86 against 0.89 measured, and both numbers moved when the
-	// demo bundle gained its Japanese half: 0.89 → 0.878 over the same
-	// 36 cases, which is one more concept competing in a corpus of
-	// thirteen, and 0.878 → 0.85 from the five Japanese cases added
-	// beside them. Those five are rank 1 or 2 in the lexical run, which
-	// held at 0.90 — what they are low in is the *stand-in* encoder's
-	// ranking, and a fake that hashes the lexical side's vocabulary has
-	// no opinion about Japanese worth reading. The regression this floor
-	// guards was re-measured against the same corpus rather than assumed
-	// to have stayed at 0.83.
-	evalFusedRecallFloor = 0.92
-	evalFusedMRRFloor    = 0.83
+	// It read 0.83 against 0.85 measured over the bilingual corpus, and
+	// before that 0.86 against 0.89. Each move came from the corpus
+	// changing under it, not from the merge; what the number certifies is
+	// still only that the merge does no harm.
+	evalFusedRecallFloor = 0.95
+	evalFusedMRRFloor    = 0.74
 )
 
 // loadDemoBundle imports every document under examples/demo with the
@@ -367,7 +375,7 @@ func scoreFusedGoldenSet(t *testing.T, ctx context.Context, svc *Service, prefix
 	}
 	enc := fakeEncoder{dim: dim}
 	corpus := embedCorpus(t, ctx, svc, prefix, enc)
-	if len(corpus) < 13 {
+	if len(corpus) < 12 {
 		t.Fatalf("embedded %d concepts, want the whole corpus", len(corpus))
 	}
 
