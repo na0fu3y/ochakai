@@ -2051,8 +2051,13 @@ components:
         written — an unrecognized status, a date it could not parse, a
         trust family read as the document's own claim rather than as
         this instance's observation. Repeatable, one per reinterpretation. A reinterpretation is never
-        silent (design doc 0075 §3.1), and there is no room for it in a
-        response whose body is the concept.
+        silent (design doc 0075 §3.1).
+
+        The same strings are in the body, as View's `notes` (design doc
+        0113) — read them there. This header is what a response whose
+        body is the document ("Accept: text/markdown") has instead, and
+        it stays on the JSON answer too because a header name is inside
+        the freeze (design doc 0082 §2): dropping it is 1.0's work.
       schema: { type: string }
     Plan:
       description: >
@@ -2653,9 +2658,9 @@ components:
         right.
 
         `id`, `document`, `summary` and `observed` are the whole of a
-        read; `files` and `plan` are there when there is something to
-        say. A schema may not advertise a field the server does not
-        write, which is checked rather than reviewed
+        read; `files`, `plan` and `notes` are there when there is
+        something to say. A schema may not advertise a field the server
+        does not write, which is checked rather than reviewed
         (`TestOpenAPISchemasMatchGoTypes`).
       required: [id, document, summary, observed]
       properties:
@@ -2710,6 +2715,22 @@ components:
             `curl` does not print and a generated client does not hand
             back by default (design doc 0097); the headers stay because
             header names are inside the freeze (design doc 0082 §2).
+        notes:
+          type: array
+          items: { type: string }
+          description: >
+            The values this write's document carried that the server read
+            differently than they were written — an unrecognized status,
+            a date it could not parse, a trust family kept as the
+            document's own claim. One string per reinterpretation, in the
+            order the parse produced them, saying what was written and
+            what it was read as. A reinterpretation is never silent
+            (design doc 0075 §3.1); this is where it is said (design doc
+            0113), and the repeated `Ochakai-Note` header carries the
+            same strings for a caller reading the document
+            representation. **Absent on a read**, which parsed no
+            document the caller sent, and absent when the write had
+            nothing to report.
     File:
       type: object
       description: >

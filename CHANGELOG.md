@@ -47,6 +47,23 @@ last entry.
   `OCHAKAI_URL` announces itself at once. No variable was added or
   removed.
 
+### Added
+
+- **A write says what it read differently, in the response body** (design
+  doc 0113). The answer to a concept write now carries `notes` — one
+  string per value the server accepted but read differently than the
+  document wrote it (an unrecognized `status`, a date it could not parse,
+  a trust family kept as the document's own claim). These are the same
+  strings the repeated `Ochakai-Note` header has always carried, and
+  **that header is unchanged**: its name is inside the freeze, so
+  dropping it is 1.0's work, and it stays the only carrier on a
+  `text/markdown` response, whose body is the document itself. Nothing
+  else moved — a read still has no `notes`, the CLI still reads the
+  header, and the MCP tools already returned the same strings in their
+  result. **What this changes for you**: the web UI's save now says what
+  the server made of the document you wrote, instead of leaving it in a
+  header nothing read, and `curl | jq` sees it too.
+
 ### Fixed
 
 - **The MCP bundle could not start the server it carries.** The

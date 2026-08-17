@@ -143,7 +143,13 @@ export async function viewEditor(id, prefix = '') {
       // 0097), so the toast can stop guessing: "保存しました。" after a
       // write that stored nothing is the one message a curator cannot
       // check.
-      toast(saved && saved.plan === 'unchanged' ? '変更はありません。' : editing ? '保存しました。' : '作成しました。');
+      const said = saved && saved.plan === 'unchanged' ? '変更はありません。' : editing ? '保存しました。' : '作成しました。';
+      // And what it read differently than this box wrote it (design doc
+      // 0113). The curator is the one person who can go fix the line,
+      // and until the notes were in the body this screen was the surface
+      // that never saw them — the header was there, and nothing read it.
+      const notes = (saved && saved.notes) || [];
+      toast(notes.length ? said + ' ただし: ' + notes.join(' / ') : said, notes.length ? 9000 : undefined);
       refreshTree();
       refreshQueues(); // an edit is what clears the past-expiry queue (design doc 0037 §2.2)
       location.hash = '#/k/' + idPath((saved && saved.id) || entryId);

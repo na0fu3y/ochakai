@@ -312,6 +312,12 @@ CRUD なら三操作以上になり、それでも全体をレビューできる
 追加はこの次元に現れない**。現れたのは `VOCAB` のほうで、三語が
 `internal/domain` に移ったとたん 46 → 49 になった。
 
+**13 のまま、`Ochakai-Note` も同じことをした**
+([0113](design/0113-a-reinterpretation-says-itself-in-the-body.md))。
+読み替えの一行が本文の `notes` にも乗り、ヘッダは同じ理由で残る。
+今度は `VOCAB` も動かない — 中身は人が読む文であって、クライアントが
+分岐する値ではないからである。
+
 10 のまま、同じ PR [#407](https://github.com/na0fu3y/ochakai/issues/407)
 が `Ochakai-On-Behalf-Of` / `Ochakai-Producer` から `X-` 接頭辞を落とし、
 他の八本と同じ綴りの型([0064](design/0064-rest-stops-at-api-v1.md))に

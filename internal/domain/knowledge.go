@@ -1377,6 +1377,18 @@ type View struct {
 	// "nothing happened" is one of three answers and not the negation of
 	// the other two.
 	Plan string `json:"plan,omitempty"`
+	// Notes are the values the server read differently than the document
+	// wrote them — an unrecognized status, an unparseable date, a trust
+	// family kept as the document's own claim. A reinterpretation is
+	// never silent (design doc 0075 §3.1), and until design doc 0113 the
+	// only place it was said on REST was the Ochakai-Note header, which
+	// `curl | jq` drops and a generated client does not model.
+	//
+	// REST fills this; MCP's answer is an envelope that already carries
+	// the same strings beside the concept, and the two nestings are the
+	// shape of each surface's answer rather than a divergence to pay off
+	// (0113 §3). Absent on a read, which parsed nothing the caller wrote.
+	Notes []string `json:"notes,omitempty"`
 }
 
 // The three things a write can turn out to have been (design doc 0074

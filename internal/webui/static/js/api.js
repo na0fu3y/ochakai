@@ -126,10 +126,15 @@ export async function api(path, opts = {}) {
   return data;
 }
 
-export function toast(msg) {
+// ms is how long it stays. The default is sized for "保存しました。" —
+// a sentence that is read in a glance and confirms what the reader
+// already expected. A toast that reports a reinterpretation is neither
+// (design doc 0113 §4): it names a line of the document and what the
+// server made of it, so the caller asks for longer.
+export function toast(msg, ms = 2200) {
   const t = $('#toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+  toast._t = setTimeout(() => t.classList.remove('show'), ms);
 }

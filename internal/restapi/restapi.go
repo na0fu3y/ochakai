@@ -1550,6 +1550,10 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 	// can only be written once the write has answered: a claim that
 	// survived it is one the document made and ochakai did not observe.
 	notes = okf.NoteClaim(notes, d.Claimed, out)
+	// The header stays — its name is inside the freeze (0082 §2), so
+	// dropping it is 1.0's work — and the same strings go into the body,
+	// where a reader of `curl | jq`, a generated client and the web UI
+	// find them without knowing to look at headers (design doc 0113).
 	for _, n := range notes {
 		w.Header().Add("Ochakai-Note", n)
 	}
@@ -1563,11 +1567,13 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 	// no 201, because nothing was created. What it has is the plan.
 	if dry {
 		w.Header().Set(planHeader, plan)
+		// The document representation has no field to put them in, so
+		// there the header is still the only carrier (0113 §5).
 		if wantsDocument(r) {
 			writeDocument(w, http.StatusOK, out)
 			return
 		}
-		writePlannedView(w, http.StatusOK, out, plan)
+		writePlannedView(w, http.StatusOK, out, plan, notes)
 		return
 	}
 	// A payload identical to the stored content wrote nothing (no
@@ -1585,7 +1591,7 @@ func putEntry(w http.ResponseWriter, r *http.Request, svc *service.Service,
 		writeDocument(w, status, out)
 		return
 	}
-	writePlannedView(w, status, out, plan)
+	writePlannedView(w, status, out, plan, notes)
 }
 
 // Ochakai-Plan is what ?dry_run=true answers with: the one word the write
@@ -1613,19 +1619,22 @@ func refuseNonConcept(w http.ResponseWriter, why string) {
 }
 
 func writeView(w http.ResponseWriter, status int, k *domain.Knowledge) {
-	writePlannedView(w, status, k, "")
+	writePlannedView(w, status, k, "", nil)
 }
 
 // writePlannedView is the same answer from a write, carrying the one word
-// the write turned out to be (design doc 0097). plan is empty on a read,
-// where none of the three words is true.
-func writePlannedView(w http.ResponseWriter, status int, k *domain.Knowledge, plan string) {
+// the write turned out to be (design doc 0097) and whatever the parse
+// read differently than the caller wrote it (design doc 0113). Both are
+// empty on a read, which did none of the three words and parsed nothing
+// the caller sent.
+func writePlannedView(w http.ResponseWriter, status int, k *domain.Knowledge, plan string, notes []string) {
 	v, err := okf.ViewOf(k)
 	if err != nil {
 		writeError(w, fmt.Errorf("render document: %w", err))
 		return
 	}
 	v.Plan = plan
+	v.Notes = notes
 	writeJSON(w, status, v)
 }
 
