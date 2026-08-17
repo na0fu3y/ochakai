@@ -278,10 +278,11 @@ go run ./cmd/ochakai import examples/demo
 
 `dev` is the only posture that is writable without an identity in front,
 and a dev deployment now says so on every page, so a capture taken this
-way carries the banner and the committed ones do not. Crop it out, or
-shoot against a deployment whose callers are authenticated: what the
-pictures are for is the product, and the banner is about the machine you
-happen to be running it on.
+way carries the banner — and an アクセス tab, because dev's anonymous
+caller reads as an administrator — and the committed ones do not. Crop
+them out, or shoot against a deployment whose callers are authenticated:
+what the pictures are for is the product, and both of those are about the
+machine you happen to be running it on.
 
 The bundle already carries the two drafts the review queue needs and a
 draft whose `stale_after` has passed. The re-verification feed is the one
@@ -317,12 +318,18 @@ a UI change moves them.
 | `#/review` | `webui-review.png` | 870 |
 | `#/k/metrics/revenue` | `webui-entry.png` | 360 |
 | `#/search/reported-wrong` | `webui-wrong.png` | 420 |
-| `#/` | `webui-tree.png` | 560 |
+| `#/` | `webui-tree.png` | 540 |
 
-Two things have to be forced, or the pictures come out wrong in ways
+Three things have to be forced, or the pictures come out wrong in ways
 that are easy to miss:
 
 - **Light scheme.** Headless Chrome defaults to dark.
+- **A Japanese font on the machine.** The UI asks for `system-ui` and
+  `sans-serif` and takes whatever fontconfig hands back, which on a
+  machine carrying no Japanese font is a Chinese one — every page then
+  renders in glyph forms a Japanese reader notices and nothing in the
+  shot explains. Install one (`fonts-noto-cjk` on Debian) and check
+  `fc-match 'sans-serif:lang=ja'` before shooting.
 - **A `ja-JP` locale.** The entry page prints its dates with
   `toLocaleDateString()`, which reads ICU's default locale, while the
   rest of the page is the Japanese UI serving a Japanese knowledge base
