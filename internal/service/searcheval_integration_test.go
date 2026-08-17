@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -238,6 +240,64 @@ const (
 	evalFusedMRRFloor    = 0.74
 )
 
+// evalFloorSlackCases is how far a floor may sit under what was measured
+// before that gap is itself a failure, counted in cases.
+//
+// The floors above check one direction: under them fails, over them is
+// free. That lets an improvement bank quietly — a ranking change that
+// lifts MRR and leaves the floor where it was hands the next regression
+// a gap to fall into, and a number nobody moved is a number nobody
+// reads. The line ceilings found the same hole from the other side and
+// closed it the same way: d28c3c8 shortened the deploy guide, raised
+// DOC-LINES for the room the fold needed, and left 28 lines nobody
+// returned, which is why DOC-LINES-SLACK and RECORD-CORPUS-LINES-SLACK
+// exist (surface_test.go, CONTRIBUTING.md). **The comment above already
+// states the rule this closes** — "a change that moves those numbers —
+// either way — says so in its PR" — and nothing could check the
+// either-way half of it.
+//
+// Two cases, and derived from the size of the set rather than declared
+// as a score, because everything on this page that reasons about noise
+// reasons in cases: one case slipping from rank 1 to rank 2 is 0.014
+// here, one case leaving the top k is 0.027, and the floors above were
+// chosen as about two cases under what was measured. A tolerance written
+// as 0.05 would have to be rewritten every time the set grows, and the
+// set has been 14, then 36, then 41, then 37.
+const evalFloorSlackCases = 2
+
+// checkEvalFloors holds one configuration's numbers to their floors in
+// both directions: under a floor is the regression the floor exists to
+// catch, and further over it than evalFloorSlackCases allows is a floor
+// that was not raised when the ranking improved.
+func checkEvalFloors(t *testing.T, config string, recall, mrr, recallFloor, mrrFloor float64) {
+	t.Helper()
+	cases := float64(len(evalCases))
+	slack := evalFloorSlackCases / cases
+	for _, m := range []struct {
+		name       string
+		got, floor float64
+	}{
+		{fmt.Sprintf("recall@%d", evalK), recall, recallFloor},
+		{"MRR", mrr, mrrFloor},
+	} {
+		switch {
+		case m.got < m.floor:
+			t.Errorf("%s (%s) fell to %.2f, under the %.2f baseline: a ranking change made the golden set worse",
+				m.name, config, m.got, m.floor)
+		case m.got-m.floor > slack:
+			// Rounded up, because the floor is written to two decimals
+			// and rounding the other way would advise a number that
+			// fails this same check on the next run.
+			want := math.Ceil((m.got-slack)*100) / 100
+			t.Errorf(`%s (%s) measures %.2f against a floor of %.2f — %.1f cases' worth of headroom, wider than the %d
+evalFloorSlackCases this file allows. Raise the floor to at least %.2f in the PR that
+earned the improvement: a floor left under a number that moved up is budget the next
+regression spends without moving anything anybody reads.`,
+				m.name, config, m.got, m.floor, (m.got-m.floor)*cases, evalFloorSlackCases, want)
+		}
+	}
+}
+
 // loadDemoBundle imports every document under examples/demo with the
 // run-unique prefix prepended to its path-derived id, and returns the
 // number imported. Root-relative links inside the bodies keep pointing
@@ -299,17 +359,14 @@ func TestSearchEvalIntegration(t *testing.T) {
 		t.Fatalf("verify %s: %v", evalVerified, err)
 	}
 
-	recall, mrr := scoreGoldenSet(t, ctx, svc, prefix, "lexical only")
-	if recall < evalRecallFloor {
-		t.Errorf("recall@%d fell to %.2f, under the %.2f baseline: a ranking change made the golden set worse", evalK, recall, evalRecallFloor)
-	}
-	if mrr < evalMRRFloor {
-		t.Errorf("MRR fell to %.2f, under the %.2f baseline: the golden set still surfaces but lower than it did", mrr, evalMRRFloor)
-	}
+	const lexical = "lexical only"
+	recall, mrr := scoreGoldenSet(t, ctx, svc, prefix, lexical)
+	checkEvalFloors(t, lexical, recall, mrr, evalRecallFloor, evalMRRFloor)
 
 	// The same questions with the vector half on, which is the
 	// configuration a Google Cloud deployment runs.
-	scoreFusedGoldenSet(t, ctx, svc, prefix)
+	fusedRecall, fusedMRR := scoreFusedGoldenSet(t, ctx, svc, prefix)
+	checkEvalFloors(t, "fused", fusedRecall, fusedMRR, evalFusedRecallFloor, evalFusedMRRFloor)
 }
 
 // scoreGoldenSet runs every case and reports recall@k and MRR, naming
@@ -367,7 +424,7 @@ func scoreGoldenSet(t *testing.T, ctx context.Context, svc *Service, prefix, con
 // named-concept sort key surviving it, the verification tie-break under
 // it. What it does not measure is the SQL that produces the vector list
 // in production, which the store's own vector tests cover.
-func scoreFusedGoldenSet(t *testing.T, ctx context.Context, svc *Service, prefix string) {
+func scoreFusedGoldenSet(t *testing.T, ctx context.Context, svc *Service, prefix string) (recall, mrr float64) {
 	t.Helper()
 	dim, ok := embed.Dimension("gemini-embedding-001")
 	if !ok {
@@ -380,7 +437,7 @@ func scoreFusedGoldenSet(t *testing.T, ctx context.Context, svc *Service, prefix
 	}
 
 	filter := store.Filter{Prefixes: []string{prefix}}
-	found, mrr := 0, 0.0
+	found := 0
 	for _, c := range evalCases {
 		lexical, err := svc.Store.SearchLexical(ctx, c.query, filter, evalK*2)
 		if err != nil {
@@ -410,16 +467,11 @@ func scoreFusedGoldenSet(t *testing.T, ctx context.Context, svc *Service, prefix
 		// add this line and run it again.
 		t.Logf("hit (fused): %q -> %s at rank %d", c.query, c.want, rank)
 	}
-	recall := float64(found) / float64(len(evalCases))
+	recall = float64(found) / float64(len(evalCases))
 	mrr /= float64(len(evalCases))
 	t.Logf("recall@%d = %.2f (%d/%d), MRR = %.2f, lexical + vector (stand-in encoder)",
 		evalK, recall, found, len(evalCases), mrr)
-	if recall < evalFusedRecallFloor {
-		t.Errorf("fused recall@%d fell to %.2f, under the %.2f baseline", evalK, recall, evalFusedRecallFloor)
-	}
-	if mrr < evalFusedMRRFloor {
-		t.Errorf("fused MRR fell to %.2f, under the %.2f baseline", mrr, evalFusedMRRFloor)
-	}
+	return recall, mrr
 }
 
 // embedded is one concept with the vector the stand-in encoder gave it.
