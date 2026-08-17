@@ -30,10 +30,14 @@ type accessFixture struct {
 	adminCtx, readCt context.Context
 }
 
+// The policy this fixture writes is the whole deployment's, so the
+// fixture takes a database of its own rather than a prefix in the shared
+// one (testdb.Private): a rule here would otherwise scope the callers in
+// every package running beside this one.
 func newAccessFixture(t *testing.T) *accessFixture {
 	t.Helper()
 	ctx := context.Background()
-	s, err := store.New(ctx, testdb.URL(t), false)
+	s, err := store.New(ctx, testdb.Private(t, "acl"), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,9 +228,12 @@ func TestPolicyBelongsToAdministratorsIntegration(t *testing.T) {
 // TestNoPolicyIsTheDeploymentThatCameBeforeIntegration is the promise
 // every existing deployment rests on: with no rules, nothing here
 // applies — not to a caller the configuration never heard of either.
+// It reads a database of its own for the same reason the fixture does,
+// in the other direction: what it asserts is the absence of a policy,
+// and in the shared database a neighbour's rule would be present.
 func TestNoPolicyIsTheDeploymentThatCameBeforeIntegration(t *testing.T) {
 	ctx := context.Background()
-	s, err := store.New(ctx, testdb.URL(t), false)
+	s, err := store.New(ctx, testdb.Private(t, "aclopen"), false)
 	if err != nil {
 		t.Fatal(err)
 	}

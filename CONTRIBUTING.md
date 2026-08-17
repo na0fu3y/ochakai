@@ -188,6 +188,36 @@ answers it (design doc 0089 §4). A script like this is not a surface —
 nobody has to learn it, no endpoint answers it — so it is cheap to write
 and cheap to delete once it has been read.
 
+### The search eval harness
+
+The standing measurement is `TestSearchEvalIntegration`
+(`internal/service/searcheval_integration_test.go`): a golden set of
+questions, each paired with the concept a good ranking puts in front of
+the reader, scored as recall@10 and MRR over the shipped `examples/demo`
+bundle. It runs the set twice — lexical only, which is the search a
+deployment without Vertex AI gets, and lexical fused with a vector
+ranking from the stand-in encoder beside it, which is the configuration
+every Google Cloud deployment runs (design doc 0080 §1.1). The stand-in
+is deterministic, so the fused half needs no API key and reaches no
+network.
+
+```sh
+scripts/check --db      # it runs with everything else
+OCHAKAI_TEST_DATABASE_URL=… go test ./internal/service/ \
+    -run TestSearchEvalIntegration -v      # -v prints the per-case ranks
+```
+
+A change to ranking lands with these numbers in its PR. **The floors
+beside them fail in both directions.** Under a floor is the regression
+the floor exists to catch. More headroom over it than
+`evalFloorSlackCases` allows is a floor nobody raised when the ranking
+improved, which is `DOC-LINES-SLACK`'s argument applied to a floor
+rather than a ceiling: banked headroom is budget the next regression
+spends without moving a number anybody reads. The tolerance is derived
+from the size of the set instead of declared here, because the noise it
+is sized against is one case moving and the set has been 14, 36, 41 and
+37 cases.
+
 ## Working with Claude Code
 
 The repository checks in a `.claude/settings.json` with four hooks and
