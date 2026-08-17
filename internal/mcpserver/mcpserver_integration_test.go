@@ -462,7 +462,7 @@ func TestIntegrationListWalksAFeedAndSearchRefusesTo(t *testing.T) {
 		}
 	}
 
-	page := func(t *testing.T, args map[string]any) searchOut {
+	page := func(t *testing.T, args map[string]any) listOut {
 		t.Helper()
 		res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "list_concepts", Arguments: args})
 		if err != nil {
@@ -471,7 +471,7 @@ func TestIntegrationListWalksAFeedAndSearchRefusesTo(t *testing.T) {
 		if res.IsError {
 			t.Fatalf("list_concepts failed: %+v", res.Content)
 		}
-		return answerOf[searchOut](t, res)
+		return answerOf[listOut](t, res)
 	}
 
 	first := page(t, map[string]any{

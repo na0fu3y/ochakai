@@ -22,6 +22,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/service"
 	"github.com/na0fu3y/ochakai/internal/store"
@@ -3575,5 +3576,71 @@ func TestIntegrationAWriteSaysWhatItReadDifferently(t *testing.T) {
 	getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &read)
 	if len(read.Notes) != 0 {
 		t.Errorf("a read carries notes: %q", read.Notes)
+	}
+}
+
+// failingEmbedder is configured and cannot answer — an embedding provider
+// outage, which is the one thing that degrades a ranking (design doc
+// 0114). Not having an embedder at all is a different state and is not
+// degraded, which the service test pins.
+type failingEmbedder struct{}
+
+func (failingEmbedder) Embed(context.Context, embed.Task, []string) ([][]float32, error) {
+	return nil, errors.New("provider unavailable")
+}
+
+func (failingEmbedder) Model() string { return "failing" }
+
+// TestIntegrationASearchSaysWhenItDegraded walks the flag over the wire
+// and through the contract check: the answer to a search that lost its
+// embeddings carries degraded, and everything that did not lose them —
+// an ordinary search, and a listing, which has no query to embed —
+// carries nothing at all.
+//
+// Absent rather than false is the half worth a test. A key that stood on
+// every response would be one no caller reads, which is the whole reason
+// it is spelled this way (design doc 0114 §3).
+func TestIntegrationASearchSaysWhenItDegraded(t *testing.T) {
+	svc := newIntegrationService(t)
+	typ := testdb.Unique(t, "degraded")
+	id := typ + "/revenue"
+	ordinary := checkedServer(t, Handler(svc))
+	removeEntries(t, ordinary, id)
+
+	resp := putDoc(t, ordinary.URL, id,
+		docFrom(t, map[string]any{"type": typ, "id": id, "title": "revenue"}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", resp.StatusCode)
+	}
+
+	answer := func(t *testing.T, srv *httptest.Server, query string) map[string]any {
+		t.Helper()
+		var body map[string]any
+		getJSON(t, srv.URL+"/api/v1/search?"+query, &body)
+		return body
+	}
+
+	// The store answers, the embedder is absent, and nothing is claimed
+	// about the ranking.
+	if body := answer(t, ordinary, "q=revenue&type="+url.QueryEscape(typ)); body["degraded"] != nil {
+		t.Errorf("an ordinary search reported degraded=%v; the key belongs to an outage", body["degraded"])
+	}
+
+	// The same store behind a service whose embedder cannot answer.
+	broken := checkedServer(t, Handler(&service.Service{
+		Store: svc.Store, Embedder: failingEmbedder{}, Log: slog.New(slog.DiscardHandler),
+	}))
+	body := answer(t, broken, "q=revenue&type="+url.QueryEscape(typ))
+	if body["degraded"] != true {
+		t.Errorf("degraded = %v, want true: the query could not be embedded", body["degraded"])
+	}
+	if hits, _ := body["hits"].([]any); len(hits) == 0 {
+		t.Error("degrading dropped the lexical hits; falling back to them is the point")
+	}
+
+	// A listing embeds nothing, so the same outage says nothing about it.
+	if body := answer(t, broken, "sort=verified_at&type="+url.QueryEscape(typ)); body["degraded"] != nil {
+		t.Errorf("a listing reported degraded=%v; it ranks nothing", body["degraded"])
 	}
 }

@@ -40,14 +40,14 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 
 	since := time.Now().Add(-time.Hour)
 
-	if hits, err := svc.Search(ctx, nonsense, store.Filter{}, 10); err != nil {
+	if hits, _, err := svc.Search(ctx, nonsense, store.Filter{}, 10); err != nil {
 		t.Fatal(err)
 	} else if len(hits) != 0 {
 		t.Fatalf("the nonsense query matched %d entries", len(hits))
 	}
 	// A repeat of the same question is the same miss, counted once more
 	// rather than becoming a second row.
-	if hits, err := svc.Search(ctx, nonsense, store.Filter{}, 10); err != nil {
+	if hits, _, err := svc.Search(ctx, nonsense, store.Filter{}, 10); err != nil {
 		t.Fatal(err)
 	} else if len(hits) != 0 {
 		t.Fatalf("the nonsense query matched %d entries", len(hits))
@@ -85,7 +85,7 @@ func TestSearchMissesAreRecordedIntegration(t *testing.T) {
 	// A deployment that keeps no questions records none — and says so,
 	// rather than reporting zero (§3.4).
 	off := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Config: &config.Config{}}
-	if _, err := off.Search(ctx, nonsense, store.Filter{}, 10); err != nil {
+	if _, _, err := off.Search(ctx, nonsense, store.Filter{}, 10); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.FlushUsage(ctx); err != nil {
@@ -201,7 +201,7 @@ func TestMissesGroupByMeaningIntegration(t *testing.T) {
 
 	since := time.Now().Add(-time.Hour)
 	for _, q := range askings {
-		if hits, err := svc.Search(ctx, q, store.Filter{}, 10); err != nil {
+		if hits, _, err := svc.Search(ctx, q, store.Filter{}, 10); err != nil {
 			t.Fatal(err)
 		} else if len(hits) != 0 {
 			t.Fatalf("%q matched %d concepts; the question has to go unanswered", q, len(hits))

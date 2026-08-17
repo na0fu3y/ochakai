@@ -778,7 +778,7 @@ is worth more than the change; this one says it also grows when the
 change is a rendering, since a rendering is the thing a reader is least
 able to reconstruct from the code.
 
-    RECORD-CORPUS-LINES: 9000
+    RECORD-CORPUS-LINES: 9500
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

@@ -64,6 +64,23 @@ last entry.
   the server made of the document you wrote, instead of leaving it in a
   header nothing read, and `curl | jq` sees it too.
 
+- **A search that lost its embeddings says so** (design doc 0114). When
+  the query cannot be embedded, the ranking degrades to the lexical list
+  alone — it always has, rather than failing the search — and the answer
+  now carries `degraded: true` instead of only writing a line to the
+  server's log. A deployment with **no** embedder configured is not
+  degraded and never sets it: there, lexical is the whole answer rather
+  than a fallback from one. Each surface words it for its own reader:
+  `ochakai search` prints a `note:` line on **stderr** (stdout stays one
+  hit per line, so pipes are unchanged), the web UI says it above the
+  results, and MCP's `search_concepts` description names the word.
+  **What this changes for you**: a search that comes back thin during an
+  embedding outage now says that it is the deployment and not your
+  question — which matters most in Japanese, where a trigram index alone
+  cannot retrieve a two-character word. MCP's answer to `search_concepts`
+  no longer carries `cursor` (a search has never paged), and
+  `list_concepts` does not carry `degraded`.
+
 ### Fixed
 
 - **The MCP bundle could not start the server it carries.** The

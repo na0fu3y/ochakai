@@ -227,7 +227,7 @@ func TestSearchRejectsEmptyQuery(t *testing.T) {
 	s := &Service{}
 	var inputErr *InvalidInputError
 	for _, q := range []string{"", "   ", " \t\n", "　"} {
-		_, err := s.Search(context.Background(), q, store.Filter{}, 10)
+		_, _, err := s.Search(context.Background(), q, store.Filter{}, 10)
 		if !errors.As(err, &inputErr) || !strings.Contains(err.Error(), "needs a query") {
 			t.Errorf("query %q: got %v, want a needs-a-query InvalidInputError", q, err)
 		}

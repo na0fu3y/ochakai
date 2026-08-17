@@ -16,7 +16,14 @@ import (
 
 // Search runs lexical search, and when an embedder is configured, fuses
 // it with vector search via reciprocal rank fusion.
-func (s *Service) Search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, error) {
+//
+// The bool is "degraded": this deployment embeds, and this ranking did
+// not — the query could not be embedded, so the fusion ran with two of
+// its three lists missing and the answer is worse than the same question
+// would ordinarily get here (design doc 0114). It is false on a
+// deployment with no embedder, where lexical alone is the answer rather
+// than a fallback from one.
+func (s *Service) Search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, bool, error) {
 	// Stored text is NFC (design doc 0022); an NFD query (pasted from a
 	// macOS path) must still match it byte-wise.
 	query = domain.Normalize(query)
@@ -27,12 +34,12 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 		// The modes come from domain.ListSorts rather than a sentence:
 		// this message named three of them for as long as there were
 		// three, and stale_after (design doc 0037) never reached it.
-		return nil, Invalidf("search needs a query; use sort=%s to list concepts without one, "+
+		return nil, false, Invalidf("search needs a query; use sort=%s to list concepts without one, "+
 			"or source=URI to list what cites a resource", strings.Join(domain.ListSorts, "|"))
 	}
 	f, err := checkedFilter(f)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	// Search is reachable without SearchOrList (MCP's search_concepts,
 	// and get_context before it retired), so the narrowing is here as
@@ -40,14 +47,14 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 	// with itself.
 	f, ok, err := s.narrow(ctx, f)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if !ok {
-		return nil, nil
+		return nil, false, nil
 	}
-	hits, err := s.search(ctx, query, f, limit)
+	hits, degraded, err := s.search(ctx, query, f, limit)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	ids := make([]string, len(hits))
 	for i, h := range hits {
@@ -62,47 +69,56 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 	if len(hits) == 0 {
 		s.recordMiss(ctx, query)
 	}
-	return hits, nil
+	return hits, degraded, nil
 }
 
-func (s *Service) search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, error) {
+func (s *Service) search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, bool, error) {
 	limit, err := checkedLimit(limit, 10, 50)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	lexical, err := s.Store.SearchLexical(ctx, query, f, limit*2)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	if s.Embedder == nil {
+	cut := func() []domain.SearchHit {
 		if len(lexical) > limit {
-			lexical = lexical[:limit]
+			return lexical[:limit]
 		}
-		return lexical, nil
+		return lexical
+	}
+	// No embedder configured is not a degradation: lexical alone is what
+	// this deployment answers with, every time, and a flag that stood on
+	// every response would say nothing about any of them (design doc
+	// 0114 §2).
+	if s.Embedder == nil {
+		return cut(), false, nil
 	}
 
 	vecs, err := s.Embedder.Embed(ctx, embed.TaskQuery, []string{query})
 	if err != nil {
-		// Degrade to lexical-only rather than failing the search.
+		// Degrade to lexical-only rather than failing the search — and
+		// say so in the answer, not only here. The log is where an
+		// operator looks afterwards; the caller is the one holding a
+		// ranking that is worse than this deployment ordinarily gives,
+		// and until design doc 0114 nothing told them (0080 §1 fuses
+		// three lists, and this is two of them missing).
 		s.Log.Warn("query embedding failed; falling back to lexical-only", "error", err)
-		if len(lexical) > limit {
-			lexical = lexical[:limit]
-		}
-		return lexical, nil
+		return cut(), true, nil
 	}
 	vector, err := s.Store.SearchVector(ctx, vecs[0], s.Embedder.Model(), f, limit*2)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	// Concepts whose attachments match are the third list (design doc
 	// 0020): a concept matching in both body and attachment gains rank
 	// from both, so evidence-backed concepts surface first.
 	attachments, err := s.Store.SearchVectorAttachments(ctx, vecs[0], s.Embedder.Model(), f, limit*2)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	fused := rrfFuse(query, limit, lexical, vector, attachments)
-	return fused, nil
+	return fused, false, nil
 }
 
 // rrfK is reciprocal rank fusion's damping constant, and the unit the

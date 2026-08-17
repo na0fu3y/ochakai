@@ -1095,6 +1095,13 @@ func writeHits(w http.ResponseWriter, r *http.Request, svc *service.Service, pag
 	if page.Cursor != "" {
 		body["cursor"] = page.Cursor
 	}
+	// A ranking this deployment could not do properly says so in the
+	// answer, where the caller holding it is (design doc 0114). Absent
+	// rather than false, like the cursor above: a key that stood on every
+	// response would be one nobody reads.
+	if page.Degraded {
+		body["degraded"] = true
+	}
 	writeJSON(w, http.StatusOK, body)
 }
 

@@ -221,6 +221,15 @@ export async function runSearch(append = false) {
     if (!isFeed && !q) {
       html = `<div class="truncation-note">まだ検索がありません — よく検索される concept から並べています。</div>` + html;
     }
+    // The server says the ranking is worse than it normally gives
+    // (design doc 0114). The page says it in its own words rather than
+    // printing the server's: `degraded` is a value, and the sentence
+    // belongs to whoever is reading it — here, a Japanese-speaking
+    // curator wondering why a search they have run before came back thin.
+    if (page.degraded) {
+      html = `<div class="truncation-note">埋め込みが使えなかったため、この結果は語の一致だけで並べています —
+        意味は近いが語が違う concept は入っていません。しばらく置いてからもう一度お試しください。</div>` + html;
+    }
     if (weak.length) {
       html += `<details class="weak-matches"><summary>弱い一致 ${weak.length} 件 —
         ほとんど関係がなく、おそらくノイズです</summary>${weak.map(hitCard).join('')}</details>`;

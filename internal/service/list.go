@@ -68,11 +68,11 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort, cursor string, 
 	if cursor != "" {
 		return nil, searchBoundError()
 	}
-	hits, err := s.Search(ctx, query, f, limit)
+	hits, degraded, err := s.Search(ctx, query, f, limit)
 	if err != nil {
 		return nil, err
 	}
-	return &Listing{Hits: hits}, nil
+	return &Listing{Hits: hits, Degraded: degraded}, nil
 }
 
 // The listing modes a reverse-lookup filter with no query selects.
