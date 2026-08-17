@@ -316,7 +316,7 @@ func (f *searchFilters) params(query, sortBy, cursor string, limit int) (apiclie
 func cmdSearch(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"search",
-		"Usage: ochakai search [flags] <query>\n\nSearch the knowledge base; verified concepts rank higher.\nOutput: score, uri, status, title — description (one hit per line).\nA search is a ranking: it is bounded by --limit and has no page two\n(design doc 0068 §2.2), so it takes no cursor and prints none.\n`ochakai list` is the other half — the review feeds and the reverse\nlookups, which are sets rather than rankings and page with --cursor.\nThe filters below narrow either command the same way.",
+		"Usage: ochakai search [flags] <query>\n\nSearch the knowledge base; verified concepts rank higher.\nOutput: uri, status, title — description (one hit per line).\nThe order is the answer; there is no score column, because the number\nis on a different scale depending on whether the deployment embeds and\nthe line cannot say which (design doc 0110). --json carries it for a\ncaller that has calibrated one.\nA search is a ranking: it is bounded by --limit and has no page two\n(design doc 0068 §2.2), so it takes no cursor and prints none.\n`ochakai list` is the other half — the review feeds and the reverse\nlookups, which are sets rather than rankings and page with --cursor.\nThe filters below narrow either command the same way.",
 		"  ochakai search \"gross margin\" --type Metric --type 'Glossary Term' --trust human-reviewed\n  ochakai search churn --json | jq -r '.hits[] | .id'\n  ochakai search 活性化 --prefix teams/growth --prefix company   # our scope and the shared one\n  ochakai search revenue --links-to metrics/revenue --type Insight   # among what reads this metric\n")
 	filters := addSearchFilters(fs)
 	limit := fs.Int("limit", 0, "max results (server default 10, max 50)")
@@ -350,13 +350,15 @@ func cmdSearch(ctx context.Context, args []string) error {
 // cmdList is the listing half. A feed and a search are not one question
 // asked two ways: one is a total order that pages, the other a ranking
 // that does not (design doc 0068 §2.2), and they disagree about --limit's
-// default, about whether --cursor means anything, and about what the
-// first column holds. While both lived in `ochakai search`, its help had
+// default, about whether --cursor means anything, and about whether
+// there is a first column at all — a feed leads with the key it ordered
+// by, and nothing else has one to lead with (design doc 0110). While
+// both lived in `ochakai search`, its help had
 // to say all of that before a reader reached the flags (design doc 0062).
 func cmdList(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"list",
-		"Usage: ochakai list [flags] [feed]\n\nList concepts as a set rather than a ranking: the review feeds, and the\ntwo reverse lookups. A listing is a total order, so it pages — a page\nwith more behind it prints the way on to stderr, and passing that back\nwith --cursor reads the next one.\n\nThe feed is the argument; it sets the order and the first column:\n\n  usage         most-read first over the last 90 days, then by\n                lifetime reads, then never-read oldest first at the\n                bottom. With --status draft, the draft review feed\n  verified_at   oldest verification first, never-verified last — the\n                canary feed\n  failed        unanswered failure reports (report_outcome failed),\n                worst first over the last 90 days — the re-verification\n                feed, which `ochakai verify` empties\n  stale_after   past the expiry their author declared, most overdue\n                first. Verifying does not empty this one: the date is\n                the writer's declaration, so clearing it means editing\n                the concept to re-declare an expiry\n\nWithout a feed, --source or --links-to lists in address order, because a\nset is the answer and there is no text to rank it by. --source is what\ncites one resource (the reverse of sources[].resource); --links-to is\nwhat points at one concept (its backlinks).\n\nTo rank by relevance instead, use `ochakai search`.",
+		"Usage: ochakai list [flags] [feed]\n\nList concepts as a set rather than a ranking: the review feeds, and the\ntwo reverse lookups. A listing is a total order, so it pages — a page\nwith more behind it prints the way on to stderr, and passing that back\nwith --cursor reads the next one.\n\nThe feed is the argument; it sets the order and the first column:\n\n  usage         most-read first over the last 90 days, then by\n                lifetime reads, then never-read oldest first at the\n                bottom. With --status draft, the draft review feed\n  verified_at   oldest verification first, never-verified last — the\n                canary feed\n  failed        unanswered failure reports (report_outcome failed),\n                worst first over the last 90 days — the re-verification\n                feed, which `ochakai verify` empties\n  stale_after   past the expiry their author declared, most overdue\n                first. Verifying does not empty this one: the date is\n                the writer's declaration, so clearing it means editing\n                the concept to re-declare an expiry\n\nWithout a feed, --source or --links-to lists in address order, because a\nset is the answer and there is no text to rank it by — so those two\nprint no first column, the address being the first field. --source is\nwhat cites one resource (the reverse of sources[].resource);\n--links-to is what points at one concept (its backlinks).\n\nTo rank by relevance instead, use `ochakai search`.",
 		"  ochakai list usage --status draft --limit 50        # the draft review queue\n  ochakai list failed --trust human-reviewed          # the re-verification queue\n  ochakai list stale_after                            # past their declared expiry\n  ochakai list verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai list --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai list --links-to metrics/revenue --type Insight   # which insights read this metric\n")
 	filters := addSearchFilters(fs)
 	limit := fs.Int("limit", 0, "max results (server default 100, max 1000)")
@@ -410,9 +412,14 @@ func cmdList(ctx context.Context, args []string) error {
 	return nil
 }
 
-// printHits writes one hit per line. The first column is what the caller
-// ordered by: the relevance score for a search, and the feed's own number
-// or date for a listing.
+// printHits writes one hit per line. A feed's own number or date leads the
+// line, because the reader asked to be ordered by it and can compare two of
+// them. Nothing else leads: a search is ordered by a relevance score the
+// product cannot calibrate — 0068 §3 struck `min_score` off the wire for
+// exactly that, the scale being fragment-match weight in lexical mode and
+// RRF's ~1/60 in hybrid, with nothing on the line saying which — and a
+// reverse lookup is ordered by address, its score a constant 0 (design doc
+// 0110).
 func printHits(page *apiclient.SearchResult, feed string) {
 	// Nothing on stdout is the right answer and a bad message: a reader
 	// who gets a silent prompt back cannot tell an empty base from a
@@ -429,34 +436,40 @@ func printHits(page *apiclient.SearchResult, feed string) {
 		return
 	}
 	for _, h := range page.Hits {
-		lead := fmt.Sprintf("%.3f", h.Score)
+		line := fmt.Sprintf("%s\t%s\t%s", h.URI(), h.Status, domain.DisplayTitle(h.Title, h.ID))
+		// A feed leads with the key it ordered by. The feeds are the whole
+		// of that list: a search and a reverse lookup arrive here with no
+		// feed and lead with the address, so their first field is the one
+		// every row has always had in second place.
 		switch feed {
 		case "verified_at":
-			lead = "-" // never verified sorts last
+			lead := "-" // never verified sorts last
 			if h.VerifiedAt != nil {
 				lead = h.VerifiedAt.Format(time.RFC3339)
 			}
+			line = lead + "\t" + line
 		case "usage":
-			lead = "0" // never-used drafts sort last
+			lead := "0" // never-used drafts sort last
 			if h.Usage != nil {
 				lead = strconv.FormatInt(h.Usage.SearchHits, 10)
 			}
+			line = lead + "\t" + line
 		case "failed":
-			lead = "0"
+			lead := "0"
 			if h.Usage != nil {
 				lead = strconv.FormatInt(h.Usage.Failed, 10)
 			}
+			line = lead + "\t" + line
 		case "stale_after":
-			lead = h.StaleAfter
+			line = h.StaleAfter + "\t" + line
 		}
-		line := fmt.Sprintf("%s\t%s\t%s\t%s", lead, h.URI(), h.Status, domain.DisplayTitle(h.Title, h.ID))
 		if h.Description != "" {
 			line += " — " + h.Description
 		}
 		// The passage that answers "why did this match?", when the answer
 		// is not already on the line: the server sends one only when the
 		// query landed in the body rather than in the name or the
-		// description. The first four fields stay tab-separated, so a
+		// description. The fields before it stay tab-separated, so a
 		// pipeline cutting them is unaffected.
 		if h.Snippet != "" {
 			line += " · " + h.Snippet

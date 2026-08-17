@@ -1375,6 +1375,53 @@ func TestPrintHitsNamesTurnedDownRowsWithoutChangingThem(t *testing.T) {
 	}
 }
 
+// The first column is the key the reader asked to be ordered by, so only a
+// feed has one. A search's score is not that key — its scale depends on
+// whether the deployment embeds and the line cannot say which, which is
+// what took `min_score` off the wire (0068 §3) — and a reverse lookup
+// orders by address and carries a score of 0 (design doc 0110).
+func TestPrintHitsLeadsWithTheOrderingKeyOnlyWhenThereIsOne(t *testing.T) {
+	verified := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
+	hit := domain.SearchHit{
+		Summary: domain.Summary{ID: "metrics/revenue", Status: domain.StatusStable, Title: "売上", StaleAfter: "2026-12-31", VerifiedAt: &verified},
+		// A lexical deployment's score, well above RRF's ~1/60 ceiling:
+		// whichever scale it is on, it must not reach the line.
+		Score: 1.73,
+		Usage: &domain.Usage{SearchHits: 42, Failed: 7},
+	}
+	page := &apiclient.SearchResult{Hits: []domain.SearchHit{hit}}
+
+	// A search and a reverse lookup both arrive with no feed, and both
+	// lead with the address.
+	for _, name := range []string{"search", "reverse lookup"} {
+		stdout, _ := capture(t, func() { printHits(page, "") })
+		line := strings.TrimSuffix(stdout, "\n")
+		if got, want := strings.Count(line, "\t"), 2; got != want {
+			t.Errorf("%s: want %d tabs (uri, status, title), got %d:\n%s", name, want, got, line)
+		}
+		if !strings.HasPrefix(line, "ochakai://metrics/revenue\t") {
+			t.Errorf("%s: the address must be the first field:\n%s", name, line)
+		}
+		if strings.Contains(line, "1.73") || strings.Contains(line, "0.000") {
+			t.Errorf("%s: a score must not reach the line:\n%s", name, line)
+		}
+	}
+
+	// A feed still leads with its own key, which is a number or a date the
+	// reader can compare against the row below it.
+	for feed, want := range map[string]string{
+		"verified_at": "2026-08-01T09:00:00Z\t",
+		"usage":       "42\t",
+		"failed":      "7\t",
+		"stale_after": "2026-12-31\t",
+	} {
+		stdout, _ := capture(t, func() { printHits(page, feed) })
+		if !strings.HasPrefix(stdout, want+"ochakai://metrics/revenue\t") {
+			t.Errorf("the %s feed must lead with %q:\n%s", feed, want, stdout)
+		}
+	}
+}
+
 // capture runs fn with stdout and stderr redirected, and returns what it
 // wrote to each.
 func capture(t *testing.T, fn func()) (stdout, stderr string) {

@@ -356,9 +356,10 @@ The feed is the argument; it sets the order and the first column:
                 the concept to re-declare an expiry
 
 Without a feed, --source or --links-to lists in address order, because a
-set is the answer and there is no text to rank it by. --source is what
-cites one resource (the reverse of sources[].resource); --links-to is
-what points at one concept (its backlinks).
+set is the answer and there is no text to rank it by — so those two
+print no first column, the address being the first field. --source is
+what cites one resource (the reverse of sources[].resource);
+--links-to is what points at one concept (its backlinks).
 
 To rank by relevance instead, use `ochakai search`.
 
@@ -650,7 +651,11 @@ Examples:
 Usage: ochakai search [flags] <query>
 
 Search the knowledge base; verified concepts rank higher.
-Output: score, uri, status, title — description (one hit per line).
+Output: uri, status, title — description (one hit per line).
+The order is the answer; there is no score column, because the number
+is on a different scale depending on whether the deployment embeds and
+the line cannot say which (design doc 0110). --json carries it for a
+caller that has calibrated one.
 A search is a ranking: it is bounded by --limit and has no page two
 (design doc 0068 §2.2), so it takes no cursor and prints none.
 `ochakai list` is the other half — the review feeds and the reverse
