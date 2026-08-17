@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-08-17
+
 ### Added
 
 - **The CLI's human-facing lines carry bold and dim at a terminal**
@@ -4589,7 +4591,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.24.1...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/na0fu3y/ochakai/compare/v0.24.1...v0.25.0
 [0.24.1]: https://github.com/na0fu3y/ochakai/compare/v0.24.0...v0.24.1
 [0.24.0]: https://github.com/na0fu3y/ochakai/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/na0fu3y/ochakai/compare/v0.22.1...v0.23.0
