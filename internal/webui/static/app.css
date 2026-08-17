@@ -205,8 +205,13 @@ input[type=date]:not(:focus):invalid, input[type=date]:not(:focus):placeholder-s
 .btn.danger:hover { border-color: var(--rejected-bd); color: var(--rejected-fg); }
 .btn.small { padding: .22rem .6rem; font-size: .84rem; }
 
-.searchbox { display: flex; gap: .6rem; margin-bottom: 1rem; }
-.searchbox input { font-size: 1rem; padding: .55rem .8rem; }
+/* The row wraps: the input (or a feed banner) keeps a readable line and
+   the create button drops below it on a narrow screen, where sharing the
+   row squeezed each to half a phone's width. On wide screens the basis
+   leaves room to spare, so the row renders as the single line it was. */
+.searchbox { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1rem; }
+.searchbox input { font-size: 1rem; padding: .55rem .8rem; flex: 1 1 14rem; width: auto; }
+.searchbox .feed-banner { flex: 1 1 30rem; margin-bottom: 0; }
 
 /* ---- cards ---- */
 .card {

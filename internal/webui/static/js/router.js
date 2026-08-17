@@ -3,7 +3,7 @@
 // after a save, and does it from inside a handler long after both
 // modules have finished evaluating.
 
-import { view } from './dom.js';
+import { $, view } from './dom.js';
 import { markTreeSelection } from './tree.js';
 import { viewAccess } from './views/access.js';
 import { viewDetail } from './views/detail.js';
@@ -104,6 +104,12 @@ export function route() {
     viewHome();
   }
   markTreeSelection();
+  // On a narrow screen the sidebar is a disclosure that sits above the
+  // view in the document. Left open across a navigation, it kept the new
+  // content a screenful below the tap that asked for it — so a tap on a
+  // tree entry looked like it did nothing. Navigating is the moment the
+  // tree has served its purpose; close it, like a drawer.
+  if (matchMedia('(max-width: 800px)').matches) $('#side-details').open = false;
   // A navigation replaced the main region in place. Focus follows it, so
   // the next Tab continues inside the new view and a screen reader reads
   // it out — but not on the first render, where the browser has just
