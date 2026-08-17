@@ -758,7 +758,20 @@ surface and 0106 completes the primitive read it leaves behind; both
 lean on 0107 and neither could be a PR description, because all three
 move what a user can observe.
 
-    RECORD-CORPUS-LINES: 8500
+8,500 → 9,000 is 0109, 0110 and 0111, and the three of them are one
+subject seen three times: **what a face shows a person, as opposed to
+what it carries.** 0109 puts the access policy in front of a human who
+has to edit it, 0110 takes away a column whose number the product could
+not explain, and 0111 adds weight to the line 0110 left — none of them
+moves a byte of what a program receives, and all three had to argue that
+in writing, because "this only changes what it looks like" is precisely
+the claim that goes unchecked when it is made in a PR description. The
+8,500 crossing said a corpus grows when the rule for changing something
+is worth more than the change; this one says it also grows when the
+change is a rendering, since a rendering is the thing a reader is least
+able to reconstruct from the code.
+
+    RECORD-CORPUS-LINES: 9000
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

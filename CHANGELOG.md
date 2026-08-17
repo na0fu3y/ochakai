@@ -21,6 +21,23 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The CLI's human-facing lines carry bold and dim at a terminal**
+  (design doc 0111). `ochakai search`, `ochakai list` and
+  `ochakai browse` now print the address in bold — the URI, and
+  `browse`'s directory names, segments and file names — and dim the
+  prose that trails the row, `— description` and the `· snippet` that
+  says why a hit matched. Everything between stays plain: `status`,
+  `type` and a feed's first column are values you compare down the
+  column. **Nothing changes for anything but a terminal.** The escapes
+  are written only when stdout is a character device, so
+  `ochakai search q | cut -f1`, `> hits.txt` and `--json` receive the
+  same bytes as before, and stripping the escapes from a styled line
+  gives back today's line exactly. Set `NO_COLOR` to any non-empty
+  value to turn it off at a terminal too; there is no `--color` flag.
+  A terminal that does not render dim shows the plain line.
+
 ### Changed
 
 - **BREAKING (CLI): `ochakai search` no longer prints a score column**

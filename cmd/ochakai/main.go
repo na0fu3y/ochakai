@@ -49,6 +49,12 @@ func main() {
 	slog.SetDefault(log)
 	version = resolveVersion()
 
+	// Asked once, here, rather than per line: whether stdout is a terminal
+	// is a property of this run (design doc 0111). Nothing downstream has
+	// to remember to check, and a printer that forgets to style is a plain
+	// line rather than an escape in a pipe.
+	styled = terminalStyling(os.Stdout)
+
 	// No default command: a bare `ochakai` is almost always a CLI user
 	// exploring, not a server operator (the container image passes
 	// `serve` explicitly via CMD).

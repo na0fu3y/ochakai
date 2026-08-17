@@ -64,6 +64,7 @@ application embedding it needs.
 [configuration.md](configuration.md); this is the list, so you know what
 to look up.
 
+- `NO_COLOR`
 - `OCHAKAI_ADMINS`
 - `OCHAKAI_DATABASE_URL`
 - `OCHAKAI_DB_IAM_AUTH`

@@ -436,7 +436,11 @@ func printHits(page *apiclient.SearchResult, feed string) {
 		return
 	}
 	for _, h := range page.Hits {
-		line := fmt.Sprintf("%s\t%s\t%s", h.URI(), h.Status, domain.DisplayTitle(h.Title, h.ID))
+		// The address in bold and the prose that trails the row dimmed
+		// (design doc 0111). Nothing between them is touched: the status
+		// is a value the reader compares down the column, and a feed's
+		// first field is the key they asked to be ordered by (0110).
+		line := fmt.Sprintf("%s\t%s\t%s", bold(h.URI()), h.Status, domain.DisplayTitle(h.Title, h.ID))
 		// A feed leads with the key it ordered by. The feeds are the whole
 		// of that list: a search and a reverse lookup arrive here with no
 		// feed and lead with the address, so their first field is the one
@@ -464,7 +468,7 @@ func printHits(page *apiclient.SearchResult, feed string) {
 			line = h.StaleAfter + "\t" + line
 		}
 		if h.Description != "" {
-			line += " — " + h.Description
+			line += dim(" — " + h.Description)
 		}
 		// The passage that answers "why did this match?", when the answer
 		// is not already on the line: the server sends one only when the
@@ -472,7 +476,7 @@ func printHits(page *apiclient.SearchResult, feed string) {
 		// description. The fields before it stay tab-separated, so a
 		// pipeline cutting them is unaffected.
 		if h.Snippet != "" {
-			line += " · " + h.Snippet
+			line += dim(" · " + h.Snippet)
 		}
 		fmt.Println(line)
 	}
@@ -530,8 +534,11 @@ func cmdBrowse(ctx context.Context, args []string) error {
 	if *asJSON {
 		return printJSON(res)
 	}
+	// A level is addresses all the way down, so the same rule as a hit
+	// line: the first field is the one you copy into the next command,
+	// and it is the one in bold (design doc 0111).
 	for _, d := range res.Dirs {
-		fmt.Printf("%s/\t%d\n", d.Name, d.Count)
+		fmt.Printf("%s\t%d\n", bold(d.Name+"/"), d.Count)
 	}
 	prefix = strings.TrimSuffix(prefix, "/")
 	for _, e := range res.Concepts {
@@ -539,14 +546,14 @@ func cmdBrowse(ctx context.Context, args []string) error {
 		if prefix != "" {
 			seg = strings.TrimPrefix(seg, prefix+"/")
 		}
-		fmt.Printf("%s\t%s\t%s\t%s\n", seg, e.Type, e.Status, domain.DisplayTitle(e.Title, e.ID))
+		fmt.Printf("%s\t%s\t%s\t%s\n", bold(seg), e.Type, e.Status, domain.DisplayTitle(e.Title, e.ID))
 	}
 	// The files in the directory, after the concepts and marked as what
 	// they are: a file is an object in the bundle (design doc 0046 §3.3)
 	// and has no type or status to print, so the column that would hold
 	// them holds what it does have.
 	for _, f := range res.Files {
-		fmt.Printf("%s\tfile\t%s\t%d\n", f.Name, f.MediaType, f.Size)
+		fmt.Printf("%s\tfile\t%s\t%d\n", bold(f.Name), f.MediaType, f.Size)
 	}
 	// The cursor is what a caller acts on, so it is the note: "there is
 	// more" without the way on is the wall design doc 0101 removed.
