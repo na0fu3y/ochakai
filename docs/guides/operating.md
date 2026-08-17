@@ -1075,6 +1075,11 @@ gcloud run services update ochakai --region=$REGION \
   をベースの規模ぶん支払う。手で `DROP TABLE` する必要は無い: ベクトルは
   それが記述する concept から導出されるものだからである(設計ドキュメント
   [0080](../design/0080-search-and-how-a-deployment-embeds.md) §3)。
+  **この「黙って無視される」は終わった**: 四つを設定したまま上げると、
+  そのリビジョンは名前を挙げて起動を拒む(設計ドキュメント
+  [0112](../design/0112-a-start-refuses-a-variable-it-does-not-read.md))。
+  起動しないリビジョンにトラフィックは移らないので、直前のリビジョンが
+  答えたまま、消すべき名前がログに出る。
 - **semantic search が到達可能になったり、モデルが変わったりしても、
   backfill はされない。** 既存の concept は `ochakai reembed` まで
   embedding が無いままである。これは Vertex AI のトークンをベースの

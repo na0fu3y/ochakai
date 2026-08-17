@@ -32,6 +32,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 )
@@ -40,6 +41,13 @@ func serveUI(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// The other command configured by environment gets the same refusal
+	// serve does, and needs it for the same reason: a misspelled
+	// OCHAKAI_IAP_AUDIENCE here is a proxy that quietly records every
+	// browser user as this service account (design doc 0112).
+	if err := config.CheckEnv(); err != nil {
+		return err
+	}
 	target := os.Getenv("OCHAKAI_URL")
 	if target == "" {
 		return fmt.Errorf("OCHAKAI_URL is required: the UI talks to its own origin, so serve-ui needs an ochakai server to proxy to")

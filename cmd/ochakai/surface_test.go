@@ -19,6 +19,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	yaml "go.yaml.in/yaml/v3"
 
+	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/mcpserver"
 	"github.com/na0fu3y/ochakai/internal/service"
@@ -576,6 +577,18 @@ func TestSurfaceDocCountsCLIFlags(t *testing.T) {
 // lives on that platform, so ochakai reads them rather than defining
 // them, and nobody sets one to configure ochakai.
 func TestSurfaceDocCountsEnvironmentVariables(t *testing.T) {
+	names := envVarsReadBySource(t)
+	compareSurface(t, "ENV", names)
+	englishPageNamesEveryEnvVar(t, names)
+}
+
+// envVarsReadBySource names every environment variable the program reads,
+// off the os.Getenv and envOr calls in the non-test Go. Two tests want
+// this list for different questions — how many there are, and whether
+// config.Known is all of ochakai's own — so it is read once here rather
+// than by two regexps that could drift apart.
+func envVarsReadBySource(t *testing.T) []string {
+	t.Helper()
 	varRe := regexp.MustCompile(`(?:os\.Getenv|envOr)\("([A-Za-z][A-Za-z0-9_]*)"`)
 	osOwned := map[string]bool{"XDG_CONFIG_HOME": true, "AppData": true}
 	seen := map[string]bool{}
@@ -612,8 +625,47 @@ func TestSurfaceDocCountsEnvironmentVariables(t *testing.T) {
 	for name := range seen {
 		names = append(names, name)
 	}
-	compareSurface(t, "ENV", names)
-	englishPageNamesEveryEnvVar(t, names)
+	sort.Strings(names)
+	return names
+}
+
+// config.Known is the list a start refuses everything outside of (design
+// doc 0112), so a variable added to the program and not to that list is
+// a variable the next deployment cannot set. Written twice — once as the
+// call that reads it, once as the name in the list — and therefore read
+// back out of the source rather than trusted (design doc 0035).
+//
+// Only ochakai's own namespace: PORT is Cloud Run's spelling and
+// NO_COLOR is every program's, and neither is ochakai's to refuse.
+func TestConfigKnowsEveryVariableTheSourceReads(t *testing.T) {
+	var read []string
+	for _, name := range envVarsReadBySource(t) {
+		if strings.HasPrefix(name, "OCHAKAI_") {
+			read = append(read, name)
+		}
+	}
+	known := append([]string(nil), config.Known...)
+	sort.Strings(known)
+	if !equalStrings(read, known) {
+		t.Errorf("the variables the source reads and config.Known disagree:\n source: %v\n Known:  %v",
+			read, known)
+	}
+}
+
+// The harness keeps OCHAKAI_TEST_*, and a start reads nothing under it
+// rather than refusing it (design doc 0112 §4). That carve-out is only
+// safe while it stays the harness's: a shipped read under the prefix
+// would be configuration an operator cannot be warned about, since the
+// check that names a typo is the one thing told to look away here. A
+// named exception is a place to hide something, so it is checked rather
+// than trusted — the reasoning internal/testdb already gets above.
+func TestNothingShippedReadsATestVariable(t *testing.T) {
+	for _, name := range envVarsReadBySource(t) {
+		if strings.HasPrefix(name, "OCHAKAI_TEST_") {
+			t.Errorf("the program reads %s, which a start does not check: "+
+				"OCHAKAI_TEST_ is the harness's half of the namespace", name)
+		}
+	}
 }
 
 // docs/en.md repeats the environment variables, which is the one place

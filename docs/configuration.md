@@ -74,6 +74,16 @@ CI と deploy ガイドはどちらも Postgres 17 で動かしている。
 `ochakai use` で選んだものより優先する。残りは
 [CLI リファレンス](cli.md)にある。
 
+**この表に無い `OCHAKAI_*` を置くと、`serve` と `serve-ui` は起動しない**
+(設計ドキュメント
+[0112](design/0112-a-start-refuses-a-variable-it-does-not-read.md))。
+エラーはその名前を挙げ、ochakai が読む名前を並べる。打ち間違いと、畳まれた
+古い綴り(`OCHAKAI_VERTEX_PROJECT` など)がそのまま残っているデプロイを
+捕まえるためのもので、**どちらもこれまでは黙って既定値で起動していた**。
+Cloud Run では起動しないリビジョンにトラフィックは移らないので、直前の
+リビジョンが答え続ける。名前を消せば次のデプロイは通る。クライアント側の
+コマンドはこの検査をしない。
+
 <a id="authentication-has-no-configuration"></a>
 
 ## 認証に設定はない

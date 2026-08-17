@@ -31,6 +31,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない) |
 | 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
+| 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
 | 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5。**`.md` が concept の住所であり、そこに座れるものは concept だけであることは [0100](0100-md-is-how-a-concept-is-spelled.md)**(0075 §3.3 を改訂) |
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
@@ -145,6 +146,23 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   (未設定 / `read-only` / `public` / `dev`)。read-only の強制点はサービス層
   1 箇所で利用測定だけが凍結の外、public は identity を一切読まず 401 も
   返さない。読めない綴りは既定に落とさず起動エラーにする。
+- [0112 起動は、自分が読まない変数を断る](0112-a-start-refuses-a-variable-it-does-not-read.md)
+  — **Accepted**、**BREAKING**。`OCHAKAI_` で始まり ochakai が読まない
+  変数が環境にあれば、`serve` と `serve-ui` は**その名前を挙げて起動を
+  止める**。値の綴りは何度も疑ってきた(0066 §4、0080 §2、0109 §3)のに
+  **名前には検査が一つも無く**、`OCHAKAI_RECORD_MISSES` を一文字落とせば
+  切ったつもりの記録が付いたまま走り、0078 が畳んだ `OCHAKAI_VERTEX_*`
+  を残したデプロイは誰も読まない値を持ち続けた。0064 §2 が REST で
+  未知のキーを 400 にしたのと同じ判断を、**運用者が手で綴るもう一つの
+  面**に当てる。見つかった名前は一度に全部挙げ、読む変数の一覧
+  (`config.Known`)はソースから読み戻して検査する(0035)。名前空間の
+  うち `OCHAKAI_TEST_` は harness のもので読み飛ばし、出荷コードが
+  そこを読んでいないことを別のテストが持つ。**環境変数に 0088 の
+  一リリースの窓は無い** — 窓は「古い綴りでも動く」を意味し、それは
+  この面では黙って効くことそのものだから、代わりに起動時の名指しが
+  その役を果たす。CLI のクライアント側は検査しない(間違いがすぐ見える)。
+  警告ログにする案・退役した綴りだけの表を持つ案(打ち間違いを一つも
+  捕まえない)は採らない。**面の数は一つも動かない**(ENV は 15 のまま)。
 - [0009 OKF/Git 往復と provenance の所有権](0009-provenance-portability.md)
   — **Accepted**。export → Git → import の往復で provenance が誰のものに
   なるか: バンドルは知識のみを運び、provenance はインスタンス固有である
