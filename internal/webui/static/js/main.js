@@ -5,6 +5,7 @@ import { $ } from './dom.js';
 import { refreshQueues } from './queues.js';
 import { route } from './router.js';
 import { refreshTree } from './tree.js';
+import { markAccessTab } from './views/access.js';
 
 // The sidebar disclosure mirrors the filter bar: forced open on wide
 // screens (its summary is hidden there), collapsed by default on mobile.
@@ -23,4 +24,5 @@ $('#side-toggle').addEventListener('click', () => {
 refreshTree();
 refreshQueues();
 markPosture();
+markAccessTab();
 route();

@@ -17,7 +17,9 @@
      and verification age (sort=verified_at), reachable from the review
      queue and #/search/reported-wrong — how much each queue is holding
      (design doc 0049), how the loop is going and what it could not
-     answer (design doc 0051) — and OKF export.
+     answer (design doc 0051), the access policy for an administrator —
+     who may read and write under which directory (design doc 0109) —
+     and OKF export.
      A starting point for building your own UI. -->
 <html lang="ja">
 <head>
@@ -33,6 +35,10 @@
   <nav class="topnav" id="topnav" aria-label="主なページ">
     <a href="#/search" data-route="search">検索</a>
     <a href="#/review" data-route="review">レビュー<span class="waiting" id="nav-waiting" hidden></span></a>
+    <!-- Shown once the server answers for it: reading the access policy
+         is an administrator's operation, and a tab that can only 403 is
+         a lie the same way a button that can only 403 is. -->
+    <a href="#/access" data-route="access" id="nav-access" hidden>アクセス</a>
   </nav>
   <span class="spacer"></span>
 </header>
