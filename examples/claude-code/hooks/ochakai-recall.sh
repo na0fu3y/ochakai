@@ -41,4 +41,4 @@ if [ -n "$session" ]; then
 		>>"${TMPDIR:-/tmp}/ochakai-recalled-$session"; } 2>/dev/null || true
 fi
 
-printf 'Team knowledge in ochakai that may bear on this request — pointers, not the knowledge itself. Fetch what you rely on before answering (`ochakai get <id>`); a fetched concept lists the concepts that link at it under linked_from, which is where the caveat that says how to read a number lives. Trust verified concepts; judge drafts by created_by:\n\n%s\n' "$rows"
+printf 'Team knowledge in ochakai that may bear on this request — pointers, not the knowledge itself. Fetch what you rely on before answering (`ochakai get <id>`); a fetched concept lists the concepts that link at it under linked_from, which is where the caveat that says how to read a number lives. Trust verified concepts; `ochakai get` prints who wrote and who confirmed one on stderr, which is how a draft is judged. Cite what you use: name the concept id and whether a human confirmed it, so the reader can check the answer and knows which concept to fix:\n\n%s\n' "$rows"
