@@ -465,6 +465,8 @@ provenance が崩れる。
 gating は、すべて運用ガイドの
 [Hardening](../../docs/guides/operating.md#hardening) にある。
 
+<a id="7-troubleshooting-in-a-security-hardened-org"></a>
+
 ## 7. セキュリティを固めた組織でのトラブルシューティング
 
 - **`allUsers` の binding が "do not belong to a permitted customer" で

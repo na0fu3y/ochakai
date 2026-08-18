@@ -1593,3 +1593,72 @@ func TestEveryErrorResponseDeclaresACode(t *testing.T) {
 		t.Fatal("no error-shaped response found in openapi.yaml: this check now guards nothing")
 	}
 }
+
+// japaneseNumerals is enough of the counting words to read a small count
+// out of the manual's prose. The manual writes these as words rather than
+// digits, so a check that reads them back has to speak the same spelling.
+var japaneseNumerals = map[string]int{
+	"一": 1, "二": 2, "三": 3, "四": 4, "五": 5,
+	"六": 6, "七": 7, "八": 8, "九": 9, "十": 10,
+}
+
+// manualToolCountRe reads "六つのツール" out of docs/README.md's entry for
+// the MCP page — the one place in the manual that states a surface's size
+// in prose rather than by listing it.
+var manualToolCountRe = regexp.MustCompile(`([一二三四五六七八九十])つのツール`)
+
+// docs/surface.md is checked against the build by the tests above, but the
+// index that sends a reader to a page also describes it, and prose does
+// not fail to compile. Its entry for the MCP guide said seven tools when
+// the server offered six — a number that had been wrong across a
+// supersession in either direction, since 0076 took the count from eight
+// to six and the index landed between the two. A reader budgeting context
+// for their agent believes that number before they open the page.
+func TestManualIndexCountsToolsCorrectly(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	srv := httptest.NewServer(mcpserver.Handler(&service.Service{}, "test"))
+	defer srv.Close()
+
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "index-test", Version: "1"}, nil).
+		Connect(ctx, &mcp.StreamableClientTransport{Endpoint: srv.URL}, nil)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer func() { _ = cs.Close() }()
+
+	res, err := cs.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+	if len(res.Tools) == 0 {
+		t.Fatal("the server offered no tools: this check now guards nothing")
+	}
+
+	const index = "../../docs/README.md"
+	body, err := os.ReadFile(index)
+	if err != nil {
+		t.Fatalf("read %s: %v", index, err)
+	}
+	m := manualToolCountRe.FindSubmatch(body)
+	if m == nil {
+		t.Fatalf("%s states no tool count matching %s — the entry's wording changed, "+
+			"and this check now guards nothing", index, manualToolCountRe)
+	}
+	if got := japaneseNumerals[string(m[1])]; got != len(res.Tools) {
+		t.Errorf("%s says %s (%d) tools; the server offers %d (%s).\n\n"+
+			"The index is what a reader budgets context from before they open the page.",
+			index, m[1], got, len(res.Tools), strings.Join(toolNames(res.Tools), ", "))
+	}
+}
+
+// toolNames is the names alone, for an error message that says which
+// tools the count disagreed with.
+func toolNames(tools []*mcp.Tool) []string {
+	out := make([]string, 0, len(tools))
+	for _, tool := range tools {
+		out = append(out, tool.Name)
+	}
+	return out
+}

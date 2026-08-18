@@ -69,7 +69,9 @@ JSON のキー名が違うだけなので、[その他のクライアント](#�
 `ochakai://metrics/revenue` や `ochakai://queries/sales/top-customers`。
 リソース参照(`@` メンション)に対応するクライアントは、ツール呼び出し
 無しで concept を OKF ドキュメント — frontmatter と本文 — として引き
-込める。発見のための手段は引き続き `search_concepts` である。読み取り系のツールには `readOnly` の、書き込み系には
+込める。発見のための手段は引き続き `search_concepts` である。
+
+読み取り系のツールには `readOnly` の、書き込み系には
 `destructive: false` のアノテーションが付いているので、クライアントの
 自動承認ポリシーは説明文を解析しなくても機能する。破壊的なツールは
 一本も無い。
@@ -249,7 +251,8 @@ ochakai ui        # http://127.0.0.1:8098/mcp
 
 `gcloud run services proxy` が三つ目の方法である — MCP 固有の振る舞い
 を持たない、ただの HTTP トンネル。deploy ガイドはこれを `curl` 越しの
-デプロイ検証に使っているが([§3](../../deploy/cloudrun/README.md))、
+デプロイ検証に使っているが
+([§3](../../deploy/cloudrun/README.md#3-deploy-cloud-run-dedicated-identity-passwordless-org-restricted))、
 クライアントを繋ぐためではない。そちらにはブリッジか上の
 `ochakai ui` を使う。
 
@@ -282,7 +285,8 @@ ochakai を公開で呼び出せる状態にすることは、デプロイの一
   問題である: Cloud Run に対してはブリッジが `gcloud auth login`
   (または ADC)を済ませている必要があり、呼び出し元は
   `roles/run.invoker` を持っている必要がある。deploy ガイドの
-  [§7](../../deploy/cloudrun/README.md) が Google 側の症状を扱う。
+  [§7](../../deploy/cloudrun/README.md#7-troubleshooting-in-a-security-hardened-org)
+  が Google 側の症状を扱う。
 - **サーバーは curl には応答するがクライアントには応答しない。** パス
   を確認する — `/mcp` であって、ルートではない。ochakai サーバーへの
   `GET /` は、それが提供するエンドポイントを表示する。
