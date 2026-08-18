@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-08-19
+
 ### Added
 
 - **The MCP bundle now carries an icon.** A desktop app draws a tile for
@@ -4774,7 +4776,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.26.1...HEAD
+[0.26.1]: https://github.com/na0fu3y/ochakai/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/na0fu3y/ochakai/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/na0fu3y/ochakai/compare/v0.24.1...v0.25.0
 [0.24.1]: https://github.com/na0fu3y/ochakai/compare/v0.24.0...v0.24.1
