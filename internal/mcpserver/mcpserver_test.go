@@ -510,6 +510,18 @@ func TestConceptHint(t *testing.T) {
 		t.Errorf("rejected is a ruling, not a lifecycle status: the hint must ask for it "+
 			"with the rejected filter, not through statuses: %s", conceptHint)
 	}
+
+	// The linking half, pinned the same way: the hint teaches a spelling,
+	// so the spelling is run through the parser that has to accept it
+	// rather than eyeballed. A hint carrying a link form design doc 0024
+	// does not recognize would teach an agent to write drafts that stay
+	// orphans — the exact failure the sentence is there to prevent, and
+	// one no reader of the string would notice.
+	links := domain.LinksFromBody("drafts/example", conceptHint)
+	if len(links) != 1 || links[0].Target != "metrics/revenue" {
+		t.Errorf("the hint's example link does not parse as a link to metrics/revenue: %v (hint: %s)",
+			links, conceptHint)
+	}
 }
 
 // TestCuratedGuardIsAdvertised pins the half of the curated-write rule

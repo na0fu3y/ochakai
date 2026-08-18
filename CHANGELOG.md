@@ -23,6 +23,17 @@ last entry.
 
 ### Changed
 
+- **The write-back habit now says to link a draft to what it came from.**
+  A relationship between concepts is a markdown link in the body and
+  nothing else, so a draft written without one is reachable by search and
+  by nothing else — it never appears under `linked_from` when somebody
+  reads the concept it is about. Both automated write-back paths said to
+  write a draft and neither said to link it: `get_concept`'s hint on the
+  MCP surface, and the Stop hook in `examples/claude-code`. Both do now.
+  Nothing about the wire changed — the hint is per-response prose, so the
+  MCP resident-byte budget is untouched at 11,788 — and the CLI's
+  `CLAUDE.md` already taught it.
+
 - **BREAKING (deployment): a variable ochakai does not read stops the
   start** (design doc 0112). `ochakai serve` and `ochakai serve-ui` now
   refuse to start when the environment carries a variable beginning

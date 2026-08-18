@@ -620,7 +620,18 @@ type listOut struct {
 const conceptHint = "After acting on this knowledge, call report_outcome (worked/failed) on the concepts you " +
 	"used — failed reports are how stale verified knowledge gets caught. If this session " +
 	"produced reusable knowledge, write it back with put_concept as a draft; search " +
-	"rejected=true first so you do not re-propose something already turned down."
+	"rejected=true first so you do not re-propose something already turned down. " +
+	// The other half of the write-back, and the one this surface never
+	// said. A relationship between concepts is a markdown link in the
+	// body and nothing else (design doc 0024) — so a draft that does not
+	// carry one is reachable by search and by nothing else, and never
+	// appears under linked_from when somebody reads the concept it is
+	// about (design doc 0106). The instructions already tell the reading
+	// half to follow linked_from; without this the writing half was
+	// producing concepts that half would never reach.
+	"Link a draft back to the concept it came from — an ordinary markdown link to that " +
+	"concept's path in the body, [revenue](/metrics/revenue.md) — because that link is " +
+	"the relationship, and without it nobody reading that concept meets what you wrote."
 
 type getIn struct {
 	ID string `json:"id" jsonschema:"the concept's id — its path: slug segments separated by / (e.g. metrics/revenue, ga4/tables/orders)"`
