@@ -39,7 +39,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md) |
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4([0093](0093-the-budget-governs-the-whole-response.md) が予算の側を改訂)。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。MCP のツール 7 本とその境界は [0076](0076-two-tools-leave-mcp.md) と、**7 本目を割った [0096](0096-a-listing-is-not-a-search-here-either.md)**。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂)。**CLI の行の第一列が「読み手が並べてくれと言った鍵」だけになることは [0110](0110-the-first-column-is-the-key-you-asked-for.md)**(0068 §3 の CLI への適用。`search` と逆引きからスコア列が落ちる)。**その行に太字と dim が付くのは [0111](0111-weight-for-the-eye-and-only-for-an-eye.md)**(端末のときだけ。パイプが受け取るバイト列は変わらない) |
-| Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂)。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)** |
+| Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂)。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**検索が `limit` を名乗らず、答えの縁を描くことは [0115](0115-an-answer-has-an-edge-and-the-page-draws-it.md)**(0067 §1 をこの面に当てたもの。ページが見せるのはエージェントが受け取る答えそのもの) |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)**。**却下の理由がどこまで運ばれるかは [0104](0104-a-ruling-travels-with-its-reason.md)**(CLI の出力と export へ) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
@@ -461,6 +461,22 @@ JSON キーと MCP ツール名だけである。`change` の語彙に残って�
   ルートは fragment に居るのでパスは `/` である。a11y は網羅ではなく
   「無いと使えない」四つ: toast が live region、移動後にフォーカスが主領域へ、
   現在のタブに `aria-current`、エラーバナーが `role="alert"`。
+- [0115 答えには縁があり、ページはそれを描く](0115-an-answer-has-an-edge-and-the-page-draws-it.md)
+  — **Accepted**。0067 §1 の「既定値はサーバー側に一元化する」を、それを
+  守っていなかった一つの面に当てる。検索の既定は一箇所
+  (`checkedLimit(limit, 10, 50)`)が四面ぜんぶに答えているのに、**Web UI
+  だけが `limit=50` を送り、さらに弱い一致を畳んでいた** — つまり
+  キュレーターは「エージェントは見つけられるか」を、**誰も受け取らない
+  答え**を見ながら判断していた。[最初のひと月](../guides/onboarding.md) §3 が
+  「飛ばすな」と書いている確認そのものである。検索は `limit` を名乗らなく
+  なり、返ってきた件数がエージェントの答えそのものになる。「もっと見る
+  (最大 50 件)」は明示の一回で、そのとき**サーバーの答えが終わった位置に
+  線を引く** — 位置はページが数えたもので、10 という数はページのどこにも
+  書かれていない。畳んだ弱い一致のうちエージェントにも届く件数を要約が
+  言う(畳むのは表示の判断だが、「誰も見ない」と読ませるのは事実でない)。
+  順位の列は足さない — 並びが既に順位を持っており、持っていない「どこで
+  終わるか」だけがこの線である(0110 §5)。CLI・MCP・REST は変更なしで、
+  `docs/surface.md` の数はどれも動かない。
 - [0006 Web UI の二つの配信経路](0006-web-ui-serving.md) — **Superseded by 0072**。
 - [0014 フォルダブラウズ](0014-folder-browse.md) — **Superseded by 0046**。
   prefix によるツリー閲覧。

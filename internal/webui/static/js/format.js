@@ -71,6 +71,40 @@ export const displayTitle = e => e.title || String(e.id).split('/').pop();
 // URL for a directory's index page; accepts "a/b" or "a/b/".
 export const dirHash = p => '#/dir/' + idPath(String(p).replace(/\/+$/, ''));
 
+// Below this score a lexical hit is almost certainly noise: a real match
+// contains the query whole and carries the server's 0.3 bonus for it,
+// while an entry sharing one common fragment with a question scores a
+// small fraction of the query's fragments (plus 0.05 if verified). Only
+// meaningful in lexical mode — hybrid (RRF) scores live on a ~1/60 scale,
+// detected by the top score, where no useful floor exists.
+export const WEAK_SCORE = 0.15;
+
+// A ranking as a reader meets it. The server sent one list; the page
+// shows it in two parts, and both parts have to keep their place in the
+// ranking — because `cut` is a position in it (design doc 0115: the
+// answer a search gives is bounded, and the page draws that edge where
+// the server put it, never at a number of its own).
+//
+// fold is off for a listing: with no query there is no relevance to be
+// weak about, and every feed is ordered by the key it was asked for.
+//
+// weakInCut is what the fold owes the reader: a hit hidden here can
+// still be inside the answer an agent holds, and the summary says so
+// rather than letting the fold read as "nobody sees these".
+export function divideRanking(hits, { cut = 0, fold = false } = {}) {
+  const ranked = (hits || []).map((hit, rank) => ({ hit, rank }));
+  // Hybrid scores never clear this bar, so the floor below would hide
+  // the whole ranking; the top hit is what says which scale this is.
+  const folding = fold && ranked.length > 0 && ranked[0].hit.score > 0.05;
+  if (!folding) return { shown: ranked, weak: [], weakInCut: 0 };
+  const weak = ranked.filter(r => r.hit.score < WEAK_SCORE);
+  return {
+    shown: ranked.filter(r => r.hit.score >= WEAK_SCORE),
+    weak,
+    weakInCut: weak.filter(r => r.rank < cut).length,
+  };
+}
+
 // crumbTrail renders a breadcrumb of directories: each links to its
 // index page and the root "/" goes home (which shows the root index). A
 // separator belongs to the directory it closes ("insights/"), so the

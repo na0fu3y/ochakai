@@ -21,6 +21,25 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The web UI's search now shows the answer an agent receives** (design
+  doc 0115). One place decides how big a search's answer is, and REST,
+  MCP and the CLI all took it; the page asked for 50 hits instead and
+  then folded the ones scoring under its own floor into a disclosure. So
+  the check the onboarding guide says not to skip — will an agent find
+  what I just wrote? — was answered on a page nobody else is served: a
+  concept sitting at rank 14 looked found, and a folded one looked
+  invisible while every agent still received it. The search box now names
+  no limit, so what comes back is what comes back for the same question
+  through every other surface. **See more (up to 50)** is one explicit
+  run and draws a line where the server's answer ended; the position is
+  counted from the previous response, so no number of the page's own is
+  involved. The weak-match fold stays and now says how many of the hits
+  it hides an agent receives. **What to do about it**: nothing. Searching
+  a directory, the feeds and the review queue are unchanged, and no
+  endpoint, parameter, command or variable moved.
+
 ### Added
 
 - **The MCP bundle now carries an icon.** A desktop app draws a tile for

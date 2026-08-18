@@ -605,3 +605,41 @@ func TestTheEditorSavesAgainstTheVersionItOpened(t *testing.T) {
 		t.Error("a save refused by the precondition is not distinguished from any other failure")
 	}
 }
+
+// A search asks the question an agent asks (design doc 0115): the page
+// names no limit, so the answer's size is the server's — the same one
+// every other caller of that deployment is handed.
+//
+// The failure this guards is silent in the way that matters here. A page
+// that asks for its own number renders a list of results either way; what
+// changes is that the curator checking "will an agent find this?" is
+// reading an answer nobody else receives. Two numbers may appear: the
+// page size of a listing, which pages with a cursor, and the contract's
+// maximum, which is only asked for when a reader deliberately looks past
+// the edge.
+func TestASearchLetsTheServerSayHowBigAnAnswerIs(t *testing.T) {
+	explore := asset(t, "js/views/explore.js")
+	if n := strings.Count(explore, "p.set('limit'"); n != 2 {
+		t.Errorf("the search view sets a limit in %d places; the listing's page size and the wide run are the only two", n)
+	}
+	for _, want := range []string{
+		"if (isFeed || !q) p.set('limit', '100');",           // a listing pages
+		"else if (wide) p.set('limit', String(WIDE_LIMIT));", // and only a wide run names the maximum
+	} {
+		if !strings.Contains(explore, want) {
+			t.Errorf("explore.js no longer contains %s", want)
+		}
+	}
+	// The edge is drawn where the server's answer ended, which the page
+	// learns by counting what came back — never from a number of its own.
+	if !strings.Contains(explore, "explore.cut = hits.length;") {
+		t.Error("the page no longer takes the size of an answer from the answer")
+	}
+
+	// The fold hides hits, and some of them are inside that answer. Saying
+	// so is the whole reason the count exists: a fold that reads as
+	// "nobody sees these" is the same lie in a smaller place.
+	if !strings.Contains(explore, "weakInCut") {
+		t.Error("the weak-match fold no longer says which of the hits it hides an agent receives")
+	}
+}

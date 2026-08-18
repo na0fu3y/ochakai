@@ -4,13 +4,24 @@ import { api } from '../api.js';
 import { hitCard } from '../cards.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
+import { divideRanking } from '../format.js';
 import { KNOWN_TYPES, STATUSES, icon } from '../vocab.js';
 
 // Filter state survives navigation within the session.
 // loaded and cursor are the listing walk: the hits already on screen and
 // where the next page resumes, both reset by any change that restarts the
 // listing (design doc 0050 §2.1).
-export const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, loaded: [], cursor: '', verified: false, rejected: false };
+// cut and wide belong to the edge of a search's answer (design doc
+// 0115): cut is how many hits came back when nobody named a limit — the
+// answer an agent holds — and wide is the one run that asks past it.
+export const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, loaded: [], cursor: '', verified: false, rejected: false, cut: 0, wide: false };
+
+// The contract's maximum for a search (api/openapi.yaml: searching,
+// max 50). The page names this one and no other: a maximum is a wall the
+// reader hits, while the default is the server's answer to "how big is
+// an answer" — and repeating that here is how the page would start
+// disagreeing with it (design doc 0067 §1).
+export const WIDE_LIMIT = 50;
 
 // If the viewport grows past the breakpoint while the filter disclosure is
 // collapsed, its summary disappears — reopen it so filters stay reachable.
@@ -127,13 +138,14 @@ export function debounce(fn, ms) {
   debounce._t = setTimeout(fn, ms);
 }
 
-// Below this score a lexical hit is almost certainly noise: a real match
-// contains the query whole and carries the server's 0.3 bonus for it,
-// while an entry sharing one common fragment with a question scores a
-// small fraction of the query's fragments (plus 0.05 if verified). Only
-// meaningful in lexical mode — hybrid (RRF) scores live on a ~1/60 scale,
-// detected below by the top score, where no useful floor exists.
-export const WEAK_SCORE = 0.15;
+// Where the answer ended. The order of a ranking is on screen already —
+// what is not is where it stops, and past this line sits everything a
+// curator can read and no agent is handed (design doc 0115 §2). It is a
+// position, not a score: the number the CLI stopped printing was one
+// nobody can calibrate (design doc 0110), while "the tenth" means the
+// same thing on every deployment.
+const agentEdge = n => `<div class="agent-edge"><span>ここまでが上位 ${n} 件 —
+  エージェントが受け取るのはここまでです</span></div>`;
 
 // append reads the next page of a feed and keeps what is already on
 // screen; every other call starts the listing over.
@@ -142,6 +154,12 @@ export async function runSearch(append = false) {
   if (!out) return;
   const p = new URLSearchParams();
   const isFeed = explore.ageFeed || explore.failedFeed || explore.expiredFeed || !!explore.source;
+  // Read once and clear: asking past the edge is one run, and the next
+  // thing typed is an ordinary search again. Every entrance to this
+  // function is covered by clearing it here rather than by each caller
+  // remembering to.
+  const wide = explore.wide;
+  explore.wide = false;
   // The query as the server and the messages below see it: a box holding
   // only spaces is no query, and saying `「  」に一致するナレッジが
   // 見つかりません` describes something the user did not ask.
@@ -170,11 +188,18 @@ export async function runSearch(append = false) {
   // they are looking at, while "my scope and the shared one at once" is
   // the agent's question, asked in one call through REST or MCP.
   if (explore.prefix) p.append('prefix', explore.prefix);
-  // Search caps at 50 server-side; a feed reads 100 at a time and walks
-  // the rest with a cursor (design doc 0050 §2.1), so "load more" appends
-  // a page instead of asking for a bigger one.
-  const limit = isFeed ? 100 : 50;
-  p.set('limit', String(limit));
+  // A feed reads 100 at a time and walks the rest with a cursor (design
+  // doc 0050 §2.1), so "load more" appends a page instead of asking for
+  // a bigger one.
+  //
+  // A search names no limit at all (design doc 0115). How big an answer
+  // to a question is, is the server's decision — the same one every
+  // agent gets — and the page asking for its own number was the page
+  // showing a curator something no caller of this deployment receives.
+  // `wide` is the reader asking past that edge, and only then does a
+  // number appear here.
+  if (isFeed || !q) p.set('limit', '100');
+  else if (wide) p.set('limit', String(WIDE_LIMIT));
   if (append && explore.cursor) p.set('cursor', explore.cursor);
   else { explore.loaded = []; explore.cursor = ''; }
   const my = runSearch._seq = (runSearch._seq || 0) + 1;
@@ -205,15 +230,26 @@ export async function runSearch(append = false) {
       wireScope();
       return;
     }
+    // How big an answer to this question is, is the server's to say: with
+    // no limit named, this is what came back — and it is the same answer
+    // the agent, the CLI and any other caller of /api/v1/search holds
+    // (design doc 0115). A wide run asked past it, so it does not move
+    // the edge it was drawn from.
+    const ranking = q && !isFeed;
+    if (ranking && !wide) explore.cut = hits.length;
+    const cut = ranking ? explore.cut : 0;
     // With a query, split off low-relevance hits so junk doesn't render as
     // if it matched — semantic and lexical search always return *something*.
-    let strong = hits, weak = [];
-    if (q && !isFeed && hits[0].score > 0.05) {
-      strong = hits.filter(h => h.score >= WEAK_SCORE);
-      weak = hits.filter(h => h.score < WEAK_SCORE);
+    const { shown, weak, weakInCut } = divideRanking(hits, { cut, fold: ranking });
+    let html = '', edged = false;
+    for (const { hit, rank } of shown) {
+      // The first hit past the edge carries the line. Drawn on the rank
+      // the server gave, not on how many cards precede it, so a folded
+      // hit above cannot move it.
+      if (wide && cut && !edged && rank >= cut) { html += agentEdge(cut); edged = true; }
+      html += hitCard(hit);
     }
-    let html = strong.map(hitCard).join('');
-    if (!strong.length) {
+    if (!shown.length) {
       html = `<div class="empty">「${esc(q)}」に強く一致するものはありません。</div>`;
     }
     // Nothing typed: this is the most-searched listing, not everything
@@ -231,21 +267,35 @@ export async function runSearch(append = false) {
         意味は近いが語が違う concept は入っていません。しばらく置いてからもう一度お試しください。</div>` + html;
     }
     if (weak.length) {
+      // The fold hides hits, and some of them are inside the answer an
+      // agent receives — which is the one thing hiding them must not
+      // imply (design doc 0115 §3).
+      const reach = weakInCut ? `(うち ${weakInCut} 件はエージェントにも届きます)` : '';
       html += `<details class="weak-matches"><summary>弱い一致 ${weak.length} 件 —
-        ほとんど関係がなく、おそらくノイズです</summary>${weak.map(hitCard).join('')}</details>`;
+        ほとんど関係がなく、おそらくノイズです${reach}</summary>${weak.map(({ hit }) => hitCard(hit)).join('')}</details>`;
     }
     if (explore.cursor) {
       html += `<div class="truncation-note">${hits.length} 件の concept を表示 ·
            <a href="#" id="feed-more">もっと読み込む</a></div>`;
-    } else if (!isFeed && hits.length >= limit) {
-      // A search does not page: 50 is the whole contract, and the way on
-      // is a narrower question rather than a next page (0050 §2.2).
-      html += `<div class="truncation-note">先頭 ${limit} ${q ? '件の一致' : '件の concept'} を表示
-           (サーバー側の上限)— 絞り込みか、より具体的な問いで狭めてください。</div>`;
+    } else if (ranking && !wide) {
+      // Said before the line is drawn, because most searches never need
+      // it drawn: this is the whole answer, and it is the answer every
+      // other caller of this deployment gets for the same question.
+      html += `<div class="truncation-note">同じ問いをエージェントが訊くと、この ${cut} 件が返ります ·
+           <a href="#" id="see-wide">もっと見る(最大 ${WIDE_LIMIT} 件)</a></div>`;
+    } else if (ranking && wide) {
+      // A search does not page: the maximum is the whole contract, and
+      // the way on is a narrower question rather than a next page
+      // (0050 §2.2).
+      html += hits.length > cut
+        ? `<div class="truncation-note">${hits.length} 件の一致を表示(サーバー側の上限は ${WIDE_LIMIT} 件)—
+             線から下に届かせるには、問いを立て直すか concept の側を直してください。</div>`
+        : `<div class="truncation-note">これで全部です — エージェントが受け取るのと同じ ${cut} 件しかありません。</div>`;
     }
     out.innerHTML = scopeNote + html;
     wireScope();
     $('#feed-more')?.addEventListener('click', e => { e.preventDefault(); runSearch(true); });
+    $('#see-wide')?.addEventListener('click', e => { e.preventDefault(); explore.wide = true; runSearch(); });
   } catch (e) {
     if (my !== runSearch._seq || out !== $('#results')) return;
     out.innerHTML = `<div class="error-banner" role="alert">検索に失敗しました: ${esc(e.message)}</div>`;

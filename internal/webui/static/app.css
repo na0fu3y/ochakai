@@ -268,6 +268,16 @@ input[type=date]:not(:focus):invalid, input[type=date]:not(:focus):placeholder-s
 }
 .weak-matches .card { opacity: .75; }
 .truncation-note { color: var(--muted); font-size: .86rem; text-align: center; padding: .8rem 0; }
+/* The edge of the answer: a rule across the results with the sentence
+   sitting in the break, so the cards below read as being on the other
+   side of something rather than as more of the same list. */
+.agent-edge {
+  display: flex; align-items: center; gap: .7rem;
+  color: var(--muted); font-size: .82rem; padding: .9rem 0 .5rem;
+}
+.agent-edge::before, .agent-edge::after {
+  content: ""; flex: 1; border-top: 1px dashed var(--border);
+}
 .feed-banner {
   background: var(--accent-weak); border: 1px solid var(--border); border-radius: 8px;
   padding: .55rem .9rem; margin-bottom: 1rem; font-size: .92rem; color: var(--accent-strong);
