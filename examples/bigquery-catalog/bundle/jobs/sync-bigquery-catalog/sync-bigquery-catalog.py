@@ -60,8 +60,8 @@ def id_token_for(audience: str) -> str:
         OCHAKAI_ID_TOKEN=$(gcloud auth print-identity-token)
 
     Returns "" when the variable is unset and the environment cannot mint
-    one either — which is fine against a local OCHAKAI_INSECURE_DEV server
-    and fatal against Cloud Run, where the server says so itself with a 403.
+    one either — which is fine against a local OCHAKAI_MODE=dev server and
+    fatal against Cloud Run, where the server says so itself with a 403.
     """
     if token := os.environ.get("OCHAKAI_ID_TOKEN", ""):
         return token

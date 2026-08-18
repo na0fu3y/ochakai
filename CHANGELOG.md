@@ -71,9 +71,14 @@ last entry.
   one design doc 0064 §2 already makes for an unrecognized query
   parameter, on the other surface an operator spells by hand.
   `OCHAKAI_TEST_*` is this repository's own harness namespace and is
-  ignored; the client commands are not checked, since a wrong
-  `OCHAKAI_URL` announces itself at once. No variable was added or
-  removed.
+  ignored, and so are the two variables ochakai ships a reader for that
+  is not the server — `OCHAKAI_RECALL_LIMIT` in the recall hook of
+  `examples/claude-code`, `OCHAKAI_ID_TOKEN` in the BigQuery catalog
+  job: a shell that exported one of those and then starts a server is
+  not a misconfigured deployment. A misspelling of either is still
+  refused, which is why those two are a list and not a prefix. The
+  client commands are not checked, since a wrong `OCHAKAI_URL`
+  announces itself at once. No variable was added or removed.
 
 ### Added
 
