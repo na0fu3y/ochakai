@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"image"
+	_ "image/png" // the bundle icon is a PNG; DecodeConfig needs the format registered
 	"os"
 	"strings"
 	"testing"
@@ -119,5 +122,54 @@ func TestMCPBManifestRunsACommandTheBinaryHas(t *testing.T) {
 	// scripts/mcpb stamps the release version over this exact string.
 	if got, _ := m["version"].(string); got != "0.0.0" {
 		t.Errorf("version = %q, want the 0.0.0 placeholder scripts/mcpb replaces", got)
+	}
+}
+
+// The icon is the one field of the manifest a user sees before anything
+// runs: the app draws the tile at install time, with no server reachable
+// and no tool called yet. A name that points at nothing is not refused —
+// the bundle installs and the tile comes up blank — so the file it names
+// is read here, and so is the line of scripts/mcpb that has to put it in
+// the zip.
+func TestMCPBManifestIconIsPackedAndReadable(t *testing.T) {
+	m := mcpbManifest(t)
+
+	name, _ := m["icon"].(string)
+	if name == "" {
+		t.Fatal("the manifest names no icon; a desktop app would draw the bundle with a blank tile")
+	}
+	if strings.ContainsAny(name, `/\`) {
+		t.Errorf("icon = %q; scripts/mcpb writes it at the bundle root, so the name carries no directory", name)
+	}
+
+	raw, err := os.ReadFile("../../packaging/mcpb/" + name)
+	if err != nil {
+		t.Fatalf("the manifest names an icon that is not in packaging/mcpb: %v", err)
+	}
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("the icon does not decode as an image: %v", err)
+	}
+	if format != "png" {
+		t.Errorf("the icon is %s; MCPB wants a PNG", format)
+	}
+	// MCPB asks for 128x128 or larger, and square is what a tile is. The
+	// checked-in file is the 512x512 rasterisation of
+	// docs/images/logo-mark.svg, which leaves room for a retina tile.
+	if cfg.Width != cfg.Height {
+		t.Errorf("the icon is %dx%d; a tile is square", cfg.Width, cfg.Height)
+	}
+	if cfg.Width < 128 {
+		t.Errorf("the icon is %dpx wide; MCPB wants 128 or more", cfg.Width)
+	}
+
+	// The name lives in two files — the manifest and the script that
+	// packs it — and only one of them is read by anything else.
+	script, err := os.ReadFile("../../scripts/mcpb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(script), name) {
+		t.Errorf("scripts/mcpb never mentions %s, so the manifest would name an icon the zip does not carry", name)
 	}
 }
