@@ -1662,3 +1662,74 @@ func toolNames(tools []*mcp.Tool) []string {
 	}
 	return out
 }
+
+// demoBundleCountRe reads a claim about how many concepts the demo bundle
+// holds. The manual states it three ways — "11 concept", "11 件", "11 個"
+// — so the check reads the number and the counter word together rather
+// than pinning one phrasing.
+var demoBundleCountRe = regexp.MustCompile(`([0-9]+)\s*(?:concept|件|個)`)
+
+// demoBundleWindow is how far after a mention of examples/demo a count
+// still belongs to it. Long enough to cross the manual's line wrapping,
+// which puts the counter word on the line after the number, and short
+// enough not to reach the next paragraph.
+const demoBundleWindow = 160
+
+// The demo bundle is what a reader imports in their first ten minutes,
+// and four places tell them how big it is. It grew to eleven concepts and
+// only the index was updated, so three went on promising ten — the
+// same shape as the tool count: a number about a thing in this repository,
+// stated in prose, that nothing read back. Counting the bundle is cheap,
+// and it is the only honest source (design doc 0035).
+func TestManualCountsTheDemoBundle(t *testing.T) {
+	const bundle = "../../examples/demo"
+	want := 0
+	err := filepath.WalkDir(bundle, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".md" {
+			return err
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		// A markdown file is a concept when it opens with OKF
+		// frontmatter; anything else in a bundle is a plain file.
+		if strings.HasPrefix(string(body), "---\n") {
+			want++
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk %s: %v", bundle, err)
+	}
+	if want == 0 {
+		t.Fatalf("%s holds no concept: this check now guards nothing", bundle)
+	}
+
+	docs, _ := userDocs(t)
+	checked := 0
+	for _, page := range docs {
+		body, err := os.ReadFile(filepath.Join("../..", page))
+		if err != nil {
+			t.Fatalf("read %s: %v", page, err)
+		}
+		text := string(body)
+		for _, at := range regexp.MustCompile(`examples/demo`).FindAllStringIndex(text, -1) {
+			end := min(at[1]+demoBundleWindow, len(text))
+			m := demoBundleCountRe.FindStringSubmatch(text[at[1]:end])
+			if m == nil {
+				continue
+			}
+			checked++
+			if m[1] != strconv.Itoa(want) {
+				t.Errorf("%s says the demo bundle holds %s concepts; it holds %d.\n\n"+
+					"It is the first thing a reader imports, and more than one page states\n"+
+					"its size — growing the bundle means saying so in every one of them.",
+					page, m[1], want)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no page states the demo bundle's size: this check now guards nothing")
+	}
+}

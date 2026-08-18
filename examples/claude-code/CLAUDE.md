@@ -13,7 +13,7 @@
 
 ナレッジベースがまだ空で、concept の形を先に見たいなら、ochakai の
 リポジトリで `ochakai import examples/demo` を**捨ててよいサーバー**に
-対して走らせる — 9 型のうち 8 型の見本が 10 concept 入っている。数字も
+対して走らせる — 9 型のうち 8 型の見本が 11 concept 入っている。数字も
 店も全部作り物なので、実際に使うナレッジベースには入れない
 ([examples/README.md](../README.md))。
 -->

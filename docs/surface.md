@@ -1072,7 +1072,7 @@ Computation` が canary としてそれを継続実行する — が、**三つ�
   毎回鳴る警報と、並行 PR の唯一の衝突点 — で退役した)。読むのは利用者ではなく変える人で、
   `RECORD-LINES`(一冊の天井)と同じ読者の同じ種類の天井だから、ここに
   十一本目の上限を足すより、その天井の隣に置くほうが筋が通る。
-- **OKF ドキュメント。** `examples/demo` の 10 件も
+- **OKF ドキュメント。** `examples/demo` の 11 件も
   `examples/bigquery-catalog/bundle` も、プロジェクト自身のナレッジで
   ある `kb/bundle` も、ochakai が**保存するもの**であって ochakai に
   ついての説明ではない。frontmatter を持つ md は知識であり、ここでは
