@@ -163,7 +163,7 @@ It drives the Chromium it finds (`$CHROME` overrides the search) over the
 DevTools Protocol, walks every route, and fails on any console error —
 which is what a module that failed to load looks like, since the panel it
 would have drawn is simply blank. A missing browser or an unreachable UI
-is a skip locally and a failure under `OCHAKAI_SMOKE_REQUIRED=1`, which
+is a skip locally and a failure under `OCHAKAI_TEST_SMOKE_REQUIRED=1`, which
 is how CI runs it: a skip there would be a green run that tested nothing.
 
 ### Measuring before proposing

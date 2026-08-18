@@ -169,7 +169,7 @@ jobs:
       # is a green run that tested nothing.
       - run: node internal/webui/jstest/smoke.mjs http://127.0.0.1:8098
         env:
-          OCHAKAI_SMOKE_REQUIRED: "1"
+          OCHAKAI_TEST_SMOKE_REQUIRED: "1"
 
   govulncheck:
     runs-on: ubuntu-latest

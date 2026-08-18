@@ -19,11 +19,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const BASE = (process.argv[2] || 'http://127.0.0.1:8098').replace(/\/+$/, '');
-const PORT = process.env.OCHAKAI_SMOKE_CDP_PORT || '9222';
+const PORT = process.env.OCHAKAI_TEST_SMOKE_CDP_PORT || '9222';
 // A missing browser or a server that never came up is a skip on a laptop
 // and a failure in CI, where a silent skip is a green run that tested
 // nothing. CI sets this; nothing else does.
-const REQUIRED = !!process.env.OCHAKAI_SMOKE_REQUIRED;
+//
+// Both names sit under OCHAKAI_TEST_, the half of the namespace this
+// repository's harness keeps (design doc 0112 §4): a start refuses every
+// other OCHAKAI_ variable it does not read, and the smoke's own two would
+// have stopped the server this file exists to drive the moment somebody
+// exported them a step earlier.
+const REQUIRED = !!process.env.OCHAKAI_TEST_SMOKE_REQUIRED;
 
 function unavailable(why) {
   console.error('smoke: ' + why + (REQUIRED ? '' : '; skipping'));
