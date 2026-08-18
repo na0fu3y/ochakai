@@ -2,7 +2,7 @@
 
 ローカルとクライアント側の症状。Google Cloud 側の症状 — `/healthz` を
 GFE が横取りする、`NOT_AUTHORIZED`、IAM の伝播遅延 — は
-[デプロイガイドの §7](../../deploy/cloudrun/README.md)にある。MCP
+[デプロイガイドの §7](../../deploy/cloudrun/README.md#7-troubleshooting-in-a-security-hardened-org)にある。MCP
 クライアントがまったく繋がらない場合は
 [MCP クライアントを繋ぐ](mcp-clients.md)にある。
 

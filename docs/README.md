@@ -52,7 +52,7 @@ otherwise have to hunt for. Not a translation; a way in.
   `ochakai <command> -h` をそのまま出力したもので、両者が食い違えば
   テストが落ちる。バイナリを持つ前から読め、持った後も古びない。
 - [MCP クライアントを繋ぐ](guides/mcp-clients.md) — エージェントに見える
-  七つのツール、そしてクライアントごとの URL か `mcp-stdio` ブリッジ、
+  六つのツール、そしてクライアントごとの URL か `mcp-stdio` ブリッジ、
   各クライアントが読む設定ファイル。
 - [最初のカタログを作る](../examples/bigquery-catalog) — BigQuery の
   テーブルを concept として取り込む day-one の手順、それを走らせる job、
