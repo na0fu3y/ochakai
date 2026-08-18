@@ -21,6 +21,18 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The MCP bundle now carries an icon.** A desktop app draws a tile for
+  an installed bundle before it has ever started the server, and
+  `ochakai_X.Y.Z.mcpb` gave it nothing to draw — the one thing a reader
+  sees first was a blank square in a list where the other entries have a
+  mark. The bundle now ships `icon.png`, the tea bowl from
+  [docs/images/logo-mark.svg](docs/images/logo-mark.svg) at 512x512, and
+  the manifest names it. Nothing about the wire, the binary or the
+  `mcp-stdio` bridge changed; a bundle from an earlier release keeps
+  working and simply stays blank.
+
 ## [0.26.0] - 2026-08-18
 
 ### Changed

@@ -2,11 +2,12 @@
 # Packs the MCP bundle (.mcpb) — the one-click install for Claude Desktop
 # and the other desktop apps that read the format.
 #
-# A bundle is a zip of one manifest and the server it describes. What goes
-# in here is the ordinary ochakai binary running `ochakai mcp-stdio`: the
-# same bridge the manual tells a Claude Desktop user to configure by hand,
-# with the JSON written for them and the server URL asked for through the
-# app's own settings UI instead of a config file.
+# A bundle is a zip of one manifest, the icon a desktop app draws for it,
+# and the server it describes. What goes in here is the ordinary ochakai
+# binary running `ochakai mcp-stdio`: the same bridge the manual tells a
+# Claude Desktop user to configure by hand, with the JSON written for
+# them and the server URL asked for through the app's own settings UI
+# instead of a config file.
 #
 # **Two binaries, not six.** The manifest can vary its command by
 # operating system and not by CPU, so an architecture has to be settled
@@ -42,10 +43,17 @@ semver=${version#v}
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 manifest="$root/packaging/mcpb/manifest.json"
+# The icon the manifest names. It is a file rather than a URL because the
+# app draws it before it has ever run the server, and often with nothing
+# reachable: a bundle whose tile is blank looks broken next to the ones
+# that are not. packaging/mcpb/icon.png is docs/images/logo-mark.svg
+# rasterised at 512x512 — the manifest's name for it and this path are
+# checked against each other in cmd/ochakai/mcpb_test.go.
+icon="$root/packaging/mcpb/icon.png"
 macos="$dist/ochakai-macos_darwin_all/ochakai"
 windows="$dist/ochakai_windows_amd64_v1/ochakai.exe"
 
-for f in "$manifest" "$macos" "$windows"; do
+for f in "$manifest" "$icon" "$macos" "$windows"; do
 	if [ ! -f "$f" ]; then
 		echo "mcpb: $f is missing — run goreleaser first (scripts/mcpb reads its dist/)" >&2
 		exit 1
@@ -58,6 +66,7 @@ mkdir -p "$work/server"
 cp "$macos" "$work/server/ochakai"
 cp "$windows" "$work/server/ochakai.exe"
 chmod 0755 "$work/server/ochakai" "$work/server/ochakai.exe"
+cp "$icon" "$work/icon.png"
 
 # The version is the one thing the checked-in manifest cannot know. Every
 # other field is reviewed in the diff, which is the point of keeping it a
@@ -74,5 +83,5 @@ rm -f "$out"
 # field) that would make the archive differ between machines building the
 # same tag. The Unix permission bits stay, which is what the macOS binary
 # needs to be executable after the app unpacks it.
-(cd "$work" && zip -q -X -r "$OLDPWD/$out" manifest.json server)
+(cd "$work" && zip -q -X -r "$OLDPWD/$out" manifest.json icon.png server)
 echo "mcpb: wrote $out"
