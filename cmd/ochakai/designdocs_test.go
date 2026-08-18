@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -672,4 +673,100 @@ func TestDesignRecordsCiteNumbersThatResolve(t *testing.T) {
 	if cited == 0 {
 		t.Fatal("no record cited another by filename: this check now guards nothing")
 	}
+}
+
+// operatorFacing is the text a person reads while deciding what ochakai
+// does and while deploying it: the manual pages, the deployment module and
+// its guide, and the bundles shipped as examples. Source files are not in
+// it — a comment beside code cites the record that was current when the
+// code was written, and rewriting those on every supersession would make
+// the citation a maintenance chore instead of a pointer to a decision.
+// Design records are not in it either, for the same reason and for their
+// own: they are immutable.
+var operatorFacing = []string{
+	"../../README.md",
+	"../../deploy",
+	"../../docs",
+	"../../examples",
+}
+
+// designCitationRe reads a citation of a numbered record out of prose, in
+// either language and with or without the section that follows it.
+var designCitationRe = regexp.MustCompile(`(?:design docs?|設計ドキュメント)\s*\[?(\d{4})`)
+
+// A citation is a pointer, and the reader follows it. Pointed at a record
+// whose Status: says Superseded, they land on a tombstone — one sentence
+// and a link to the commit that held the text — which answers a question
+// about the history of the project rather than the one they asked, which
+// was how the thing in front of them works.
+//
+// The deployment module was where this had gone furthest: fifteen of its
+// citations named records 0066 and 0065 had folded away, so `terraform
+// output posture` printed a record number whose own header disowned it,
+// while the two READMEs beside it cited the current one. Records are
+// immutable and their numbers are not reused, so nothing about a
+// supersession reaches the prose that cites it — something has to read it
+// back (design doc 0035).
+func TestOperatorFacingTextCitesCurrentRecords(t *testing.T) {
+	replacedBy := map[string]string{}
+	for _, r := range designRecords(t) {
+		if m := supersededByRe.FindStringSubmatch(r.status); m != nil {
+			replacedBy[r.number] = m[1]
+		}
+	}
+	if len(replacedBy) == 0 {
+		t.Fatal("no Superseded record found: this check now guards nothing")
+	}
+
+	cited := 0
+	for _, root := range operatorFacing {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			// docs/design holds the records themselves and their two
+			// indexes; the indexes are checked by their own tests above.
+			if d.IsDir() && path == filepath.Join("../..", "docs", "design") {
+				return fs.SkipDir
+			}
+			if d.IsDir() || !citableFile(path) {
+				return nil
+			}
+			body, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, m := range designCitationRe.FindAllStringSubmatch(string(body), -1) {
+				cited++
+				current, superseded := replacedBy[m[1]]
+				if !superseded {
+					continue
+				}
+				t.Errorf(`%s cites design doc %s, which %s superseded.
+
+A reader following that number lands on a tombstone. Point it at %s, and at
+the section of it that decides what the sentence is about — the decision
+survived the renumbering, only the record that states it moved.`,
+					filepath.Clean(path), m[1], current, current)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
+	}
+	if cited == 0 {
+		t.Fatal("no design record cited outside docs/design: this check now guards nothing")
+	}
+}
+
+// citableFile is the prose and the configuration an operator reads —
+// markdown pages, and the Terraform module whose descriptions, outputs and
+// error messages are read straight off a `terraform` run.
+func citableFile(path string) bool {
+	switch filepath.Ext(path) {
+	case ".md", ".tf", ".example":
+		return true
+	}
+	return false
 }

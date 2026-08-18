@@ -80,7 +80,7 @@ Three of those choices are load-bearing:
   `ochakai list --source bigquery://my-project.shop.orders` returns the
   catalog entry *and* every insight or computation written against the same
   table. `list`, not `search`: a reverse lookup is a listing and has no
-  query to rank by, which is the whole of design doc 0062. That lookup only
+  query to rank by, which is the whole of design doc 0068 §2. That lookup only
   works if everyone spells the URI the same way — pick the spelling once
   and keep it.
 - **Query counts go in `sources[].usage_count`, never into ochakai's usage
@@ -99,7 +99,7 @@ between the read and the write loses the race instead of being erased by
 it.
 
 "The projection's own" is recognized by the `Ochakai-Producer` stamp
-every write here carries (`sync-bigquery-catalog/2`, design doc 0052) —
+every write here carries (`sync-bigquery-catalog/2`, design doc 0065 §4) —
 deliberately the stamp, not the account. A catalog grown on demand is
 refreshed by whoever needed it: A's morning run under A's account, B's
 under B's, the nightly one under the scheduler's. A rule keyed to one

@@ -33,6 +33,28 @@ last entry.
   `mcp-stdio` bridge changed; a bundle from an earlier release keeps
   working and simply stays blank.
 
+### Fixed
+
+- **`sandbox = true` could not be applied at all.** The Terraform module
+  widened the `allUsers` grant to cover the disposable sandbox but left
+  its plan-time precondition demanding `OCHAKAI_MODE=public`, so a
+  sandbox produced a plan that asked for the binding and then refused
+  itself. The precondition now names both postures that justify a public
+  binding — `public` and `sandbox` — and still refuses every other one.
+  Nothing changes for a deployment that was already applying.
+- **`terraform output` called a sandbox private.** `posture` fell through
+  to "private read-write" and `demo_url` returned null for a service that
+  `allUsers` can reach, so the output that exists to answer "is this one
+  public?" answered it wrongly for the one posture that is public *and*
+  writable. Both now follow the `allUsers` grant rather than
+  `var.public_read_only` alone.
+- **The recommended deployment pinned a nine-release-old image.**
+  `deploy/terraform/terraform.tfvars.example` is copied to
+  `terraform.tfvars` and applied as written, and its `image_tag` had
+  stayed at 0.17.0. It tracks the current release again, and
+  `TestReleaseVersionsAgree` now reads it — and the deployment guide's
+  hand-set `export VERSION=` — back against the changelog.
+
 ## [0.26.0] - 2026-08-18
 
 ### Changed

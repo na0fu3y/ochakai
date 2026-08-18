@@ -18,9 +18,9 @@ variable "region" {
 
 variable "image_tag" {
   description = <<-EOT
-    Release tag of ghcr.io/na0fu3y/ochakai to run, without the leading "v"
-    (for example "0.13.0"). Pinned rather than "latest" so that a redeploy is
-    a decision and shows up as a diff. See the releases page:
+    Release tag of ghcr.io/na0fu3y/ochakai to run, without the leading "v".
+    Pinned rather than "latest" so that a redeploy is a decision and shows up
+    as a diff. See the releases page for what to pin:
     https://github.com/na0fu3y/ochakai/releases
   EOT
   type        = string
@@ -59,7 +59,8 @@ variable "invoker_members" {
     "domain:your-org.example" / "user:..." / "serviceAccount:..." form. This
     is the entire access-control surface: whoever can reach ochakai can read
     and write everything, and ochakai itself authorizes nothing (design doc
-    0002). Empty by default, so a fresh apply reaches nobody but the deployer.
+    0065 §1). Empty by default, so a fresh apply reaches nobody but the
+    deployer.
   EOT
   type        = list(string)
   default     = []
@@ -129,8 +130,9 @@ variable "sandbox" {
 
 variable "public_read_only" {
   description = <<-EOT
-    The public read-only demo (OCHAKAI_MODE=public, design doc 0042).
-    This is the one posture where a publicly invokable ochakai is intended:
+    The public read-only demo (OCHAKAI_MODE=public, design doc 0066 §3).
+    The first of the two postures where a publicly invokable ochakai is
+    intended, and the read-only one:
     the module grants allUsers roles/run.invoker, so anyone with the URL can
     read the base with no Google account and no token.
 
@@ -155,7 +157,7 @@ variable "delegating_callers" {
   description = <<-EOT
     Callers allowed to forward an end user's identity with the
     Ochakai-On-Behalf-Of header (OCHAKAI_DELEGATING_CALLERS, design doc
-    0027). For applications that embed ochakai and serve many people;
+    0065 §3). For applications that embed ochakai and serve many people;
     without it every one of their users collapses into the application's one
     service account. Both identities are always recorded. The webui's own
     service account is added automatically when var.enable_webui and
@@ -251,7 +253,7 @@ variable "enable_vertex_embeddings" {
     Search is hybrid (trigram + vector, reciprocal rank fusion) using Vertex AI
     embeddings through the service identity — no API keys. On by default: this
     grants roles/aiplatform.user and enables the API, and ochakai finds the
-    project it runs in by itself (design doc 0053). It is what makes search work
+    project it runs in by itself (design doc 0080 §1.1). It is what makes search work
     on a Japanese knowledge base, where the trigram index degrades to a scan.
 
     Set it to false to run lexical-only: the role is not granted and
@@ -374,8 +376,8 @@ variable "webui_records_browser_user" {
     Record the person signed in to the browser as the author of their edits
     (`human:tanaka@… via process:<webui-sa>`) instead of the webui's own service
     account. Sets OCHAKAI_IAP_AUDIENCE on the webui and adds the webui's
-    service account to the server's delegating callers (design docs 0027,
-    0032). Once set, serve-ui refuses any request IAP did not sign, so a
+    service account to the server's delegating callers (design doc 0065
+    §§3, 5). Once set, serve-ui refuses any request IAP did not sign, so a
     misconfiguration surfaces immediately rather than as months of writes
     attributed to the wrong author.
   EOT

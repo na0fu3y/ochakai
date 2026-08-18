@@ -5,7 +5,7 @@ region     = "us-central1"
 
 # Pin a released version, not "latest", so a redeploy is a decision:
 # https://github.com/na0fu3y/ochakai/releases
-image_tag = "0.17.0"
+image_tag = "0.26.0"
 
 # Who can reach ochakai. This is the whole access-control surface — whoever
 # reaches it can read and write everything. Never allUsers.
@@ -41,7 +41,7 @@ invoker_members = [
 # read_only = true
 
 # The public read-only demo, and the only posture in which this module grants
-# allUsers (guide §5d, design doc 0042). Anyone with the URL reads the base
+# allUsers (guide §5d, design doc 0066 §3). Anyone with the URL reads the base
 # with no Google account. Safe only because of what comes with it: writes are
 # refused (this implies read_only) and no identity is read at all — the
 # Authorization header is ignored, every caller is human:anonymous. Do not use

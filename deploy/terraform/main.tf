@@ -10,18 +10,21 @@
 #     Postgres with Cloud SQL IAM database authentication, where the
 #     "password" is a short-lived IAM token fetched at connect time. If a
 #     change to this module ever needs a generated credential, the change is
-#     wrong for this project (design docs 0002, 0003).
+#     wrong for this project (design docs 0065, 0003).
 #
-#   * The service is not publicly invokable, with exactly one exception.
+#   * The service is not publicly invokable, with exactly two exceptions.
 #     ochakai performs no authorization of its own: it reads the caller
 #     identity Cloud Run has already verified and records it as provenance.
 #     Those headers only mean something behind Cloud Run's IAM check, so
 #     allUsers would not merely widen access, it would make provenance
-#     forgeable. The exception is var.public_read_only (design doc 0042),
-#     which grants allUsers only together with the flag that makes the
-#     deployment refuse every write and stop reading identity altogether —
-#     there is then no provenance to forge and no author to get wrong. A
-#     public binding from anywhere else in this module is a bug.
+#     forgeable. The exceptions are var.public_read_only (design doc 0066
+#     §3) and var.sandbox (design doc 0087), and each is a single variable
+#     rather than a combination: whichever one opens the service is also
+#     the one that stops it reading identity, so a deployment cannot end up
+#     public while still claiming to know who wrote what. Public read-only
+#     additionally refuses every write; a sandbox takes writes and declares
+#     that it will lose them. A public binding from anywhere else in this
+#     module is a bug.
 
 data "google_project" "this" {
   project_id = var.project_id
@@ -58,16 +61,16 @@ locals {
 
   iap_audience = "/projects/${data.google_project.this.number}/locations/${var.region}/services/${local.webui_name}"
 
-  # Public read-only implies read-only (design doc 0042): the server applies
-  # the implication itself and cannot be separated from it, so a publicly
-  # readable and writable ochakai is not a configuration it accepts. The
-  # module states the implication in the environment rather than leaving it
-  # to be read back off the running service, so the deployed configuration
+  # Public read-only implies read-only (design doc 0066 §3): the server
+  # applies the implication itself and cannot be separated from it, so a
+  # publicly readable and writable ochakai is not a configuration it accepts.
+  # The module states the implication in the environment rather than leaving
+  # it to be read back off the running service, so the deployed configuration
   # reads the same way the posture does.
-  # One word for the posture (design doc 0060): the module maps its two
+  # One word for the posture (design doc 0066 §1): the module maps its three
   # booleans onto the single OCHAKAI_MODE the server reads, and public
-  # wins because it is the stronger of the two — it is read-only plus
-  # believing nobody.
+  # wins over read-only because it is the stronger of the two — it is
+  # read-only plus believing nobody.
   # sandbox is checked first because it is the one posture that is
   # public *and* writable: read-only would silently win over it, and a
   # sandbox that cannot be written is the demo it exists to replace.
@@ -452,12 +455,14 @@ resource "google_cloud_run_v2_service_iam_member" "invokers" {
   member   = each.value
 }
 
-# The public read-only demo, and the only allUsers grant in this module
-# (design doc 0042). It is deliberately not something an operator can compose
-# out of parts: the same variable that opens the service is the one that makes
-# it refuse every write and stop reading identity, so "public" and "believes
-# nobody" cannot drift apart. A public writable ochakai would record authors
-# it has no way to know, which is worse than recording none.
+# The only allUsers grant in this module, shared by the two postures that
+# justify one: the public read-only demo (design doc 0066 §3) and the
+# disposable sandbox (design doc 0087). Neither is something an operator can
+# compose out of parts — the same variable that opens the service is the one
+# that stops it reading identity, so "public" and "believes nobody" cannot
+# drift apart. A public writable ochakai that still recorded authors would
+# name people it has no way to know, which is worse than naming none; the
+# sandbox takes writes precisely because it names nobody and keeps nothing.
 #
 # Domain Restricted Sharing (guide §6) rejects this binding, as it should —
 # a demo project is the place to lift it, not the org.
@@ -472,13 +477,16 @@ resource "google_cloud_run_v2_service_iam_member" "public_demo" {
 
   lifecycle {
     # Reads the environment the service actually carries rather than the
-    # variable that set it. Today the two cannot disagree; this exists for
+    # variables that set it. Today the two cannot disagree; this exists for
     # the edit that separates them, and it fails at plan time — an allUsers
     # binding must never outlive the posture that justifies it, not even for
-    # the length of an apply.
+    # the length of an apply. It lists both postures because the count above
+    # does: while it named only "public", var.sandbox produced a plan that
+    # asked for the binding and then refused itself, so the sandbox could
+    # not be deployed at all.
     precondition {
-      condition     = lookup(local.server_env, "OCHAKAI_MODE", "") == "public"
-      error_message = "Refusing to grant allUsers: the service is not running with OCHAKAI_MODE=public. Public is only safe while ochakai writes nothing and reads no identity (design doc 0042)."
+      condition     = contains(["public", "sandbox"], lookup(local.server_env, "OCHAKAI_MODE", ""))
+      error_message = "Refusing to grant allUsers: the service is running with neither OCHAKAI_MODE=public nor OCHAKAI_MODE=sandbox. Reaching everyone is only safe while ochakai reads no identity — writing nothing at all (design doc 0066 §3), or saying outright that what is written will be lost (design doc 0087)."
     }
   }
 }
