@@ -110,7 +110,7 @@ before the stamp existed are still recognized by account.
 ## `draft-from-query-history`
 
 ```sh
-bq query --format=json --nouse_legacy_sql '...' \
+bq query --max_rows=100000 --format=json --nouse_legacy_sql '...' \
   | python3 draft-from-query-history.py \
   | ochakai import -
 ```

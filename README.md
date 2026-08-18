@@ -158,10 +158,13 @@ page's counters read zero, by design.
 
 That shop is invented. Your own tables go in the same way, and ochakai
 never touches the warehouse to get them — you run the schema query with
-your own client and your own identity, and pipe the rows in:
+your own client and your own identity, and pipe the rows in. Raise your
+client's row limit while you do: `bq query` prints the first 100 rows and
+says nothing about the rest, so a dataset with more columns than that
+seeds only the tables the first 100 rows reached.
 
 ```sh
-bq query --format=json --nouse_legacy_sql \
+bq query --max_rows=100000 --format=json --nouse_legacy_sql \
   'SELECT table_schema, table_name, column_name, data_type, is_nullable, description
      FROM `your-project.your_dataset.INFORMATION_SCHEMA.COLUMNS`
     ORDER BY ordinal_position' \

@@ -26,7 +26,7 @@ It reads `INFORMATION_SCHEMA.JOBS` rows as JSON on stdin and writes an OKF
 bundle of drafts on stdout, one per query somebody keeps running:
 
 ```sh
-bq query --format=json --nouse_legacy_sql \
+bq query --max_rows=100000 --format=json --nouse_legacy_sql \
   'SELECT query, user_email, creation_time, referenced_tables
      FROM `region-us`.INFORMATION_SCHEMA.JOBS
     WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
@@ -46,6 +46,12 @@ It also makes the permission yours to have or not. Seeing anybody else's
 jobs needs `bigquery.jobs.listAll`; without it the history is your own
 queries, and the counts still look plausible — which is worse than no
 counts. Read the first line of the summary before the drafts.
+
+Your client's row limit does the same thing more quietly. `bq query`
+prints the first 100 rows unless `--max_rows` says otherwise and never
+mentions the ones it dropped, so 90 days of history arrives as the last
+100 jobs and almost nothing reaches `min_runs`. `jobs_read` in the
+receipt is the number to disbelieve when it is exactly 100.
 
 # There is no LLM in it
 

@@ -693,6 +693,10 @@ here. Every concept comes out as a draft, because a projected schema is a
 skeleton somebody still has to say something about — which is what the
 review queue is for.
 
+Raise your client's row limit when you run that query: `bq query` prints
+the first 100 rows unless --max_rows says otherwise, and a listing cut
+there looks exactly like a small dataset from here.
+
 Flags:
   -prefix string
     	the id prefix each concept is written under, e.g. tables/shop/orders (default "tables")
@@ -700,7 +704,7 @@ Flags:
     	the warehouse project or account the tables live in, written into each concept's resource address
 
 Examples:
-  bq query --format=json --nouse_legacy_sql \
+  bq query --max_rows=100000 --format=json --nouse_legacy_sql \
     'SELECT table_schema, table_name, column_name, data_type, is_nullable
        FROM `proj.dataset.INFORMATION_SCHEMA.COLUMNS` ORDER BY ordinal_position' |
     ochakai seed - | ochakai import -
