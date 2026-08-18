@@ -34,6 +34,23 @@ last entry.
   MCP resident-byte budget is untouched at 11,788 — and the CLI's
   `CLAUDE.md` already taught it.
 
+- **The read half of that loop now says where an answer came from.**
+  An agent that searches ochakai, reads a definition and answers a
+  person had no citation convention: nothing told it to name the
+  concept it used, or whether a human had confirmed that concept. A
+  verified definition and a guess assembled on the spot then arrive
+  wearing the same face, and the reader who spots a wrong number has
+  no id to open, to re-verify, or to report failed against.
+  `examples/claude-code/CLAUDE.md` now asks for both, and the recall
+  hook carries one sentence of it, because an instruction only works
+  where the agent still remembers it. Two claims about the CLI are
+  corrected in the same pass: the search line advertised a score
+  column, which design doc 0110 dropped, and both layers said to judge
+  a draft by `created_by`, which is not on a search hit at all — it is
+  on the full read. **What to do about it**: nothing, unless you
+  copied `examples/claude-code` into your own repository, where the
+  paragraph is worth copying again.
+
 - **BREAKING (deployment): a variable ochakai does not read stops the
   start** (design doc 0112). `ochakai serve` and `ochakai serve-ui` now
   refuse to start when the environment carries a variable beginning
