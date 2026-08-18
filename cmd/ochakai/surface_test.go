@@ -652,6 +652,68 @@ func TestConfigKnowsEveryVariableTheSourceReads(t *testing.T) {
 	}
 }
 
+// The same question asked of the readers that are not Go. ochakai ships a
+// shell hook and a python job that read their own variables in the same
+// namespace, and a start refuses that namespace by prefix — so a name
+// added to one of them and left out of config.KnownElsewhere is a name
+// that stops the server of anybody who exported it, naming ochakai's own
+// documentation as the mistake (design doc 0112 §4).
+//
+// examples/ is what a reader copies; .claude/ is this repository's own
+// copy of the hook, and it runs on the machine that also starts the
+// dogfood instance. Prose counts as a reader here: a page that teaches a
+// spelling is what puts it in somebody's shell, which is how
+// OCHAKAI_INSECURE_DEV — folded into OCHAKAI_MODE in 0.17.0 — turned up
+// still being taught by an example.
+func TestConfigKnowsWhatTheShippedReadersRead(t *testing.T) {
+	nameRe := regexp.MustCompile(`OCHAKAI_[A-Z0-9_]+`)
+	inGo := map[string]bool{}
+	for _, name := range config.Known {
+		inGo[name] = true
+	}
+	seen := map[string]bool{}
+	for _, root := range []string{"../../examples", "../../.claude"} {
+		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			for _, name := range nameRe.FindAllString(string(content), -1) {
+				// The harness's half is the prefix config keeps for it,
+				// spelled here rather than exported: a test asking what
+				// the shipped readers read should not be able to widen
+				// the carve-out it is checking against.
+				if !inGo[name] && !strings.HasPrefix(name, "OCHAKAI_TEST_") {
+					seen[name] = true
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk %s: %v", root, err)
+		}
+	}
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	elsewhere := append([]string(nil), config.KnownElsewhere...)
+	sort.Strings(elsewhere)
+	if !equalStrings(names, elsewhere) {
+		t.Errorf("the OCHAKAI_ names the shipped readers use and config.KnownElsewhere disagree:\n"+
+			" readers: %v\n list:    %v\n"+
+			"A name the readers use and the list does not is one a start refuses; a name the "+
+			"list has and nothing uses is one nothing reads any more.", names, elsewhere)
+	}
+}
+
 // The harness keeps OCHAKAI_TEST_*, and a start reads nothing under it
 // rather than refusing it (design doc 0112 §4). That carve-out is only
 // safe while it stays the harness's: a shipped read under the prefix

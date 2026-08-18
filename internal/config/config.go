@@ -265,12 +265,43 @@ var Known = []string{
 	"OCHAKAI_URL",
 }
 
+// KnownElsewhere is the rest of the answer to "does ochakai read this?":
+// names nothing in the binary reads, because the reader ochakai ships for
+// them is not Go. OCHAKAI_RECALL_LIMIT is the recall hook in
+// examples/claude-code (and this repository's own copy under .claude);
+// OCHAKAI_ID_TOKEN is the python job in examples/bigquery-catalog.
+//
+// They belong here for the reason OCHAKAI_URL belongs in Known, which no
+// server reads either: a shell that exported a variable for something
+// ochakai ships is not a misconfigured deployment, and a start that
+// refuses it names ochakai's own documentation as a mistake. The refusal
+// matches the namespace by prefix while Known is built from the calls in
+// the Go, and that difference is exactly the gap these two fall into.
+//
+// A prefix would have been the cheaper carve-out and is the wrong shape
+// here: OCHAKAI_RECALL_LMIT typed one letter short would go through it,
+// which is the failure design doc 0112 exists to catch, and
+// OCHAKAI_ID_TOKEN has no prefix to sit behind. So this is a list, read
+// back out of the shipped readers rather than trusted —
+// TestConfigKnowsWhatTheShippedReadersRead fails when the two disagree
+// (design doc 0035, the habit Known already gets, extended past Go).
+//
+// The error message stays the Known list alone. What an operator is
+// configuring when a start refuses them is a server, and a hook's
+// variable offered as a suggestion there would be a worse answer than
+// none.
+var KnownElsewhere = []string{
+	"OCHAKAI_ID_TOKEN",
+	"OCHAKAI_RECALL_LIMIT",
+}
+
 // namespace is the prefix ochakai claims, and testPrefix is the part of
-// it this repository's own harness keeps: OCHAKAI_TEST_DATABASE_URL is
-// exported across `scripts/check --db`, so a process started under it
-// must not read it as a misconfiguration. Nothing the program ships
-// reads anything under testPrefix, which TestNothingShippedReadsATestVariable
-// holds — the exception is checked rather than named and trusted.
+// it this repository's own harness keeps: OCHAKAI_TEST_DATABASE_URL and
+// OCHAKAI_TEST_SMOKE_REQUIRED are exported across `scripts/check --db`
+// and CI's browser smoke, so a process started under one must not read it
+// as a misconfiguration. Nothing the program ships reads anything under
+// testPrefix, which TestNothingShippedReadsATestVariable holds — the
+// exception is checked rather than named and trusted.
 const (
 	namespace  = "OCHAKAI_"
 	testPrefix = "OCHAKAI_TEST_"
@@ -280,8 +311,11 @@ const (
 // does not read, in the order they would be listed back to an operator.
 // environ is passed in rather than read here so a test can hand it one.
 func unknownVars(environ []string) []string {
-	known := make(map[string]bool, len(Known))
+	known := make(map[string]bool, len(Known)+len(KnownElsewhere))
 	for _, name := range Known {
+		known[name] = true
+	}
+	for _, name := range KnownElsewhere {
 		known[name] = true
 	}
 	var unknown []string

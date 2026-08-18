@@ -54,7 +54,8 @@ ochakai does not read OCHAKAI_VERTEX_PROJECT; it reads OCHAKAI_ADMINS / …
   `TestConfigKnowsEveryVariableTheSourceReads` が落ちる
   ([0035](0035-verifiability.md):規約を信じず、外から不変条件を読む)。
   一覧に載せ忘れた変数は、**次のデプロイが設定できない変数**になるので、
-  この検査は親切ではなく必須である。
+  この検査は親切ではなく必須である。**読み手が Go でない変数のための
+  二本目の一覧が隣にある** — `config.KnownElsewhere`、§4.2。
 
 `PORT` と `NO_COLOR` は入らない。前者は Cloud Run の綴りで、後者は
 `NO_COLOR` を読むすべてのプログラムの綴りである
@@ -73,17 +74,67 @@ ochakai does not read OCHAKAI_VERTEX_PROJECT; it reads OCHAKAI_ADMINS / …
 安い**。これは 0066 §4 の判断と同じ形で、対象が値から名前に移った
 だけである。
 
-## 4. 名前空間の半分は、この repo 自身の harness のもの
+## 4. 名前空間には、サーバが読まない住人が二種類いる
+
+「ochakai が読まない」は「誰も読まない」ではない。この名前空間には、
+`serve` が一度も見ないのに **ochakai のために置かれている**変数が二種類
+いて、どちらも設定の間違いではない。扱いが違うのは、間違えられ方が違う
+からである。
+
+### 4.1 harness の半分 — 接頭辞で切る
 
 `OCHAKAI_TEST_` で始まる変数は読み飛ばす。`scripts/check --db` は
 `OCHAKAI_TEST_DATABASE_URL` を export したままテスト全体を走らせるので、
-これを設定の間違いと読む検査は、それを入れた PR 自身を落とす。
+これを設定の間違いと読む検査は、それを入れた PR 自身を落とす。CI の
+ブラウザ smoke が読む二つ(`OCHAKAI_TEST_SMOKE_REQUIRED` /
+`_CDP_PORT`)も同じ理由でこの下にいる — 一段前の step でそれを export
+していれば、smoke が叩くはずのサーバが起動しない。
+
+接頭辞で足りるのは、**この下には出荷物の読み手が一人もいない**からで
+ある。打ち間違いが素通りする穴ではあるが、素通りする先に製品の挙動が
+無い。
 
 **名指しの例外は物を隠せる場所なので、信じずに検査する**(`internal/testdb`
 が既に同じ扱いを受けている) — 出荷されるコードが `OCHAKAI_TEST_` の
 下を読んでいれば `TestNothingShippedReadsATestVariable` が落ちる。
 出荷コードがそこを読めば、それは**運用者が間違えても言われない設定**に
 なる。この検査だけが目を逸らしている場所だからである。
+
+### 4.2 Go でない読み手の半分 — 一覧で切る
+
+ochakai が配っているのは binary だけではない。`examples/claude-code` の
+想起フック(shell)は `OCHAKAI_RECALL_LIMIT` を読み、
+`examples/bigquery-catalog` の python job は `OCHAKAI_ID_TOKEN` を読む。
+どちらも README と skill が利用者に export させている名前であり、
+**その shell で `ochakai serve` を上げると、ochakai 自身の説明書が
+「ochakai が読まない変数」として名指される**。手元でサーバを上げる手順
+は自分たちの dogfood 手順そのものなので、これは想像上の衝突ではない。
+
+前例は既に `Known` の側にある。`OCHAKAI_URL` はサーバが一度も読まない
+のに一覧にいて、理由は「client のために export した shell は誤設定の
+サーバではない」である。この二つはその同類で、違うのは読み手が Go で
+ないことだけ — `Known` がソースの `os.Getenv` から作られるのに対し、
+拒否は接頭辞で当たる。その差にちょうど落ちる。
+
+そこで `config.KnownElsewhere` を `Known` の隣に置き、判定は和集合で
+行う。**接頭辞ではなく一覧なのは、ここが 4.1 の裏返しだからである**:
+この下には読み手が実在するので、`OCHAKAI_RECALL_LMIT` と一文字落とした
+綴りは本書が捕まえるべき失敗そのものであり、接頭辞で切ればそれが素通り
+する。`OCHAKAI_ID_TOKEN` にはそもそも隠れる接頭辞が無く、接頭辞に寄せる
+なら利用者が export している名前の改名になる — 環境変数に窓は無い(§5)
+ので、それは黙って壊れる側に振れる。
+
+一覧は信じずに検査する。`examples/` と `.claude/` を読み戻し、そこに
+現れる `OCHAKAI_` の綴りが「Go が読む(`Known`)/ ここに載っている /
+harness の(§4.1)」のどれでもなければ
+`TestConfigKnowsWhatTheShippedReadersRead` が落ちる。散文も読み手に
+数える — 綴りを教えるページこそが、それを誰かの shell に置くものだから
+である。実際この検査は、0.17.0 で `OCHAKAI_MODE` に畳まれた
+`OCHAKAI_INSECURE_DEV` を、まだ教えている例の中から見つけた。
+
+エラーメッセージが並べるのは `Known` だけにする。拒否されている人が
+設定しているのはサーバであり、そこにフックの変数が候補として並ぶのは、
+何も並ばないより悪い答えである。
 
 ## 5. 環境変数に窓は無い
 
@@ -109,7 +160,9 @@ ochakai does not read OCHAKAI_VERTEX_PROJECT; it reads OCHAKAI_ADMINS / …
 - **MCP / Web UI** — 変化なし。
 - **表面の数** — `ENV` は 15 のまま。名前は一つも増えず、減ってもいない。
   増えたのは規則であり、[docs/surface.md](../surface.md) が数えるのは
-  名前である(0066 §4 が VOCAB について同じことを書いている)。
+  名前である(0066 §4 が VOCAB について同じことを書いている)。§4.2 の
+  一覧も数を動かさない — あの節が数えているのは製品の `os.Getenv` 呼び出し
+  であって、`KnownElsewhere` は定義上その呼び出しが存在しない名前である。
 
 ## 7. これは BREAKING である
 
@@ -128,6 +181,9 @@ ochakai does not read OCHAKAI_VERTEX_PROJECT; it reads OCHAKAI_ADMINS / …
   だが表は永久に伸び(env に窓は無い、§5)、しかも**打ち間違いは一つも
   捕まらない** — 起きる頻度が高いのはそちらである。
 - **CLI にも同じ検査をする。** §6。
+- **出荷している読み手の名前も接頭辞で切る**(`OCHAKAI_RECALL_` のように)。
+  §4.2。安いが、読み手が実在する下に穴を開けることになり、打ち間違いが
+  素通りする。`OCHAKAI_ID_TOKEN` は接頭辞に載せるために改名が要る。
 - **許可する名前を設定ファイルで宣言できるようにする。** 設定を設定する
   ものが増え、No FDE(C4)から遠ざかる。
 - **`OCHAKAI_TEST_DATABASE_URL` を一覧に一本足す。** harness の名前が

@@ -412,6 +412,36 @@ func TestTheHarnessNamespaceIsNotAMisconfiguration(t *testing.T) {
 	}
 }
 
+// A variable ochakai ships a reader for, where the reader is not this
+// program: the recall hook in examples/claude-code and the python job in
+// examples/bigquery-catalog (design doc 0112 §4). A shell that exported
+// one and then started a server is not a misconfigured deployment, and
+// refusing it would name ochakai's own documentation as the mistake.
+//
+// A typo in one of those names is still refused, which is why they are a
+// list and not a prefix.
+func TestAShippedReadersVariableIsNotAMisconfiguration(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x")
+	for _, name := range KnownElsewhere {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv(name, "8")
+			if _, err := FromEnv(); err != nil {
+				t.Errorf("err = %v, want a start: %s is read by something ochakai ships", err, name)
+			}
+		})
+	}
+	t.Run("a typo in one of them is not", func(t *testing.T) {
+		t.Setenv("OCHAKAI_RECALL_LMIT", "8")
+		_, err := FromEnv()
+		if err == nil {
+			t.Fatal("OCHAKAI_RECALL_LMIT was accepted; a list is kept instead of a prefix so that it is not")
+		}
+		if !strings.Contains(err.Error(), "OCHAKAI_RECALL_LMIT") {
+			t.Errorf("err = %v, want the misspelling named", err)
+		}
+	})
+}
+
 // What the check reads is a process environment, which carries every
 // other program's variables and, on some systems, an entry with no "=".
 func TestUnknownVarsReadsOnlyOchakaisNamespace(t *testing.T) {

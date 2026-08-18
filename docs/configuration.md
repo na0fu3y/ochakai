@@ -84,6 +84,14 @@ Cloud Run では起動しないリビジョンにトラフィックは移らな�
 リビジョンが答え続ける。名前を消せば次のデプロイは通る。クライアント側の
 コマンドはこの検査をしない。
 
+**素通りする名前が二種類ある。** この repo 自身の harness が使う
+`OCHAKAI_TEST_*` と、ochakai が配っているものが読む二つ —
+想起フックの `OCHAKAI_RECALL_LIMIT`
+([examples/claude-code](../examples/claude-code/README.md))と、BigQuery
+カタログの job の `OCHAKAI_ID_TOKEN` である。どちらもサーバーは読まない
+が、export した shell からサーバーを上げるのは誤設定ではないので止めない
+(0112 §4)。打ち間違いは素通りしない — 一覧に載っている綴りだけである。
+
 <a id="authentication-has-no-configuration"></a>
 
 ## 認証に設定はない
