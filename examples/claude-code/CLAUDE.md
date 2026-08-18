@@ -24,9 +24,10 @@ ochakai はメトリクスの定義、attested computation(sanctioned な SQL。
 学んだことを書き戻すこと。
 
 - `ochakai search "<question or keyword>" [--type '<Type>'] [--trust human-reviewed]`
-  — データの問いはここから始める。1 行 1 ヒット: score、uri、status、
-  title。検証済みの concept は信用してよい。`draft` の concept は
-  provenance で判断する(`--json` が `created_by` を出す)。読む価値の
+  — データの問いはここから始める。1 行 1 ヒット: uri、status、title。
+  検証済みの concept は信用してよい(`--json` の各ヒットが `trust` と
+  `verified_at` を持つ)。`draft` の concept は provenance で判断する —
+  誰が書いたかはヒットには無いので、下の get の stderr で読む。読む価値の
   ある hit は下の get で全文を取る。
 - `ochakai get <id>` — concept の全文を markdown(YAML frontmatter +
   本文)で。stderr の `linked from:` 行は、この concept を本文から指す
@@ -59,6 +60,25 @@ ochakai はメトリクスの定義、attested computation(sanctioned な SQL。
 - `ochakai export <dir>` — ナレッジベース全体を markdown としてスナップ
   ショットする。`ochakai import <dir>` はバンドルを読み戻す(どの OKF
   バンドルでもよい)。
+
+**答えるときは、どの concept から来たかを言う。** ナレッジベースから
+持ってきた定義・数え方・SQL は、**concept の id と、それが人に確認された
+ものかどうか**を添えて答えに書くこと —「売上は税と送料を除く
+(`metrics/revenue`、2026-07-14 に human-reviewed)」のように。値は
+`ochakai get` が stderr に出す一行(`verified by … on …; created by …`)
+にあり、`ochakai search --json` の各ヒットは `trust` と `verified_at` を
+持つ。
+
+理由は二つある。**読んだ人が確かめられる** — 引用が無ければ、人が検証
+した定義と、あなたがその場で組み立てた推測が、答えの中で同じ顔をして
+並ぶ。そして **直せる場所が分かる**: 定義が古いと分かったとき人が開くのは
+その concept であり、`ochakai report <id> failed` を打てるのも id を
+知っているときだけである。引用は、上の report の習慣を**人間の側にも**
+使えるようにする一行である。
+
+**確認されていないものは、そう言う。** `draft` の concept を引くのは
+構わない — 黙って引くのが間違いである。「まだ draft」と書けば、読んだ人は
+その一行を自分で確かめるかどうかを決められる。
 
 ここに挙げた以外の型を使ってよいし(任意のスラグが通る — 例
 `runbook/…`)、関連するナレッジをまとめるために id は階層的でよい
