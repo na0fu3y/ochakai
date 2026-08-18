@@ -905,7 +905,7 @@ gcloud run services add-iam-policy-binding ochakai --region=$REGION \
 
 ### シードする
 
-[examples/demo](../../examples/demo) は読ませるために作られた 10 個の
+[examples/demo](../../examples/demo) は読ませるために作られた 11 個の
 concept を持つナレッジベースである: リンクされた concept、混在した
 type、そして `sort=usage` が何かを意味するだけの利用実績。サービスが
 まだ非公開のうちに import せよ。認証の方法はデプロイガイド §5 とまったく
@@ -917,10 +917,10 @@ git clone --depth 1 https://github.com/na0fu3y/ochakai && cd ochakai
 go run ./cmd/ochakai import examples/demo    # $OCHAKAI_URL は上で
 ```
 
-その 10 個の concept は `human:you@your-org.example` として記録される —
+その 11 個の concept は `human:you@your-org.example` として記録される —
 このベースが受け取る最後の provenance であり、切り替えの後に訪問者が
 見る唯一の `created_by` である。(この手順はローカルサーバーに対して
-リハーサル済みである: 書き込み可能な状態で import — 10 created、0
+リハーサル済みである: 書き込み可能な状態で import — 11 created、0
 skipped — それから `OCHAKAI_MODE=public` で再起動すると、読み取りは
 匿名で応答し、すべての書き込みが拒否される。Cloud Run が足すのは IAM の
 binding だけである。)
