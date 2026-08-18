@@ -337,6 +337,20 @@ paths:
                     description: >
                       Where the next page of this listing resumes. Absent
                       on the last page, and on every search.
+                  degraded:
+                    type: boolean
+                    enum: [true]
+                    description: >
+                      This ranking is worse than this deployment
+                      ordinarily gives: the query could not be embedded,
+                      so only the lexical list ranked it and a concept
+                      that matches by meaning rather than by word is
+                      missing from `hits` (design doc 0114). Present only
+                      when that happened — a deployment with no embedder
+                      configured ranks lexically every time, which is its
+                      answer rather than a fallback from one, and never
+                      sets this. A listing never sets it either: there is
+                      no query to embed.
                 required: [hits]
               examples:
                 search:

@@ -187,6 +187,19 @@ func onlyAdditionsOutsideTheFreeze(t *testing.T, want, got string) bool {
 		if strings.HasPrefix(line, "components/responses/") {
 			continue
 		}
+		// The third place a response schema can live, and the one 0082
+		// §3 did not name: written inline under an operation's
+		// `responses`, which is where the search and listing answer is
+		// spelled. It is response-only by construction as surely as a
+		// responses component is — the fingerprint puts " response "
+		// in the line only for a node reached through `responses`, and
+		// a requestBody has no spelling that reaches one — so it earns
+		// the same rule (design doc 0114 §5). Without this arm the rule
+		// reached two of three places, and the third could not gain a
+		// field a client ignores without claiming a security defect.
+		if isInlineResponseSchema(line) {
+			continue
+		}
 		if isOptionalQueryParam(line) {
 			continue
 		}
@@ -196,6 +209,26 @@ func onlyAdditionsOutsideTheFreeze(t *testing.T, want, got string) bool {
 		}
 	}
 	return true
+}
+
+// isInlineResponseSchema reports whether a line names a node inside an
+// operation's own `responses` — "GET /api/v1/search response 200 content
+// application/json.degraded" and the like.
+//
+// The marker is the fingerprint's own word. Only a node reached through
+// `responses` is printed with " response " after the address, and the
+// address ahead of it is a URL path, which cannot contain a space; so a
+// request-side line cannot spell this and the test does not have to walk
+// the contract again to be sure. That is the same argument the
+// components/responses arm makes, applied to the other place a response
+// schema is written without a name (design doc 0114 §5).
+func isInlineResponseSchema(line string) bool {
+	method, rest, ok := strings.Cut(line, " ")
+	if !ok || !slices.Contains(fingerprintedMethods, method) {
+		return false
+	}
+	_, rest, ok = strings.Cut(rest, " ")
+	return ok && strings.HasPrefix(rest, "response ")
 }
 
 // isOptionalQueryParam reports whether a line declares a query parameter
@@ -824,6 +857,15 @@ func TestOnlyResponseAdditionsRefusesEverythingElse(t *testing.T) {
 			base + "\nGET /api/v1/stats query weeks required=true type=integer", false},
 		{"an added request header", base,
 			base + "\nGET /api/v1/stats header Ochakai-Window ref=Window", false},
+		// The third place a response schema lives: inline under the
+		// operation, with no component to run the reachability walk
+		// against (design doc 0114 §5).
+		{"an added property on an inline response schema", base,
+			base + "\nGET /api/v1/search response 200 content application/json.degraded required=false type=boolean", true},
+		{"an added inline response schema on a new operation", base,
+			base + "\nGET /api/v1/new\nGET /api/v1/new response 200 content application/json.x required=false type=string", false},
+		{"a request body property is not a response one", base,
+			base + "\nPUT /api/v1/access requestBody content application/json.rules required=true type=array", false},
 		{"an added path parameter", base,
 			base + "\nGET /api/v1/stats path id required=false type=string", false},
 		{"nothing at all", base, base, false},

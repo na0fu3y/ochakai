@@ -1,8 +1,7 @@
 # ochakai 設計ドキュメント 0080: 検索が何を融合し、このデプロイがどう埋め込むか
 
 Status: Accepted(2026-08-07)。**検索と埋め込みの現行ドキュメント。**
-[0073](0073-search-and-when-embeddings-apply.md) を Superseded にし、
-[0078](0078-one-variable-says-how-it-embeds.md) を Superseded にする。
+[0073](0073-search-and-when-embeddings-apply.md) と [0078](0078-one-variable-says-how-it-embeds.md) を Superseded にする。
 **二つが決めたことのうち、動くのは埋め込みのリージョンひとつだけである**
 (§0・§1.2)。0073 が引き継いでいた
 [0020](0020-attachment-search.md) と [0053](0053-embeddings-by-default.md)
@@ -11,6 +10,7 @@ Status: Accepted(2026-08-07)。**検索と埋め込みの現行ドキュメン�
 順位に徹することは [0067](0067-four-faces-and-what-they-decline.md) §4、
 住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6 が持つ。入力窓に収まらなかった
 ベクトルがそう名乗ることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)(§3・§7 を改訂)、ファイルのベクトルをパスで引くことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)(§5 を改訂)。
+**クエリを埋め込めず §1 の融合が片肺で走ったとき、応答がそう名乗ることは [0114](0114-a-degraded-ranking-says-so.md)**(何を融合するかは動かない)。
 Date: 2026-08-07
 
 ## 0. この記録が決めたこと

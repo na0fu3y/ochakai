@@ -117,6 +117,7 @@ GET /api/v1/search query type[] ref=Type
 GET /api/v1/search response 200
 GET /api/v1/search response 200 content application/json type=object
 GET /api/v1/search response 200 content application/json.cursor required=false type=string
+GET /api/v1/search response 200 content application/json.degraded required=false type=boolean enum=["true"]
 GET /api/v1/search response 200 content application/json.hits required=true type=array
 GET /api/v1/search response 200 content application/json.hits[] ref=SearchHit
 GET /api/v1/search response 200 header Ochakai-Read-Only ref=ReadOnly

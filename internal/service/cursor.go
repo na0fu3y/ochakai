@@ -22,6 +22,12 @@ import (
 type Listing struct {
 	Hits   []domain.SearchHit `json:"hits"`
 	Cursor string             `json:"cursor,omitempty"`
+	// Degraded says this ranking is worse than this deployment ordinarily
+	// gives: the query could not be embedded, so it was ranked lexically
+	// alone (design doc 0114). Only a search can carry it — a listing is
+	// a total order with nothing to embed — and it is absent rather than
+	// false when the answer is the whole answer.
+	Degraded bool `json:"degraded,omitempty"`
 }
 
 // cursorVersion prefixes the encoded position so a later change of shape

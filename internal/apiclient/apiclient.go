@@ -226,6 +226,11 @@ type SearchParams struct {
 type SearchResult struct {
 	Hits   []domain.SearchHit `json:"hits"`
 	Cursor string             `json:"cursor,omitempty"`
+	// Degraded says the server ranked this search without the embeddings
+	// it has: lexical only, so a concept that matches by meaning and not
+	// by word is missing from Hits (design doc 0114). Only a search sets
+	// it; a listing has nothing to embed.
+	Degraded bool `json:"degraded,omitempty"`
 }
 
 func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, error) {

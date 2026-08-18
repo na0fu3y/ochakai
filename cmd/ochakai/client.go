@@ -344,6 +344,16 @@ func cmdSearch(ctx context.Context, args []string) error {
 		return printJSON(page)
 	}
 	printHits(page, "")
+	// The server ranked this without the embeddings it has, so these hits
+	// are worse than this deployment ordinarily gives (design doc 0114).
+	// On stderr, next to the listing's "more concepts" note and for the
+	// same reason: stdout stays one hit per line, so a pipe reads the
+	// same bytes whether or not the ranking degraded (design doc 0111).
+	if page.Degraded {
+		fmt.Fprintln(os.Stderr,
+			"note: the query could not be embedded, so this ranking is lexical only — "+
+				"a concept that matches by meaning and not by word is missing from it")
+	}
 	return nil
 }
 

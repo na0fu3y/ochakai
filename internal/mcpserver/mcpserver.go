@@ -286,7 +286,9 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			"excluded unless you pass rejected=true — ask for them to check whether a proposal " +
 			"was already turned down.\n" +
 			"Ranking, so it ends at limit and has no page two: a search that needs more is one " +
-			"that needs narrowing. To walk a whole feed instead, use list_concepts.",
+			"that needs narrowing. To walk a whole feed instead, use list_concepts.\n" +
+			"degraded=true in the answer means the query could not be embedded and this ranking " +
+			"is lexical only: thin or odd results are the deployment, not your question.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in searchIn) (*mcp.CallToolResult, searchOut, error) {
 		// SearchOrList routes an empty query with a source filter to a
 		// listing before it ever checks that search needs a query (0096
@@ -302,7 +304,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 		if err != nil {
 			return nil, searchOut{}, err
 		}
-		return nil, searchOut{Hits: page.Hits, Cursor: page.Cursor}, nil
+		return nil, searchOut{Hits: page.Hits, Degraded: page.Degraded}, nil
 	}))
 
 	// The other half of the same wire operation, as its own tool: a
@@ -324,18 +326,18 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			"alone does not clear this feed, because the date is the writer's declaration and " +
 			"only an edit changes it.\n" +
 			"Omit sort with source set to list what derives from that material instead.",
-	}, tool(svc, func(ctx context.Context, _ domain.Actor, in listIn) (*mcp.CallToolResult, searchOut, error) {
+	}, tool(svc, func(ctx context.Context, _ domain.Actor, in listIn) (*mcp.CallToolResult, listOut, error) {
 		f := in.filter()
 		if in.Sort == "" && f.Source == "" {
-			return nil, searchOut{}, service.Invalidf(
+			return nil, listOut{}, service.Invalidf(
 				"list_concepts needs sort (%s) or source; to search by text, use search_concepts",
 				strings.Join(domain.ListSorts, ", "))
 		}
 		page, err := svc.SearchOrList(ctx, "", in.Sort, in.Cursor, f, in.Limit)
 		if err != nil {
-			return nil, searchOut{}, err
+			return nil, listOut{}, err
 		}
-		return nil, searchOut{Hits: page.Hits, Cursor: page.Cursor}, nil
+		return nil, listOut{Hits: page.Hits, Cursor: page.Cursor}, nil
 	}))
 
 	// get_context is not a tool (design doc 0108). The one-call pack —
@@ -581,7 +583,27 @@ type listIn struct {
 	Cursor string `json:"cursor,omitempty" jsonschema:"resume: pass back the cursor the last page returned, with the same sort and filters"`
 }
 
+// searchOut is a ranking's answer and listOut is a listing's. They are
+// two types because the fields are not the same ones — the split 0096
+// made of the tools, finished on the answers. A search never pages
+// (design doc 0050 §2.2), so a cursor on its schema was a field the
+// server could not write there; a listing embeds nothing, so `degraded`
+// on its schema would be the same mistake in the other direction.
 type searchOut struct {
+	Hits []domain.SearchHit `json:"hits"`
+	// Degraded is design doc 0114: this deployment embeds and this
+	// ranking did not, so the caller holds a worse answer than the same
+	// question ordinarily gets here.
+	//
+	// No jsonschema tag, and the word is named in the tool's description
+	// instead. This server declares no output schema (residentbytes_test
+	// counts both halves precisely because one day it might), so a tag
+	// here would define the field for nobody: the description is the only
+	// text about an answer that reaches the agent before it reads one.
+	Degraded bool `json:"degraded,omitempty"`
+}
+
+type listOut struct {
 	Hits []domain.SearchHit `json:"hits"`
 	// Cursor is present only when a listing has more behind this page;
 	// its absence is the end (design doc 0050 §2.3 — no total is given).

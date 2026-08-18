@@ -165,7 +165,7 @@ func TestAttachmentSearchIntegration(t *testing.T) {
 
 	// The Japanese query shares no fragment with any of these entries or
 	// filenames; only the attachment vector can tell them apart.
-	hits, err := svc.Search(ctx, query, store.Filter{Types: []domain.Type{typ}}, 10)
+	hits, _, err := svc.Search(ctx, query, store.Filter{Types: []domain.Type{typ}}, 10)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

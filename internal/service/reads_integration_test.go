@@ -52,7 +52,7 @@ func TestSearchRecordsUsageIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hits, err := svc.Search(httpauth.WithActor(ctx, actor), id, store.Filter{}, 5)
+	hits, _, err := svc.Search(httpauth.WithActor(ctx, actor), id, store.Filter{}, 5)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

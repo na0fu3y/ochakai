@@ -377,7 +377,7 @@ func scoreGoldenSet(t *testing.T, ctx context.Context, svc *Service, prefix, con
 	filter := store.Filter{Prefixes: []string{prefix}}
 	found := 0
 	for _, c := range evalCases {
-		hits, err := svc.Search(ctx, c.query, filter, evalK)
+		hits, _, err := svc.Search(ctx, c.query, filter, evalK)
 		if err != nil {
 			t.Fatalf("search %q: %v", c.query, err)
 		}
