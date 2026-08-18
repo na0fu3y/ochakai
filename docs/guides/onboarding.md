@@ -55,12 +55,18 @@ BigQuery カタログの初日の全手順は
 スキーマは自分で撃って、答えを渡す。ochakai は倉庫に接続しない:
 
 ```sh
-bq query --format=json --nouse_legacy_sql \
+bq query --max_rows=100000 --format=json --nouse_legacy_sql \
   'SELECT table_schema, table_name, column_name, data_type, is_nullable, description
      FROM `your-project.your_dataset.INFORMATION_SCHEMA.COLUMNS`
     ORDER BY ordinal_position' \
   | ochakai seed --project your-project - | ochakai import -
 ```
+
+**`--max_rows` は省けない。** `bq query` が既定で表示するのは先頭 100 行
+だけで、打ち切ったことは何も言わない — カラムが合計 100 本を超える
+データセットは、エラーも警告も無しに一部のテーブルだけが入る。行数を
+数えるのは投影の前であり、`seed` が最後に出す「seeded N tables」の N を
+自分のテーブル数と突き合わせるのが、その場でできる確認である。
 
 **全件 draft で着地する。** 投影されたスキーマは骨格であって、まだ
 ナレッジではない([0085](../design/0085-the-empty-base-and-what-fills-it.md) §3)。

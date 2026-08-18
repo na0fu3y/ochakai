@@ -23,11 +23,16 @@ receipt も要らない — 自分で撃ったクエリの答えを `ochakai see
 draft の OKF バンドルになって出てくる([0085](../../docs/design/0085-the-empty-base-and-what-fills-it.md)):
 
 ```sh
-bq query --format=json --nouse_legacy_sql \
+bq query --max_rows=100000 --format=json --nouse_legacy_sql \
   'SELECT table_schema, table_name, column_name, data_type, is_nullable
      FROM `proj.dataset.INFORMATION_SCHEMA.COLUMNS` ORDER BY ordinal_position' |
   ochakai seed --project proj - | ochakai import -
 ```
+
+`--max_rows` はここでは飾りではない。`bq query` は既定で先頭 100 行しか
+出さず、打ち切りを何も言わない — カラムが 100 本を超えるデータセットは、
+黙って一部のテーブルだけが入る。`seed` の「seeded N tables」を自分の
+テーブル数と突き合わせること。
 
 `seed` もウェアハウスには接続しない — 撃つのはあなたの `bq` であり、
 ochakai が受け取るのはその出力だけである。出てくる draft の中身を
@@ -105,7 +110,7 @@ verify すること — それはちょうど、IAM ロールを実際に付与�
 答えをパイプで渡す:
 
 ```sh
-bq query --format=json --nouse_legacy_sql \
+bq query --max_rows=100000 --format=json --nouse_legacy_sql \
   'SELECT query, user_email, creation_time, referenced_tables
      FROM `region-us`.INFORMATION_SCHEMA.JOBS
     WHERE creation_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 90 DAY)
@@ -113,6 +118,10 @@ bq query --format=json --nouse_legacy_sql \
   python3 bundle/jobs/draft-from-query-history/draft-from-query-history.py |
   ochakai import -
 ```
+
+ここでも `--max_rows` が要る。既定の 100 行では 90 日分のつもりが直近の
+100 ジョブになり、「5 回以上」の敷居に届くものがほとんど無くなる —
+`jobs_read` の数を見ること。
 
 リテラルとコメントと空白だけが違う実行は**一つにまとまり**、5 回以上
 撃たれたものが draft として着地する。**LLM は入っていない** — 「この

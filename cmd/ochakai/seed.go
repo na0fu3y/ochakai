@@ -30,10 +30,17 @@ import (
 // draft concepts and prints them as an OKF bundle, which `ochakai import`
 // writes like any other bundle:
 //
-//	bq query --format=json --nouse_legacy_sql \
+//	bq query --max_rows=100000 --format=json --nouse_legacy_sql \
 //	  'SELECT table_schema, table_name, column_name, data_type, is_nullable
 //	     FROM `proj.dataset.INFORMATION_SCHEMA.COLUMNS` ORDER BY ordinal_position' |
 //	  ochakai seed - | ochakai import -
+//
+// The row limit in that first line is not decoration. `bq query` prints
+// the first 100 rows and says nothing about the rest, so a dataset with
+// more columns than that seeds only the tables those rows reached — with
+// no error anywhere, because nothing downstream can tell a truncated
+// listing from a small one. seedTruncationNote below is what ochakai can
+// say about it from where it stands.
 //
 // Nothing here connects to anything. No warehouse client is linked into
 // the binary, no credential is read, and the same command serves any
@@ -82,8 +89,11 @@ func cmdSeed(_ context.Context, args []string) error {
 			"the query, with your own client and your own identity, and pipe the answer\n"+
 			"here. Every concept comes out as a draft, because a projected schema is a\n"+
 			"skeleton somebody still has to say something about — which is what the\n"+
-			"review queue is for.",
-		"  bq query --format=json --nouse_legacy_sql \\\n"+
+			"review queue is for.\n\n"+
+			"Raise your client's row limit when you run that query: `bq query` prints\n"+
+			"the first 100 rows unless --max_rows says otherwise, and a listing cut\n"+
+			"there looks exactly like a small dataset from here.",
+		"  bq query --max_rows=100000 --format=json --nouse_legacy_sql \\\n"+
 			"    'SELECT table_schema, table_name, column_name, data_type, is_nullable\n"+
 			"       FROM `proj.dataset.INFORMATION_SCHEMA.COLUMNS` ORDER BY ordinal_position' |\n"+
 			"    ochakai seed - | ochakai import -\n"+
@@ -108,6 +118,9 @@ func cmdSeed(_ context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	if note := seedTruncationNote(len(cols)); note != "" {
+		fmt.Fprintln(os.Stderr, "note:", note)
+	}
 	tables := gatherSeedTables(cols)
 	if len(tables) == 0 {
 		return fmt.Errorf("no rows with a table_name: is this the output of a SELECT over INFORMATION_SCHEMA.COLUMNS?")
@@ -117,6 +130,27 @@ func cmdSeed(_ context.Context, args []string) error {
 	}
 	fmt.Fprintf(os.Stderr, "seeded %d tables as drafts; pipe into `ochakai import -` to write them\n", len(tables))
 	return nil
+}
+
+// clientDefaultRows is what `bq query` prints when nobody passes
+// --max_rows, and the shape of the one failure this path has that nothing
+// else can catch: the pipe succeeds, the bundle is well-formed, and the
+// tables past the cut are simply not in it. A listing truncated there is
+// indistinguishable from a small warehouse — except for its size, which is
+// this exact number and rarely anything else by accident.
+const clientDefaultRows = 100
+
+// seedTruncationNote is that suspicion, said out loud once and never as an
+// error: exactly 100 rows is a legitimate listing often enough that
+// refusing it would be wrong, and a silent partial catalog is the thing
+// somebody actually lost a day to.
+func seedTruncationNote(rows int) string {
+	if rows != clientDefaultRows {
+		return ""
+	}
+	return fmt.Sprintf("the input is exactly %d rows, which is what a client's default row limit looks like:\n"+
+		"      `bq query` prints %d unless you pass --max_rows, and drops the rest without saying so.\n"+
+		"      If the schema is larger than that, rerun the query with the limit raised.", clientDefaultRows, clientDefaultRows)
 }
 
 // readSeedColumns accepts both shapes a warehouse client prints: one JSON

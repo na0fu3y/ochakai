@@ -208,3 +208,24 @@ func TestSeedPipesIntoImport(t *testing.T) {
 		t.Errorf("wrote %v, want the one table at its own address", written)
 	}
 }
+
+// The failure this path cannot see from the inside: `bq query` stops at
+// 100 rows unless told otherwise, and a catalog cut there is a valid
+// bundle of the tables that fit. Nothing downstream can tell it from a
+// small warehouse, so the count itself is the only thing left to say
+// something about — and it says it as a note, because 100 rows is also
+// just 100 rows.
+func TestSeedNotesAnInputCutAtAClientsDefault(t *testing.T) {
+	note := seedTruncationNote(clientDefaultRows)
+	if note == "" {
+		t.Fatalf("%d rows drew no note: the truncation a reporter lost a day to passes in silence", clientDefaultRows)
+	}
+	if !strings.Contains(note, "--max_rows") {
+		t.Errorf("the note does not name the flag that fixes it:\n%s", note)
+	}
+	for _, rows := range []int{0, 1, clientDefaultRows - 1, clientDefaultRows + 1, 1000} {
+		if got := seedTruncationNote(rows); got != "" {
+			t.Errorf("%d rows drew a note: %s", rows, got)
+		}
+	}
+}

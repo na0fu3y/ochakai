@@ -83,6 +83,23 @@ last entry.
 
 ### Fixed
 
+- **The day-one catalog could arrive with 100 rows of it and no
+  complaint.** Every documented `bq query` that feeds `ochakai seed` or
+  the query-history drafter now passes `--max_rows`: `bq` prints the
+  first 100 rows and says nothing about the rest, so a dataset whose
+  columns add up past that seeded only the tables those rows reached —
+  no error, no warning, and a bundle that looks exactly like a small
+  warehouse. `ochakai seed` now prints a `note:` on **stderr** when its
+  input is exactly 100 rows, naming the flag; it stays a note rather
+  than a refusal, because 100 rows is also just 100 rows. **What to do
+  about it**: if a catalog was seeded before this, rerun the query with
+  the limit raised and `ochakai import --dry-run` the result first — the
+  tables that were missing come back as *created*, and anything counted
+  as *updated* is an entry the projection would replace with a fresh
+  skeleton (the version somebody wrote is kept as a revision, but it is
+  no longer what the entry says). Where drafts have been filled in
+  already, `ochakai seed cols.json > catalog.tar.gz` and import the
+  missing tables out of it instead. Reported by a user.
 - **The MCP bundle could not start the server it carries.** The
   `.mcpb` manifest named its command `server/ochakai` — a path relative
   to whatever directory the desktop app happens to run from, not to the
