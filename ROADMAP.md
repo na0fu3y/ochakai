@@ -99,6 +99,16 @@ it.
   ([0106](docs/design/0106-a-read-carries-what-points-at-it.md)).
 - **Connector ingestion.** Knowledge is curated by humans and agents, not
   harvested by pipelines. Trust density over volume.
+- **A second format beside OKF — including Apache Ossie (formerly Open
+  Semantic Interchange).** Ossie standardizes the definition layer, and
+  ochakai stands on the other side of that boundary: nothing in its core spec
+  carries who wrote a definition, who confirmed it, or when it goes stale,
+  which is what OKF holds. Reading or writing it would be a second format
+  beside OKF, which C8's sibling condition C3 declines. The condition under
+  which this is revisited is written down
+  ([docs/positioning.md](docs/positioning.md#ウェアハウス-native-の-semantic-layer)):
+  Ossie leaving incubation with a place in its core for a human having
+  confirmed a definition.
 - **A chat UI or dashboards.** The bundled web UI is a curation surface, not a
   BI tool: no charts, no query execution, no chat. It feeds your agents rather
   than competing with them.

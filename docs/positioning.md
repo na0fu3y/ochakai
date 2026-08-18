@@ -26,7 +26,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 
 | 比較対象 | あちらが持つもの | あちらが持たないもの | 判定 |
 |---|---|---|---|
-| ウェアハウス native の semantic layer(dbt MCP、Cube、Lightdash、Snowflake Semantic Views、Databricks Metric Views) | メトリクス定義、ディメンション、コンパイルされた SQL | 解釈、用語集、書き戻し、ウェアハウスをまたぐもの | 両立 |
+| ウェアハウス native の semantic layer(dbt MCP、Cube、Lightdash、Snowflake Semantic Views、Databricks Metric Views)と、その標準([Apache Ossie](https://github.com/apache/ossie) — 旧 OSI) | メトリクス定義、ディメンション、コンパイルされた SQL | 解釈、用語集、書き戻し、ウェアハウスをまたぐもの、そして誰が確認したか | 両立 — 下記参照 |
 | 「コンテキスト層」になったカタログ(OpenMetadata、DataHub、Atlan) | 技術メタデータ、リネージ、オーナーシップ、大規模な収集 | キュレーションされた側が OSS であること — 解釈とレビューループは商用ティアに置かれがち | 両立、あるいは既に運用しているなら ochakai の代わりになる |
 | エージェントのメモリ層(mem0、Zep、Letta) | ユーザーごと・エージェントごとの記憶、自動抽出・自動注入 | チームの所有、人のレビュー、*no* の記録 | 両立 |
 | 自分の文書に対する RAG | 他の理由で書かれた文書からの断片 | 単位としてのレビュー済みの主張、provenance、著者の向き | 両立 |
@@ -47,6 +47,35 @@ concept は冗長である。残るのは semantic model の YAML に収まら�
 生成をやめたのは意図した決定であり
 ([0070](design/0070-what-was-retired-and-why.md) §3)、エージェントが
 必要とするのは検証済みのクエリとその周りの注意書きだからである。
+
+**その層は 2026 年に標準を持った — [Apache Ossie](https://github.com/apache/ossie)
+(incubating、旧 Open Semantic Interchange / OSI)である。** Snowflake・
+dbt Labs・Salesforce ほかが始め、Apache Software Foundation に寄贈されて
+Incubator に入った(Apache-2.0)。標準化するのは**定義の層**で、
+2026-08 に読んだ `core-spec/spec.yaml`(`0.2.0.dev0`、draft)の
+トップレベルは `semantic_model` / `datasets` / `fields` / `metrics` /
+`relationships` / `dialects` / `datatypes` である。
+
+**ochakai はこれと競合しない。同じ境界の反対側に立っている。** 上の
+「一行で」がその境界そのものである — Ossie が一つの綴りに揃えるのは
+revenue = `SUM(price)` の側で、ochakai が持つのは 100 が良いのか悪いのか
+の側である。決定的なのは、その `spec.yaml` に **provenance・検証・trust・
+鮮度・誰が書いたか を運ぶ構造が無い**ことで、あるのはベンダーごとの
+`custom_extensions` だけである。つまり OKF が中核に置いているもの —
+誰が書き、誰が確認し、いつ古びるか([0065](design/0065-identity-and-provenance.md)・
+[0069](design/0069-the-loop-and-what-measures-it.md))— は Ossie の枠の
+外にあり、**二つは同じものを二通りに言っているのではない**。重なって
+いないから、両方置ける。
+
+**いま実装はしない。** これは立場の表明であって計画ではない。Ossie を
+読み書きすることは OKF の横に第二の形式を持つことであり、C3 がそれを
+断っている。ウェアハウス側の semantic model を ochakai の `Metric`
+concept に投影したいなら、その形は既にある — 自分のサービスアカウントで
+動く普通のクライアント([例](../examples/bigquery-catalog))であって、
+ochakai が持つコネクタではない([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1)。
+**見直す条件は書いておく**: Ossie が incubating を出て、かつ「この定義を
+人が確認した」を core が運ぶようになったとき。そのときは重なりが本物に
+なるので、OKF との対応を書く価値がある。
 
 ### コンテキスト層としてのカタログ
 
