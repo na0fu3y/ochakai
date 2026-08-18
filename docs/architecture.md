@@ -411,7 +411,7 @@ producer キーは索引しない: concept の別名ではなく concept につ�
 である。そこで ochakai はクエリの**用語** — ひらがなの間に挟まれた、
 漢字かカタカナを含む連なり — を取り出し、その名前を持つ concept を
 上に出す。名前は二つとも効く: `title` と、id の最後のセグメント
-(設計ドキュメント [0022](design/0022-filename-as-name.md))。
+(設計ドキュメント [0074 §1](design/0074-the-document-and-the-vocabulary-that-asks-it.md))。
 空白で語を区切る言語ではこれをしない — 英語の質問に出てくる
 "revenue" は、revenue という名前の concept を引きに来たわけではない
 からである。

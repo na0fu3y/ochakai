@@ -33,8 +33,9 @@ top of a red main.
 
 ## 1. The preparation PR
 
-Branch off `origin/main`. Four files that drift silently — nothing
-fails when they are stale — and one window that has to close:
+Branch off `origin/main`. Five files that carry a version number, and
+one window that has to close. `TestReleaseVersionsAgree` fails on four of
+them, so a forgotten bump is a red test rather than a stale page:
 
 1. **`CHANGELOG.md`**
    - `## [Unreleased]` → `## [x.y.z] - YYYY-MM-DD` (tag date, JST)
@@ -45,14 +46,17 @@ fails when they are stale — and one window that has to close:
 3. **`.github/ISSUE_TEMPLATE/bug_report.yml`** — the version placeholder
 4. **`deploy/cloudrun/README.md`** — the hand-set `export VERSION=`
    example, for the reader with no `gh` CLI
-5. **`mcpserver.RetiredToolNames` and `retiredCommands`** — delete every
+5. **`deploy/terraform/terraform.tfvars.example`** — `image_tag`. Unlike
+   the four above it is not a sentence about a version but a value that
+   gets applied, so a stale pin deploys the stale image
+6. **`mcpserver.RetiredToolNames` and `retiredCommands`** — delete every
    entry whose `Release` is older than the version you are cutting. A renamed
    MCP tool or CLI command answers under its old name for one release
    (design doc 0088), and this release ends the previous one's window.
    `TestARetiredNameLastsOneRelease` fails until they are gone, so the
    prep PR is where you find out.
 
-`grep -rn '<prev>' --exclude-dir=.git .` catches a fifth if one appears;
+`grep -rn '<prev>' --exclude-dir=.git .` catches a sixth if one appears;
 `CHANGELOG.md` and `docs/design` name old versions legitimately, so read
 the hits rather than replacing them.
 

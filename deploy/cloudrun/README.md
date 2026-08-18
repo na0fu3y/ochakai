@@ -20,25 +20,22 @@ Cloud SQL インスタンス一つでナレッジベース全体を賄う — �
 
 **推奨: [deploy/terraform](../terraform) で立ち上げる** — §1–§4b(web UI
 とデモの姿勢を含む)を一回の `terraform apply` と手作業ひとつ(スキーマの
-bootstrap)にまとめてあり、diff
-としてレビューでき、環境ごとに再現でき、きれいに壊せる。このガイドは引
-き続きリファレンスであり続ける — 各リソースがなぜそう作られているかを
-説明し、コマンドを手で打ちたい場合の経路でもある。§1–§5、§5d、§9 をカ
-バーし、web UI・公開デモ・org-policy によるガードレール・アップグレー
-ドの注意点は運用ガイドが、
-[docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
-は §5c と REST API を組み込むアプリケーションに要るその他すべてをカバー
-する。
+bootstrap)にまとめてあり、diff としてレビューでき、環境ごとに再現でき、
+きれいに壊せる。
 
-**すでにデプロイ済みなら?**
-[docs/guides/operating.md](../../docs/guides/operating.md) がその後を扱
-う — バックアップと復元、hardening、team web UI、監視、capacity、アッ
-プグレード。
+このガイドは引き続きリファレンスであり続ける — 各リソースがなぜそう作ら
+れているかを説明し、コマンドを手で打ちたい場合の経路でもある。どこを読む
+かは、いま何をしているかで決まる:
 
-**自分の製品に ochakai を組み込むなら?**
-[docs/guides/rest-integration.md](../../docs/guides/rest-integration.md)
-が、REST API を直接叩くアプリケーションのための認証、delegated
-provenance、安全な同時書き込みをカバーする。
+- **これから立てる** → このページの §1–§5、§5d、§9。
+- **すでに動いている** →
+  [運用ガイド](../../docs/guides/operating.md)。バックアップと復元、
+  hardening、team web UI、公開デモ、監視、capacity、org-policy による
+  ガードレール、アップグレード。
+- **自分の製品に組み込む** →
+  [REST 統合ガイド](../../docs/guides/rest-integration.md)。§5c にあたる
+  認証、delegated provenance、安全な同時書き込み、そして REST API を叩く
+  アプリケーションに要るその他すべて。
 
 ## 1. 前提条件
 
@@ -125,8 +122,8 @@ gcloud sql users create ochakai --instance=ochakai --password=$DB_PASSWORD
   と mTLS を経て、そのあとデータベース認証 — だけになる。ローカルの
   admin アクセス(§3 の SQL、§6 の保守)は
   [`cloud-sql-proxy`](https://cloud.google.com/sql/docs/postgres/sql-proxy)
-  を通す。これも同じコネクタ経路を使うので、リストに concept を持たせ
-  る必要は無い。空のままにしておけば、この姿勢は保たれる。到達可能な
+  を通す。これも同じコネクタ経路を使うので、リストにエントリを足す必要
+  は無い。空のままにしておけば、この姿勢は保たれる。到達可能な
   エンドポイントそのものを無くすには §2b を見よ。
 
 ### 2b. 任意の hardening: private IP のみにする

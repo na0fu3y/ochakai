@@ -1,26 +1,30 @@
 output "service_url" {
-  description = "URL of the ochakai service. Not reachable without an identity: a plain curl gets Google's 401, which is the point — unless var.public_read_only is on, in which case see demo_url."
+  description = "URL of the ochakai service. Not reachable without an identity: a plain curl gets Google's 401, which is the point — unless var.public_read_only or var.sandbox is on, in which case see demo_url."
   value       = google_cloud_run_v2_service.ochakai.uri
 }
 
 output "demo_url" {
   description = <<-EOT
-    The public read-only demo URL — anyone with this link can read the whole
-    knowledge base, with no Google account and no token — or null when
-    var.public_read_only is false. It is the same service as service_url; the
-    output exists so that "is this one public?" is answerable from
-    `terraform output` alone, without reading the IAM policy.
+    The URL anyone can reach without a Google account and without a token —
+    the public read-only demo (var.public_read_only) or the disposable
+    sandbox (var.sandbox) — and null when this deployment is neither. It is
+    the same service as service_url; the output exists so that "is this one
+    public?" is answerable from `terraform output` alone, without reading the
+    IAM policy, which is why it follows the allUsers grant rather than one of
+    the two variables that can produce it.
   EOT
-  value       = var.public_read_only ? google_cloud_run_v2_service.ochakai.uri : null
+  value       = var.public_read_only || var.sandbox ? google_cloud_run_v2_service.ochakai.uri : null
 }
 
 output "posture" {
   description = "One line naming what this deployment will and will not do, so that a flip between demo and normal shows up in the output diff as well as the plan."
-  value = (var.public_read_only
-    ? "public read-only: anyone with the URL can read; no identity is read, every caller is human:anonymous, and nothing can be written (design doc 0042)"
+  value = (var.sandbox
+    ? "public sandbox: anyone with the URL can read and write; no identity is read, every caller is human:anonymous, and the contents are restored on a schedule rather than kept (design doc 0087)"
+    : var.public_read_only
+    ? "public read-only: anyone with the URL can read; no identity is read, every caller is human:anonymous, and nothing can be written (design doc 0066 §3)"
     : local.mode == "read-only"
-    ? "private read-only: only invoker_members can reach it, and nothing can be written (design doc 0040)"
-  : "private read-write: only invoker_members can reach it, and whoever reaches it can read and write everything (design doc 0002)")
+    ? "private read-only: only invoker_members can reach it, and nothing can be written (design doc 0066 §2)"
+  : "private read-write: only invoker_members can reach it, and whoever reaches it can read and write everything (design doc 0065 §1)")
 }
 
 output "use_command" {

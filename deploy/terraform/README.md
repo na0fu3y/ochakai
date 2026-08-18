@@ -35,7 +35,7 @@ private IP(§2b)、GCS files(§4b)、IAP 越しの web UI(§5b)。
 
 ### パスワードはどこにも無い
 
-このモジュールに `random_password` は無く、Secret Manager の concept も、
+このモジュールに `random_password` は無く、Secret Manager のエントリも、
 サービスアカウントキーも、どのリソースにも `password` 引数は無い — 代わり
 にランタイムは Cloud SQL IAM データベース認証で Postgres に認証する。
 **Secret-zero** はこのプロジェクトの中心的な設計判断であって細部ではない。
@@ -53,7 +53,7 @@ private IP(§2b)、GCS files(§4b)、IAP 越しの web UI(§5b)。
   — 実行するにはパスワードを持つ必要があるからである。そのステップは手作
   業のまま残る。下を見よ。
 
-### 公開呼び出しは不可、名指しの例外が一つだけ
+### 公開呼び出しは不可、名指しの例外が二つだけ
 
 `invoker_members` は `allUsers` と `allAuthenticatedUsers` を拒む — ochakai
 が provenance として信じるヘッダーは、Cloud Run の IAM チェックの背後にあ
@@ -62,13 +62,18 @@ private IP(§2b)、GCS files(§4b)、IAP 越しの web UI(§5b)。
 同じ規則が、Domain Restricted Sharing の org policy とデプロイの互換性を保
 っている。
 
-例外は `public_read_only`(ガイド §5d、設計ドキュメント 0066 §3)で、これ自体
-が `allUsers` を付与する。変数を二つに分けず一つにしているのは、public が
-安全なのはそれに伴うものと組み合わさったときだけだからである: デプロイはす
-べての書き込みを拒み、identity を一切読まない — 偽装する provenance も、取
-り違える著者も存在しない。だから public で*書き込み可能*な ochakai には、
-このモジュールの中に綴りが無い — 覚えておくべきチェックではなく、表現し得
-ない状態である。
+例外は `public_read_only`(ガイド §5d、設計ドキュメント 0066 §3)と
+`sandbox`(同 §5d、設計ドキュメント 0087)の二つで、どちらもそれ自体が
+`allUsers` を付与する。どちらも変数を二つに分けず一つにしているのは、公開
+が安全なのはそれに伴うものと組み合わさったときだけだからである: 公開する
+のと同じ変数が、identity を読むのをやめさせる。`public_read_only` はさら
+にすべての書き込みを拒み、`sandbox` は書き込みを受ける代わりに、中身が消
+えることを自分で宣言する。
+
+だから、このモジュールの中に綴りが無いのは「公開かつ書き込み可能」ではな
+く、**公開でありながら著者を記録し続ける** ochakai である — 誰とも確かめ
+ようのない名前を記録に残す状態で、覚えておくべきチェックではなく、表現し
+得ない状態である。
 
 ## 使い方
 
