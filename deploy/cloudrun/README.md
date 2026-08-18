@@ -77,7 +77,7 @@ export IMAGE=$REGION-docker.pkg.dev/$PROJECT_ID/ghcr/na0fu3y/ochakai:$VERSION
 `:latest` ではなくバージョンを固定し、再デプロイを意識的な判断にする。
 `gh` CLI が無ければ
 [リリースページ](https://github.com/na0fu3y/ochakai/releases)から番号
-を読み、手で設定する — `export VERSION=0.26.0`。
+を読み、手で設定する — `export VERSION=0.26.1`。
 
 (このガイドは 0.9.0 以降を前提にしている。それより前のリリースは
 [retract](https://go.dev/ref/mod#go-mod-file-retract) 済みでサポート外
