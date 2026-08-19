@@ -201,6 +201,17 @@ every Google Cloud deployment runs (design doc 0080 §1.1). The stand-in
 is deterministic, so the fused half needs no API key and reaches no
 network.
 
+Each case is labelled with the dimension of query behaviour it
+exercises — natural questions, keyword lookups, warehouse English
+inside a Japanese sentence, English questions, spelling variants,
+synonyms, two-character terms — and both runs log a recall/MRR line per
+dimension beside the aggregate. The floors hold only the aggregate; the
+dimension lines are where to look when deciding what to improve next,
+and where a change to search should show its effect landing. A question
+the bundle deliberately answers in several linked places lists the
+other correct concepts in `accept`, and the first acceptable concept's
+rank is what scores.
+
 ```sh
 scripts/check --db      # it runs with everything else
 OCHAKAI_TEST_DATABASE_URL=… go test ./internal/service/ \
@@ -215,8 +226,8 @@ improved, which is `DOC-LINES-SLACK`'s argument applied to a floor
 rather than a ceiling: banked headroom is budget the next regression
 spends without moving a number anybody reads. The tolerance is derived
 from the size of the set instead of declared here, because the noise it
-is sized against is one case moving and the set has been 14, 36, 41 and
-37 cases.
+is sized against is one case moving and the set has been 14, 36, 41, 37
+and 56 cases.
 
 ## Working with Claude Code
 
