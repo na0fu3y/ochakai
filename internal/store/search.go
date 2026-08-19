@@ -211,8 +211,48 @@ func scriptRuns(token string) []string {
 // scriptWithoutSpaces reports whether r belongs to a script that does not
 // separate words with spaces, so a token of it needs windowing rather than
 // taking whole.
+//
+// The three scripts, and the marks that are written inside a word
+// without belonging to a script (joiningMark).
 func scriptWithoutSpaces(r rune) bool {
-	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r)
+	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) ||
+		unicode.Is(unicode.Katakana, r) || joiningMark(r)
+}
+
+// joiningMark reports whether r is one of the marks a Japanese word is
+// written *through* — the prolonged sound mark that spells the long
+// vowel of a loanword, and the voiced marks the halfwidth forms leave
+// standing alone.
+//
+// None of them belongs to a script. Unicode gives them Script=Common,
+// because ー is written after hiragana as readily as after katakana, and
+// that answer is right for a property table and wrong for a word
+// boundary: it made ー a boundary on both sides of the search at once,
+// so データ was cut into デ and タ — two runs of one character, which
+// fragmentQuery can only ask for as the prefixes デ:* and タ:*.
+//
+// **That is most of a data team's vocabulary.** テーブル, ロード,
+// パーティション, カレンダー, レポート, ユーザー, サービスアカウント:
+// each was a prefix scan rather than a lookup, and the corpus answered
+// every one of them with all of itself — the eight katakana probes over
+// examples/demo each returned all twelve concepts, the right one first
+// and eleven trailing it on a shared first character. Migration 0036
+// exists so a two-character Japanese term stops reading the table, and
+// for every word with a long vowel in it the mark had quietly given
+// that back.
+//
+// ・ is deliberately not here. It separates words rather than joining
+// them (サービス・アカウント is two names), which is what a boundary
+// is for.
+func joiningMark(r rune) bool {
+	switch r {
+	case 'ー', // U+30FC prolonged sound mark
+		'ｰ', // U+FF70 halfwidth prolonged sound mark
+		'ﾞ', // U+FF9E halfwidth voiced mark
+		'ﾟ': // U+FF9F halfwidth semi-voiced mark
+		return true
+	}
+	return false
 }
 
 // contentChar reports whether r is the kind of character a Japanese

@@ -95,6 +95,7 @@ const (
 	dimKeyword     = "keyword"     // bare terms and jargon lookups
 	dimMixed       = "mixed"       // warehouse English inside a Japanese sentence
 	dimEnglish     = "english"     // English asked of a Japanese base
+	dimKatakana    = "katakana"    // loanwords joined by the ー mark
 	dimOrthography = "orthography" // spelling variants of the same word
 	dimSynonyms    = "synonyms"    // names only the synonyms key holds
 	dimShort       = "short"       // two-character terms below trigram
@@ -166,6 +167,18 @@ var evalCases = []evalCase{
 	{query: "25日の山", want: "insights/着地見込み", dim: dimKeyword},
 	{query: "分割出荷", want: "glossary/completed-order", dim: dimKeyword},
 	{query: "遡る期間", want: "metrics/repeat-purchase-rate", dim: dimKeyword},
+	// Katakana loanwords, which is most of the vocabulary a data team
+	// writes in: the terms below are the only place each word appears in
+	// the corpus, so a case answers only if the term was looked up as a
+	// term. Every one of them is joined by ー — テーブル, ロード,
+	// カレンダー — and that mark is where a katakana word is cut, so
+	// these measure whether a loanword can be searched for at all.
+	{query: "ロケーション", want: "skills/run-bigquery-query", dim: dimKatakana},
+	{query: "データセット", want: "skills/run-bigquery-query", dim: dimKatakana},
+	{query: "毎時ロード", want: "tables/shop-orders", dim: dimKatakana},
+	{query: "カレンダー", want: "insights/reading-revenue",
+		accept: []string{"insights/着地見込み", "queries/sales/monthly-revenue"}, dim: dimKatakana},
+	{query: "フィード", want: "queries/sales/revenue-by-channel", dim: dimKatakana},
 	// Warehouse English inside a Japanese sentence, which is how a data
 	// agent actually talks to this base: the column name stays English,
 	// the question around it does not. scriptRuns is what keeps the two
@@ -280,7 +293,8 @@ const evalVerified = "policies/revenue-recognition"
 // The set grew from 14 cases to 36, then to 41 when the demo gained a
 // Japanese half, to 37 when the demo became Japanese and the two
 // supplement concepts the bundle had come to duplicate were gone, and
-// stands at 56 with the dimension labels. Fourteen put MRR inside its
+// stands at 61: 56 with the dimension labels, and five more when the
+// katakana dimension was added to measure migration 0042. Fourteen put MRR inside its
 // own noise: one case moving from rank 1 to rank 2 moved it by 0.036,
 // which is the size of the differences anybody was reading. The second
 // pass asks the same corpus the way somebody asks rather than the way a
@@ -302,8 +316,21 @@ const evalVerified = "policies/revenue-recognition"
 // again at 56 cases (lexical 0.78 → 0.80, fused 0.77 → 0.78), and
 // again the runs are not comparable: the set changed under the number,
 // partly because accept stopped charging the multi-homed questions to
-// the ranking. The 37-case story below still names the two effects that
-// govern this corpus:
+// the ranking.
+//
+// **Migration 0042 is the first entry here that moved the number
+// without the set changing under it**: at 61 cases, lexical went 0.82 →
+// 0.83 and fused stayed 0.80, all of it in the question dimension (0.76
+// → 0.79). That is the honest size of it, and it is much smaller than
+// what the migration actually bought — the golden set scores rank, and
+// what a loanword lookup fixes is the candidate set: over this corpus
+// the eight katakana probes went from returning all twelve concepts
+// each to returning 2.6 on average. A twelve-concept corpus cannot
+// charge for the nine wrong answers underneath a right one, which is
+// this harness's own limit written down.
+//
+// The 37-case story below still names the two effects that govern this
+// corpus:
 //
 //   - A monolingual Japanese corpus about one shop shares 売上 across
 //     every concept, and the concept whose name *is* 売上 takes the name
@@ -328,25 +355,26 @@ const evalVerified = "policies/revenue-recognition"
 // vocabulary at all, and no number on this page says how much that is.
 const (
 	evalK = 10
-	// Lexical, measured at 1.00 / 0.80. The MRR floor is two cases'
-	// worth under it: one case slipping from rank 1 to rank 2 is 0.009
+	// Lexical, measured at 1.00 / 0.83. The MRR floor is two cases'
+	// worth under it: one case slipping from rank 1 to rank 2 is 0.008
 	// here, so a floor closer than that fails on noise.
 	evalRecallFloor = 0.97
-	evalMRRFloor    = 0.77
+	evalMRRFloor    = 0.80
 	// Fused: the same questions with the stand-in encoder on, measured
-	// at 1.00 / 0.78. This floor is the one that catches the verified
+	// at 1.00 / 0.80. This floor is the one that catches the verified
 	// addend going back to 0.002 — that constant is the kind that gets
 	// nudged by whoever is looking at one query — so it was re-measured
 	// when it was set: at 0.002 the 37-case fused run scored 0.73, and
 	// the floor sat between.
 	//
-	// It read 0.74 against 0.77 measured when the demo became Japanese,
+	// It read 0.75 against 0.78 measured at 56 cases, 0.74 against 0.77
+	// when the demo became Japanese,
 	// 0.83 against 0.85 over the bilingual corpus, and before that 0.86
 	// against 0.89. Each move came from the corpus or the set changing
 	// under it, not from the merge; what the number certifies is still
 	// only that the merge does no harm.
 	evalFusedRecallFloor = 0.97
-	evalFusedMRRFloor    = 0.75
+	evalFusedMRRFloor    = 0.77
 )
 
 // evalFloorSlackCases is how far a floor may sit under what was measured
@@ -371,7 +399,7 @@ const (
 // here, one case leaving the top k is 0.018, and the floors above were
 // chosen as about two cases under what was measured. A tolerance written
 // as 0.05 would have to be rewritten every time the set grows, and the
-// set has been 14, then 36, then 41, then 37, then 56.
+// set has been 14, then 36, then 41, then 37, then 56, then 61.
 const evalFloorSlackCases = 2
 
 // checkEvalFloors holds one configuration's numbers to their floors in
@@ -553,7 +581,8 @@ func scoreGoldenSet(t *testing.T, config, prefix string, search func(query strin
 	}
 	recall = float64(found) / float64(len(evalCases))
 	mrr /= float64(len(evalCases))
-	for _, dim := range []string{dimQuestion, dimKeyword, dimMixed, dimEnglish, dimOrthography, dimSynonyms, dimShort} {
+	for _, dim := range []string{dimQuestion, dimKeyword, dimMixed, dimEnglish,
+		dimKatakana, dimOrthography, dimSynonyms, dimShort} {
 		d := byDim[dim]
 		if d == nil {
 			t.Fatalf("dimension %s has no cases; drop it from this list or give it one", dim)

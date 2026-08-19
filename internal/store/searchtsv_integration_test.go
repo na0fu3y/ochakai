@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unicode"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/testdb"
@@ -49,10 +48,12 @@ func TestCJKClassAgreesWithGo(t *testing.T) {
 	ctx := context.Background()
 	s := newSearchStore(t, ctx)
 
-	goSaysCJK := func(r rune) bool {
-		return unicode.Is(unicode.Han, r) ||
-			unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r)
-	}
+	// The predicate itself, not a restatement of it. Migration 0042
+	// added characters that belong to none of the three scripts (the
+	// marks written inside a word), and a test that listed the scripts
+	// here would have gone on agreeing with a class the query side had
+	// stopped using.
+	goSaysCJK := scriptWithoutSpaces
 	// The planes these scripts live in, plus latin, Cyrillic and
 	// punctuation to catch a class that matches too much.
 	spans := [][2]rune{
@@ -231,6 +232,63 @@ func explainJapaneseLookup(t *testing.T, ctx context.Context, s *Store) string {
 		t.Fatal(err)
 	}
 	return strings.Join(plan, "\n")
+}
+
+// TestLoanwordIsLookedUpNotPrefixScanned pins what migration 0042
+// bought: a katakana word with a long vowel in it is one term, so a
+// search for it finds the concept that says it and not every concept
+// that happens to start with the same character.
+//
+// Before 0042, データ was two runs of one character — ー was a boundary
+// on both sides of the search — and one-character runs are asked for as
+// prefixes (fragmentQuery). So デ:* reached デプロイ, デフォルト and
+// every other word beginning デ, and the candidate set was most of the
+// corpus. The right concept still ranked first, which is why nothing
+// caught this: the scorer was never what was broken.
+//
+// The assertion is on the neighbour rather than on the target. A test
+// that only checked that データ finds the データ concept passed before
+// this migration too.
+func TestLoanwordIsLookedUpNotPrefixScanned(t *testing.T) {
+	ctx := context.Background()
+	s := newSearchStore(t, ctx)
+	run := testdb.Unique(t, "loanword")
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+
+	// Two concepts sharing nothing but the first character of the word
+	// each is about, which is the whole of what a prefix could match on.
+	for id, body := range map[string]string{
+		"wanted":    "データセットの権限は読み取りだけである。",
+		"neighbour": "デプロイの手順は別に書いてある。",
+	} {
+		k := &domain.Knowledge{
+			Type: domain.TypeInsights, ID: run + "/" + id,
+			Title: id, Body: body, Status: domain.StatusStable, CreatedBy: actor,
+		}
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatalf("create %s: %v", k.ID, err)
+		}
+	}
+
+	hits, err := s.SearchLexical(ctx, "データ", Filter{Prefixes: []string{run}}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := make([]string, 0, len(hits))
+	for _, h := range hits {
+		ids = append(ids, strings.TrimPrefix(h.ID, run+"/"))
+	}
+	if len(ids) != 1 || ids[0] != "wanted" {
+		t.Errorf("searching データ returned %v; want just the concept that says it. "+
+			"A neighbour here means the query is asking for the prefix デ:* rather "+
+			"than looking the word up — migration 0042 is what makes ー part of it", ids)
+	}
+
+	// The halfwidth spelling of the same defect: the voiced mark used to
+	// split the run it is written inside.
+	if got := queryFragments("ﾃﾞｰﾀ"); len(got) != 1 {
+		t.Errorf("ﾃﾞｰﾀ cut into %v; a halfwidth loanword is one run, not one per mark", got)
+	}
 }
 
 // TestEnglishSearchStems pins the recall ILIKE could not have: a plural
