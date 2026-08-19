@@ -21,6 +21,23 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A katakana word with a long vowel in it is one search term.**
+  ー belongs to no script — Unicode calls it Common, because it is
+  written after hiragana as readily as after katakana — so both halves
+  of the lexical search treated it as a word boundary. データ was two
+  runs of one character, asked for as the prefixes `デ:*` and `タ:*`,
+  and that is most of the vocabulary a data team writes in: テーブル,
+  ロード, パーティション, カレンダー, レポート, ユーザー. Measured over
+  `examples/demo`, each of eight katakana probes returned all twelve
+  concepts — the right one first and eleven trailing it on a shared
+  first character; they now return 2.6 on average. The halfwidth voiced
+  marks (ﾞ ﾟ) and halfwidth ｰ join for the same reason. **Migration 0042
+  recomputes the search index for every stored object**, so the first
+  start after upgrading writes once per row before it serves; a base of
+  a few thousand concepts takes seconds, and nothing else is affected.
+
 ## [0.26.1] - 2026-08-19
 
 ### Added
