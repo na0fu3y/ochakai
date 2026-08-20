@@ -253,6 +253,7 @@ func MoveServerKeys(raw []byte) (doc []byte, claimed []string, claim map[string]
 		if !serverOwnedKeys[pairs[i].Value] {
 			continue
 		}
+		keepTimestampText(pairs[i+1])
 		var v any
 		if err := pairs[i+1].Decode(&v); err != nil {
 			continue
@@ -272,6 +273,29 @@ func MoveServerKeys(raw []byte) (doc []byte, claimed []string, claim map[string]
 	}
 	out := appendFrontmatter(stripped, block)
 	return out, claimed, ClaimOf(out)
+}
+
+// keepTimestampText makes every timestamp under n decode as the text it
+// was written as, by retagging it a string in place.
+//
+// A claim is what the document asserted (design doc 0075 §3.1), and a
+// timestamp is the one scalar that cannot survive the trip through Go: a
+// node YAML resolves to time.Time has to be given a spelling again on the
+// way out, and the value alone no longer says which one it arrived in.
+// So `at: 2026-07-01T00:00:00Z` came back out as the bare date
+// `2026-07-01` (yamlScalar reads a zero clock as a date, which is what
+// keeps `stale_after: 2026-12-31` a day rather than an instant), and
+// `at: 2026-07-01 09:30:00` came back out in the T form. Neither is what
+// the document said. Retagging costs nothing else: the node already holds
+// the written text, and a claim is stored as text anyway (textify).
+func keepTimestampText(n *yaml.Node) {
+	// !!timestamp is what YAML resolves an unquoted date or date-time to.
+	if n.Kind == yaml.ScalarNode && n.Tag == "!!timestamp" {
+		n.Tag = "!!str"
+	}
+	for _, c := range n.Content {
+		keepTimestampText(c)
+	}
 }
 
 // ClaimOf reads ClaimKey back out of a document, which is how a caller
