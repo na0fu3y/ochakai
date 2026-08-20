@@ -202,6 +202,23 @@ func TestQueryFragments(t *testing.T) {
 		{"latin infix", "EC売上高", []string{"EC", "売上", "上高"}},
 		{"all-kana query keeps its windows", "ください",
 			[]string{"くだ", "ださ", "さい"}},
+		// An honorific prefix is the exception to "a content word does
+		// not begin with hiragana": お盆 and ご要望 are words, and the
+		// window that spells them is the only one that finds them —
+		// 盆の and 望の depend on the particle the document happened to
+		// use. Without this, 「お盆」 finds the entry and 「お盆は」 does
+		// not, which is the difference between a term and a question.
+		{"honorific prefix keeps its window", "お盆の影響",
+			[]string{"お盆", "盆の", "影響"}},
+		{"honorific prefix in a question", "ご要望の件",
+			[]string{"ご要", "要望", "望の"}},
+		// Only お and ご, and only before a content character: ぜ売
+		// (なぜ売上) is still a straddling fragment, and おく (〜しておく)
+		// is still grammar.
+		{"other hiragana still straddles", "なぜ売上が下がる",
+			[]string{"売上", "上が", "下が"}},
+		{"honorific before hiragana is grammar", "対応しておく",
+			[]string{"対応", "応し"}},
 		{"short japanese term", "売上", []string{"売上"}},
 		{"mixed scripts", "revenue 売上高", []string{"revenue", "売上", "上高"}},
 		{"punctuation only falls back to the query", "???", []string{"???"}},

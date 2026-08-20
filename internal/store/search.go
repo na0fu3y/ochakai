@@ -120,13 +120,20 @@ func queryFragments(query string) []string {
 //
 // A run with no content character at all — an all-kana query like
 // ください — keeps every window, or it would match nothing.
+//
+// The honorific prefixes are the exception to the first-character rule,
+// because お盆 and ご要望 are content words that do begin with hiragana.
+// Their window is the only fragment that finds them: the one after it
+// (盆の, 望の) carries whichever particle the document happened to use,
+// so 「お盆」 found an entry and 「お盆は」 found nothing until this
+// branch existed.
 func contentWindows(runes []rune) []string {
 	all := make([]string, 0, len(runes))
 	var content []string
 	for i := 0; i+2 <= len(runes); i++ {
 		w := string(runes[i : i+2])
 		all = append(all, w)
-		if contentChar(runes[i]) {
+		if contentChar(runes[i]) || honorific(runes[i], runes[i+1]) {
 			content = append(content, w)
 		}
 	}
@@ -260,6 +267,19 @@ func joiningMark(r rune) bool {
 // grammar around it.
 func contentChar(r rune) bool {
 	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Katakana, r)
+}
+
+// honorific reports whether first and second spell a content word behind
+// an honorific prefix — お盆, ご要望 — which is the one shape in which a
+// word begins with hiragana.
+//
+// Both conditions carry weight. Restricting it to お and ご keeps ぜ売
+// (なぜ売上) a straddling fragment, and requiring a content character
+// after keeps おく (〜しておく) grammar: without the second test every
+// hiragana-to-kanji boundary in a question would become a fragment, which
+// is what the first-character rule exists to exclude.
+func honorific(first, second rune) bool {
+	return (first == 'お' || first == 'ご') && contentChar(second)
 }
 
 // fragmentQuery renders the tsquery that finds one fragment in
