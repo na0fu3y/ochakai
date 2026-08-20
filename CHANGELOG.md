@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.26.2] - 2026-08-21
+
 ### Fixed
 
 - **A claim keeps the timestamps the document wrote.** A received
@@ -51,6 +53,26 @@ last entry.
   recomputes the search index for every stored object**, so the first
   start after upgrading writes once per row before it serves; a base of
   a few thousand concepts takes seconds, and nothing else is affected.
+
+- **An honorific prefix no longer takes the word behind it out of the
+  query.** Japanese is cut into two-character windows, and a window was
+  kept only when it began with a content character — grammar is written
+  in hiragana, and that rule holds right up until the content word
+  itself begins with one. お盆 and ご要望 are that shape: the window
+  spelling the word was dropped from every query, leaving only the next
+  window along (`盆の`, `望の`), which carries whichever particle the
+  document happened to use. `ochakai search "お盆"` found the concept
+  and `ochakai search "お盆は"` found nothing — one particle, and the
+  question was gone. A window beginning お or ご now survives when a
+  content character follows it, and both halves of that test carry
+  weight: `おく` (〜しておく) has to stay grammar. Measured lexical-only
+  over 22 Japanese questions against a 20-concept base, top-3 recall
+  goes 21/22 to 22/22 and MRR 0.77 to 0.81, and no other question's
+  rank moved. **This is the query side only** — the stored index has
+  always kept every window — so nothing is reindexed for it. The cost,
+  named: a politeness formula (`ご覧のとおり`) is now a fragment too,
+  and scoring weights rare fragments highest, so a base holding a lot
+  of polite prose is where to watch the ranking.
 
 ### Changed
 
@@ -4854,7 +4876,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.26.1...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.26.2...HEAD
+[0.26.2]: https://github.com/na0fu3y/ochakai/compare/v0.26.1...v0.26.2
 [0.26.1]: https://github.com/na0fu3y/ochakai/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/na0fu3y/ochakai/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/na0fu3y/ochakai/compare/v0.24.1...v0.25.0

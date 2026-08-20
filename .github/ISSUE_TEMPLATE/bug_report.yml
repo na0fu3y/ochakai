@@ -36,7 +36,7 @@ body:
     attributes:
       label: Version
       description: Output of `ochakai version`, or the image tag you deployed.
-      placeholder: "0.26.1"
+      placeholder: "0.26.2"
     validations:
       required: true
 
