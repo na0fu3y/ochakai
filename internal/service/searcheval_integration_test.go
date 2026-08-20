@@ -387,7 +387,7 @@ const (
 	evalRecallFloor = 0.98
 	evalMRRFloor    = 0.85
 	// Fused: the same questions with the stand-in encoder on, measured
-	// at 1.00 / 0.86. This floor is the one that catches the verified
+	// at 1.00 / 0.87. This floor is the one that catches the verified
 	// addend going back to 0.002 — that constant is the kind that gets
 	// nudged by whoever is looking at one query — so it was re-measured
 	// when it was set: at 0.002 the 37-case fused run scored 0.73, and
@@ -399,8 +399,16 @@ const (
 	// came from the corpus or the set changing under it, not from the
 	// merge; what the number certifies is still only that the merge
 	// does no harm.
+	//
+	// The prose rewrite of the demo bundle moved this one and nothing
+	// else: the same eighteen concepts saying the same things in plainer
+	// Japanese left the lexical run identical (1.00 / 0.87, reach 10.54)
+	// and took the fused run from 0.86 to 0.87. Shorter sentences around
+	// the same terms is a smaller haystack for the stand-in to reorder,
+	// which is the mixed dimension going 0.74 to 0.81 lexically. It is
+	// the corpus changing under the merge again, not the merge.
 	evalFusedRecallFloor = 0.98
-	evalFusedMRRFloor    = 0.84
+	evalFusedMRRFloor    = 0.85
 )
 
 // Reach: how many concepts a question touched at all.
@@ -458,15 +466,18 @@ const (
 	evalReachCeiling = 10.56
 
 	// What the dimensions read over this corpus, for the next change to
-	// aim at: english 12.83, mixed 12.57, question 12.00, keyword
-	// 10.10, katakana 8.60, orthography 7.33, synonyms 5.67, short
-	// 2.25. english and mixed are the widest and also rank worst (MRR
-	// 0.65 and 0.74), which is where the two measurements agree that
-	// something is unfinished: an English column name lands in prose
-	// that is Japanese around it, matches the concepts that all carry
-	// it, and is settled by tie-breaks rather than by aboutness. short
-	// is the narrowest, which is the windowed scan doing exactly what
-	// it is for.
+	// aim at: english 12.83, mixed 12.43, question 11.97, keyword
+	// 10.20, katakana 8.80, orthography 7.33, synonyms 5.67, short
+	// 2.25. english is the widest and also ranks worst (MRR 0.65),
+	// which is where the two measurements agree that something is
+	// unfinished: an English column name lands in prose that is
+	// Japanese around it, matches the concepts that all carry it, and is
+	// settled by tie-breaks rather than by aboutness. mixed is nearly as
+	// wide and used to rank as badly; the prose rewrite took it to 0.81
+	// without narrowing it, which is the same sentence carrying fewer
+	// competing terms rather than fewer concepts. short is the
+	// narrowest, which is the windowed scan doing exactly what it is
+	// for.
 )
 
 // evalFloorSlackCases is how far a floor may sit under what was measured

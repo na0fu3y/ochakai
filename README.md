@@ -53,8 +53,10 @@ a knowledge base a Japanese team keeps looks like and this demo is one
 (the eight conditions in [docs/surface.md](docs/surface.md), C8). What
 stays English is what comes from the warehouse — `sale_price`,
 `status = 'Complete'`, the SQL in the `# Computation` fence — so
-`ochakai search traffic_source` still lands on the concept that lists
-the values and their trap.
+`ochakai search traffic_source` still reaches the Japanese concepts
+that carry the column: the computation that splits revenue by it, and
+the table concept that lists its five values and says the same column
+name means something else in another table.
 
 It is also the one deployment where plain curl works — nothing to sign:
 `curl 'https://demo.ochak.ai/api/v1/search?q=売上'`.
@@ -81,14 +83,14 @@ what the demo actually says:
 > **作り込まれた成長 (the built-in growth).** The demo's corpus is
 > Google's public `thelook_ecommerce` dataset, and its knowledge base
 > knows what the schema never says: 「系列には右肩上がりの成長が最初から
-> 作り込まれている。前年比がプラスであることにも、前月比がプラスである
-> ことにも、何の情報も無い」 — the growth is the generator's spec, not
-> anyone's achievement, so only a *fall* can mean anything here.
+> 入っている。前年比がプラスであることにも、前月比がプラスであることにも
+> 情報は無い」 — the growth is the generator's spec, not anyone's
+> achievement, so only a *fall* can mean anything here.
 >
 > **動く過去 (the past that moves).** Returns pull revenue back out of
 > the months it was earned in, so 「先週見た数字と今日の数字は合わない。
-> 合わないことはバグでも改竄でもなく、締めた数字が要るなら receipt を
-> 残すのが正しい側である」 — `status` overwrites history, last month's
+> 合わないこと自体は不具合ではなく、締めた数字が必要なら receipt を
+> 残しておくのが正しい」 — `status` overwrites history, last month's
 > revenue changes underneath you, and the sanctioned answer is a
 > receipt, not a re-run.
 

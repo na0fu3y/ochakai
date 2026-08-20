@@ -10,7 +10,7 @@ verified:
 status: stable
 ---
 
-顧客。1行は会員1人で、[注文](/tables/orders.md)と
+顧客である。1行は会員1人で、[注文](/tables/orders.md)と
 [明細](/tables/order-items.md)の両方が `user_id` で指してくる。合成
 データなので、名前も email も実在しない。
 
@@ -18,15 +18,15 @@ status: stable
 
 | 列 | 型 | 注記 |
 |---|---|---|
-| `traffic_source` | STRING | **獲得時**のチャネル。下の罠を読むこと |
-| `created_at` | TIMESTAMP | **会員登録**の時刻であって、初回購入ではない。登録だけして買っていない客がいる |
+| `traffic_source` | STRING | 獲得時のチャネル。下の注意点を読むこと |
+| `created_at` | TIMESTAMP | 会員登録の時刻であって、初回購入ではない。登録だけして買っていない客がいる |
 | `age` / `gender` | INT64 / STRING | デモグラ。合成なので分布はきれいすぎる |
 | `country` / `state` / `city` | STRING | 所在地。緯度経度の列もある |
 
-## traffic_source の罠: 同じ名前で別物が二つある
+## traffic_source は同じ名前の列が二つある
 
-この列は**その客がどこから来たか**(獲得時のチャネル)である。値は
-5つ:
+この列が持つのは、その客がどこから来たか(獲得時のチャネル)である。
+値は5つある。
 
 | 値 | 意味 |
 |---|---|
@@ -37,17 +37,18 @@ status: stable
 | `Email` | メール |
 
 同じ名前の `traffic_source` 列が `events`(行動ログ、カタログ外)にも
-あり、そちらは**セッションの流入元**である。**値の集合すら重なって
-いない**: events 側は `Email` / `Adwords` / `YouTube` / `Facebook` /
-`Organic` で、`Search` と `Display` は無く、代わりに `Adwords` と
-`YouTube` がある。同じ列名で同じ「チャネル」を指しているように見えて、
-語彙が違う。客は Search で獲得され、その後の注文は Email 経由の
-セッションから来る —
-どちらの列を JOIN するかで「チャネル別売上」の意味が変わる。
-[獲得チャネル別売上](/queries/sales/revenue-by-traffic-source.md)が
-draft のまま止まっているのは、この二つのどちらに答えるべきかが
-決まっていないからである。
+あり、そちらはセッションの流入元である。**値の集合も重なっていない。**
+events 側は `Email` / `Adwords` / `YouTube` / `Facebook` / `Organic`
+で、`Search` と `Display` は無く、代わりに `Adwords` と `YouTube` が
+ある。同じ列名で同じ「チャネル」を指しているように見えて、語彙が違う。
 
-会員登録と初回購入が別である件は、
-[リピート購入率](/metrics/repeat-purchase-rate.md)の分母の議論に
-直接効いてくる。
+客は Search で獲得され、その後の注文は Email 経由のセッションから来る、
+ということが起きる。どちらの列を JOIN するかで「チャネル別売上」の
+意味が変わり、
+[獲得チャネル別売上](/queries/sales/revenue-by-traffic-source.md)が
+draft のまま止まっているのも、二つのどちらに答えるべきかが決まって
+いないからである。
+
+会員登録と初回購入が別である点は、
+[リピート購入率](/metrics/repeat-purchase-rate.md)の分母の議論に直接
+効いてくる。
