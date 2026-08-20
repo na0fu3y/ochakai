@@ -23,6 +23,19 @@ last entry.
 
 ### Fixed
 
+- **A claim keeps the timestamps the document wrote.** A received
+  document's trust family is kept as its own claim under `received:`
+  ([0075](docs/design/0075-the-bundle-is-the-address-space.md) §3.1) —
+  but YAML types an unquoted date-time, and rendering that back had to
+  pick a spelling again: `at: 2026-07-01T00:00:00Z` was stored as the
+  bare date `2026-07-01`, and `at: 2026-07-01 09:30:00` as
+  `2026-07-01T09:30:00Z`. A claim now carries the text as written, which
+  is what a claim is for. Only documents from another producer were
+  affected — this instance's own export form quotes its timestamps, so
+  the export → review → import loop is unchanged — and a claim already
+  stored keeps the spelling it landed with, because the bytes it arrived
+  in are gone; re-importing the bundle it came from restores it.
+
 - **A katakana word with a long vowel in it is one search term.**
   ー belongs to no script — Unicode calls it Common, because it is
   written after hiragana as readily as after katakana — so both halves

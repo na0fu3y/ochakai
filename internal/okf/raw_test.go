@@ -193,6 +193,48 @@ func TestForeignTrustFamilyBecomesAClaim(t *testing.T) {
 	}
 }
 
+// A claim is what the document asserted, down to how it spelled its
+// timestamps: YAML types an unquoted date-time, and rendering that back
+// used to hand a midnight instant out as a bare date and the
+// space-separated form out as the T form (design doc 0075 §3.1).
+func TestAClaimKeepsTheTimestampsAsWritten(t *testing.T) {
+	in := "---\ntype: Metric\ntitle: Revenue\n" +
+		"generated:\n  by: human:sato@example.co.jp\n  at: 2026-07-01T00:00:00Z\n" +
+		"verified:\n- by: human:ceo@example.co.jp\n  at: 2026-07-02 09:30:00\n" +
+		"- by: human:cfo@example.co.jp\n  at: 2026-07-03\n---\n\n本文。\n"
+	d, _, err := Parse([]byte(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	claim, ok := d.Attrs[ClaimKey].(map[string]any)
+	if !ok {
+		t.Fatalf("no claim was kept: %#v", d.Attrs)
+	}
+	generated, _ := claim["generated"].(map[string]any)
+	if got := generated["at"]; got != "2026-07-01T00:00:00Z" {
+		t.Errorf("claim.generated.at = %#v, want the instant the document wrote", got)
+	}
+	verified, _ := claim["verified"].([]any)
+	if len(verified) != 2 {
+		t.Fatalf("claim.verified = %#v", claim["verified"])
+	}
+	for i, want := range []string{"2026-07-02 09:30:00", "2026-07-03"} {
+		e, _ := verified[i].(map[string]any)
+		if got := e["at"]; got != want {
+			t.Errorf("claim.verified[%d].at = %#v, want %q", i, got, want)
+		}
+	}
+	// And the stored document says the same thing as the map beside it,
+	// through as many round trips as the bundle is carried.
+	back, _, err := Parse([]byte(d.Doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if back.Doc != d.Doc {
+		t.Errorf("a claim did not survive re-import:\n--- want ---\n%s\n--- got ---\n%s", d.Doc, back.Doc)
+	}
+}
+
 // A move rewrites a referring entry's body. Its frontmatter is not what
 // changed, and must come out byte for byte (design doc 0046 §2.2).
 func TestReplaceBodyLeavesFrontmatterAlone(t *testing.T) {
