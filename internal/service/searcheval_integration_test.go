@@ -101,6 +101,12 @@ const (
 	dimShort       = "short"       // two-character terms below trigram
 )
 
+// evalDimensions is the order the per-dimension lines are reported in,
+// and the list both reports read: a dimension named here with no cases
+// under it fails the run rather than printing an empty line.
+var evalDimensions = []string{dimQuestion, dimKeyword, dimMixed, dimEnglish,
+	dimKatakana, dimOrthography, dimSynonyms, dimShort}
+
 // evalCases is the golden set. Keep queries phrased as questions and
 // keywords a data agent would send — the point is aboutness, not exact
 // title matches (those are pinned separately by the name-bonus tests in
@@ -377,6 +383,67 @@ const (
 	evalFusedMRRFloor    = 0.77
 )
 
+// Reach: how many concepts a question touched at all.
+//
+// recall@k and MRR both read one position — where the right answer
+// landed — and are blind to what came with it. Migration 0042 was found
+// outside this harness for exactly that reason: ー was a word boundary,
+// every katakana question had degraded from a lookup to a prefix scan,
+// and the golden set said 1.00 recall and MRR 1.00 on those cases,
+// because the right concept was still first. What was wrong sat
+// underneath it, and no number here could see it.
+//
+// Reach is that number. It is the length of the lexical list — every
+// concept that matched a fragment at all, which is the floor the
+// ranking is built on ("matched something", not a score threshold:
+// design doc 0068 §3). A question that reaches the whole corpus has
+// ranked it, not searched it, and the reader under a byte budget
+// (design doc 0093) pays for the difference.
+//
+// **Lexical only, and that is not a gap to close later.** Cosine is
+// never zero, so the vector half reaches every concept in the corpus by
+// construction; a fused reach would be the corpus size for every query
+// on every run and would measure nothing at all.
+//
+// **Read it with the recall floor, never alone.** Reach falls to 1.00
+// if the search stops finding anything, and it is the recall floor —
+// not this ceiling — that says the answers are still there. The two
+// numbers are one measurement: recall says nothing fell out, reach says
+// how much came with it.
+const (
+	// High enough that nothing is truncated by it: a reach that hit its
+	// own limit would be the limit's number, not the query's, and the
+	// measurement fails rather than reporting it.
+	evalReachLimit = 200
+	// Measured at 6.25 concepts of the 12 this corpus holds. The
+	// ceiling sits two cases' worth over it, the width the floors use,
+	// and fails in both directions for the floors' reason: a ceiling
+	// nobody lowered when a change narrowed the search is budget the
+	// next widening spends without moving a number anybody reads.
+	//
+	// **It was checked against the defect it was written for.** On the
+	// tree before migration 0042 the same set measures 7.44, which
+	// fails this ceiling, and the katakana line reads 11.00 of 12 —
+	// every loanword question touching all but one concept in the base.
+	// recall and MRR over that tree are 1.00 and 0.82, against 1.00 and
+	// 0.83 after: the ranking numbers moved by one point where reach
+	// moved by nine concepts, which is the whole argument for measuring
+	// this at all.
+	//
+	// It moves when the corpus does, as the floors do — a thirteenth
+	// concept is another concept every common fragment can reach.
+	evalReachCeiling = 6.27
+
+	// What the dimensions read after 0042, for the next change to aim
+	// at: question 8.48, english 6.67, orthography 5.67, mixed 5.00,
+	// keyword 4.91, katakana 2.60, synonyms 2.00, short 1.33. The
+	// question line is the widest and the least alarming — a natural
+	// question carries many fragments and a twelve-concept corpus about
+	// one shop shares most of them — while english and orthography are
+	// wide *and* rank worst (MRR 0.69 and 0.67), which is where the two
+	// measurements agree that something is unfinished.
+)
+
 // evalFloorSlackCases is how far a floor may sit under what was measured
 // before that gap is itself a failure, counted in cases.
 //
@@ -507,10 +574,89 @@ func TestSearchEvalIntegration(t *testing.T) {
 	})
 	checkEvalFloors(t, lexical, recall, mrr, evalRecallFloor, evalMRRFloor)
 
+	// What the ranking numbers above cannot see: how much each question
+	// touched on its way to the answer.
+	corpus, err := svc.SearchOrList(ctx, "", "verified_at", "", filter, 1000)
+	if err != nil {
+		t.Fatalf("count the corpus: %v", err)
+	}
+	checkEvalReach(t, measureReach(t, ctx, svc, prefix, len(corpus.Hits)), evalReachCeiling)
+
 	// The same questions with the vector half on, which is the
 	// configuration a Google Cloud deployment runs.
 	fusedRecall, fusedMRR := scoreFusedGoldenSet(t, ctx, svc, prefix)
 	checkEvalFloors(t, "fused", fusedRecall, fusedMRR, evalFusedRecallFloor, evalFusedMRRFloor)
+}
+
+// measureReach reports the mean number of concepts a question reached,
+// with a line per dimension beside it — the same shape the scorer
+// reports, so the two are read together.
+//
+// The worst case is logged by name. A mean says the search narrowed;
+// the question sitting at the top of it says what to look at next, and
+// that is the line that sent this harness to the prolonged sound mark.
+func measureReach(t *testing.T, ctx context.Context, svc *Service, prefix string, corpus int) float64 {
+	t.Helper()
+	filter := store.Filter{Prefixes: []string{prefix}}
+	type tally struct{ cases, reached int }
+	byDim := map[string]*tally{}
+	total, worst, worstQuery := 0, 0, ""
+	for _, c := range evalCases {
+		hits, err := svc.Store.SearchLexical(ctx, c.query, filter, evalReachLimit)
+		if err != nil {
+			t.Fatalf("reach %q: %v", c.query, err)
+		}
+		if len(hits) >= evalReachLimit {
+			t.Fatalf("%q reached %d concepts, filling the limit this is measured at: "+
+				"raise evalReachLimit, or the number is the limit's and not the query's",
+				c.query, len(hits))
+		}
+		total += len(hits)
+		if len(hits) > worst {
+			worst, worstQuery = len(hits), c.query
+		}
+		d := byDim[c.dim]
+		if d == nil {
+			d = &tally{}
+			byDim[c.dim] = d
+		}
+		d.cases++
+		d.reached += len(hits)
+	}
+	for _, dim := range evalDimensions {
+		d := byDim[dim]
+		t.Logf("  %-11s reach = %.2f concepts", dim, float64(d.reached)/float64(d.cases))
+	}
+	mean := float64(total) / float64(len(evalCases))
+	t.Logf("reach = %.2f concepts of %d (widest: %q at %d), lexical only", mean, corpus, worstQuery, worst)
+	return mean
+}
+
+// checkEvalReach holds the reach to its ceiling in both directions, the
+// way checkEvalFloors holds a floor: over it is the widening the
+// ceiling exists to catch, and further under it than
+// evalFloorSlackCases allows is a ceiling nobody lowered when the
+// search narrowed.
+func checkEvalReach(t *testing.T, got, ceiling float64) {
+	t.Helper()
+	slack := evalFloorSlackCases / float64(len(evalCases))
+	switch {
+	case got > ceiling:
+		t.Errorf(`reach rose to %.2f concepts, over the %.2f ceiling: a change widened what every
+question touches. Recall and MRR can both be unmoved while this happens — the right
+answer stays where it was and more wrong ones arrive under it.`, got, ceiling)
+	case ceiling-got > slack:
+		// Rounded down, which is the floors' rule read in the other
+		// direction: a floor is advised upward and a ceiling downward,
+		// because both have to stay on the measurement's side of the
+		// number. Rounding a ceiling up advises a value that fails this
+		// same check on the next run.
+		want := math.Floor((got+slack)*100) / 100
+		t.Errorf(`reach measures %.2f concepts against a ceiling of %.2f — %.1f cases' worth of room,
+wider than the %d evalFloorSlackCases this file allows. Lower the ceiling to at most
+%.2f in the PR that earned it.`,
+			got, ceiling, (ceiling-got)*float64(len(evalCases)), evalFloorSlackCases, want)
+	}
 }
 
 // rank is the position of the first acceptable concept — want, or one of
@@ -581,8 +727,7 @@ func scoreGoldenSet(t *testing.T, config, prefix string, search func(query strin
 	}
 	recall = float64(found) / float64(len(evalCases))
 	mrr /= float64(len(evalCases))
-	for _, dim := range []string{dimQuestion, dimKeyword, dimMixed, dimEnglish,
-		dimKatakana, dimOrthography, dimSynonyms, dimShort} {
+	for _, dim := range evalDimensions {
 		d := byDim[dim]
 		if d == nil {
 			t.Fatalf("dimension %s has no cases; drop it from this list or give it one", dim)

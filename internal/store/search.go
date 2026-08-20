@@ -234,9 +234,9 @@ func scriptWithoutSpaces(r rune) bool {
 // **That is most of a data team's vocabulary.** テーブル, ロード,
 // パーティション, カレンダー, レポート, ユーザー, サービスアカウント:
 // each was a prefix scan rather than a lookup, and the corpus answered
-// every one of them with all of itself — the eight katakana probes over
-// examples/demo each returned all twelve concepts, the right one first
-// and eleven trailing it on a shared first character. Migration 0036
+// every one of them with most of itself — over examples/demo a katakana
+// question reached 11.00 of the base's 12 concepts, the right one first
+// and the rest trailing it on a shared first character. Migration 0036
 // exists so a two-character Japanese term stops reading the table, and
 // for every word with a long vowel in it the mark had quietly given
 // that back.

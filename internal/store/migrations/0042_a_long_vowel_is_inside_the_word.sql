@@ -10,12 +10,12 @@
 -- character each — asked for as the prefixes デ:* and タ:*, and stored
 -- as the lone lexeme デ.
 --
--- Measured over examples/demo before this migration: each of the eight
--- katakana probes (データ, テーブル, ロード, フィード, パーティション,
--- レポート, ページ, コード) returned all twelve concepts. The right one
--- ranked first — the scorer is not what was broken — and eleven
--- unrelated concepts followed it with a non-zero score, on the strength
--- of a shared first character. That is the corpus reading itself, which
+-- Measured over examples/demo before this migration: a katakana
+-- question reached 11.00 of the 12 concepts in the base, and reaches
+-- 2.60 after it (the harness reports this as the katakana dimension's
+-- reach). The right one ranked first either way — the scorer is not
+-- what was broken — and the rest followed it with a non-zero score, on
+-- the strength of a shared first character. That is the corpus reading itself, which
 -- is the cost 0036 exists to have removed, and it applies to most of
 -- the vocabulary a data team writes in.
 --

@@ -201,6 +201,17 @@ every Google Cloud deployment runs (design doc 0080 §1.1). The stand-in
 is deterministic, so the fused half needs no API key and reaches no
 network.
 
+Beside recall@10 and MRR it reports **reach**: how many concepts each
+question touched at all, meaned over the set. Ranking numbers read one
+position and are blind to what arrives under it — migration 0042 was
+found outside this harness because every katakana question had degraded
+from a lookup to a prefix scan while recall stayed 1.00 and those cases
+stayed at rank 1. Reach carries a ceiling that fails in both directions,
+like the floors, and is read *with* the recall floor: recall says
+nothing fell out, reach says how much came with it. It is measured on
+the lexical list alone — cosine is never zero, so a fused reach would be
+the corpus size for every query.
+
 Each case is labelled with the dimension of query behaviour it
 exercises — natural questions, keyword lookups, warehouse English
 inside a Japanese sentence, English questions, spelling variants,

@@ -30,9 +30,9 @@ last entry.
   runs of one character, asked for as the prefixes `デ:*` and `タ:*`,
   and that is most of the vocabulary a data team writes in: テーブル,
   ロード, パーティション, カレンダー, レポート, ユーザー. Measured over
-  `examples/demo`, each of eight katakana probes returned all twelve
-  concepts — the right one first and eleven trailing it on a shared
-  first character; they now return 2.6 on average. The halfwidth voiced
+  `examples/demo`, a katakana question touched 11.00 of the 12 concepts
+  in the base — the right one first, and the rest trailing it on a
+  shared first character; it now touches 2.60. The halfwidth voiced
   marks (ﾞ ﾟ) and halfwidth ｰ join for the same reason. **Migration 0042
   recomputes the search index for every stored object**, so the first
   start after upgrading writes once per row before it serves; a base of
