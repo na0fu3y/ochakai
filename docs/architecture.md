@@ -527,7 +527,7 @@ ochakai の不変条件のほとんどは Go の型システムでは表現で�
   分野別にまとめた索引。上のすべてについて権威ある情報源である。
 - [api/openapi.yaml](../api/openapi.yaml) — ワイヤサーフェス。
 - [examples/demo](../examples/demo) — このページが説明するレイアウト・
-  type・リンクを備えた、11 concept のナレッジベース。
+  type・リンクを備えた、18 concept のナレッジベース。
 - [deploy/cloudrun/README.md](../deploy/cloudrun/README.md) —
   デプロイの手順と hardening のチェックリスト。
 - [docs/guides/golden-query-canary.md](guides/golden-query-canary.md)

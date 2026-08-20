@@ -23,10 +23,10 @@ import (
 // with these numbers in the PR; the floors below pin the current
 // baseline so a regression fails instead of shipping quietly.
 //
-// The corpus is examples/demo — the same eleven concepts the quick start
-// loads — imported under a run-unique prefix so a shared test database
-// neither collides nor pollutes, plus one Japanese concept defined
-// inline.
+// The corpus is examples/demo — the same eighteen concepts the quick
+// start loads — imported under a run-unique prefix so a shared test
+// database neither collides nor pollutes, plus one Japanese concept
+// defined inline.
 //
 // The supplement used to be the only Japanese here, because the demo had
 // none and the two-character windows a Japanese question is cut into
@@ -37,7 +37,7 @@ import (
 // got silence. The demo is written in Japanese now — that is what
 // ochak.ai's demo is — so the questions below are asked of the shipped
 // bundle in the language it is written in. The supplement is down to the
-// one term the invented shop has no home for (解約率 — it sells no
+// one term the demo's store has no home for (解約率 — it sells no
 // subscriptions); the two that stood in for 売上 and 受注 are gone,
 // because the bundle says both itself and a fixture competing with the
 // concept it stands in for measures nothing.
@@ -116,93 +116,118 @@ var evalCases = []evalCase{
 	// in.
 	{query: "なぜ売上が落ちているのか", want: "insights/reading-revenue", dim: dimQuestion},
 	{query: "月次売上", want: "queries/sales/monthly-revenue", dim: dimKeyword},
-	{query: "チャネル別の売上", want: "queries/sales/revenue-by-channel", dim: dimKeyword},
+	{query: "獲得チャネル別の売上", want: "queries/sales/revenue-by-traffic-source", dim: dimKeyword},
 	{query: "売上とは何か", want: "metrics/revenue", dim: dimQuestion},
 	{query: "完了した注文とは", want: "glossary/completed-order", dim: dimQuestion},
 	{query: "リピート購入率", want: "metrics/repeat-purchase-rate", dim: dimKeyword},
-	{query: "チャネルコードの一覧", want: "references/order-channel-codes", dim: dimQuestion},
+	{query: "返品率", want: "metrics/return-rate", dim: dimKeyword},
 	{query: "売上計上のルール", want: "policies/revenue-recognition", dim: dimQuestion},
-	{query: "注文テーブルのスキーマ", want: "tables/shop-orders", dim: dimQuestion},
+	{query: "注文テーブルのスキーマ", want: "tables/orders", dim: dimQuestion},
 	{query: "BigQuery のクエリはどう実行するか", want: "skills/run-bigquery-query", dim: dimQuestion},
-	{query: "月末の着地見込み", want: "insights/着地見込み", dim: dimKeyword},
+	{query: "オントロジー", want: "glossary/ontology", dim: dimKeyword},
+	{query: "アクションはどう実行するか", want: "skills/run-an-action", dim: dimQuestion},
+	{query: "返品率の高い商品", want: "actions/review-high-return-products",
+		accept: []string{"metrics/return-rate"}, dim: dimKeyword},
+	{query: "データセットはどこにあるか", want: "references/thelook-dataset", dim: dimQuestion},
 	// A second pass over the same corpus, phrased the way somebody asks
-	// rather than the way a title reads. Fourteen cases put MRR inside
-	// its own noise — one case moving from rank 1 to 2 moved it by 0.036
-	// — so the set is widened as far as twelve concepts honestly
-	// support. Beyond that a case stops being a question anybody has and
-	// becomes a restatement of a title, which measures the fixture.
+	// rather than the way a title reads. Beyond this kind a case stops
+	// being a question anybody has and becomes a restatement of a title,
+	// which measures the fixture.
 	{query: "売上が下がった理由", want: "insights/reading-revenue", dim: dimQuestion},
-	{query: "お盆", want: "insights/reading-revenue", dim: dimKeyword},
-	{query: "普通の月はいくらか", want: "insights/reading-revenue", dim: dimQuestion},
-	{query: "大口の注文で山ができた", want: "insights/reading-revenue", dim: dimQuestion},
-	{query: "パーティションの遅れ", want: "insights/reading-revenue",
-		accept: []string{"tables/shop-orders"}, dim: dimQuestion},
-	{query: "季節性", want: "insights/reading-revenue", dim: dimKeyword},
-	{query: "売上に税は含まれるか", want: "metrics/revenue", dim: dimQuestion},
-	{query: "純売上との違い", want: "metrics/revenue", dim: dimQuestion},
-	{query: "どの注文を売上として数えるか", want: "policies/revenue-recognition",
-		accept: []string{"glossary/completed-order"}, dim: dimQuestion},
-	{query: "返金は引くのか", want: "policies/revenue-recognition",
-		accept: []string{"metrics/revenue"}, dim: dimQuestion},
-	{query: "キャンセルした注文", want: "glossary/completed-order", dim: dimKeyword},
-	{query: "受注と完了の違い", want: "glossary/completed-order", dim: dimQuestion},
-	{query: "売上が伸びているチャネル", want: "queries/sales/revenue-by-channel", dim: dimQuestion},
-	{query: "今年度の売上を月ごとに", want: "queries/sales/monthly-revenue", dim: dimQuestion},
-	{query: "買い直した客の割合", want: "metrics/repeat-purchase-rate", dim: dimQuestion},
-	{query: "ゲスト購入", want: "metrics/repeat-purchase-rate", dim: dimKeyword},
-	{query: "注文はどこに入っているか", want: "tables/shop-orders", dim: dimQuestion},
-	{query: "receipt には何を返すのか", want: "skills/run-bigquery-query", dim: dimMixed},
-	{query: "今月はどうなりそうか", want: "insights/着地見込み", dim: dimQuestion},
-	// A third pass, added with the dimension report: questions whose
-	// answer the bundle holds as a fact rather than as a title — the
-	// payday spike, the 与信 hold, the split shipment — and the questions
-	// the bundle answers in several linked places at once, which is what
-	// accept is for. Each anchors to prose one concept actually carries;
-	// none restates a name.
-	{query: "今日の売上が少なく見える", want: "tables/shop-orders",
-		accept: []string{"insights/reading-revenue"}, dim: dimQuestion},
-	{query: "経理の締めと合わないのはなぜか", want: "policies/revenue-recognition",
-		accept: []string{"metrics/revenue", "glossary/completed-order", "insights/着地見込み"},
+	{query: "右肩上がりの成長", want: "insights/reading-revenue",
+		accept: []string{"references/thelook-dataset", "metrics/revenue"}, dim: dimKeyword},
+	{query: "前年比がプラスなのは成果か", want: "insights/reading-revenue", dim: dimQuestion},
+	{query: "先週見た数字と合わない", want: "insights/reading-revenue",
+		accept: []string{"references/thelook-dataset", "policies/revenue-recognition"},
 		dim:    dimQuestion},
-	{query: "月がずれる", want: "tables/shop-orders",
-		accept: []string{"queries/sales/monthly-revenue", "insights/着地見込み"}, dim: dimQuestion},
-	{query: "一部返品された注文はどう数えるか", want: "glossary/completed-order",
-		accept: []string{"policies/revenue-recognition", "metrics/revenue"}, dim: dimQuestion},
-	{query: "アプリからの注文はどのコードか", want: "references/order-channel-codes", dim: dimQuestion},
-	{query: "どのサービスアカウントで実行するか", want: "skills/run-bigquery-query", dim: dimQuestion},
-	{query: "25日の山", want: "insights/着地見込み", dim: dimKeyword},
-	{query: "分割出荷", want: "glossary/completed-order", dim: dimKeyword},
+	{query: "過去の月の数字が動く", want: "policies/revenue-recognition",
+		accept: []string{"glossary/completed-order", "references/thelook-dataset",
+			"metrics/return-rate", "insights/reading-revenue"},
+		dim: dimQuestion},
+	{query: "売上に税は含まれるか", want: "metrics/revenue", dim: dimQuestion},
+	{query: "GMV との違い", want: "metrics/revenue",
+		accept: []string{"queries/sales/monthly-bookings"}, dim: dimQuestion},
+	{query: "受注ベースの合計", want: "queries/sales/monthly-bookings",
+		accept: []string{"glossary/completed-order"}, dim: dimKeyword},
+	{query: "どの明細を売上として数えるか", want: "policies/revenue-recognition",
+		accept: []string{"glossary/completed-order", "metrics/revenue"}, dim: dimQuestion},
+	{query: "キャンセルした注文", want: "glossary/completed-order", dim: dimKeyword},
+	{query: "一部返品はどう数えるか", want: "glossary/completed-order",
+		accept: []string{"metrics/return-rate", "tables/order-items"}, dim: dimQuestion},
+	{query: "注文の金額はどの列にあるか", want: "tables/order-items",
+		accept: []string{"tables/orders"}, dim: dimQuestion},
+	{query: "数量の列が無いのはなぜか", want: "tables/order-items", dim: dimQuestion},
+	{query: "定価と実売の違い", want: "tables/products",
+		accept: []string{"tables/order-items"}, dim: dimQuestion},
+	{query: "商品カテゴリで売上を割る", want: "tables/products",
+		accept: []string{"insights/reading-revenue"}, dim: dimQuestion},
+	{query: "会員登録と初回購入は別か", want: "tables/users",
+		accept: []string{"metrics/repeat-purchase-rate"}, dim: dimQuestion},
 	{query: "遡る期間", want: "metrics/repeat-purchase-rate", dim: dimKeyword},
+	{query: "決定草案はどこに書くか", want: "skills/run-an-action", dim: dimQuestion},
+	{query: "月の途中の数字の読み方", want: "insights/reading-revenue", dim: dimQuestion},
+	{query: "検証済みのクエリはどれか", want: "queries/sales/monthly-revenue",
+		accept: []string{"tables/order-items", "metrics/revenue"}, dim: dimQuestion},
+	// A third pass: questions whose answer the bundle holds as a fact
+	// rather than as a title — the lowercase-'complete' trap, the moving
+	// past, the missing money column — and the questions the bundle
+	// answers in several linked places at once, which is what accept is
+	// for. Each anchors to prose one concept actually carries; none
+	// restates a name.
+	{query: "今月の売上が少なく見える", want: "insights/reading-revenue", dim: dimQuestion},
+	{query: "status に履歴はあるか", want: "glossary/completed-order",
+		accept: []string{"tables/orders", "policies/revenue-recognition",
+			"references/thelook-dataset"},
+		dim: dimQuestion},
+	{query: "ゲスト購入はあるか", want: "tables/orders", dim: dimQuestion},
+	{query: "候補が0行だったらどうするか", want: "skills/run-an-action", dim: dimQuestion},
+	{query: "実行してよいパラメータの範囲", want: "actions/review-high-return-products",
+		accept: []string{"skills/run-an-action"}, dim: dimQuestion},
+	{query: "クエリの課金は誰持ちか", want: "references/thelook-dataset",
+		accept: []string{"skills/run-bigquery-query"}, dim: dimQuestion},
 	// Katakana loanwords, which is most of the vocabulary a data team
-	// writes in: the terms below are the only place each word appears in
-	// the corpus, so a case answers only if the term was looked up as a
-	// term. Every one of them is joined by ー — テーブル, ロード,
-	// カレンダー — and that mark is where a katakana word is cut, so
-	// these measure whether a loanword can be searched for at all.
-	{query: "ロケーション", want: "skills/run-bigquery-query", dim: dimKatakana},
-	{query: "データセット", want: "skills/run-bigquery-query", dim: dimKatakana},
-	{query: "毎時ロード", want: "tables/shop-orders", dim: dimKatakana},
-	{query: "カレンダー", want: "insights/reading-revenue",
-		accept: []string{"insights/着地見込み", "queries/sales/monthly-revenue"}, dim: dimKatakana},
-	{query: "フィード", want: "queries/sales/revenue-by-channel", dim: dimKatakana},
+	// writes in. Every one of these is joined by ー — ロケーション,
+	// フィード, キャンペーン — and that mark is where a katakana word
+	// used to be cut (migration 0042), so they measure whether a
+	// loanword can be searched for as a word at all. Each is anchored
+	// where the corpus actually says it: フィード and キャンペーン
+	// appear in one concept only, ロケーション in the two that name the
+	// dataset's region, プラットフォーム in the one concept that
+	// contrasts ochakai with one.
+	{query: "ロケーション", want: "skills/run-bigquery-query",
+		accept: []string{"references/thelook-dataset"}, dim: dimKatakana},
+	{query: "フィード", want: "queries/sales/revenue-by-traffic-source", dim: dimKatakana},
+	{query: "キャンペーンの振り返り", want: "queries/sales/revenue-by-traffic-source",
+		dim: dimKatakana},
+	{query: "プラットフォーム", want: "glossary/ontology", dim: dimKatakana},
+	{query: "レポートに書いてよい数字か", want: "metrics/repeat-purchase-rate",
+		accept: []string{"queries/sales/monthly-bookings"}, dim: dimKatakana},
 	// Warehouse English inside a Japanese sentence, which is how a data
 	// agent actually talks to this base: the column name stays English,
 	// the question around it does not. scriptRuns is what keeps the two
 	// halves findable (store/search.go), and nothing measured it.
-	{query: "channel_code が null の行", want: "tables/shop-orders",
-		accept: []string{"queries/sales/revenue-by-channel", "references/order-channel-codes"},
-		dim:    dimMixed},
-	{query: "created_at はどのタイムゾーンか", want: "tables/shop-orders", dim: dimMixed},
-	{query: "from_date は必須か", want: "queries/sales/revenue-by-channel", dim: dimMixed},
+	{query: "sale_price はどの表にあるか", want: "tables/order-items",
+		accept: []string{"tables/orders"}, dim: dimMixed},
+	{query: "status が Complete の明細", want: "glossary/completed-order",
+		accept: []string{"tables/order-items", "queries/sales/monthly-revenue"}, dim: dimMixed},
+	{query: "traffic_source は何の値か", want: "tables/users",
+		accept: []string{"queries/sales/revenue-by-traffic-source"}, dim: dimMixed},
+	{query: "num_of_item とは", want: "tables/orders", dim: dimMixed},
+	{query: "receipt には何を返すのか", want: "skills/run-bigquery-query",
+		accept: []string{"skills/run-an-action"}, dim: dimMixed},
+	{query: "min_sold は必須か", want: "actions/review-high-return-products", dim: dimMixed},
+	{query: "department は2値か", want: "tables/products", dim: dimMixed},
 	// English, and still against the shipped bundle: the names the
 	// warehouse supplies stayed English when the prose became Japanese,
 	// which is what a Japanese team's own base looks like. A base that
-	// could not be asked `total_price` would have translated the wrong
+	// could not be asked `sale_price` would have translated the wrong
 	// half.
-	{query: "total_price column", want: "tables/shop-orders", dim: dimEnglish},
-	{query: "web_direct", want: "references/order-channel-codes", dim: dimEnglish},
-	{query: "channel_code enum", want: "references/order-channel-codes", dim: dimEnglish},
-	{query: "status completed", want: "glossary/completed-order", dim: dimEnglish},
+	{query: "sale_price column", want: "tables/order-items", dim: dimEnglish},
+	{query: "status Complete", want: "glossary/completed-order",
+		accept: []string{"tables/order-items"}, dim: dimEnglish},
+	{query: "traffic_source values", want: "tables/users", dim: dimEnglish},
+	{query: "thelook_ecommerce dataset", want: "references/thelook-dataset", dim: dimEnglish},
+	{query: "order_items schema", want: "tables/order-items", dim: dimEnglish},
 	// The whole English question, not only the keyword — the exact input
 	// queryFragments was written around (store/search.go names it), sent
 	// by the teammate who does not read the base's language. The stemmer
@@ -211,39 +236,43 @@ var evalCases = []evalCase{
 	// comes first for a question none of them contains.
 	{query: "why is revenue down", want: "insights/reading-revenue",
 		accept: []string{"metrics/revenue"}, dim: dimEnglish},
-	{query: "customer_id is null", want: "tables/shop-orders", dim: dimEnglish},
 	// Spelling variants of words the bundle writes another way. These
 	// are the improvement backlog, kept as measured cases rather than as
 	// a to-do: 売り上げ is the okurigana spelling every IME offers
 	// first, and its windows (売り, 上げ) share nothing with the 売上
 	// the corpus writes — the case rides entirely on the rest of the
-	// sentence, which is what a reader typing it gets. チャンネル shares
-	// two of its four windows with チャネル, so the n-gram treatment
-	// absorbs that variant on its own. Full-width ＢｉｇＱｕｅｒｙ is
-	// what a Japanese IME yields mid-sentence; no width folding exists,
-	// so the Latin term is lost and the Japanese half of the sentence
-	// has to carry the case. A normalization that closes any of these
-	// moves this dimension's line without touching the others — that is
-	// the report doing its job.
+	// sentence, which is what a reader typing it gets. オントロジ drops
+	// the long vowel and keeps most of its windows, so the n-gram
+	// treatment absorbs that variant on its own. Full-width
+	// ＢｉｇＱｕｅｒｙ is what a Japanese IME yields mid-sentence; no
+	// width folding exists, so the Latin term is lost and the Japanese
+	// half of the sentence has to carry the case. A normalization that
+	// closes any of these moves this dimension's line without touching
+	// the others — that is the report doing its job.
 	{query: "売り上げの定義", want: "metrics/revenue", dim: dimOrthography},
-	{query: "チャンネルごとの売上", want: "queries/sales/revenue-by-channel", dim: dimOrthography},
+	{query: "オントロジとは", want: "glossary/ontology", dim: dimOrthography},
 	{query: "ＢｉｇＱｕｅｒｙの実行", want: "skills/run-bigquery-query", dim: dimOrthography},
 	// The other names the writer gave the metric (design doc 0105).
 	// "top line" appears nowhere in the bundle but the synonyms key, so
-	// this case answers only when the haystack reads it — and unlike the
-	// "net sales" it replaced, it is a name for this metric rather than
-	// for the 純売上 the concept spends a paragraph saying it is not.
-	// トップライン is the same key's Japanese entry, windowed instead of
-	// stemmed — the two spellings take different paths to the same row.
+	// this case answers only when the haystack reads it. トップライン is
+	// the same key's Japanese entry, windowed instead of stemmed — the
+	// two spellings take different paths to the same row. "return rate"
+	// is the return-rate metric's own synonyms entry, though the action
+	// carries the words as a SQL alias too.
 	{query: "top line", want: "metrics/revenue", dim: dimSynonyms},
 	{query: "トップライン", want: "metrics/revenue", dim: dimSynonyms},
+	{query: "return rate", want: "metrics/return-rate",
+		accept: []string{"actions/review-high-return-products"}, dim: dimSynonyms},
 	// Two-character terms — exactly the shape the trigram index cannot
 	// serve and the windowed scan answers. 解約 lives in the inline
-	// supplement below, in a corpus with no other home for it; 与信 is
-	// the demo's own, one concept's single sentence about credit holds.
+	// supplement below, in a corpus with no other home for it; 粗利 and
+	// 定価 are the demo's own, a couple of sentences in the products
+	// concept about which price column means what.
 	{query: "解約率", want: "ja/metrics/kaiyakuritsu", dim: dimShort},
 	{query: "解約の分母", want: "ja/metrics/kaiyakuritsu", dim: dimShort},
-	{query: "与信", want: "glossary/completed-order", dim: dimShort},
+	{query: "粗利", want: "tables/products", dim: dimShort},
+	{query: "定価", want: "tables/products",
+		accept: []string{"references/thelook-dataset"}, dim: dimShort},
 }
 
 // japaneseSupplement holds the inline Japanese concepts, keyed by id
@@ -298,57 +327,47 @@ const evalVerified = "policies/revenue-recognition"
 //
 // The set grew from 14 cases to 36, then to 41 when the demo gained a
 // Japanese half, to 37 when the demo became Japanese and the two
-// supplement concepts the bundle had come to duplicate were gone, and
-// stands at 61: 56 with the dimension labels, and five more when the
-// katakana dimension was added to measure migration 0042. Fourteen put MRR inside its
-// own noise: one case moving from rank 1 to rank 2 moved it by 0.036,
-// which is the size of the differences anybody was reading. The second
-// pass asks the same corpus the way somebody asks rather than the way a
-// title reads — 「お盆」「ゲスト購入」「返金は引くのか」 — and twelve
-// concepts do not honestly support many more *of that kind*. The third
-// pass got past that limit two ways: by anchoring to facts rather than
-// concepts (与信, 分割出荷, the 25日 spike — one concept holds several
-// facts somebody asks for separately), and by asking the same fact in
-// the spellings the corpus does not use (売り上げ, チャンネル,
-// ＢｉｇＱｕｅｒｙ), which is where queries actually differ from
-// documents. accept opened the questions the bundle deliberately
-// answers in several linked places, which single-answer scoring had
-// been excluding as ambiguous.
+// supplement concepts the bundle had come to duplicate were gone, to 56
+// with the dimension labels, to 61 when the katakana dimension was added
+// to measure migration 0042, and was rewritten at 68 when the demo
+// became the thelook_ecommerce ontology bundle — eighteen concepts over
+// a real public dataset, with an action and its executor beside the
+// computations. Fourteen put MRR inside its own noise: one case moving
+// from rank 1 to rank 2 moved it by 0.036, which is the size of the
+// differences anybody was reading. The second pass asks the same corpus
+// the way somebody asks rather than the way a title reads —
+// 「先週見た数字と合わない」「ゲスト購入はあるか」 — and the third pass
+// anchors to facts rather than concepts (the lowercase-'complete' trap,
+// the missing money column, the 0-row action run — one concept holds
+// several facts somebody asks for separately) and to the spellings the
+// corpus does not use (売り上げ, オントロジ, ＢｉｇＱｕｅｒｙ), which is
+// where queries actually differ from documents. accept opened the
+// questions the bundle deliberately answers in several linked places,
+// which single-answer scoring had been excluding as ambiguous.
 //
-// **The numbers moved when the demo became Japanese, and the two runs
-// are not comparable.** Both the corpus and the questions changed:
-// lexical went 0.90 → 0.78 and fused 0.85 → 0.77, while recall went to
-// 1.00 on both halves — nothing fell out of the top ten. They moved
-// again at 56 cases (lexical 0.78 → 0.80, fused 0.77 → 0.78), and
-// again the runs are not comparable: the set changed under the number,
-// partly because accept stopped charging the multi-homed questions to
-// the ranking.
+// **Each rewrite moved the numbers, and the runs are not comparable
+// across one.** When the demo became Japanese: lexical 0.90 → 0.78 and
+// fused 0.85 → 0.77, recall to 1.00 on both halves. At 56 cases:
+// lexical 0.80, fused 0.78. Migration 0042 was the first entry that
+// moved the number without the set changing under it — at 61 cases
+// lexical 0.82 → 0.83, fused flat at 0.80, all of it in the question
+// dimension — and the reach measurement below exists because that is so
+// much smaller than what the migration actually bought. The thelook
+// rewrite then replaced the corpus and the set together, so its numbers
+// start a new series again. Two effects still govern a corpus of this
+// shape:
 //
-// **Migration 0042 is the first entry here that moved the number
-// without the set changing under it**: at 61 cases, lexical went 0.82 →
-// 0.83 and fused stayed 0.80, all of it in the question dimension (0.76
-// → 0.79). That is the honest size of it, and it is much smaller than
-// what the migration actually bought — the golden set scores rank, and
-// what a loanword lookup fixes is the candidate set: over this corpus
-// the eight katakana probes went from returning all twelve concepts
-// each to returning 2.6 on average. A twelve-concept corpus cannot
-// charge for the nine wrong answers underneath a right one, which is
-// this harness's own limit written down.
-//
-// The 37-case story below still names the two effects that govern this
-// corpus:
-//
-//   - A monolingual Japanese corpus about one shop shares 売上 across
+//   - A monolingual Japanese corpus about one store shares 売上 across
 //     every concept, and the concept whose name *is* 売上 takes the name
 //     rule (store/search.go) from the insight that answers the question.
-//     「なぜ売上が落ちているのか」 puts metrics/revenue first and
+//     「なぜ売上が落ちているのか」 can put metrics/revenue first and
 //     insights/reading-revenue second, which is the rule working: the
 //     README's next line is `ochakai get insights/reading-revenue`.
-//   - An English keyword now lands in prose that is Japanese around it,
-//     so "total_price column" ties seven concepts at the same score and
-//     is settled by verification recency and id. Rank 7 of 10 is what a
-//     Japanese base gives an English keyword, and measuring it is why
-//     the English cases stayed.
+//   - An English keyword lands in prose that is Japanese around it, so
+//     "sale_price column" ties the concepts that all carry the column
+//     name and is settled by verification recency and id. A middling
+//     rank is what a Japanese base gives an English keyword, and
+//     measuring it is why the English cases stayed.
 //
 // The fused floors are separate. A stand-in that shares the lexical
 // side's vocabulary can only reorder a list the words already reached,
@@ -361,26 +380,27 @@ const evalVerified = "policies/revenue-recognition"
 // vocabulary at all, and no number on this page says how much that is.
 const (
 	evalK = 10
-	// Lexical, measured at 1.00 / 0.83. The MRR floor is two cases'
-	// worth under it: one case slipping from rank 1 to rank 2 is 0.008
-	// here, so a floor closer than that fails on noise.
-	evalRecallFloor = 0.97
-	evalMRRFloor    = 0.80
+	// Lexical, measured at 1.00 / 0.87 over the thelook corpus. The MRR
+	// floor is two cases' worth under it: one case slipping from rank 1
+	// to rank 2 is 0.007 here, so a floor closer than that fails on
+	// noise.
+	evalRecallFloor = 0.98
+	evalMRRFloor    = 0.85
 	// Fused: the same questions with the stand-in encoder on, measured
-	// at 1.00 / 0.80. This floor is the one that catches the verified
+	// at 1.00 / 0.86. This floor is the one that catches the verified
 	// addend going back to 0.002 — that constant is the kind that gets
 	// nudged by whoever is looking at one query — so it was re-measured
 	// when it was set: at 0.002 the 37-case fused run scored 0.73, and
 	// the floor sat between.
 	//
 	// It read 0.75 against 0.78 measured at 56 cases, 0.74 against 0.77
-	// when the demo became Japanese,
-	// 0.83 against 0.85 over the bilingual corpus, and before that 0.86
-	// against 0.89. Each move came from the corpus or the set changing
-	// under it, not from the merge; what the number certifies is still
-	// only that the merge does no harm.
-	evalFusedRecallFloor = 0.97
-	evalFusedMRRFloor    = 0.77
+	// when the demo became Japanese, 0.83 against 0.85 over the
+	// bilingual corpus, and before that 0.86 against 0.89. Each move
+	// came from the corpus or the set changing under it, not from the
+	// merge; what the number certifies is still only that the merge
+	// does no harm.
+	evalFusedRecallFloor = 0.98
+	evalFusedMRRFloor    = 0.84
 )
 
 // Reach: how many concepts a question touched at all.
@@ -415,33 +435,38 @@ const (
 	// own limit would be the limit's number, not the query's, and the
 	// measurement fails rather than reporting it.
 	evalReachLimit = 200
-	// Measured at 6.25 concepts of the 12 this corpus holds. The
+	// Measured at 10.54 concepts of the 19 this corpus holds. The
 	// ceiling sits two cases' worth over it, the width the floors use,
 	// and fails in both directions for the floors' reason: a ceiling
 	// nobody lowered when a change narrowed the search is budget the
 	// next widening spends without moving a number anybody reads.
 	//
 	// **It was checked against the defect it was written for.** On the
-	// tree before migration 0042 the same set measures 7.44, which
-	// fails this ceiling, and the katakana line reads 11.00 of 12 —
-	// every loanword question touching all but one concept in the base.
-	// recall and MRR over that tree are 1.00 and 0.82, against 1.00 and
-	// 0.83 after: the ranking numbers moved by one point where reach
-	// moved by nine concepts, which is the whole argument for measuring
-	// this at all.
+	// previous demo corpus, before migration 0042, the same measurement
+	// read 7.44 of 12 against 6.25 after, with the katakana line at
+	// 11.00 of 12 before and 2.60 after — every loanword question
+	// touching all but one concept in the base. recall and MRR moved by
+	// one point across that fix where reach moved by nine concepts,
+	// which is the whole argument for measuring this at all.
 	//
-	// It moves when the corpus does, as the floors do — a thirteenth
-	// concept is another concept every common fragment can reach.
-	evalReachCeiling = 6.27
+	// **It moves when the corpus does, and it did.** The thelook rewrite
+	// replaced twelve concepts with nineteen, so the number here is not
+	// comparable with the 6.25 above: as a share of the base it went
+	// from 52% to 56%. A monolingual corpus about one store shares its
+	// common fragments across everything in it, and eighteen concepts
+	// have more of each other to reach than eleven did.
+	evalReachCeiling = 10.56
 
-	// What the dimensions read after 0042, for the next change to aim
-	// at: question 8.48, english 6.67, orthography 5.67, mixed 5.00,
-	// keyword 4.91, katakana 2.60, synonyms 2.00, short 1.33. The
-	// question line is the widest and the least alarming — a natural
-	// question carries many fragments and a twelve-concept corpus about
-	// one shop shares most of them — while english and orthography are
-	// wide *and* rank worst (MRR 0.69 and 0.67), which is where the two
-	// measurements agree that something is unfinished.
+	// What the dimensions read over this corpus, for the next change to
+	// aim at: english 12.83, mixed 12.57, question 12.00, keyword
+	// 10.10, katakana 8.60, orthography 7.33, synonyms 5.67, short
+	// 2.25. english and mixed are the widest and also rank worst (MRR
+	// 0.65 and 0.74), which is where the two measurements agree that
+	// something is unfinished: an English column name lands in prose
+	// that is Japanese around it, matches the concepts that all carry
+	// it, and is settled by tie-breaks rather than by aboutness. short
+	// is the narrowest, which is the windowed scan doing exactly what
+	// it is for.
 )
 
 // evalFloorSlackCases is how far a floor may sit under what was measured
@@ -466,7 +491,7 @@ const (
 // here, one case leaving the top k is 0.018, and the floors above were
 // chosen as about two cases under what was measured. A tolerance written
 // as 0.05 would have to be rewritten every time the set grows, and the
-// set has been 14, then 36, then 41, then 37, then 56, then 61.
+// set has been 14, then 36, then 41, then 37, then 56, then 61, then 68.
 const evalFloorSlackCases = 2
 
 // checkEvalFloors holds one configuration's numbers to their floors in
@@ -546,8 +571,8 @@ func TestSearchEvalIntegration(t *testing.T) {
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "eval"}
 	prefix := uid(t, "svceval")
 
-	if n := loadDemoBundle(t, ctx, svc, prefix, actor); n < 11 {
-		t.Fatalf("demo bundle shrank to %d documents; the golden set assumes the quick-start eleven", n)
+	if n := loadDemoBundle(t, ctx, svc, prefix, actor); n < 18 {
+		t.Fatalf("demo bundle shrank to %d documents; the golden set assumes the quick-start eighteen", n)
 	}
 	for id, doc := range japaneseSupplement {
 		d, _, err := okf.Parse([]byte(doc))

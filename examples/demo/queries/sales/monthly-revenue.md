@@ -1,18 +1,18 @@
 ---
 type: Attested Computation
 title: 月次売上
-description: 今年度の売上を暦月ごとに出す
+description: 直近24か月の売上を暦月ごとに出す
 tags: [sales, revenue, bigquery]
 sources:
   - id: rev-policy
     resource: https://wiki.example.co.jp/finance/revenue-recognition
     title: 売上計上ポリシー (FY2026)
     author: human:tanaka@example.co.jp
-    last_modified: "2026-04-01"
-usage_window: { from: "2026-06-01", to: "2026-06-30" }
-generated: { by: analysis_agent/gemini-2.5-pro, at: 2026-07-18T06:10:00Z }
+    last_modified: "2026-07-24"
+usage_window: { from: "2026-07-01", to: "2026-07-31" }
+generated: { by: analysis_agent/claude-fable-5, at: 2026-07-26T06:10:00Z }
 verified:
-  - { by: human:tanaka@example.co.jp, at: 2026-07-20T02:30:00Z }
+  - { by: human:tanaka@example.co.jp, at: 2026-07-30T02:30:00Z }
 status: stable
 stale_after: "2026-12-31"
 runtime: bigquery
@@ -21,50 +21,56 @@ executor:
   receipt: [job_id, executed_sql, row_count]
 attester:
   resource: https://git.example.co.jp/analytics/attesters/sql_equality.py
-question: 今年度の月次売上は?
+question: 月ごとの売上は?
 ---
 
 [売上](/metrics/revenue.md)を月ごとに出す、承認された方法。上の
-`question` にそのまま答える。ダッシュボードから月次売上を読む人は、これを
-再現できるはずである。
+`question` にそのまま答える。公開データセットなので、これは誰の
+Google Cloud プロジェクトからでも本当に実行できる。
 
 # Computation
 
 ```sql
 SELECT
-  DATE_TRUNC(o.created_at, MONTH) AS month,
-  SUM(o.total_price)              AS revenue,
-  COUNT(*)                        AS orders
-FROM `demo-shop.shop.orders` AS o
-WHERE o.status = 'completed'
-  AND o.created_at >= DATE_TRUNC(CURRENT_DATE('Asia/Tokyo'), YEAR)
+  DATE_TRUNC(DATE(oi.created_at), MONTH) AS month,
+  ROUND(SUM(oi.sale_price), 2)           AS revenue,
+  COUNT(DISTINCT oi.order_id)            AS orders
+FROM `bigquery-public-data.thelook_ecommerce.order_items` AS oi
+WHERE oi.status = 'Complete'
+  AND oi.created_at >= TIMESTAMP(
+        DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 24 MONTH))
 GROUP BY month
 ORDER BY month
 ```
 
 # 注意
 
-- `status = 'completed'` は[完了した注文](/glossary/completed-order.md)の
-  定義そのもので、このクエリを「全注文」に簡略化できない理由である。
-- `created_at` はテーブル上は UTC だが、切り捨ては `Asia/Tokyo` で行って
-  いる。1日 08:30 JST の注文が正しい月に落ちるのはそのためである。列が
-  UTC である理由は [shop.orders](/tables/shop-orders.md) にある。
-- 返金は引かない。[売上計上ポリシー](/policies/revenue-recognition.md)の
-  とおりである。
-- 出力は月ごとに1行で、注文のなかった月は行ごと空く — カレンダーとの
-  結合はしていない。今まで必要になっていない。
+- `status = 'Complete'` は[完了した注文](/glossary/completed-order.md)の
+  定義そのものである。大文字の C — 小文字で書くと 0 行が黙って返る。
+- 月は UTC の暦月で切る。[売上計上ポリシー](/policies/revenue-recognition.md)
+  の規則 3 で、`Asia/Tokyo` に直さないこと。[^rev-policy]
+- **同じ月でも、走らせる日によって数字が違う。** 返品が過去の月から
+  売上を抜いていくからで、これはこの計算の欠陥ではなく
+  [データセット](/references/thelook-dataset.md)の性質である。締めた
+  数字が要るなら、締めの日の receipt を残す。
+- **末尾の月を読まないこと。** 未完なだけなら低く出るところだが、
+  この世界では生成器が直近数日に山を作り、`created_at` が今日より
+  先の行まで入っているので、当月が系列の最高値として返ってくる。
+  出力の最後の行はこの計算の結果であって、店の状態ではない —
+  [売上の読み方](/insights/reading-revenue.md)にある。
 
 # 実行のしかた
 
 `executor.resource` が指すのは
-[BigQuery の計算を実行する](/skills/run-bigquery-query.md)で、実行は上に
+[BigQuery の計算を実行する](/skills/run-bigquery-query.md)で、実行は
 宣言した `receipt` の三つ — `job_id`・`executed_sql`・`row_count` — を
 持って帰ってこなければならない。`attester` はその実行が有効かどうかを
 決めるコードで、`executed_sql` を上のフェンスと突き合わせ、書き換えられて
 いれば拒否する。この数字が「承認された」だけでなく「証明された」ものに
-なるのはそこである。どちらも ochakai の仕事ではない。契約を保存するだけで、
-実行はしない。
+なるのはそこである。どちらも ochakai の仕事ではない。契約を保存するだけ
+で、実行はしない。
 
-結果を良し悪しで語る前に、[売上の読み方](/insights/reading-revenue.md)を
-読むこと。`stale_after` を年度末にしてあるのは、そこで `shop.orders` の
-パーティションが変わるからである。1月には、信じる前に見直すこと。
+`stale_after` は年度末に置いてある。データセットは生きているので、
+年に一度、この形のままでよいかを見直すこと。
+
+[^rev-policy]: 売上計上ポリシー (FY2026)

@@ -30,13 +30,34 @@ last entry.
   runs of one character, asked for as the prefixes `デ:*` and `タ:*`,
   and that is most of the vocabulary a data team writes in: テーブル,
   ロード, パーティション, カレンダー, レポート, ユーザー. Measured over
-  `examples/demo`, a katakana question touched 11.00 of the 12 concepts
-  in the base — the right one first, and the rest trailing it on a
-  shared first character; it now touches 2.60. The halfwidth voiced
+  the demo bundle as it then stood, a katakana question touched 11.00 of
+  the 12 concepts in the base — the right one first, and the rest
+  trailing it on a shared first character; it now touches 2.60 (over the
+  rewritten bundle below, 8.60 of 19). The halfwidth voiced
   marks (ﾞ ﾟ) and halfwidth ｰ join for the same reason. **Migration 0042
   recomputes the search index for every stored object**, so the first
   start after upgrading writes once per row before it serves; a base of
   a few thousand concepts takes seconds, and nothing else is affected.
+
+### Changed
+
+- **The demo bundle is now an ontology over a real dataset.** The
+  eighteen concepts under `examples/demo` (was eleven) describe Google's
+  public `bigquery-public-data.thelook_ecommerce` dataset instead of an
+  invented shop, so every `# Computation` fence actually runs. The
+  bundle now covers the kinetic half of a Palantir-style ontology too:
+  an action concept with parameters, validation bounds and a
+  decision-draft write-back, its executor skill, and a
+  `glossary/ontology` concept mapping Foundry's core concepts onto what
+  ochakai and an executing agent hold. Anything written against the old
+  invented-shop ids (`tables/shop-orders`,
+  `queries/sales/revenue-by-channel`,
+  `references/order-channel-codes`, `insights/着地見込み`) needs the new
+  bundle; the load-bearing ids (`metrics/revenue`,
+  `glossary/completed-order`, `queries/sales/monthly-revenue`,
+  `insights/reading-revenue`, `policies/revenue-recognition`,
+  `skills/run-bigquery-query`, `metrics/repeat-purchase-rate`) are
+  unchanged.
 
 ## [0.26.1] - 2026-08-19
 
