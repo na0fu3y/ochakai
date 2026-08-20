@@ -94,7 +94,7 @@ otherwise have to hunt for. Not a translation; a way in.
 - [api/openapi.yaml](../api/openapi.yaml) — REST の契約。説明ではなく
   検査される対象で、統合テストがすべてのリクエストとレスポンスをこれと
   突き合わせるので、乖離したエンドポイントは CI で落ちる。
-- [examples/demo](../examples/demo) — import して触れる 11 concept の
+- [examples/demo](../examples/demo) — import して触れる 18 concept の
   ナレッジベース(`ochakai import examples/demo`)。リンクした concept、
   混在する status、宣言された期限を過ぎた concept があり、フィードと
   検索に何か表示するものがある。

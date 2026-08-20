@@ -51,10 +51,10 @@ ochakai get insights/reading-revenue
 **The demo knowledge base is written in Japanese**, because that is what
 a knowledge base a Japanese team keeps looks like and this demo is one
 (the eight conditions in [docs/surface.md](docs/surface.md), C8). What
-stays English is what comes from the warehouse — `total_price`,
-`status = 'completed'`, the SQL in the `# Computation` fence — so
-`ochakai search channel_code` still lands on the concept that lists the
-codes.
+stays English is what comes from the warehouse — `sale_price`,
+`status = 'Complete'`, the SQL in the `# Computation` fence — so
+`ochakai search traffic_source` still lands on the concept that lists
+the values and their trap.
 
 It is also the one deployment where plain curl works — nothing to sign:
 `curl 'https://demo.ochak.ai/api/v1/search?q=売上'`.
@@ -78,36 +78,37 @@ part of what the insight above holds, condensed — the quoted sentences
 are verbatim, and the English beside them is this page's rendering of
 what the demo actually says:
 
-> **季節性 (seasonality).** The shape repeats every year and is larger
-> than almost anything you will be asked to investigate. December, +30 to
-> +40%; March, +10 to +15%; **August, -15%** — お盆 (Obon), the whole
-> country stops buying for a week. 「8月が 15% 落ちることは、ここで知って
-> おく価値がいちばん高い一つの事実である。毎年戻ってくるし、一度も何かを
-> 意味したことがないし、それでも毎年調査が立つ」 — it comes back every
-> year, it has never meant anything, and a review is opened over it every
-> year anyway.
+> **作り込まれた成長 (the built-in growth).** The demo's corpus is
+> Google's public `thelook_ecommerce` dataset, and its knowledge base
+> knows what the schema never says: 「系列には右肩上がりの成長が最初から
+> 作り込まれている。前年比がプラスであることにも、前月比がプラスである
+> ことにも、何の情報も無い」 — the growth is the generator's spec, not
+> anyone's achievement, so only a *fall* can mean anything here.
 >
-> **しきい値 (threshold).** 「前年同月を 8% 以上下回る月が2か月続いた
-> ときに上へ上げる […] 1か月だけなら、どれだけ下でも問題だったことは
-> ない」 — one month below has never been a problem, however far below,
-> including the month a payment provider outage cost a full day.
+> **動く過去 (the past that moves).** Returns pull revenue back out of
+> the months it was earned in, so 「先週見た数字と今日の数字は合わない。
+> 合わないことはバグでも改竄でもなく、締めた数字が要るなら receipt を
+> 残すのが正しい側である」 — `status` overwrites history, last month's
+> revenue changes underneath you, and the sanctioned answer is a
+> receipt, not a re-run.
 
-An agent with warehouse access alone can see that August fell. Nothing in
-the schema says the fall arrives every year, that a month-over-month move
-inside ±6% is this series' own noise, or that a late 06:00 JST partition
-reads exactly like a bad day and has caused more false alarms than any
-real decline. Those are somebody's conclusions about their own data, and
-they are the difference between *revenue is down 15%* and *it is August*.
+An agent with warehouse access alone can run `SUM(sale_price)`. Nothing
+in the schema says the orders table holds no money at all, that
+`'complete'` in lowercase returns zero rows without an error, or that
+two columns named `traffic_source` mean different things in different
+tables. Those are somebody's conclusions about their own data, and they
+are the difference between *revenue is down* and *you mixed up which
+question you were asking*.
 
 The same search hands back what is **not** settled, which is the half a
 retrieval system usually drops. The repeat-purchase-rate metric comes back
 marked `draft`, carrying the three questions nobody has answered yet — the
-lookback window, guest checkout, the denominator — and its frontmatter says
-who wrote it: `by: analysis_agent/gemini-2.5-pro`. An agent drafted it
-while looking into this very question, a human has not ruled on it, and
-ochakai says so instead of quietly ranking it beside the verified ones. The
-deprecated channel-code reference comes back too, by name, for the same
-reason.
+lookback window, what counts as having bought, the denominator — and its
+frontmatter says who wrote it: `by: analysis_agent/claude-fable-5`. An
+agent drafted it while looking into this very question, a human has not
+ruled on it, and ochakai says so instead of quietly ranking it beside the
+verified ones. The deprecated bookings computation — the number FY2025's
+reports were built on — comes back too, by name, for the same reason.
 
 **No LLM ran inside ochakai to produce any of that.** It returned what
 people wrote and verified, with the provenance still attached; the reading
@@ -129,15 +130,15 @@ This runs with `OCHAKAI_MODE=dev`: authentication is off and every
 request acts as `human:anonymous` — never do this on a deployment
 ([every mode](docs/configuration.md#environment-variables) (Japanese)).
 
-Point the same CLI at it and load the demo knowledge base — [eleven
-concepts](examples/demo) about one invented retail domain, linked to each
-other, some of them drafts. Everything goes through the API, so plain
-curl reaches it too:
+Point the same CLI at it and load the demo knowledge base — [eighteen
+concepts](examples/demo) about Google's public `thelook_ecommerce`
+dataset, linked to each other, some of them drafts. Everything goes
+through the API, so plain curl reaches it too:
 
 ```sh
 ochakai use http://localhost:8080
 ochakai import examples/demo
-curl 'http://localhost:8080/api/v1/search?q=shop.orders'
+curl 'http://localhost:8080/api/v1/search?q=order_items'
 ochakai search "なぜ売上が落ちている?"   # the judgment, asked in Japanese
 ```
 
@@ -156,7 +157,8 @@ metrics/revenue` — or the web UI's ✓ — is the first one, and until it
 lands, `--trust human-reviewed` answers with nothing and the review
 page's counters read zero, by design.
 
-That shop is invented. Your own tables go in the same way, and ochakai
+That store is Google's synthetic demo dataset — the SQL in the bundle
+really runs against it. Your own tables go in the same way, and ochakai
 never touches the warehouse to get them — you run the schema query with
 your own client and your own identity, and pipe the rows in. Raise your
 client's row limit while you do: `bq query` prints the first 100 rows and

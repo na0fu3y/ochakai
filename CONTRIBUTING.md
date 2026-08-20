@@ -313,12 +313,12 @@ document — report one, and read a few entries so the usage counts on the
 cards are not all zero:
 
 ```sh
-go run ./cmd/ochakai report tables/shop-orders failed --note "07:40 JST に日次の
-  売上チェックを走らせたら、その日が 13% 少なく出た。MAX(created_at) が 05:58
-  だったので、06:00 のパーティションがまだ着いていない。"
+go run ./cmd/ochakai report queries/sales/monthly-revenue failed --note "先週の
+  レポートと数字が合わない。receipt を確かめたら先週の実行に job_id が無く、
+  比較が成立していなかった。"
 go run ./cmd/ochakai search "なぜ売上が落ちているのか"
 go run ./cmd/ochakai get metrics/repeat-purchase-rate   # the queue's cards
-go run ./cmd/ochakai get queries/sales/revenue-by-channel
+go run ./cmd/ochakai get queries/sales/revenue-by-traffic-source
 go run ./cmd/ochakai verify metrics/revenue   # the entry shot's ✓ human-reviewed
 ```
 

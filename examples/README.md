@@ -1,6 +1,6 @@
 # サンプル
 
-- **[demo/](demo)** — 11 concept のナレッジベース丸ごと。コマンド一つで
+- **[demo/](demo)** — 18 concept のナレッジベース丸ごと。コマンド一つで
   import できる。下で説明する。
 - **[bigquery-catalog/](bigquery-catalog)** — 空のベースを BigQuery から
   埋める二つのジョブ。テーブルのメタデータを毎日投影するものと、**ジョブ履歴
@@ -15,13 +15,24 @@
 
 ## demo/: import できるナレッジベース
 
-架空のオンラインショップの売上についての 11 concept を、
+Google の公開データセット
+[`bigquery-public-data.thelook_ecommerce`](https://console.cloud.google.com/marketplace/product/bigquery-public-data/thelook-ecommerce)
+— Looker が生成する架空の衣料品店 — についての 18 concept を、
 [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
-v0.2 バンドルとして書いたもの。ナレッジベース一つの姿が丸ごと見える程度の
-中身がある: メトリクスとその裏にある attested computation、両者が乗って
-いる用語とテーブルカタログの concept、その数字を決めるポリシー、クエリの
-走らせ方を言う skill、そして系列の*読み方*を言う `Insight` — どの
-semantic layer も持たないナレッジを運ぶ型である。
+v0.2 バンドルとして書いたもの。実在のデータセットなので、
+**`# Computation` フェンスの SQL はどれも本当に走る**。ナレッジベース
+一つの姿が丸ごと見える程度の中身がある: メトリクスとその裏にある
+attested computation、両者が乗っている用語とテーブルカタログの
+concept、その数字を決めるポリシー、クエリの走らせ方を言う skill、系列
+の*読み方*を言う `Insight`、そして**アクション** — 候補を出す計算と、
+決定草案の書き戻しと、人の裁定で止まる副作用の契約を一枚に持つ
+concept である。
+
+Palantir Foundry がオントロジーと呼ぶもの — object・property・link の
+意味層と、action・function の動力層 — をこの分業でどう持つかは、
+バンドル自身が `glossary/ontology` という concept で説明している。
+対応表はそこにあり、demo.ochak.ai で `オントロジー` を検索すると
+出てくる。
 
 動いているサーバーに読み込ませる:
 
@@ -35,15 +46,16 @@ OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
 で互いを指しているので、グラフは既にそこにある — 何も宣言していない。
 
 **わざと均質にしていない**: 2 つの concept は **draft** なのでレビュー
-キューは空にならず、1 つの `Reference` は **deprecated** で、1 つの draft
-は `stale_after` を既に過ぎているので stale フィードにも住人がいる。
+キューは空にならず、1 つの Attested Computation は **deprecated**
+(FY2025 のレポートが乗っていた受注ベースの合計)で、1 つの draft は
+`stale_after` を既に過ぎているので stale フィードにも住人がいる。
 一ヶ月使った本物のナレッジベースは、こう見える。
 
 **書かれているのは日本語である。** ochak.ai のデモは日本語でやると決めた
 からで、[demo.ochak.ai](https://demo.ochak.ai) が見せているのもこのバンドル
 である。日本語なのは人が読む側 — 題・説明・本文・`question`・呼び名
-(`売上` / `純売上` / `GMV` の区別)と注文状態の和名 — であって、倉庫から
-来る名前(`total_price`、`status = 'completed'`、`channel_code` の値、
+(`売上` / `受注額` / `GMV` の区別)と注文状態の和名 — であって、倉庫から
+来る名前(`sale_price`、`status = 'Complete'`、`traffic_source` の値、
 `# Computation` フェンスの SQL)は英語のままである。列は英語で、判断は
 日本語で下る。日本語話者のチームのナレッジベースは実際にこうなるので、
 デモもそうしてある。上の `ochakai search "なぜ売上が落ちているのか"`
@@ -56,13 +68,16 @@ OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
 求めており(SPEC §11)、免除されるのは `index.md` と `log.md` だけである。
 バンドルの中に README があるとその規則を破り、`ochakai import` が毎回
 ファイルを一つスキップすることになる。`demo/` 以下のすべての `.md` は
-concept 文書なので、import は 11 concept を報告し、何もスキップしない。
+concept 文書なので、import は 18 concept を報告し、何もスキップしない。
 
-### 数字はでっち上げである
+### データは実在し、チームは架空である
 
-そこにある数値はすべて作り物である: ベースライン、季節性のパーセント、
-しきい値、テーブル名とプロジェクト名、`example.co.jp`、登場する二人とも。
-何一つ測っていない。これは教材であり、concept の*形*を読んで真似する
-ためのものであって、中身を真似するためのものではない。エージェントが
-実際に使うナレッジベースにこれを import すると、存在しない店について
-自信満々の出鱈目を教え込むことになる。
+SQL と、テーブル・列・enum についての記述は、実在する公開データセット
+に対するものである — 走らせて確かめられるし、走らせて確かめるべきもの
+として書いてある(バンドル自身の方針として、動く数字は concept に
+書かず、承認された計算が receipt 付きで出す)。一方で判断の側はすべて
+作り物である: `example.co.jp` も、登場する二人も、売上計上ポリシーも、
+アクションの閾値も、誰の業務でもない。これは教材であり、concept の
+*形*を読んで真似するためのものであって、この判断を自分の店に持ち込む
+ためのものではない。エージェントが実際に使うナレッジベースにこれを
+import すると、自分の店ではない店の決めごとを教え込むことになる。
