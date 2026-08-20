@@ -1,7 +1,7 @@
 ---
 type: Attested Computation
 title: 獲得チャネル別売上
-description: 売上を顧客の獲得チャネルで割ったもの(draft — セッション側で割るべきかが決まっていない)
+description: 売上を顧客の獲得チャネルで割ったもの(draft。セッション側で割るべきかが決まっていない)
 tags: [sales, revenue, marketing, bigquery]
 generated: { by: analysis_agent/claude-fable-5, at: 2026-07-27T09:45:00Z }
 status: draft
@@ -18,7 +18,7 @@ question: 売上が伸びているのはどのチャネルか?
 
 [月次売上](/queries/sales/monthly-revenue.md)と同じ
 [売上](/metrics/revenue.md)を、[顧客](/tables/users.md)の
-`traffic_source` で割ったもの。キャンペーンの振り返りのときに
+`traffic_source` で割ったものである。キャンペーンの振り返りのときに
 エージェントが書き、draft のまま置いてある。
 
 # Computation
@@ -40,20 +40,19 @@ ORDER BY month, revenue DESC
 
 # 検証されていない理由
 
-- これが割っているのは**獲得時**のチャネルである。5年前に Search で
-  獲得された客の今日の注文も Search に積まれる。「今月の売上はどの
-  チャネルから来たか」という問いなら、割るべきは `events` 側の
-  セッションであって、この列ではない — 同名の列が二つあって別物で
-  ある件は[顧客](/tables/users.md)にある。どちらの問いに答えたいのか、
-  誰も決めていない。
-- `events` 側で割るには注文とセッションの紐付けを決める必要があり、
-  その紐付け自体がもう一つの決めごとである。
-- `stale_after` はキャンペーン振り返りの締切に置いたので、もう過ぎて
-  いる。つまりこの concept は stale のフィードに出てくる。それが狙い
-  である — 誰も戻ってきていないことが、フィードでわかる。
+- これが割っているのは**獲得時**のチャネルである。5年前に Search で獲得
+  された客の今日の注文も Search に積まれる。「今月の売上はどのチャネル
+  から来たか」という問いなら、割るべきは `events` 側のセッションであって、
+  この列ではない。同名の列が二つあって別物である件は
+  [顧客](/tables/users.md)にある。どちらの問いに答えたいのかを、まだ誰も
+  決めていない。
+- `events` 側で割るには、注文とセッションの紐付けを決める必要がある。その
+  紐付け自体が、もう一つの決めごとである。
+- `stale_after` はキャンペーン振り返りの締切に置いたので、もう過ぎている。
+  つまりこの concept は stale のフィードに出てくる。誰も戻ってきていない
+  ことがフィードでわかる、という状態を意図して残してある。
 - `attester` が無い。`executor` はあるので
-  [実行はできる](/skills/run-bigquery-query.md)が、その実行が*この*
-  SQL を使ったことを確かめるものが何も無い。ここから引いた数字は、
-  信用で受け取る数字である。
-  [月次売上](/queries/sales/monthly-revenue.md)には attester がある。
-  二つの concept の違いで、いちばん効くのはそこである。
+  [実行はできる](/skills/run-bigquery-query.md)が、その実行が*この* SQL を
+  使ったことを確かめるものが無い。ここから引いた数字は、信用で受け取る
+  数字である。[月次売上](/queries/sales/monthly-revenue.md)には attester が
+  ある。二つの concept の差で一番効くのがここである。

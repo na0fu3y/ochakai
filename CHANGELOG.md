@@ -72,6 +72,33 @@ last entry.
   `skills/run-bigquery-query`, `metrics/repeat-purchase-rate`) are
   unchanged.
 
+  **Its Japanese was rewritten before release.** The first draft leaned
+  on the dash, the bold and the aphoristic closing line often enough
+  that the prose read as generated rather than written; every concept
+  now says the same things in plainer sentences. No id, no
+  frontmatter key, no SQL and no threshold moved, and the search
+  evaluation over the bundle is unchanged where it matters (lexical
+  recall 1.00 / MRR 0.87 and reach 10.54 both before and after; fused
+  MRR 0.86 to 0.87, so `evalFusedMRRFloor` rises to 0.85). An
+  instance that already imported the bundle sees the bodies replaced
+  and the old ones kept as revisions. The same pass rewrote
+  [最初のひと月](docs/guides/onboarding.md) and the demo half of
+  [examples/README.md](examples/README.md), and the two sentences
+  README.md quotes verbatim from `insights/reading-revenue` were
+  re-quoted to match.
+
+  **Two things the bundle said about itself were wrong, and running it
+  said so.** The action's `min_sold` accepted 5 to 50 while arguing that
+  the denominators here are small: measured against the dataset, a SKU
+  has at most 5 resolved items in a 90-day window and 12 over the whole
+  history, and no candidate meeting the threshold had more than 9, so
+  anything above 10 returns an empty list at every window. The bound is
+  5 to 10 now, with those numbers as its reason. README.md also promised
+  that `ochakai search traffic_source` lands on the concept listing the
+  column's values; it lands on the computation that splits revenue by
+  it, with the table concept below — the sentence now says what comes
+  back.
+
 ## [0.26.1] - 2026-08-19
 
 ### Added
