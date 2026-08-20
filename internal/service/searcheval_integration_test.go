@@ -380,14 +380,14 @@ const evalVerified = "policies/revenue-recognition"
 // vocabulary at all, and no number on this page says how much that is.
 const (
 	evalK = 10
-	// Lexical, measured at 1.00 / 0.88 over the thelook corpus. The MRR
+	// Lexical, measured at 1.00 / 0.87 over the thelook corpus. The MRR
 	// floor is two cases' worth under it: one case slipping from rank 1
 	// to rank 2 is 0.007 here, so a floor closer than that fails on
 	// noise.
 	evalRecallFloor = 0.98
-	evalMRRFloor    = 0.86
+	evalMRRFloor    = 0.85
 	// Fused: the same questions with the stand-in encoder on, measured
-	// at 1.00 / 0.88. This floor is the one that catches the verified
+	// at 1.00 / 0.86. This floor is the one that catches the verified
 	// addend going back to 0.002 — that constant is the kind that gets
 	// nudged by whoever is looking at one query — so it was re-measured
 	// when it was set: at 0.002 the 37-case fused run scored 0.73, and
@@ -400,7 +400,7 @@ const (
 	// merge; what the number certifies is still only that the merge
 	// does no harm.
 	evalFusedRecallFloor = 0.98
-	evalFusedMRRFloor    = 0.86
+	evalFusedMRRFloor    = 0.84
 )
 
 // Reach: how many concepts a question touched at all.
@@ -435,7 +435,7 @@ const (
 	// own limit would be the limit's number, not the query's, and the
 	// measurement fails rather than reporting it.
 	evalReachLimit = 200
-	// Measured at 10.47 concepts of the 19 this corpus holds. The
+	// Measured at 10.54 concepts of the 19 this corpus holds. The
 	// ceiling sits two cases' worth over it, the width the floors use,
 	// and fails in both directions for the floors' reason: a ceiling
 	// nobody lowered when a change narrowed the search is budget the
@@ -452,14 +452,14 @@ const (
 	// **It moves when the corpus does, and it did.** The thelook rewrite
 	// replaced twelve concepts with nineteen, so the number here is not
 	// comparable with the 6.25 above: as a share of the base it went
-	// from 52% to 55%. A monolingual corpus about one store shares its
+	// from 52% to 56%. A monolingual corpus about one store shares its
 	// common fragments across everything in it, and eighteen concepts
 	// have more of each other to reach than eleven did.
-	evalReachCeiling = 10.49
+	evalReachCeiling = 10.56
 
 	// What the dimensions read over this corpus, for the next change to
-	// aim at: english 12.83, mixed 12.57, question 11.87, keyword
-	// 10.00, katakana 8.60, orthography 7.33, synonyms 5.67, short
+	// aim at: english 12.83, mixed 12.57, question 12.00, keyword
+	// 10.10, katakana 8.60, orthography 7.33, synonyms 5.67, short
 	// 2.25. english and mixed are the widest and also rank worst (MRR
 	// 0.65 and 0.74), which is where the two measurements agree that
 	// something is unfinished: an English column name lands in prose

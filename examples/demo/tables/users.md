@@ -37,8 +37,12 @@ status: stable
 | `Email` | メール |
 
 同じ名前の `traffic_source` 列が `events`(行動ログ、カタログ外)にも
-あり、そちらは**セッションの流入元**で、値の集合も別物である。客は
-Search で獲得され、その後の注文は Email 経由のセッションから来る —
+あり、そちらは**セッションの流入元**である。**値の集合すら重なって
+いない**: events 側は `Email` / `Adwords` / `YouTube` / `Facebook` /
+`Organic` で、`Search` と `Display` は無く、代わりに `Adwords` と
+`YouTube` がある。同じ列名で同じ「チャネル」を指しているように見えて、
+語彙が違う。客は Search で獲得され、その後の注文は Email 経由の
+セッションから来る —
 どちらの列を JOIN するかで「チャネル別売上」の意味が変わる。
 [獲得チャネル別売上](/queries/sales/revenue-by-traffic-source.md)が
 draft のまま止まっているのは、この二つのどちらに答えるべきかが
