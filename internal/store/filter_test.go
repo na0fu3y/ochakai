@@ -220,6 +220,31 @@ func TestQueryFragments(t *testing.T) {
 		{"honorific before hiragana is grammar", "対応しておく",
 			[]string{"対応", "応し"}},
 		{"short japanese term", "売上", []string{"売上"}},
+		// A run of one or two characters is kept whole, and that is the
+		// right answer only when the run is a word. Spaces and latin
+		// words cut the particles out of a question as runs of their
+		// own — が, は, を — and fragmentQuery asks for a
+		// one-character run as a prefix, so が arrived as が:* and
+		// matched nearly every Japanese document in the base. It is the
+		// rule contentWindows applies to the runs long enough to be
+		// cut, reaching the ones that are not.
+		{"a particle between latin words is not a fragment",
+			"AI が verify を打ってよいか", []string{"AI", "verify", "打っ"}},
+		{"a particle against a digit is not a fragment",
+			"department は2値か", []string{"department", "2", "値か"}},
+		// Kept, because the run is the word rather than a window of one:
+		// asking whether a content character is *in* it, not whether it
+		// begins it.
+		{"a two-character word is still a fragment", "与信の判断",
+			[]string{"与信", "信の", "判断"}},
+		{"an honorific two-character word survives", "お茶 を 出す",
+			[]string{"お茶", "出す"}},
+		// The whole-query fallback: a question with nowhere else to look
+		// asks for its grammar rather than asking for nothing. This is
+		// contentWindows' own fallback, applied across the query.
+		{"a grammar-only query keeps its runs", "か", []string{"か"}},
+		{"grammar-only runs survive when nothing else does", "の と は",
+			[]string{"の", "と", "は"}},
 		{"mixed scripts", "revenue 売上高", []string{"revenue", "売上", "上高"}},
 		{"punctuation only falls back to the query", "???", []string{"???"}},
 		{"duplicate windows collapse", "ををを", []string{"をを"}},

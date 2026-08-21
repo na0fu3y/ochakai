@@ -55,7 +55,11 @@ func queryFragments(query string) []string {
 	// falls evenly across the query instead of truncating its tail. A
 	// question often names its subject last ("〜の件で、直近の原価率は?"),
 	// and cutting in reading order would drop exactly that.
-	var runs [][]string
+	//
+	// A short run holding no content character is collected apart from
+	// the rest and used only when nothing else survives (grammarOnly
+	// below).
+	var runs, grammarOnly [][]string
 	for _, token := range strings.FieldsFunc(query, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	}) {
@@ -68,12 +72,42 @@ func queryFragments(query string) []string {
 		// script boundary first and treat each run on its own terms.
 		for _, run := range scriptRuns(token) {
 			runes := []rune(run)
-			if !scriptWithoutSpaces(runes[0]) || len(runes) <= 2 {
+			switch {
+			case !scriptWithoutSpaces(runes[0]):
 				runs = append(runs, []string{run})
-				continue
+			case len(runes) <= 2:
+				// Short enough to be a word of its own — 売上, 与信 — or
+				// short enough to be nothing but grammar. Which it is
+				// decides whether it is asked for at all: a run this
+				// short is kept whole, and fragmentQuery asks for a
+				// one-character run as a prefix, so が arrives as が:*
+				// and matches nearly every Japanese document there is.
+				//
+				// This is the rule contentWindows already applies to the
+				// runs long enough to be cut ("they match nearly every
+				// entry"), reaching the runs that are not. It was
+				// measured by the leak the golden set gained with a
+				// second domain: 「AI が verify を打ってよいか」 asked
+				// for が and touched 18 concepts of a store it has
+				// nothing to do with.
+				if holdsContent(runes) {
+					runs = append(runs, []string{run})
+				} else {
+					grammarOnly = append(grammarOnly, []string{run})
+				}
+			default:
+				runs = append(runs, contentWindows(runes))
 			}
-			runs = append(runs, contentWindows(runes))
 		}
+	}
+
+	// A query that is nothing but grammar — ください, か — asks for it
+	// rather than asking for nothing, which is contentWindows' own
+	// fallback applied to the whole query instead of to one run. The
+	// two have to agree: a question is dropped from the fragments only
+	// when the question has somewhere else to look.
+	if len(runs) == 0 {
+		runs = grammarOnly
 	}
 
 	var out []string
@@ -141,6 +175,20 @@ func contentWindows(runes []rune) []string {
 		return content
 	}
 	return all
+}
+
+// holdsContent reports whether a short run carries a content word
+// rather than spelling grammar. Any content character in it answers —
+// the run is the word here, not a window of one, so the
+// first-character rule contentWindows uses would drop ヶ月 and お盆
+// for where the content sits rather than for whether it is there.
+func holdsContent(runes []rune) bool {
+	for _, r := range runes {
+		if contentChar(r) {
+			return true
+		}
+	}
+	return false
 }
 
 // QueryTerms extracts the terms of a query — the names a compound
