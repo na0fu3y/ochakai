@@ -24,13 +24,13 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 | id | 条件 |
 |---|---|
 | C1 | 資産は利用者のもの — 丸ごと出て、丸ごと戻り、求められれば消える([0009](design/0009-provenance-portability.md)・[0031](design/0031-purge.md)・[0075](design/0075-the-bundle-is-the-address-space.md)) |
-| C2 | Google Cloud、secret なし — Cloud Run IAM と Cloud SQL IAM で、トークンもパスワードも置かない([0065](design/0065-identity-and-provenance.md)・[0003](design/0003-gcp-only.md)) |
+| C2 | secret を一つも置かないこと — その性質を Cloud Run IAM と Cloud SQL IAM が無設定で買う([0065](design/0065-identity-and-provenance.md)・[0003](design/0003-gcp-only.md))。**性質と買い方は同じではない**: OIDC 発行者を名指したデプロイは Google Cloud の外でも secret を増やさずに誰が呼んでいるかを答え([0086](design/0086-a-second-way-to-say-who-is-calling.md))、そこではデータベースの資格情報が運用者の仕事に戻る |
 | C3 | 形式は Open Knowledge Format v0.2 — 保存もワイヤも往復も OKF で、その横に第二の形式を発明しない([0075](design/0075-the-bundle-is-the-address-space.md)) |
 | C4 | No FDE — デプロイは自分でできて、必要な操作には自分で打てるコマンドがある([0067](design/0067-four-faces-and-what-they-decline.md)) |
 | C5 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0067](design/0067-four-faces-and-what-they-decline.md) §3) |
 | C6 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md)・[0067](design/0067-four-faces-and-what-they-decline.md) §1) |
 | C7 | 人間の改善ループが測れる — 検証・結果報告・キューの長さ・答えの無かった問いを、推測ではなく数で持つ([0069](design/0069-the-loop-and-what-measures-it.md)) |
-| C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — trigram 索引は二文字の日本語語を引けず、埋め込みは Google Cloud 上で既定である([0080](design/0080-search-and-how-a-deployment-embeds.md)) |
+| C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — 二文字の日本語語が索引で引け(移行 `0036`)、書き手が与えた別名も索引に入り([0105](design/0105-a-concept-answers-to-its-other-names.md))、埋め込みは既定でデプロイのリージョンで走る([0080](design/0080-search-and-how-a-deployment-embeds.md) §1.2) |
 
 **どれにも当たらない提案は、三つの問いに進むまでもなく no である。**
 逆は成り立たない — 条件に当たることは必要条件であって十分条件では
