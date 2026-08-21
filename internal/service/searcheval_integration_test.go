@@ -507,7 +507,7 @@ const (
 	// own limit would be the limit's number, not the query's, and the
 	// measurement fails rather than reporting it.
 	evalReachLimit = 200
-	// Measured at 12.59 concepts of the 28 this corpus holds. The
+	// Measured at 12.04 concepts of the 28 this corpus holds. The
 	// ceiling sits two cases' worth over it, the width the floors use,
 	// and fails in both directions for the floors' reason: a ceiling
 	// nobody lowered when a change narrowed the search is budget the
@@ -529,29 +529,31 @@ const (
 	// second, unrelated domain is the only one of the two growths that
 	// made the search narrower relative to what it was searching, which
 	// is what adding concepts nobody's question is about should do.
-	evalReachCeiling = 12.61
+	evalReachCeiling = 12.05
 
 	// Leak: of those, how many came from the other bundle. The two
 	// domains share nothing but the language, so a leaked hit is the
 	// search matching on Japanese rather than on subject.
 	//
-	// Measured at 3.24 concepts, and **the widest case is the finding
-	// this second bundle was added to produce**: 「AI が verify を
-	// 打ってよいか」 reaches 18 of the store's concepts, and the demo's
-	// own 「department は2値か」 reaches all 28 in the base. Both are
-	// the defect migration 0042 fixed for vocabulary, still standing for
-	// grammar: queryFragments keeps a run of one or two characters whole
-	// without asking whether it holds a content character, so the
-	// particles が, は and の arrive as fragments and fragmentQuery asks
-	// for a one-character run as a prefix. が:* matches nearly every
-	// Japanese document in the base. contentWindows drops hiragana-only
-	// windows for exactly this reason — "they match nearly every entry"
-	// — and the short-run branch above it never asks.
+	// Measured at 2.87 concepts, against 3.24 when this measurement
+	// arrived — **and the difference is the defect it was added to
+	// find.** 「AI が verify を打ってよいか」 reached 18 of the store's
+	// concepts and the demo's own 「department は2値か」 reached all 28
+	// in the base, because queryFragments kept a run of one or two
+	// characters whole without asking whether it held a content
+	// character: the particles が and は arrived as fragments, and
+	// fragmentQuery asks for a one-character run as a prefix, so が:*
+	// matched nearly every Japanese document there was. It was migration
+	// 0042's defect — a boundary in the wrong place — standing for
+	// grammar rather than for vocabulary, and one corpus about one
+	// subject could not have shown it: reaching every neighbour is
+	// honest when every neighbour is about your question.
 	//
-	// The number ships before the fix, which is the order the records
-	// follow (design doc 0089 §4). Reach and leak are both baselined
-	// with the defect in them; the change that closes it moves both.
-	evalLeakCeiling = 3.25
+	// What the fix moved is here and nowhere else: reach 12.59 → 12.04,
+	// leak 3.24 → 2.87, recall and MRR unchanged at 1.00 and 0.90.
+	// Three numbers, and only the two this file added last say anything
+	// happened.
+	evalLeakCeiling = 2.89
 
 	// What the dimensions read over this corpus, for the next change to
 	// aim at: english 12.83, mixed 12.43, question 11.97, keyword
