@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/text/unicode/norm"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
@@ -51,6 +52,11 @@ const maxQueryFragments = 24
 // index entries are the same two characters the query is. What each
 // fragment becomes on the way there is fragmentQuery.
 func queryFragments(query string) []string {
+	// One spelling of a character, as the haystack holds it (migration
+	// 0043): ﾃﾞｰﾀｾｯﾄ and データセット are the same word, and until both
+	// sides folded, a question in either spelling could not reach a
+	// document in the other at all.
+	query = norm.NFKC.String(query)
 	// Fragments are collected per run and then interleaved, so the cap
 	// falls evenly across the query instead of truncating its tail. A
 	// question often names its subject last ("〜の件で、直近の原価率は?"),
@@ -378,7 +384,9 @@ func holdsContent(runes []rune) bool {
 // query is the name whole — the reach the rule had before terms existed
 // — and a name with hiragana inside it (売り上げ) likewise.
 func QueryTerms(query string) []string {
-	runes := []rune(query)
+	// Folded as queryFragments folds, and for its reason: a name is
+	// matched against the same haystack.
+	runes := []rune(norm.NFKC.String(query))
 	var terms []string
 	seen := map[string]bool{}
 	start, hasContent := -1, false
@@ -541,6 +549,14 @@ func fragmentQuery(frag string, n int) string {
 const (
 	filenameText = `regexp_replace(k.id, '^.*/', '')`
 	nameText     = `k.title || ' ' || ` + filenameText
+	// The same two, as the query is spelled by the time it is compared
+	// to them (migration 0043). A concept filed at ｵｰﾀﾞｰ.md is named
+	// オーダー by whoever filed it there, and the reader types it the
+	// way they type it. Both are short strings on a row the scan
+	// already has.
+	foldedName     = `normalize(` + nameText + `, NFKC)`
+	foldedTitle    = `normalize(k.title, NFKC)`
+	foldedFilename = `normalize(` + filenameText + `, NFKC)`
 )
 
 // SearchLexical ranks entries by how much of the query they contain and
@@ -612,16 +628,16 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	// (「EC事業の継続率を計算して」) is the name of nothing, but it names
 	// EC事業 and 継続率, and the definitions it asks for must not lose to
 	// the reports that merely say all its words (QueryTerms).
-	args = append(args, escapeLike(query))
+	args = append(args, escapeLike(norm.NFKC.String(query)))
 	nameTests := []string{fmt.Sprintf(
-		"k.title ILIKE $%[1]d OR "+filenameText+" ILIKE $%[1]d", len(args))}
+		foldedTitle+" ILIKE $%[1]d OR "+foldedFilename+" ILIKE $%[1]d", len(args))}
 	for _, term := range QueryTerms(query) {
 		if strings.EqualFold(term, query) {
 			continue // the whole-query test above already asks this
 		}
 		args = append(args, escapeLike(term))
 		nameTests = append(nameTests, fmt.Sprintf(
-			"k.title ILIKE $%[1]d OR "+filenameText+" ILIKE $%[1]d", len(args)))
+			foldedTitle+" ILIKE $%[1]d OR "+foldedFilename+" ILIKE $%[1]d", len(args)))
 	}
 	frags := queryFragments(query)
 	var hit, weight, weighted, named, weights, tests []string
@@ -705,7 +721,7 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 							THEN 1 ELSE 0 END AS named,
 						(SELECT max(v.at) FROM knowledge_verification v
 							WHERE v.id = k.id) AS last_verified
-					FROM object k, LATERAL (SELECT `+nameText+` AS name) nm
+					FROM object k, LATERAL (SELECT `+foldedName+` AS name) nm
 					WHERE k.search_tsv @@ (%[8]s) AND %[9]s
 				) c
 			) w

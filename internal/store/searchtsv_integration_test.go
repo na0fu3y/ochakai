@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/testdb"
 )
@@ -107,6 +109,126 @@ func TestCJKClassAgreesWithGo(t *testing.T) {
 		}
 		if mismatched > 8 {
 			t.Errorf("...and %d more disagreements in U+%04X..U+%04X", mismatched-8, span[0], span[1])
+		}
+	}
+}
+
+// TestNFKCAgreesWithGo pins the fold migration 0043 put on the haystack
+// against the one store.queryFragments puts on the query.
+//
+// Two implementations of one standard, and they have to be the same
+// implementation for the search to work at all: the document's lexemes
+// are cut from normalize(…, NFKC) in SQL, and the fragments looked up
+// in them are cut from norm.NFKC in Go. A character either side folds
+// differently is a term nobody can find — the failure 0043 exists to
+// remove, arriving from the other direction.
+//
+// The blocks are the ones a fold changes: latin and its fullwidth
+// forms, the kana, the CJK compatibility squares (㍿, ㌔), and the
+// halfwidth and fullwidth block itself.
+func TestNFKCAgreesWithGo(t *testing.T) {
+	ctx := context.Background()
+	s := newSearchStore(t, ctx)
+
+	spans := [][2]rune{
+		{0x0020, 0x0500}, // ASCII, latin-1, latin extended
+		{0x2000, 0x30FF}, // punctuation, CJK symbols, the kana
+		{0x3200, 0x33FF}, // enclosed CJK letters, compatibility squares
+		{0xFB00, 0xFFEF}, // ligatures through halfwidth and fullwidth forms
+	}
+	compared, mismatched := 0, 0
+	for _, span := range spans {
+		var chars []string
+		for r := span[0]; r <= span[1]; r++ {
+			if r >= 0xD800 && r <= 0xDFFF {
+				continue // surrogates are not characters
+			}
+			chars = append(chars, string(r))
+		}
+		rows, err := s.pool.Query(ctx,
+			`SELECT c, normalize(c, NFKC) FROM unnest($1::text[]) AS c`, chars)
+		if err != nil {
+			t.Fatalf("normalize U+%04X..U+%04X: %v", span[0], span[1], err)
+		}
+		for rows.Next() {
+			var char, sqlFolded string
+			if err := rows.Scan(&char, &sqlFolded); err != nil {
+				rows.Close()
+				t.Fatal(err)
+			}
+			compared++
+			goFolded := norm.NFKC.String(char)
+			if goFolded == sqlFolded {
+				continue
+			}
+			mismatched++
+			if mismatched <= 8 {
+				t.Errorf("U+%04X (%q): Go folds to %q, the database to %q — "+
+					"a query fragment and the document's lexemes would not meet",
+					[]rune(char)[0], char, goFolded, sqlFolded)
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if mismatched > 8 {
+		t.Errorf("...and %d more disagreements", mismatched-8)
+	}
+	if compared < 7000 {
+		t.Fatalf("compared only %d code points; the spans stopped covering the fold", compared)
+	}
+}
+
+// TestOneSpellingOfACharacter is what the fold buys: a question and a
+// document written in different compatibility forms of the same word
+// find each other.
+//
+// Halfwidth katakana and fullwidth latin are what a system upstream of
+// the reader writes — a warehouse export, an IME mid-sentence, a CSV
+// that came through something fixed-width. Before migration 0043 each
+// spelling was its own island: neither of the two documents below could
+// be found by a question spelled the other way, which is recall rather
+// than rank.
+func TestOneSpellingOfACharacter(t *testing.T) {
+	ctx := context.Background()
+	s := newSearchStore(t, ctx)
+	run := testdb.Unique(t, "spelling")
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+
+	for id, body := range map[string]string{
+		"halfwidth": "基幹の ｴｸｽﾎﾟｰﾄ は ｵｰﾀﾞｰ 区分を半角で書く。",
+		"fullwidth": "ＥＴＬ を通しても綴りはそのまま残る。",
+	} {
+		k := &domain.Knowledge{
+			Type: domain.TypeInsights, ID: run + "/" + id,
+			Title: id, Body: body, Status: domain.StatusStable, CreatedBy: actor,
+		}
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatalf("create %s: %v", k.ID, err)
+		}
+	}
+
+	for _, tc := range []struct{ query, want string }{
+		{"オーダー", "halfwidth"},    // asked normally, written halfwidth
+		{"ｴｸｽﾎﾟｰﾄ", "halfwidth"}, // and asked the way it is written
+		{"ETL", "fullwidth"},     // asked in ASCII, written fullwidth
+		{"ＥＴＬ", "fullwidth"},
+	} {
+		hits, err := s.SearchLexical(ctx, tc.query, Filter{Prefixes: []string{run}}, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(hits) != 1 || !strings.HasSuffix(hits[0].ID, "/"+tc.want) {
+			ids := make([]string, 0, len(hits))
+			for _, h := range hits {
+				ids = append(ids, strings.TrimPrefix(h.ID, run+"/"))
+			}
+			t.Errorf("searching %s returned %v; want just %s — the two spellings of a "+
+				"character have to reach the same lexeme (migration 0043)",
+				tc.query, ids, tc.want)
 		}
 	}
 }

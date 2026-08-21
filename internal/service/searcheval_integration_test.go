@@ -332,6 +332,14 @@ var evalCases = []evalCase{
 	{query: "testdb.Unique", want: "kb/insights/store-tests-shared-db", dim: dimEnglish},
 	{query: "DOC-LINES", want: "kb/insights/translation-costs-lines", dim: dimEnglish},
 	{query: "ICU ロケール", want: "kb/skills/webui-screenshots", dim: dimMixed},
+	// The same word the reader types and the document spells another
+	// way. Until the index and the query agree on one spelling of a
+	// character, these are two islands: a normally-written question
+	// cannot reach a halfwidth-written document and the reverse holds
+	// too, so what fails here is recall rather than rank.
+	{query: "オーダー", want: "ja/ops/export-notes", dim: dimOrthography},
+	{query: "エクスポート", want: "ja/ops/export-notes", dim: dimOrthography},
+	{query: "ETL", want: "ja/ops/export-notes", dim: dimOrthography},
 	{query: "解約率", want: "ja/metrics/kaiyakuritsu", dim: dimShort},
 	{query: "解約の分母", want: "ja/metrics/kaiyakuritsu", dim: dimShort},
 	{query: "粗利", want: "tables/products", dim: dimShort},
@@ -352,6 +360,25 @@ var japaneseSupplement = map[string]string{
 		"status: draft\n" +
 		"---\n\n" +
 		"解約率は月初時点の有効契約数を分母に取る。日割りはしない。\n",
+	// A concept written the way a system upstream of the reader writes:
+	// halfwidth katakana and fullwidth latin, which is what a warehouse
+	// export, an IME mid-sentence and anything that came through a
+	// fixed-width system produce. No shipped bundle is written this way
+	// — they are written by people who type carefully — which is
+	// exactly why the supplement carries it (the 解約率 argument: a
+	// shape the bundles cannot exercise).
+	//
+	// The questions asking for it below are spelled normally, because
+	// that is how the reader asks.
+	"ja/ops/export-notes": "---\n" +
+		"type: Insight\n" +
+		"title: ｴｸｽﾎﾟｰﾄの綴り\n" +
+		"description: 基幹から届く抽出ファイルの表記ゆれ\n" +
+		"tags: [ops]\n" +
+		"status: draft\n" +
+		"---\n\n" +
+		"基幹の ｴｸｽﾎﾟｰﾄ は ｵｰﾀﾞｰ 区分を半角で書く。ＥＴＬ を通しても\n" +
+		"綴りはそのまま残るので、読む側で揃えることになる。\n",
 }
 
 // evalVerified is the one concept the harness confirms before scoring.
@@ -449,7 +476,7 @@ const (
 	// to rank 2 is 0.007 here, so a floor closer than that fails on
 	// noise.
 	evalRecallFloor = 0.98
-	evalMRRFloor    = 0.88
+	evalMRRFloor    = 0.89
 	// Fused: the same questions with the stand-in encoder on, measured
 	// at 1.00 / 0.87. This floor is the one that catches the verified
 	// addend going back to 0.002 — that constant is the kind that gets
@@ -472,7 +499,7 @@ const (
 	// which is the mixed dimension going 0.74 to 0.81 lexically. It is
 	// the corpus changing under the merge again, not the merge.
 	evalFusedRecallFloor = 0.98
-	evalFusedMRRFloor    = 0.86
+	evalFusedMRRFloor    = 0.87
 )
 
 // Reach: how many concepts a question touched at all.
@@ -507,7 +534,7 @@ const (
 	// own limit would be the limit's number, not the query's, and the
 	// measurement fails rather than reporting it.
 	evalReachLimit = 200
-	// Measured at 10.75 concepts of the 28 this corpus holds. The
+	// Measured at 10.52 concepts of the 29 this corpus holds. The
 	// ceiling sits two cases' worth over it, the width the floors use,
 	// and fails in both directions for the floors' reason: a ceiling
 	// nobody lowered when a change narrowed the search is budget the
@@ -529,7 +556,7 @@ const (
 	// second, unrelated domain is the only one of the two growths that
 	// made the search narrower relative to what it was searching, which
 	// is what adding concepts nobody's question is about should do.
-	evalReachCeiling = 10.77
+	evalReachCeiling = 10.54
 
 	// Leak: of those, how many came from the other bundle. The two
 	// domains share nothing but the language, so a leaked hit is the
@@ -556,9 +583,12 @@ const (
 	// one moved nothing else at all: **every one of the 85 cases landed
 	// on the rank it landed on before**, while the questions touched an
 	// eighth fewer concepts and a quarter fewer from the wrong domain.
-	// Three numbers, and only the two this file added last have said
-	// anything for three changes running.
-	evalLeakCeiling = 2.21
+	// Three numbers, and only the two this file added last had said
+	// anything for three changes running — until migration 0043, where
+	// recall moved instead: three questions that could not find their
+	// concept at all, because the document spelled it ｵｰﾀﾞｰ and the
+	// question spelled it オーダー.
+	evalLeakCeiling = 2.14
 
 	// What the dimensions read over this corpus, for the next change to
 	// aim at: english 12.83, mixed 12.43, question 11.97, keyword

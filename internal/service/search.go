@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/store"
@@ -156,7 +158,10 @@ func namedBy(h domain.SearchHit, names []string) bool {
 	if i := strings.LastIndexByte(seg, '/'); i >= 0 {
 		seg = seg[i+1:]
 	}
-	title, seg := domain.Normalize(h.Title), domain.Normalize(seg)
+	// Folded as the store folds the query it compares against
+	// (migration 0043), or a concept named ｵｰﾀﾞｰ would keep the sort key
+	// the store's own scorer gave it and lose it here.
+	title, seg := norm.NFKC.String(h.Title), norm.NFKC.String(seg)
 	for _, name := range names {
 		if strings.EqualFold(title, name) || strings.EqualFold(seg, name) {
 			return true
