@@ -472,7 +472,7 @@ const (
 	// which is the mixed dimension going 0.74 to 0.81 lexically. It is
 	// the corpus changing under the merge again, not the merge.
 	evalFusedRecallFloor = 0.98
-	evalFusedMRRFloor    = 0.85
+	evalFusedMRRFloor    = 0.86
 )
 
 // Reach: how many concepts a question touched at all.
@@ -507,7 +507,7 @@ const (
 	// own limit would be the limit's number, not the query's, and the
 	// measurement fails rather than reporting it.
 	evalReachLimit = 200
-	// Measured at 12.04 concepts of the 28 this corpus holds. The
+	// Measured at 10.75 concepts of the 28 this corpus holds. The
 	// ceiling sits two cases' worth over it, the width the floors use,
 	// and fails in both directions for the floors' reason: a ceiling
 	// nobody lowered when a change narrowed the search is budget the
@@ -529,7 +529,7 @@ const (
 	// second, unrelated domain is the only one of the two growths that
 	// made the search narrower relative to what it was searching, which
 	// is what adding concepts nobody's question is about should do.
-	evalReachCeiling = 12.05
+	evalReachCeiling = 10.77
 
 	// Leak: of those, how many came from the other bundle. The two
 	// domains share nothing but the language, so a leaked hit is the
@@ -549,11 +549,16 @@ const (
 	// subject could not have shown it: reaching every neighbour is
 	// honest when every neighbour is about your question.
 	//
-	// What the fix moved is here and nowhere else: reach 12.59 → 12.04,
-	// leak 3.24 → 2.87, recall and MRR unchanged at 1.00 and 0.90.
-	// Three numbers, and only the two this file added last say anything
-	// happened.
-	evalLeakCeiling = 2.89
+	// What the particle fix moved was here and nowhere else: reach
+	// 12.59 → 12.04, leak 3.24 → 2.87, recall and MRR unchanged at 1.00
+	// and 0.90. Taking a loanword whole (store.minLoanword) moved the
+	// same two again — reach 12.04 → 10.75, leak 2.87 → 2.19 — and that
+	// one moved nothing else at all: **every one of the 85 cases landed
+	// on the rank it landed on before**, while the questions touched an
+	// eighth fewer concepts and a quarter fewer from the wrong domain.
+	// Three numbers, and only the two this file added last have said
+	// anything for three changes running.
+	evalLeakCeiling = 2.21
 
 	// What the dimensions read over this corpus, for the next change to
 	// aim at: english 12.83, mixed 12.43, question 11.97, keyword
