@@ -605,6 +605,38 @@ const (
 	// for.
 )
 
+// **What the english and mixed dimensions are, and what does not move
+// them.** They are the two lowest lines the report prints, and after
+// four changes to the lexical side they are the two that did not
+// improve. It is worth writing down why, because the shape of their
+// loss is not a defect anything here can fix.
+//
+// A question whose content is a warehouse identifier saturates. Asked
+// 「sale_price column」 or 「sale_price はどの表にあるか」 — the
+// Japanese half of which is particles, so both questions are the
+// identifier — six concepts score exactly 1.00: the table that defines
+// the column, and the five computations that use it all contain sale,
+// price and column, so coverage is total for every one of them and the
+// order among them falls to the tie-break, which knows nothing about
+// the question. 「traffic_source は何の値か」 is the same at 0.53, and
+// 「why is revenue down」 puts five concepts at 1.50.
+//
+// Two ways out were measured and neither works. **Frequency** is
+// refused on principle and was measured refusing it: keeping positions
+// and breaking ties with ts_rank moved MRR from 0.85 to 0.84 (migration
+// 0036). **Length** does not separate them either — for
+// 「sale_price column」 the concept that answers is the second shortest
+// of the six, behind one that does not.
+//
+// What separates "defines this column" from "uses this column" is not
+// in the words: both say the identifier, once, in prose that is
+// otherwise about different things. It is the vector half's question,
+// and **this harness cannot answer whether the vector half answers
+// it** — the stand-in encoder shares the lexical side's vocabulary
+// exactly here, which is the limit fakeencoder_test.go states about
+// itself. So these two lines are not a backlog. They are where the
+// lexical side ends.
+
 // evalFloorSlackCases is how far a floor may sit under what was measured
 // before that gap is itself a failure, counted in cases.
 //
