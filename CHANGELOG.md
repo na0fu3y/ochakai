@@ -21,6 +21,22 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Halfwidth katakana and fullwidth latin are found by a question
+  spelled normally, and the reverse.** They are what a system upstream
+  of the reader writes — a warehouse export from something fixed-width,
+  an IME that yields ＢｉｇＱｕｅｒｙ mid-sentence, a CSV that came
+  through a mainframe — and each spelling used to be its own island:
+  「データセット」 found only the normally-written document, 「ﾃﾞｰﾀｾｯﾄ」
+  only the halfwidth one, and neither ever found the other. That was
+  recall, not ranking: the document could not be found at all. Both
+  sides now fold with NFKC, the compatibility normalization the standard
+  defines for this, and the two implementations are pinned against each
+  other over 7,377 code points. **Migration 0043 recomputes the search
+  index for every stored object**, so the first start after upgrading
+  writes once per row before it serves.
+
 ## [0.26.2] - 2026-08-21
 
 ### Fixed
