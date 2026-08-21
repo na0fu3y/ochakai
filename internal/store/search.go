@@ -70,7 +70,7 @@ func queryFragments(query string) []string {
 		// string "PL科目") and cut "売上KPI" into windows that break KPI
 		// apart. Domain vocabulary is full of these, so split at the
 		// script boundary first and treat each run on its own terms.
-		for _, run := range scriptRuns(token) {
+		for _, run := range loanwordRuns(scriptRuns(token)) {
 			runes := []rune(run)
 			switch {
 			case !scriptWithoutSpaces(runes[0]):
@@ -95,6 +95,31 @@ func queryFragments(query string) []string {
 				} else {
 					grammarOnly = append(grammarOnly, []string{run})
 				}
+			case katakanaRun(runes):
+				// A katakana run is a word already. Unlike a run of Han
+				// and hiragana, which is a sentence and has to be cut
+				// into windows to find the words inside it, this one is
+				// delimited by what surrounds it — the kanji, kana or
+				// latin on either side — so cutting it says less than
+				// keeping it whole.
+				//
+				// Cutting it also collides. Loanwords share long
+				// substrings: ット is in スクリーンショット, データセット
+				// and ネットワーク; ショ and ョン are in ショット,
+				// セッション, ロケーション and ディメンション. Measured
+				// over the two bundles the eval loads, ット reached 14 of
+				// 28 concepts and セッ reached 16 — while 撮り, 踏む and
+				// 正直 reached one each. A question about a screenshot
+				// was asking for most of the base, and the words that
+				// said what it was about were outnumbered eight
+				// fragments to three in its own score.
+				//
+				// So the run stays one fragment, and fragmentTerm asks
+				// the index for all of its windows at once rather than
+				// any of them (the AND plainto_tsquery builds). The
+				// windows are already stored; nothing about the document
+				// side changes.
+				runs = append(runs, []string{run})
 			default:
 				runs = append(runs, contentWindows(runes))
 			}
@@ -175,6 +200,145 @@ func contentWindows(runes []rune) []string {
 		return content
 	}
 	return all
+}
+
+// minLoanword is how long a katakana stretch has to be before it is
+// taken out of the run around it as a word of its own.
+//
+// **Five, and it was measured rather than derived.** The floor is two
+// on principle — 三ヶ月 and 一ケタ are kanji words with a katakana
+// character inside them, and splitting there would leave 三 and 月 as
+// one-character runs, asked for as prefixes, which is the defect this
+// line of work has been removing. Everything above two was a question
+// for the golden set, and it answered:
+//
+//	threshold   lexical MRR   reach    leak
+//	(unsplit)   0.90          12.04    2.87
+//	3           0.89          10.24    1.84
+//	5           0.90          10.75    2.19
+//
+// At three, 「注文テーブルのスキーマ」 falls from first to fifth, and
+// what it falls behind is worth naming because it is not this rule's
+// fault. Asked for as words, that question is 注文, テーブル and
+// スキーマ; スキーマ is in exactly one concept of the twenty-eight and
+// in the other bundle entirely, so its rarity weight is the largest
+// there is, and a concept holding only it outscores the orders table
+// holding the other two. **The score is a fraction of the query's
+// weight, and a term nobody else has can be most of that fraction.**
+// Cutting テーブル into windows had been hiding it by spending the
+// query's weight on three correlated fragments instead of one.
+//
+// So five is where this rule stops before it uncovers a scoring
+// question it has no business answering, and the words it does take —
+// スクリーンショット, セッション, パーティション, ロケーション,
+// データセット — are the compounds whose windows collide in the first
+// place. The scoring question is real and still open; it wants its own
+// change and its own numbers.
+const minLoanword = 5
+
+// loanwordRuns splits each run at the loanwords inside it, so that
+// スクリーンショットの撮り直し arrives as スクリーンショット and
+// の撮り直し rather than as one stretch of sentence.
+//
+// **Katakana delimits itself.** A run of Han and hiragana is a sentence
+// — where its words begin is a question no rule here can answer, which
+// is why they are cut into windows and why the windows that begin with
+// hiragana are dropped. A stretch of katakana is not: the script change
+// on either side of it is the word boundary, written by whoever wrote
+// the sentence. Reading it is free, and everything downstream of this
+// gets easier — the loanword is asked for as a word (katakanaRun,
+// fragmentTerm), and the windows that used to straddle its edge (トの
+// in ショットの, ンで in ションで) are not asked for at all.
+func loanwordRuns(runs []string) []string {
+	var out []string
+	for _, run := range runs {
+		runes := []rune(run)
+		if !scriptWithoutSpaces(runes[0]) {
+			out = append(out, run)
+			continue
+		}
+		start := 0
+		for i := 0; i <= len(runes); i++ {
+			// The end of a katakana stretch, or the end of the run.
+			if i < len(runes) && (unicode.Is(unicode.Katakana, runes[i]) || joiningMark(runes[i])) {
+				continue
+			}
+			j := i
+			for j > start && (unicode.Is(unicode.Katakana, runes[j-1]) || joiningMark(runes[j-1])) {
+				j--
+			}
+			// j..i is the katakana stretch ending here; start..j is what
+			// came before it.
+			if i-j >= minLoanword && katakanaRun(runes[j:i]) {
+				if j > start {
+					out = append(out, string(runes[start:j]))
+				}
+				out = append(out, string(runes[j:i]))
+				start = i + 1
+				if i < len(runes) {
+					// The character that ended the stretch belongs to
+					// what follows it.
+					start = i
+				}
+			}
+		}
+		if start < len(runes) {
+			out = append(out, string(runes[start:]))
+		}
+	}
+	return out
+}
+
+// katakanaRun reports whether a run is a loanword rather than a stretch
+// of sentence: every character katakana, or one of the marks written
+// inside a word (joiningMark).
+//
+// Hiragana disqualifies it, which is the point — ですます and the
+// particles are the sentence, and a run holding them is not one word.
+func katakanaRun(runes []rune) bool {
+	for _, r := range runes {
+		if !unicode.Is(unicode.Katakana, r) && !joiningMark(r) {
+			return false
+		}
+	}
+	return true
+}
+
+// fragmentTerm is what the index is asked for on behalf of a fragment.
+//
+// For everything but a katakana run it is the fragment itself. A
+// katakana run is asked for as all of its two-character windows at
+// once: the document stores windows (migration 0036), so the word
+// itself is in no lexeme, and plainto_tsquery ANDs the terms it is
+// given — which turns "any window of this word" into "all of them",
+// the difference between スクリーンショット reaching every concept that
+// says ット and reaching the one that says the word.
+//
+// The fragment keeps its own spelling everywhere else: the name test
+// matches it as a substring, and the snippet looks for it in the body.
+// Both want the word a person typed, not the windows it was cut into.
+func fragmentTerm(frag string) string {
+	runes := []rune(frag)
+	if len(runes) <= 2 || !katakanaRun(runes) {
+		return frag
+	}
+	windows := make([]string, 0, len(runes)-1)
+	for i := 0; i+2 <= len(runes); i++ {
+		windows = append(windows, string(runes[i:i+2]))
+	}
+	return strings.Join(windows, " ")
+}
+
+// fragmentWindows is how many of the document's two-character windows a
+// fragment stands for: one for anything asked for as itself, and the
+// count of them for a loanword asked for as all of its windows at once
+// (fragmentTerm).
+func fragmentWindows(frag string) int {
+	runes := []rune(frag)
+	if len(runes) <= 2 || !katakanaRun(runes) {
+		return 1
+	}
+	return len(runes) - 1
 }
 
 // holdsContent reports whether a short run carries a content word
@@ -466,7 +630,7 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 		// tsquery reads, and the escaped pattern the name test reads. The
 		// name is one short string on the row, so it is matched as a
 		// substring rather than through the index the body needs.
-		args = append(args, frag)
+		args = append(args, fragmentTerm(frag))
 		match := fragmentQuery(frag, len(args))
 		args = append(args, "%"+escapeLike(frag)+"%")
 		tests = append(tests, match)
@@ -486,9 +650,19 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 		// that the query is stemmed ("why is revenue down" asks for four
 		// terms and two of them are dropped by the dictionary), which is
 		// how this came to be measured rather than reasoned about.
+		// A loanword asked for as one fragment stands for the windows it
+		// was cut from (fragmentTerm), and is weighted as those windows
+		// rather than as one term. Without this the unit of the score
+		// changes with the script — 「注文テーブルのスキーマ」 asks for
+		// three terms where the same question in kanji asks for six — and
+		// a concept holding only the rarest of the three outranks the one
+		// holding the other two: measured on that query as tables/orders
+		// falling from first to fifth behind a concept whose only match
+		// was スキーマ.
 		weight = append(weight, fmt.Sprintf(
 			"CASE WHEN count(*) FILTER (WHERE h%[1]d) OVER () = 0 THEN 0 "+
-				"ELSE ln(1 + total::float / count(*) FILTER (WHERE h%[1]d) OVER ()) END AS w%[1]d", i))
+				"ELSE %[2]d * ln(1 + total::float / count(*) FILTER (WHERE h%[1]d) OVER ()) END AS w%[1]d",
+			i, fragmentWindows(frag)))
 		weighted = append(weighted, fmt.Sprintf("CASE WHEN h%d THEN w%d ELSE 0 END", i, i))
 		// A fragment in the name is scored with the same weight it earns
 		// in the body, so a rare term stays rare wherever it lands.

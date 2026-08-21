@@ -291,6 +291,64 @@ func TestLoanwordIsLookedUpNotPrefixScanned(t *testing.T) {
 	}
 }
 
+// TestLoanwordIsAskedForWhole pins what a katakana run buys by staying
+// one fragment: the index is asked for all of its windows at once
+// (fragmentTerm), so a loanword finds the concept that says it rather
+// than every concept sharing a syllable with it.
+//
+// Loanwords share long substrings — ット is in スクリーンショット,
+// データセット and ネットワーク; ショ and ョン are in ショット,
+// セッション and ロケーション — and a two-character window is smaller
+// than the thing it is trying to identify. Measured over the bundles
+// the eval loads, ット reached 14 concepts of 28 and セッ reached 16,
+// while the words saying what the question was about reached one each.
+//
+// The assertion is on the neighbours. A test that only checked the
+// target passed before this rule existed too.
+func TestLoanwordIsAskedForWhole(t *testing.T) {
+	ctx := context.Background()
+	s := newSearchStore(t, ctx)
+	run := testdb.Unique(t, "loanwhole")
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+
+	for id, body := range map[string]string{
+		"screenshot": "スクリーンショットの撮り直しで踏む罠がある。",
+		"dataset":    "データセットの権限は読み取りだけである。",
+		"network":    "ネットワークの設定は触らない。",
+		"session":    "リモートセッションのチェック。",
+	} {
+		k := &domain.Knowledge{
+			Type: domain.TypeInsights, ID: run + "/" + id,
+			Title: id, Body: body, Status: domain.StatusStable, CreatedBy: actor,
+		}
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatalf("create %s: %v", k.ID, err)
+		}
+	}
+
+	for _, tc := range []struct{ query, want string }{
+		{"スクリーンショット", "screenshot"},
+		{"データセット", "dataset"},
+		// A word inside a longer one still answers: the document holding
+		// リモートセッション holds every window セッション asks for.
+		{"セッション", "session"},
+	} {
+		hits, err := s.SearchLexical(ctx, tc.query, Filter{Prefixes: []string{run}}, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids := make([]string, 0, len(hits))
+		for _, h := range hits {
+			ids = append(ids, strings.TrimPrefix(h.ID, run+"/"))
+		}
+		if len(ids) != 1 || ids[0] != tc.want {
+			t.Errorf("searching %s returned %v; want just %s. A neighbour here means the "+
+				"query is asking for any window of the word rather than all of them",
+				tc.query, ids, tc.want)
+		}
+	}
+}
+
 // TestEnglishSearchStems pins the recall ILIKE could not have: a plural
 // finds the body that says the singular. A search that found nothing was
 // recorded as a knowledge gap (design doc 0051), so this defect used to

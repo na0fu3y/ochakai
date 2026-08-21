@@ -220,6 +220,26 @@ func TestQueryFragments(t *testing.T) {
 		{"honorific before hiragana is grammar", "対応しておく",
 			[]string{"対応", "応し"}},
 		{"short japanese term", "売上", []string{"売上"}},
+		// A loanword delimits itself: the script change on either side of
+		// it is a word boundary somebody wrote, unlike the inside of a
+		// run of Han and hiragana, where no rule here knows where a word
+		// begins. So it leaves the run whole instead of being cut into
+		// windows that collide with every other loanword sharing a
+		// syllable — ット is in スクリーンショット, データセット and
+		// ネットワーク alike — and the windows that used to straddle its
+		// edge (トの) are not asked for at all.
+		{"a loanword is one fragment", "スクリーンショットの撮り直し",
+			[]string{"スクリーンショット", "撮り", "直し"}},
+		{"and so is a compound one", "データセットの権限",
+			[]string{"データセット", "権限"}},
+		// Under the threshold, and deliberately: splitting at a katakana
+		// character inside a kanji word would leave 三 and 月 as
+		// one-character runs, which fragmentQuery can only ask for as
+		// prefixes.
+		{"a counter inside a kanji word is not a loanword", "三ヶ月の売上",
+			[]string{"三ヶ", "ヶ月", "月の", "売上"}},
+		{"a short loanword stays in its run", "ネコの数",
+			[]string{"ネコ", "コの"}},
 		// A run of one or two characters is kept whole, and that is the
 		// right answer only when the run is a word. Spaces and latin
 		// words cut the particles out of a question as runs of their
