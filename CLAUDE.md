@@ -61,7 +61,7 @@ too**: the manual has a ceiling on its line count, so explaining a fold
 at length is a decision like any other.
 
 That document opens with the **eight conditions** ochakai exists to
-satisfy — the knowledge stays the user's, Google Cloud with no secrets,
+satisfy — the knowledge stays the user's, secret-zero on Google Cloud,
 OKF v0.2, no forward-deployed engineer, usable from Claude Code, a small
 embeddable REST API, a measurable improvement loop, and being one of the
 best choices available to a Japanese-speaking user weighing similar
