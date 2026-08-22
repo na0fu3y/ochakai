@@ -27,7 +27,7 @@ import (
 // run-unique prefix so a shared test database neither collides nor
 // pollutes: examples/demo, the eighteen concepts the quick start loads,
 // plus kb/bundle, the nine concepts of ochakai's own development
-// knowledge, plus one Japanese concept defined inline.
+// knowledge, plus the two Japanese concepts defined inline — 29 in all.
 //
 // The second bundle is here because one was not a base, it was a topic.
 // Every question asked of examples/demo alone is a question about a
@@ -45,11 +45,13 @@ import (
 // following the quick start typed a Japanese question at the demo and
 // got silence. The demo is written in Japanese now — that is what
 // ochak.ai's demo is — so the questions below are asked of the shipped
-// bundle in the language it is written in. The supplement is down to the
-// one term the demo's store has no home for (解約率 — it sells no
-// subscriptions); the two that stood in for 売上 and 受注 are gone,
-// because the bundle says both itself and a fixture competing with the
-// concept it stands in for measures nothing.
+// bundle in the language it is written in. The supplement is down to
+// what the shipped bundles have no home for: the term (解約率 — the
+// demo's store sells no subscriptions) and the orthography (a concept
+// written in halfwidth katakana and fullwidth latin, which no bundle is,
+// because people type carefully). The two that stood in for 売上 and
+// 受注 are gone, because the bundle says both itself and a fixture
+// competing with the concept it stands in for measures nothing.
 //
 // The English cases that remain are the ones that stayed English in the
 // bundle: column names, enum values, the words the warehouse supplies.
