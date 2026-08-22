@@ -491,7 +491,7 @@ func TestADescriptionIsRenderedAsTheMarkdownItIs(t *testing.T) {
 	}
 }
 
-// The loop strip is the human side of design doc 0051: the review page
+// The loop strip is the human side of design doc 0069 §5: the review page
 // is where the person who runs the loop already is, so the instance's
 // numbers are drawn there rather than on a page of their own.
 //

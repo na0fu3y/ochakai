@@ -9,17 +9,26 @@ import { esc } from '../escape.js';
 import { actorStr, daysSince, displayTitle, entryHash, fmtAge } from '../format.js';
 import { descHTML } from '../markdown.js';
 import { queueStrip, refreshQueues } from '../queues.js';
-import { refreshTree } from '../tree.js';
+import { knownDirs, refreshTree } from '../tree.js';
 import { icon } from '../vocab.js';
-import { explore } from './explore.js';
+import { debounce, explore } from './explore.js';
 
 // A draft with zero search hits, older than this, is flagged stale — the
 // inventory case (nobody's finding it; a candidate to drop). Sort=usage
 // already sinks these to the bottom; the toggle isolates them.
 export const STALE_DAYS = 14;
+// The windows the flow numbers can be asked about — `days` on the stats
+// call, whose default is the 30 this page opens with. 180 is the
+// server's ceiling and not a round number chosen here: the raw events
+// behind the outcome and miss counts are pruned after it, so a longer
+// window would answer with less than it was asked for (design doc 0069
+// §3), and asking for one is a 400.
+export const STATS_WINDOWS = [7, 30, 90, 180];
 // loaded and cursor walk the draft queue a page at a time (design doc
 // 0050 §2.1): the queue is a ledger, so it has an end rather than a cap.
-export const review = { staleOnly: false, loaded: [], cursor: '' };
+// days and prefix are what the loop's numbers above it are asked about;
+// both are parameters the stats call already takes.
+export const review = { staleOnly: false, loaded: [], cursor: '', days: 30, prefix: '' };
 
 export function viewReview() {
   view.innerHTML = `
@@ -37,6 +46,16 @@ export function viewReview() {
     <a href="#/search/verification-age">検証の古さ</a>(検証が古いものから順)です。検証し直すと、前者からは消え、
     後者では最後尾に回ります。三つ目の <a href="#/search/stale">期限切れ</a> は、書き手が宣言した期限を過ぎた
     concept を並べます。こちらは検証では片付かず、concept を編集して期限を宣言し直すと消えます。</p>
+    <div class="toolbar" style="margin:.2rem 0 .5rem">
+      <label class="check">窓
+        <select id="loop-days" aria-label="流れの数を数える窓">${STATS_WINDOWS.map(d =>
+          `<option value="${d}"${d === review.days ? ' selected' : ''}>直近 ${d} 日</option>`).join('')}</select></label>
+      <label class="check">範囲
+        <input type="text" id="loop-prefix" list="loop-dirs" placeholder="全体" aria-label="パスで数を絞る"
+               title="このパスの下にある concept だけを数える(例: teams/growth)"
+               value="${esc(review.prefix)}" style="width:9rem"></label>
+      <datalist id="loop-dirs"></datalist>
+    </div>
     <div id="loop-stats"></div>
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
@@ -46,15 +65,32 @@ export function viewReview() {
     </div>
     <div id="review-results"><div class="empty">…</div></div>`;
   $('#r-stale').addEventListener('change', () => { review.staleOnly = $('#r-stale').checked; runReview(); });
+  // The directories the tree has loaded, offered as completions — the
+  // same list the move dialog completes against, and the reason the
+  // scope is typed as a path rather than picked from a fixed menu:
+  // which prefixes mean a team is the base's own business.
+  $('#loop-dirs').innerHTML = knownDirs().map(p => `<option value="${esc(p)}">`).join('');
+  $('#loop-days').addEventListener('change', e => { review.days = Number(e.target.value); loadLoopStats(); });
+  $('#loop-prefix').addEventListener('input', e => {
+    review.prefix = e.target.value.replace(/^\/+|\/+$/g, '').trim();
+    debounce(loadLoopStats, 250);
+  });
   refreshQueues();
   runReview();
   loadLoopStats();
 }
 
-// The loop as the instance sees it (design doc 0051), on the page where
-// the person who runs it already is. Four numbers and the questions that
-// came back empty — not a dashboard: what a curator can act on this
-// morning, which is what the queues below are for.
+// The loop as the instance sees it (design doc 0069 §5), on the page
+// where the person who runs it already is. A handful of numbers and the
+// questions that came back empty — not a dashboard: what a curator can
+// act on this morning, which is what the queues below are for.
+//
+// They come in two kinds and are read differently, so they are drawn as
+// two bands rather than one row: a *state* is how the base stands right
+// now, a *flow* is what happened inside the window (design doc 0069 §5
+// says which is which, field by field). Split, the window control
+// visibly moves the second band and leaves the first alone; mixed, the
+// reader had to know the schema to tell which numbers just changed.
 //
 // sparkline draws the review trend: eight weeks of verifications, oldest
 // first (design doc 0095). Inline SVG rather than a chart library — this
@@ -88,13 +124,24 @@ function sparkline(weeks) {
 export async function loadLoopStats() {
   const out = $('#loop-stats');
   if (!out) return;
+  // The window and the scope are both parameters the stats call already
+  // takes, so asking a narrower question adds nothing to the wire. days
+  // is sent only when it is not the server's own default, which keeps
+  // the plain "how is it going" call the same one it always was.
+  const p = new URLSearchParams();
+  if (review.days !== 30) p.set('days', review.days);
+  if (review.prefix) p.append('prefix', review.prefix);
+  const query = p.toString();
+  // Rapid changes to either control leave earlier answers in flight; the
+  // last one asked for is the one drawn, whichever returns first.
+  const my = loadLoopStats._seq = (loadLoopStats._seq || 0) + 1;
   let s;
-  try { s = await api('/api/v1/stats'); } catch (e) {
-    if (out !== $('#loop-stats')) return;
+  try { s = await api('/api/v1/stats' + (query ? '?' + query : '')); } catch (e) {
+    if (my !== loadLoopStats._seq || out !== $('#loop-stats')) return;
     out.innerHTML = `<div class="error-banner" role="alert">loop の数字を読み込めませんでした: ${esc(e.message)}</div>`;
     return;
   }
-  if (out !== $('#loop-stats')) return;
+  if (my !== loadLoopStats._seq || out !== $('#loop-stats')) return;
   const trust = s.concepts?.trust || {};
   const confirmed = (trust['human-reviewed'] || 0) + (trust['machine-confirmed'] || 0);
   const gaps = s.misses?.recording ? (s.misses.queries || []) : [];
@@ -107,15 +154,32 @@ export async function loadLoopStats() {
   // past, and this one is worth stopping at — nothing else on any
   // surface says a concept is half in the index (design doc 0089).
   const truncated = s.embedding?.enabled ? (s.embedding.truncated ?? 0) : 0;
-  out.innerHTML = `
-    <div class="stat-tiles" style="max-width:52rem;margin:.2rem 0 1rem">
+  // Every number keyed by a concept honors the scope — the tallies, the
+  // queues, the verifications, the outcomes, the shape. `misses` does
+  // not and cannot: a search that found nothing found it nowhere, so
+  // there is no id to scope it by (design doc 0069 §5.1). Wherever one
+  // is drawn beside a scoped number, it says which it is.
+  const scoped = !!review.prefix;
+  out.innerHTML = (scoped ? `
+    <p style="max-width:48rem;margin:0 0 .8rem;color:var(--muted);font-size:.9rem">
+      <code>/${esc(review.prefix)}</code> の下だけを数えています。<strong>答えの無かった検索だけは絞れません</strong> —
+      何も返さなかった検索には concept の id が無いので、どこで訊かれたかを言えないからです。その数と一覧は
+      インスタンス全体のものです。下のキューの帯と draft の一覧も絞っていません。</p>` : '') + `
+    <div class="tile-band">いまの姿</div>
+    <div class="stat-tiles band" style="max-width:52rem;margin:0 0 1rem">
       <div class="tile"><div class="num">${s.concepts?.total ?? 0}</div><div class="lbl">concept</div></div>
       <div class="tile"><div class="num">${confirmed}</div><div class="lbl">誰かが確認した</div></div>
-      <div class="tile"><div class="num">${s.review?.verifications ?? 0}</div><div class="lbl">直近 ${s.window_days} 日の検証</div></div>
-      <div class="tile"><div class="num">${s.misses?.recording ? (s.misses.count ?? 0) : '–'}</div>
-        <div class="lbl">何も見つからなかった検索</div></div>
+    </div>
+    <div class="tile-band">直近 ${s.window_days} 日に起きたこと</div>
+    <div class="stat-tiles band" style="max-width:52rem;margin:0 0 1rem">
+      <div class="tile"><div class="num">${s.concepts?.created ?? 0}</div><div class="lbl">増えた concept</div></div>
+      <div class="tile"><div class="num">${s.review?.verifications ?? 0}</div><div class="lbl">検証</div></div>
+      <div class="tile"><div class="num">${s.outcomes?.worked ?? 0} / ${s.outcomes?.failed ?? 0}</div>
+        <div class="lbl">うまくいった / 失敗の報告</div></div>
       <div class="tile"><div class="num">${s.outcomes?.concepts_reported ?? 0}/${s.outcomes?.concepts_used ?? 0}</div>
         <div class="lbl">使われた concept のうち結果が返ってきたもの</div></div>
+      <div class="tile"><div class="num">${s.misses?.recording ? (s.misses.count ?? 0) : '–'}</div>
+        <div class="lbl">何も見つからなかった検索${scoped ? '(全体)' : ''}</div></div>
     </div>` + sparkline(s.review?.weekly) + (dropped ? `
     <p style="max-width:48rem;margin:0 0 1.2rem;color:var(--muted);font-size:.9rem">
       この ${s.window_days} 日で、記録されたあと失われた観測が ${dropped} 件あります。
@@ -127,10 +191,10 @@ export async function loadLoopStats() {
       見つかりません — 語句そのものが含まれていれば字句検索は当てます。長すぎる concept を
       分けるか、より広い窓のモデルに移すかのどちらかです。</p>` : '') + (gaps.length ? `
     <details style="max-width:48rem;margin:0 0 1.2rem">
-      <summary style="cursor:pointer;color:var(--muted)">答えの無かった検索 — 次に書くもの</summary>
+      <summary style="cursor:pointer;color:var(--muted)">答えの無かった検索 — 次に書くもの${scoped ? '(全体)' : ''}</summary>
       <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日で何も返さなかった検索を、
       多く訊かれたものから順に並べています。誰かが片付けるキューではありません: 答えになる concept が書かれれば、
-      この一覧からは自然に消えます。</p>
+      この一覧からは自然に消えます。${scoped ? 'この一覧だけは範囲の指定を受けません — 何も見つからなかった検索は、どこで訊かれたかを言えないからです。' : ''}</p>
       ${gaps.map(g => `<div style="display:flex;gap:.6rem;align-items:baseline;padding:.25rem 0">
         <span class="badge">${g.count}×</span>
         <a href="#/search" class="mono" data-gap="${esc(g.query)}">${esc(g.query)}</a></div>`).join('')}
