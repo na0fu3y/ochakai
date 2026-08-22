@@ -44,6 +44,19 @@ last entry.
   the queue depths a curator works from are untouched.
 ### Changed
 
+- **The re-verification feed has one name again.** `sort=failed` was
+  called four things at once: 「再検証フィード」 in five design records
+  (0025, 0067, 0076, 0090), 「要レビュー」 in the manual, 「誤りの報告」
+  in the web UI, and 「再検証のフィード」 in that same UI's own banner —
+  which told the reader to uncheck a box it had just called something
+  else. Design doc 0090 and `docs/loop.md` made the same claim, that
+  this is the feed verifying empties, under two of those names. The
+  records cannot move, so everything else moved to them: the filter
+  chip, the queue badge, the home page and the review page say
+  「再検証」, and the manual stops naming the pair of feeds at all —
+  「再検証キュー」 covered both while 「再検証フィード」 meant one.
+  Nothing changes about what the feed holds or how it empties.
+
 - **The web UI's Japanese is rewritten to one register.** The page was
   translated in a single pass and had been reading like two: prose in
   ですます, tooltips and menu items in 常体, and at least one tooltip in
@@ -51,7 +64,7 @@ last entry.
   polite, buttons and tile labels 体言止め, a tooltip one polite sentence
   under 40 characters — and the labels that were relative clauses are
   nouns: a stat tile says 「結果報告 / 利用」 rather than 「使われた
-  concept のうち結果が返ってきたもの」, and the queue is 「誤りの報告」
+  concept のうち結果が返ってきたもの」, and the queue is 「再検証」
   rather than 「間違いと報告された」. **`concept` no longer reaches the
   reader**: the page says 「ナレッジ」 for one, 「ナレッジベース」 for all
   of them, and 「ドキュメント」 for the stored OKF text, while `concept`

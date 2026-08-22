@@ -48,7 +48,7 @@ export function viewExplore() {
       ${explore.ageFeed
         ? `<div class="feed-banner"><strong>検証の古さ</strong>のフィードです。最後に検証してから時間が経ったナレッジが上に来るので、古くなった検証済みクエリを見つけ直すのに使います。検索に戻るには「検証の古さ」のチェックを外してください。</div>`
         : explore.failedFeed
-        ? `<div class="feed-banner"><strong>再検証のフィード</strong>です。失敗の報告(<code>report_outcome failed</code>)にまだ応えていないナレッジを、報告の多い順に並べています。中身を確かめて検証し直すと、このフィードから外れます。検索に戻るには「誤りの報告」のチェックを外してください。</div>`
+        ? `<div class="feed-banner"><strong>再検証のフィード</strong>です。失敗の報告(<code>report_outcome failed</code>)にまだ応えていないナレッジを、報告の多い順に並べています。中身を確かめて検証し直すと、このフィードから外れます。検索に戻るには「再検証」のチェックを外してください。</div>`
         : explore.source
         ? `<div class="feed-banner"><code>${esc(explore.source)}</code> を引用しているナレッジです。この資料から派生したものを、すべて表示しています。<a href="#/search">検索に戻る</a>。</div>`
         : explore.expiredFeed
@@ -72,8 +72,8 @@ export function viewExplore() {
         <span class="fb-sep"></span>
         <label class="chip" title="最後の検証が古い順に並べます"><input
           type="checkbox" id="f-age" aria-label="検証の古さのフィード" ${explore.ageFeed ? 'checked' : ''}>検証の古さ</label>
-        <label class="chip" title="誤りの報告に応えていないナレッジを並べます"><input
-          type="checkbox" id="f-failed" aria-label="再検証のフィード" ${explore.failedFeed ? 'checked' : ''}>誤りの報告</label>
+        <label class="chip" title="失敗の報告にまだ応えていないナレッジを並べます"><input
+          type="checkbox" id="f-failed" aria-label="再検証のフィード" ${explore.failedFeed ? 'checked' : ''}>再検証</label>
         <label class="chip" title="stale_after を過ぎたナレッジを並べます(編集すると解消します)"><input
           type="checkbox" id="f-expired" aria-label="期限切れのフィード" ${explore.expiredFeed ? 'checked' : ''}>期限切れ</label>
       </div>

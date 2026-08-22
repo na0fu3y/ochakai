@@ -35,7 +35,7 @@ export function viewReview() {
     <div class="section-title">draft のレビューキュー</div>
     <div class="read-only-note">この ochakai は read-only のため、レビューの操作は表示されません。キューそのものは本物です。書き込めるデプロイのレビュアーが解消していくのは、これと同じ列です。</div>
     <p style="color:var(--muted);max-width:48rem">エージェントが書き戻した draft を、求められている順に並べています。順位を決めるのは検索に出た回数ではなく、実際に読み込まれた回数です。直近の期間を先に見て、同じなら通算で比べます。正しいものは検証し、そうでないものは却下してください(理由が <code>status_note</code> として残るため、エージェントは同じ提案を繰り返さなくなります)。一度も読まれていない draft は下に並ぶので、<em>放置されたものだけ</em>に切り替えると仕分けができます。</p>
-    <p style="color:var(--muted);font-size:.9rem;max-width:48rem">検証済みのナレッジには、それ自身のキューが二つあります。<a href="#/search/reported-wrong">誤りの報告</a>(失敗の報告にまだ応えていないナレッジ)と、<a href="#/search/verification-age">検証の古さ</a>(検証の古いものから順)です。検証し直すと、前者からは消え、後者では最後尾に回ります。三つ目の<a href="#/search/stale">期限切れ</a>は、書き手が宣言した期限を過ぎたナレッジを並べます。こちらは検証では解消せず、ナレッジを編集して期限を宣言し直すと消えます。</p>
+    <p style="color:var(--muted);font-size:.9rem;max-width:48rem">検証済みのナレッジには、それ自身のキューが二つあります。<a href="#/search/reported-wrong">再検証</a>(失敗の報告にまだ応えていないナレッジ)と、<a href="#/search/verification-age">検証の古さ</a>(検証の古いものから順)です。検証し直すと、前者からは消え、後者では最後尾に回ります。三つ目の<a href="#/search/stale">期限切れ</a>は、書き手が宣言した期限を過ぎたナレッジを並べます。こちらは検証では解消せず、ナレッジを編集して期限を宣言し直すと消えます。</p>
     <div class="toolbar" style="margin:.2rem 0 .5rem">
       <label class="check" style="white-space:nowrap">期間
         <select id="loop-days" aria-label="集計期間">${STATS_WINDOWS.map(d =>
