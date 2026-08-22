@@ -971,6 +971,83 @@ Two pieces of bookkeeping, both easy to forget:
   another page no longer supports, say so in an issue and leave that
   sentence for a separate PR — #451 is what happens otherwise.
 
+## The web UI's Japanese
+
+`internal/webui/static/` is the one surface a non-contributor reads
+whole, and it is Japanese (C8). It was translated once in a single pass
+and shipped 40-50 English strings behind a CHANGELOG line claiming every
+one of them was done — because nothing in this repository read the copy.
+`internal/webui/jstest/copy.test.js` reads it now, against the rules
+below. It sees string literals only, including the ones inside a
+template's `${...}`, which is where the half-translated tooltips hid.
+
+**Register follows the element, not the file.** The page used to pick a
+form by where a string happened to sit — prose polite, tooltips plain,
+and one tooltip both at once.
+
+| Element | Form |
+|---|---|
+| Prose, banners, hints | ですます |
+| Toasts, `confirm`, `prompt`, error banners | ですます, one sentence |
+| Buttons, tabs, column headings, badges, tile labels | 体言止め, ~8 characters |
+| `title` | ですます, one sentence, no 。, under 40 characters |
+| `aria-label` | 体言止め — it is the control's *name*, not a description |
+
+The two attributes are split because they are different things: a
+`title` is a description a reader hovers for, an `aria-label` is the
+accessible name a screen reader announces in place of the control. A
+sentence in the second is not a label at all.
+
+A tile label is a noun, not a clause: 「結果報告 / 利用」 rather than
+「使われた concept のうち結果が返ってきたもの」. A tooltip is a sentence,
+not a paragraph — needing a second one means the thing it explains
+belongs in the prose above it, where there is room.
+
+**One word for one thing.** 「ナレッジ」 is a concept as the reader meets
+it, 「ナレッジベース」 is all of them, and 「ドキュメント」 is the stored
+OKF text — the frontmatter and markdown the editor opens and `export`
+writes. `concept` is the wire's word: it stays in ids, in tool names
+(`put_concept`), and in `api/openapi.yaml`, and never reaches the page.
+
+**What stays English** is the vocabulary a reader also types or sees
+stored, where translating would put the screen and the frontmatter into
+disagreement. Declared here so the list a writer consults and the list
+the check enforces are one list, for the reason `RECORD-LINES` is:
+
+    COPY-ENGLISH-TERMS: OKF SPEC YAML MiB REST MCP CLI API
+      frontmatter markdown export import ochakai ui serve-ui access
+      draft stable deprecated rejected unverified
+      machine-confirmed human-reviewed outcome failed
+
+Two or more English words in a row fail the check unless every word in
+the run is on that list — which is what separates a name from a
+sentence, because English prose always reaches for a word that is not.
+Add a term when a reader would type it; translate it otherwise.
+
+**Punctuation.** Half-width parentheses, as everywhere else here (the
+design records use them 729 times and the full-width form none). But
+full-width ？ and ！ after Japanese: no other page in this repository has
+ever needed a question mark, so the UI is the one place with the rule to
+pick, and half-width reads broken directly after kana.
+
+**A Japanese paragraph is one source line.** A newline between two
+Japanese characters is rendered as a space — browsers do not apply the
+segment-break removal that would have spared it, which was measured
+rather than assumed — and a half-width space mid-sentence is
+conspicuous in a language that has none. The page carried 61 of them,
+three in the home page's first paragraph, before anything looked. Lines
+get long; that is the trade, and the check holds it. A space between
+Japanese and Latin stays correct and is left alone: 「ナレッジ 5 件」
+and 「<code>stale_after</code> を過ぎた」 both want one.
+
+**Two rules the check reads that are not style.** A plural branch
+(`n === 1 ? 'draft' : 'drafts'`) is untranslated copy by construction —
+Japanese does not inflect, so the branch cannot survive a translation,
+which makes it a reliable place to start grepping. And a failure message
+names its operation: 「検証できませんでした」, not 「失敗しました」. One
+sentence shared by six actions tells a curator nothing about which of
+them it was.
+
 ## Pull requests
 
 Review is the scarce resource here, and code being cheap to write has

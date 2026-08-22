@@ -355,7 +355,7 @@ try {
   // the reading says which of its numbers did not narrow.
   await check('a scoped reading says what it could not scope',
     await waitFor(`(() => { const t = ${textOf('#loop-stats')};
-      return t.includes('答えの無かった検索だけは絞れません') && t.includes('/metrics'); })()`), shown);
+      return t.includes('該当なしの検索だけは絞れません') && t.includes('/metrics'); })()`), shown);
 
   // The access policy (design doc 0109 §5). The tab is absent until the
   // server answers for it, so this is also the check that the probe ran

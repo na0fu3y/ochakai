@@ -66,45 +66,35 @@ export function renderAccess(rules, open = false) {
   const table = rules.length ? `
     <div class="scroll-x">
       <table class="rules">
-        <thead><tr><th>ディレクトリ</th><th>誰が</th><th class="flag">読む</th><th class="flag">書く</th>
-          <th>置いた人</th></tr></thead>
+        <thead><tr><th>ディレクトリ</th><th>対象</th><th class="flag">読取</th><th class="flag">書込</th>
+          <th>設定者</th></tr></thead>
         <tbody>${rules.map(ruleRow).join('')}</tbody>
       </table>
     </div>
-    <p style="color:var(--muted);max-width:48rem;font-size:.9rem">付与だけの表です — 拒否の行はありません。
-    <strong>書ける は 読める を含みます。</strong>ディレクトリはセグメント境界で照合するので、
-    <code>sales</code> は <code>sales/orders</code> に当たり <code>sales-legacy/orders</code> には当たりません。
-    深い行は浅い行を打ち消さない足し算なので、<code>sales</code> を書ける人は
-    <code>sales/sample</code> も書けます。表に無いところは、その人には <strong>404</strong> —
-    見えないのではなく、無いものとして答えます。</p>
-    <p style="color:var(--muted);max-width:48rem;font-size:.9rem">バンドル全体を取る操作
-    (統計・エクスポート・<code>move</code>・再埋め込み・このポリシー自身)は管理者のものです。
-    塞げないものが一つあります: 読める concept の本文が隠した id を名指していれば、その id は本文の中で読めます。
-    この表が約束するのは、一覧・検索・取得・エクスポート・履歴から<em>出てこない</em>ことまでです。</p>`
+    <p style="color:var(--muted);max-width:48rem;font-size:.9rem">付与だけの表です。拒否の行はありません。<strong>「書込」は「読取」を含みます。</strong>ディレクトリはセグメント境界で照合するため、
+    <code>sales</code> は <code>sales/orders</code> に当たり、<code>sales-legacy/orders</code> には当たりません。深い行が浅い行を打ち消すことはなく足し算になるので、<code>sales</code> を書ける人は
+    <code>sales/sample</code> も書けます。表に無いところは、その人には <strong>404</strong> です。見えないのではなく、無いものとして答えます。</p>
+    <p style="color:var(--muted);max-width:48rem;font-size:.9rem">バンドル全体にまたがる操作
+    (統計・エクスポート・<code>move</code>・再埋め込み・このポリシー自身)は管理者のものです。塞げないものが一つあります。読めるナレッジの本文が、隠した id を名指していれば、その id は本文の中で読めてしまいます。この表が約束するのは、一覧・検索・取得・エクスポート・履歴から<em>出てこない</em>ことまでです。</p>`
     : `<div class="empty" style="padding:1.5rem 0">境界はまだありません。</div>
-    <p style="color:var(--muted);max-width:48rem;font-size:.9rem">付与が一行も無いデプロイでは、
-    ここに届いた人は全部を読み書きします。<strong>最初の一行が、全員に対して同時に境界を入れます</strong> —
-    段階的に効かせる仕組みはありません。部門ごとに秘匿しながら全社の用語集は検証済みのまま共有する、
-    といった、デプロイを分けても買えないものが要るときの機構です。</p>`;
+    <p style="color:var(--muted);max-width:48rem;font-size:.9rem">付与が一行も無いデプロイでは、ここに届いた人が全部を読み書きします。<strong>最初の一行が、全員に対して同時に境界を入れます。</strong>段階的に効かせる仕組みはありません。部門ごとに秘匿しながら全社の用語集は検証済みのまま共有する、といった、デプロイを分けるだけでは実現できない要件のための機構です。</p>`;
 
   view.innerHTML = `
     <div class="section-title">アクセス</div>
     ${table}
-    <div class="read-only-note">この ochakai は read-only なので、ポリシーは表示だけです。
-    凍結されているのが知識の側だけで境界は動かせる、という状態を作らないためです。</div>
+    <div class="read-only-note">この ochakai は read-only のため、ポリシーは表示のみです。知識の側だけが凍結されて境界は動かせる、という状態を作らないためです。</div>
     <details class="write-only" id="access-edit"${open ? ' open' : ''}>
       <summary style="cursor:pointer">文書として編集</summary>
       <div class="caution">
         <strong>保存が誰として記録されるかは、この UI の配り方で決まります。</strong>
         <code>ochakai ui</code> なら、あなた自身(<code>human:…</code>)です。
         <code>ochakai serve-ui</code> を IAP 無しで置いた場合は、全員が同じサービスアカウント
-        (<code>process:…</code>)に畳まれるので、<strong>この URL に届く全員がこのポリシーを編集できます</strong>。
-        ポリシーに履歴はありません — 残るのは、いまの表と、それを置いた人だけです。
+        (<code>process:…</code>)に畳まれるため、<strong>この URL に届く全員がこのポリシーを編集できます</strong>。ポリシーに履歴はありません。残るのは、いまの表と、それを設定した人だけです。
       </div>
       <p style="color:var(--muted);max-width:48rem;font-size:.9rem">文書を丸ごと置き換えます。
-      <code>ochakai access --json</code> が出すもの、<code>-f</code> が受け取るものと同じ形です。
+      <code>ochakai access --json</code> が出力するもの、<code>-f</code> が受け取るものと同じ形式です。
       <code>prefix</code> の <code>""</code> はバンドル全体、<code>principal</code> は
-      <code>human:&lt;名前&gt;</code>・<code>process:&lt;名前&gt;</code>・<code>*</code>。</p>
+      <code>human:&lt;名前&gt;</code>・<code>process:&lt;名前&gt;</code>・<code>*</code> です。</p>
       <textarea id="access-doc" rows="16" class="mono" spellcheck="false"
         aria-label="アクセスポリシーの文書">${esc(policyDocument(rules))}</textarea>
       <div id="access-error"></div>
@@ -136,9 +126,9 @@ async function saveAccess(rules) {
   // click from an empty textarea, and neither is undoable by reading the
   // page again.
   if (!rules.length && next.length && !confirm(
-    'これが最初の一行です。保存すると、いま全部を読み書きできている全員に、同時に境界が入ります。続けますか?')) return;
+    'これが最初の一行です。保存すると、いま全部を読み書きできている全員に、同時に境界が入ります。続けますか？')) return;
   if (rules.length && !next.length && !confirm(
-    '付与を全部消します。境界そのものが無くなり、ここに届く人はまた全部を読み書きできます。続けますか?')) return;
+    '付与を全部消します。境界そのものが無くなり、ここに届く人はまた全部を読み書きできます。続けますか？')) return;
   try {
     const saved = await api('/api/v1/access', { method: 'PUT', body: { rules: next } });
     toast('アクセスポリシーを保存しました。');

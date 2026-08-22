@@ -187,7 +187,7 @@ export function md(src, resolveFile, resolveEntry) {
   if (cited.length) {
     out += '<section class="footnotes"><ol>' + cited.map(id =>
       `<li id="fn-${anchor(id)}">${inline(notes.get(id))} ` +
-      `<a class="fnback" href="#fnref-${anchor(id)}" title="本文に戻る">↩</a></li>`).join('') +
+      `<a class="fnback" href="#fnref-${anchor(id)}" title="本文に戻ります">↩</a></li>`).join('') +
       '</ol></section>';
   }
   return out;

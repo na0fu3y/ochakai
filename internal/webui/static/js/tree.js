@@ -52,7 +52,7 @@ export function nodeHTML(prefix, label, count) {
   return `<details class="node" data-prefix="${esc(prefix)}" ${browse.open.has(prefix) ? 'open' : ''}>
     <summary>${label}<span class="count">${count}</span><a class="node-new write-only"
       href="#/new/${prefix.split('/').filter(Boolean).map(encodeURIComponent).join('/')}/"
-      title="${esc(prefix)} に concept を作る">＋</a></summary>
+      title="${esc(prefix)} にナレッジを作成します">＋</a></summary>
     <div class="children"><div class="empty">…</div></div>
   </details>`;
 }
@@ -69,7 +69,7 @@ export function nodeHTML(prefix, label, count) {
 export function levelHTML(res, prefix) {
   const dirs = (res.dirs || []).map(dir => nodeHTML(prefix + dir.name + '/',
     `<span class="type-ico">📁</span><a class="dir-name mono" href="${dirHash(prefix + dir.name)}"
-       title="${esc(prefix + dir.name)}/ の索引を開く">${esc(dir.name)}/</a>`, dir.count)).join('');
+       title="${esc(prefix + dir.name)}/ の索引を開きます">${esc(dir.name)}/</a>`, dir.count)).join('');
   const concepts = (res.concepts || []).map(e => `
     <a class="tree-entry" data-id="${esc(e.id)}" href="#/k/${idPath(e.id)}" draggable="${READ_ONLY ? 'false' : 'true'}"
        title="${esc(e.id)} · ${esc(e.status)}">
@@ -106,8 +106,7 @@ export function loadNode(d) {
       const res = await api(`/api/v1/bundle/${idPath(prefix)}/index.md`);
       const body = levelHTML(res, prefix);
       const note = res.truncated
-        ? `<div class="truncation-note">この階層の先頭 1000 concept を表示 — これだけ広いディレクトリは
-           サブディレクトリに分けたほうがよいでしょう。</div>` : '';
+        ? `<div class="truncation-note">この階層の先頭 1000 件を表示しています。これだけ広いディレクトリは、サブディレクトリに分けることをおすすめします。</div>` : '';
       box.innerHTML = (body + note) || '<div class="empty">空です。</div>';
       wireNodes(box);
       markTreeSelection();
