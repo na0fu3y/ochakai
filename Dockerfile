@@ -13,7 +13,11 @@ ARG TARGETOS TARGETARCH
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /ochakai ./cmd/ochakai
 
 # distroless static: no shell, no package manager, minimal supply chain.
-FROM gcr.io/distroless/static-debian12:nonroot
+# The Debian version is named rather than left off: distroless resolves a
+# bare tag to whatever it currently considers newest, which would move
+# this image's base on a day nobody chose. debian13 is where that default
+# points today.
+FROM gcr.io/distroless/static-debian13:nonroot
 COPY --from=build /ochakai /ochakai
 USER nonroot
 ENTRYPOINT ["/ochakai"]

@@ -41,6 +41,13 @@ last entry.
 
 ### Changed
 
+- **The image's runtime base is `distroless/static-debian13`.** distroless
+  resolves a bare tag to whatever it currently considers newest, and
+  debian13 is where that points today; naming the version keeps the base
+  from moving on a day nobody chose. Nothing else about the image
+  changes — still static, still nonroot, still no shell and no package
+  manager — and the built image was checked end to end, including
+  reaching a deployment over TLS.
 - **Built on Go 1.27**, and migration 0044 carries the Unicode 17
   character class that comes with it. The CJK class the lexical index
   splits on is generated from Go's own
