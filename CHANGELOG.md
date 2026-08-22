@@ -21,6 +21,28 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The loop's numbers on the review page can be asked about a period
+  and a path.** `GET /api/v1/stats` has taken `days` and `prefix` all
+  along (design doc 0069 §5); the page asked for neither, so the only
+  reading a browser offered was the last 30 days over the whole base —
+  a team sharing a deployment could not see its own month, and nobody
+  could look back over a quarter without the CLI. Two controls sit above
+  the numbers now, and the numbers are drawn as two bands: what the base
+  *is*, and what happened *inside the window* — the split design doc
+  0069 §5 already made field by field, which is what makes it visible
+  that the period moves the second band and not the first. Two flow
+  numbers the wire carried and the page did not draw join them: concepts
+  created, and outcomes reported worked and failed. **Scoped, the
+  unanswered searches beside them are still the whole instance's** and
+  cannot be otherwise — a search that found nothing found it nowhere, so
+  there is no id to scope it by (0069 §5.1) — and the reading says so
+  rather than letting that number pass as the team's. Nothing is added
+  to the wire: no endpoint, no parameter, no word. The review trend
+  stays the one shape with no axes that design doc 0095 §3 gave it, and
+  the queue depths a curator works from are untouched.
+
 ### Fixed
 
 - **`put_concept` no longer says a ruling exists outside the caller's

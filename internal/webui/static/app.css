@@ -344,6 +344,16 @@ table.rules .flag { text-align: center; width: 3.2rem; padding-right: 0; }
 .stat-tiles .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1rem; }
 .tile .num { font-size: 1.7rem; font-weight: 700; }
 .tile .lbl { color: var(--muted); font-size: .82rem; }
+/* The loop's numbers are of two kinds and are read differently: a state
+   is how the base stands now, a flow is what happened inside the window
+   the reader picked (design doc 0069 §5). One band each, so the window
+   control visibly moves the second and leaves the first alone. */
+.tile-band { color: var(--muted); font-size: .82rem; margin: .2rem 0 .35rem; }
+/* The two bands are read as one table of numbers, so their columns
+   have to line up: auto-fill keeps the tracks the shorter band would
+   otherwise swallow, and a state tile stays the width of the flow
+   tile under it. */
+.stat-tiles.band { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); }
 
 /* ---- markdown body ---- */
 .md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { line-height: 1.3; margin: 1.1em 0 .4em; }
