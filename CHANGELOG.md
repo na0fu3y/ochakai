@@ -23,18 +23,31 @@ last entry.
 
 ### Changed
 
-- **Built on Go 1.26.7**, the current patch of the release line ochakai
-  targets. Go 1.27 is deliberately not adopted yet: it carries Unicode
-  17, and migration 0036's CJK character class is generated from Go's
-  own `unicode.Han`/`Hiragana`/`Katakana` tables and pinned to them by
-  `TestCJKClassAgreesWithGo`. Under Go 1.27 that test reports 645
-  characters Go now calls Han and the stored class does not — a term a
-  query would window and the index would not, which is a document that
-  cannot be found rather than one ranked badly. The pin caught it before
-  a build could ship it, which is what it is for. Nothing else in the
-  tree objected to Go 1.27: the whole suite passes, the frozen wire
-  golden files included, with `encoding/json` on its new v2
-  implementation.
+- **Built on Go 1.27**, and migration 0044 carries the Unicode 17
+  character class that comes with it. The CJK class the lexical index
+  splits on is generated from Go's own
+  `unicode.Han`/`Hiragana`/`Katakana` tables and pinned to them by
+  `TestCJKClassAgreesWithGo`; Unicode 17 gives Han 645 more characters
+  than Unicode 15 did, and the pin reported every one of them the first
+  time the suite ran on 1.27 — which is what it is for. **The migration
+  recomputes every row's search index**, the way migration 0043 did;
+  rehearsed on a base written at 0043, where Japanese, halfwidth and
+  English searches all answer the same before and after. Nothing an
+  operator sets changes.
+- **`go.mod` now names 1.27 as a floor rather than a preference**, which
+  is new: a build older than the class in the database windows fewer
+  characters than the index holds. The pin fails rather than letting that
+  ship, and the floor is what keeps it from being reached. Everything
+  else about 1.27 was checked rather than assumed — the whole suite
+  passes, frozen wire golden files and OpenAPI contract validation
+  included, with `encoding/json` on its new v2 implementation.
+- **What the new characters still cannot do**, recorded in
+  `TestWhatPostgresCanIndexAboveTheBMP`: all 645 live above the BMP, and
+  what becomes a lexeme up there is decided by PostgreSQL's Unicode
+  knowledge rather than by ochakai's class. PostgreSQL 17 reads CJK
+  extension I as blank on both the document and the query side, so a term
+  written in it is found by nothing — no class can change that, and the
+  day a PostgreSQL lifts the limit is a day that test fails and says so.
 - **A filtered semantic search no longer answers short.** pgvector's
   HNSW scan runs before the `WHERE` clause, so a search for ten concepts
   narrowed by type, tag or path got only whatever survived of its
