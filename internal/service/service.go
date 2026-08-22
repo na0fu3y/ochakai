@@ -475,8 +475,17 @@ func (s *Service) Plan(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 // tell agents to consult before re-proposing. Nobody notices: unlike a
 // deleted verified concept, a deleted rejection leaves nothing anyone was
 // using.
+//
+// It is a step of a write, so it is scoped like one (design doc 0109 §4).
+// Without that, its refusal was a read of somebody else's subtree: the
+// sentence names the id and says a human ruled on it, which is exactly
+// what a caller outside the scope is meant to receive a 404 for.
 func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, error) {
-	k, err := s.Store.Get(ctx, domain.Normalize(id))
+	id = domain.Normalize(id)
+	if err := s.mayWrite(ctx, id); err != nil {
+		return nil, err
+	}
+	k, err := s.Store.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -517,8 +526,18 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, 
 // revivable in one call. A draft tombstone stays revivable: nobody ruled
 // on it, and reviving an abandoned draft is how a create on a deleted id
 // is supposed to work.
+//
+// Scoped like RefuseIfCurated and for the same reason (design doc 0109
+// §4): a tombstone is still something at an address, and saying a
+// deleted ruling sits at one answers the question the boundary refuses.
+// It runs ahead of create's own guard, so without this the refusal
+// arrived before the 404 that should have replaced it.
 func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error {
-	k, err := s.Store.GetTombstone(ctx, domain.Normalize(id))
+	id = domain.Normalize(id)
+	if err := s.mayWrite(ctx, id); err != nil {
+		return err
+	}
+	k, err := s.Store.GetTombstone(ctx, id)
 	if errors.Is(err, store.ErrNotFound) {
 		// A free id, or a live concept — Create's own ErrAlreadyExists
 		// covers the second case.

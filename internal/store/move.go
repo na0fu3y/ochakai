@@ -172,7 +172,11 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		`SELECT `+knowledgeSelectDoc+` FROM object
 		 WHERE deleted_at IS NULL AND (links @> $1 OR attrs->>'model' = $2 OR id = $3)
 		 ORDER BY id FOR UPDATE`,
-		fmt.Sprintf(`[{"target": %q}]`, oldID),
+		// The same containment the reverse lookup asks with, marshalled
+		// rather than formatted: %q spells a Go literal, and the two
+		// disagree for a rune Go writes as \U0001d173 — which no id is
+		// likely to carry, and which JSON has no such escape for.
+		linkContainment(oldID),
 		oldID, newID)
 	if err != nil {
 		return err

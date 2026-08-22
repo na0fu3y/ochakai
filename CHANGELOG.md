@@ -23,6 +23,27 @@ last entry.
 
 ### Fixed
 
+- **`put_concept` no longer says a ruling exists outside the caller's
+  scope.** On a deployment with an access policy (design doc 0109), the
+  two guards MCP's `put_concept` runs before it writes — the ones that
+  refuse to replace or revive knowledge a human has ruled on — read the
+  ledger without the scope check the write itself has. Against an id
+  outside the caller's grant they answered "cannot replace `<id>`: it is
+  rejected" instead of the 404 that hides the address, so an agent could
+  learn that a concept exists there, or existed, and that somebody
+  verified, rejected or deprecated it. The concept's content was never
+  reachable and no write ever landed; what leaked was the address and
+  the ruling. Both are scoped now, and §6's exhaustiveness walk covers
+  them, which is why they were the two it did not. A deployment with no
+  access rules — every deployment before 0109 and every one that has not
+  written a policy since — was never affected.
+- **`ochakai get --download` checks the filenames it is handed.** A
+  server names the files it hands back, and the client wrote them under
+  the download directory without asking whether the name was one path
+  segment. Any ochakai holds every filename to that rule on the way in,
+  so this could only fire for an answer that did not come from one — but
+  believing such an answer would have put bytes wherever the name
+  pointed. The name is checked now and a refusal names it.
 - **Halfwidth katakana and fullwidth latin are found by a question
   spelled normally, and the reverse.** They are what a system upstream
   of the reader writes — a warehouse export from something fixed-width,
