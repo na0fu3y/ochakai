@@ -333,8 +333,12 @@ ochakai loses, and says who should pick something else.
   second, supported authentication path — ochakai verifies the bearer
   token itself against the issuer's published keys, which introduces no
   secret either, so it costs secret-zero nothing. Embeddings stay Vertex
-  AI or nothing there, so search off Google Cloud is lexical-only. What
-  is portable is the knowledge; a particular runtime is not required.
+  AI or nothing there, so search off Google Cloud is lexical-only — which
+  is measured rather than assumed: the golden set in CI runs that
+  configuration too, and scores recall@10 1.00 and MRR 0.91 on its
+  29-concept base ([positioning](docs/positioning.md) (Japanese) says
+  what that number does and does not claim). What is portable is the
+  knowledge; a particular runtime is not required.
 - **PostgreSQL 17, able to install `pg_trgm`**. Nothing queries it — the
   lexical index has been a `tsvector` column since the two-character
   windows above replaced trigrams — but the schema replays from its first
