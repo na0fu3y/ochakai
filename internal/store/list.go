@@ -6,6 +6,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/jackc/pgx/v5"
@@ -59,8 +60,8 @@ func keysetAfter(cols []orderCol, idExpr string, a *After, args *[]any) (string,
 	// this key, or equal on it and after by everything below".
 	*args = append(*args, a.ID)
 	pred := fmt.Sprintf("%s > $%d", idExpr, len(*args))
-	for i := len(cols) - 1; i >= 0; i-- {
-		c, v := cols[i], a.Keys[i]
+	for i, col := range slices.Backward(cols) {
+		c, v := col, a.Keys[i]
 		var strict, eq string
 		if v == nil {
 			// Nothing sorts after a NULL in ASC NULLS LAST, so the walk

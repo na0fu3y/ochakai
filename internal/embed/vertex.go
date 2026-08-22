@@ -277,7 +277,7 @@ func (v *Vertex) post(ctx context.Context, url string, req any) ([]byte, error) 
 	}
 	var lastErr error
 	backoff := vertexBackoff
-	for attempt := 0; attempt < 3; attempt++ {
+	for attempt := range 3 {
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():

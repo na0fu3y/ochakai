@@ -274,7 +274,7 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 				notes = append(notes, "tags is neither a list nor a scalar; dropped")
 				break
 			}
-			for _, t := range strings.Split(s, ",") {
+			for t := range strings.SplitSeq(s, ",") {
 				if t = strings.TrimSpace(t); t != "" {
 					tags = append(tags, t)
 				}

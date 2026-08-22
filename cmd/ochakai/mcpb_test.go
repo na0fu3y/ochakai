@@ -71,11 +71,11 @@ func TestMCPBManifestRunsACommandTheBinaryHas(t *testing.T) {
 	for _, a := range args {
 		s, _ := a.(string)
 		const open = "${user_config."
-		i := strings.Index(s, open)
-		if i < 0 {
+		_, after, ok := strings.Cut(s, open)
+		if !ok {
 			continue
 		}
-		key := s[i+len(open):]
+		key := after
 		key, _, _ = strings.Cut(key, "}")
 		if _, ok := userConfig[key]; !ok {
 			t.Errorf("args reference ${user_config.%s}, which user_config does not define", key)

@@ -151,8 +151,8 @@ func jsonFields(t *testing.T, typ reflect.Type) map[string]bool {
 		t.Fatalf("%s is not a struct", typ)
 	}
 	out := map[string]bool{}
-	for i := range typ.NumField() {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
+		field := field
 		if !field.IsExported() {
 			continue
 		}

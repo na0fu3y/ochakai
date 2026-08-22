@@ -111,6 +111,90 @@ func TestCJKClassAgreesWithGo(t *testing.T) {
 			t.Errorf("...and %d more disagreements in U+%04X..U+%04X", mismatched-8, span[0], span[1])
 		}
 	}
+	if t.Failed() {
+		// A disagreement is almost always a new Unicode version under a
+		// new Go, and the fix is a migration carrying the class this
+		// toolchain answers. Printing it makes that a copy rather than a
+		// reading of the standard — the same bargain surface_test.go
+		// strikes, where the bookkeeping is free and the judgment is what
+		// the reader spends attention on.
+		t.Logf("the class this toolchain asks for, for the migration that replaces it:\n%s", cjkClassSQL())
+	}
+}
+
+// cjkClassSQL renders scriptWithoutSpaces as the PostgreSQL character
+// class a migration declares, spelled literally inside the BMP and as an
+// escape above it — which is what the regex engine reads either way, and
+// what keeps the common blocks legible in the migration.
+func cjkClassSQL() string {
+	// An escape above the BMP, and an escape for anything a
+	// normalization would rewrite. The CJK compatibility ideographs
+	// decompose under NFC, so spelling them literally makes a class that
+	// survives the file and not the trip through an editor, a terminal
+	// or a message: what comes out the other side is a different code
+	// point, and 豈-舘 written that way is a range PostgreSQL reads as
+	// descending and refuses outright. An escape cannot be normalized
+	// into something else.
+	spell := func(r rune) string {
+		if r > 0xFFFF || norm.NFC.String(string(r)) != string(r) {
+			return fmt.Sprintf(`\U%08X`, r)
+		}
+		return string(r)
+	}
+	var parts []string
+	start := rune(-1)
+	emit := func(lo, hi rune) {
+		switch {
+		case lo == hi:
+			parts = append(parts, spell(lo))
+		case hi == lo+1:
+			parts = append(parts, spell(lo)+spell(hi))
+		default:
+			parts = append(parts, spell(lo)+"-"+spell(hi))
+		}
+	}
+	for r := rune(0); r <= 0x10FFFF; r++ {
+		if r >= 0xD800 && r <= 0xDFFF { // surrogates are not characters
+			continue
+		}
+		if scriptWithoutSpaces(r) {
+			if start < 0 {
+				start = r
+			}
+			continue
+		}
+		if start >= 0 {
+			emit(start, r-1)
+			start = -1
+		}
+	}
+	if start >= 0 {
+		emit(start, 0x10FFFF)
+	}
+
+	var out strings.Builder
+	var line strings.Builder
+	flush := func() {
+		if line.Len() == 0 {
+			return
+		}
+		if out.Len() == 0 {
+			fmt.Fprintf(&out, "    SELECT '%s'\n", line.String())
+		} else {
+			fmt.Fprintf(&out, "        || '%s'\n", line.String())
+		}
+		line.Reset()
+	}
+	for _, p := range parts {
+		// Wrapped where 0044 wraps, so the printed block can be pasted
+		// into a migration without reflowing it.
+		if line.Len() > 0 && line.Len()+len(p) > 46 {
+			flush()
+		}
+		line.WriteString(p)
+	}
+	flush()
+	return out.String()
 }
 
 // TestNFKCAgreesWithGo pins the fold migration 0043 put on the haystack

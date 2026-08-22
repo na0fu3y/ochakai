@@ -269,7 +269,7 @@ func errMessage(t *testing.T, rec *httptest.ResponseRecorder) string {
 // iteration: with two unknown keys, the same one is named every time.
 func TestUnknownQueryParamNamedIsDeterministic(t *testing.T) {
 	h := Handler(&service.Service{})
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/stats?zzz=1&aaa=1", nil))
 		if rec.Code != http.StatusBadRequest {

@@ -96,9 +96,8 @@ func TestCursorRefusals(t *testing.T) {
 // before any of it, as the mode checks beside it do.
 func TestSearchRefusesACursor(t *testing.T) {
 	s := &Service{}
-	var inputErr *InvalidInputError
 	_, err := s.SearchOrList(context.Background(), "revenue", "", "MQBhbnl0aGluZw", store.Filter{}, 0)
-	if !errors.As(err, &inputErr) {
+	if _, ok := errors.AsType[*InvalidInputError](err); !ok {
 		t.Fatalf("a cursor on a search: got %v, want an InvalidInputError", err)
 	}
 	for _, sort := range domain.ListSorts {

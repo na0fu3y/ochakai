@@ -142,10 +142,12 @@ GRANT "<database_user output>" TO "you@your-org.example";
 | `maintenance_users` | §6 | 人のための Cloud SQL IAM ログイン、パスワードは無い。 |
 | `database_backups` | §6 | 日次バックアップ。**既定で on** — データベースはナレッジベースそのものである。使い捨ての評価だけ off にしてよい。 |
 
-web UI を有効にすると `google-beta` provider が付いてくる: Cloud Run 上の
-IAP(`iap_enabled`)はまだベータの面だからである。provider はどちらにせよ
-宣言されているので、UI が off のときも download はされる — その場合は何
-もしない。
+web UI を有効にすると `google-beta` provider が付いてくる: 残っている
+ベータ面は `google_project_service_identity`(IAP のサービスエージェント)
+だけである。Cloud Run 上の IAP 自体は 2026-03 に GA になり、`iap_enabled`
+も GA provider 7.21 に入ったので、webui サービス本体はもう beta を通らない。
+provider はどちらにせよ宣言されているので、UI が off のときも download は
+される — その場合は何もしない。
 
 ## このモジュールが扱わないもの
 

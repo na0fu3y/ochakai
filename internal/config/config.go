@@ -169,7 +169,7 @@ type EmbeddingConfig struct {
 // splitList parses a comma-separated env var, dropping blanks.
 func splitList(v string) []string {
 	var out []string
-	for _, s := range strings.Split(v, ",") {
+	for s := range strings.SplitSeq(v, ",") {
 		if s = strings.TrimSpace(s); s != "" {
 			out = append(out, s)
 		}

@@ -8,6 +8,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -353,12 +354,7 @@ func fragmentWindows(frag string) int {
 // first-character rule contentWindows uses would drop ヶ月 and お盆
 // for where the content sits rather than for whether it is there.
 func holdsContent(runes []rune) bool {
-	for _, r := range runes {
-		if contentChar(r) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(runes, contentChar)
 }
 
 // QueryTerms extracts the terms of a query — the names a compound
@@ -802,6 +798,10 @@ func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, mode
 // limit is the headroom for that filtering, floored at the default so a
 // small search is no worse than before and capped at pgvector's maximum.
 //
+// Headroom is still a guess, which is why it is no longer the whole
+// answer: iterativeScan below lifts the ceiling itself where pgvector
+// can.
+//
 // Set per query rather than on the connection: pooled connections are
 // shared, and a lingering session GUC would silently retune searches that
 // never asked.
@@ -810,10 +810,7 @@ func efSearch(limit int) int {
 		defaultEF = 40   // pgvector's own default
 		maxEF     = 1000 // pgvector's ceiling
 	)
-	ef := 4 * limit
-	if ef < defaultEF {
-		ef = defaultEF
-	}
+	ef := max(4*limit, defaultEF)
 	if ef > maxEF {
 		ef = maxEF
 	}
@@ -823,6 +820,29 @@ func efSearch(limit int) int {
 // annSearch runs a vector query with ef_search sized for the limit. The
 // transaction exists only to scope SET LOCAL to this one statement; it
 // reads, so it ends in a rollback.
+//
+// Where pgvector allows it the scan is also iterative, which is what
+// keeps a filtered search from answering short without saying so. The
+// index scan stops at its ef_search candidates and the filter then
+// discards most of them, so a search for ten rows comes back with three
+// and nothing in the response says the other seven were never looked
+// for. ef_search alone cannot fix that: it is a guess at how much
+// filtering will discard, and any guess is wrong for some filter.
+//
+// What iterating buys was measured rather than assumed, and it is a
+// ceiling lifted rather than an answer guaranteed: over twelve fixtures
+// it was never worse, better in half, and complete in one
+// (TestIterativeScanIsWhatMakesAFilteredSearchAnswerInFull carries the
+// numbers). What ends the scan is the graph running out of reachable
+// matches — raising hnsw.max_scan_tuples and hnsw.scan_mem_multiplier
+// moved none of those figures.
+//
+// strict_order rather than relaxed_order, which is the faster of the two
+// and returns rows slightly out of distance order. The ranking is what
+// this repays: a hit's position is what RRF fuses on (design doc 0080),
+// so rows out of order are a ranking quietly built on the wrong ranks,
+// and the deployments where the cost of ordering them shows up are far
+// past the size at which the planner reaches for this index at all.
 func (s *Store) annSearch(ctx context.Context, limit int, q string, args []any) ([]domain.SearchHit, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -831,6 +851,11 @@ func (s *Store) annSearch(ctx context.Context, limit int, q string, args []any) 
 	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL hnsw.ef_search = %d", efSearch(limit))); err != nil {
 		return nil, err
+	}
+	if s.iterativeScan {
+		if _, err := tx.Exec(ctx, "SET LOCAL hnsw.iterative_scan = 'strict_order'"); err != nil {
+			return nil, err
+		}
 	}
 	rows, err := tx.Query(ctx, q, args...)
 	if err != nil {

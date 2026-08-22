@@ -41,7 +41,7 @@ func TestShippedPutExamplesPassAnID(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", f, err)
 		}
-		for _, line := range strings.Split(string(content), "\n") {
+		for line := range strings.SplitSeq(string(content), "\n") {
 			_, rest, found := strings.Cut(line, "ochakai put")
 			if !found {
 				continue
@@ -155,7 +155,7 @@ func TestShippedInstructionsNameFlagsThatExist(t *testing.T) {
 		// A shell continuation carries one invocation across two lines;
 		// join them so the flags stay with their command.
 		text := strings.ReplaceAll(string(content), "\\\n", " ")
-		for _, line := range strings.Split(text, "\n") {
+		for line := range strings.SplitSeq(text, "\n") {
 			cmds := shippedInvocation.FindAllStringSubmatchIndex(line, -1)
 			if len(cmds) == 0 {
 				continue

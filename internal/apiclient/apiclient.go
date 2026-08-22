@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -756,9 +757,7 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
-	for name, values := range extra {
-		req.Header[name] = values
-	}
+	maps.Copy(req.Header, extra)
 	if c.producer != "" {
 		req.Header.Set(httpauth.ProducerHeader, c.producer)
 	}

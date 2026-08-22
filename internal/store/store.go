@@ -79,6 +79,11 @@ type Store struct {
 	blobs blob.Store
 	// lastEventPrune throttles knowledge_event pruning (unix seconds).
 	lastEventPrune atomic.Int64
+	// iterativeScan says whether the installed pgvector can be asked to
+	// keep walking the HNSW graph when a filter has discarded most of
+	// what it found (pgvector 0.8.0). Settled once, during migration,
+	// because it is a property of the installation; see hasIterativeScan.
+	iterativeScan bool
 	// log carries what only the store can see. The background flush loop
 	// has no caller to return an error to, so without this a database
 	// that rejects writes loses usage in silence.
@@ -229,7 +234,7 @@ func pastExpiry(prefix string) string {
 // want the document itself.
 func withoutFrontmatter(cols string) string {
 	var kept []string
-	for _, c := range strings.Split(cols, ",") {
+	for c := range strings.SplitSeq(cols, ",") {
 		if t := strings.TrimSpace(c); !strings.HasSuffix(t, "frontmatter") {
 			kept = append(kept, t)
 		}
@@ -239,7 +244,7 @@ func withoutFrontmatter(cols string) string {
 
 func withoutDoc(cols string) string {
 	var kept []string
-	for _, c := range strings.Split(cols, ",") {
+	for c := range strings.SplitSeq(cols, ",") {
 		t := strings.TrimSpace(c)
 		if t == "doc" || t == "k.doc" || t == "object.doc" {
 			continue

@@ -65,7 +65,7 @@ func surfaceSections(t *testing.T) map[string]surfaceSection {
 	}
 	sections := map[string]surfaceSection{}
 	name := ""
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		if m := surfaceHeadingRe.FindStringSubmatch(line); m != nil {
 			if _, dup := sections[m[1]]; dup {
 				t.Fatalf("%s: two %s sections", surfaceDoc, m[1])
@@ -415,7 +415,7 @@ func TestSurfaceStaysUnderItsCaps(t *testing.T) {
 		t.Fatalf("read %s: %v", surfaceDoc, err)
 	}
 	caps := map[string]int{}
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		if m := surfaceCapRe.FindStringSubmatch(line); m != nil {
 			n, err := strconv.Atoi(m[2])
 			if err != nil {
@@ -454,8 +454,8 @@ earned it.`, name, section.declared, limit, name, section.declared)
 		}
 	}
 	for name := range caps {
-		if strings.HasSuffix(name, slackSuffix) {
-			base := strings.TrimSuffix(name, slackSuffix)
+		if before, ok := strings.CutSuffix(name, slackSuffix); ok {
+			base := before
 			if _, ok := caps[base]; !ok {
 				t.Errorf("%s declares %s but no %s for it to soften", surfaceDoc, name, base)
 			}
@@ -745,7 +745,7 @@ func englishPageNamesEveryEnvVar(t *testing.T, names []string) {
 		t.Fatalf("read %s: %v", page, err)
 	}
 	listed := map[string]bool{}
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		if m := surfaceItemRe.FindStringSubmatch(line); m != nil {
 			listed[m[1]] = true
 		}
@@ -1006,7 +1006,7 @@ func TestUserDocsStayUnderTheirLineCap(t *testing.T) {
 		t.Fatalf("read %s: %v", surfaceDoc, err)
 	}
 	limit, slack := 0, -1
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		m := surfaceCapRe.FindStringSubmatch(line)
 		if m == nil {
 			continue
@@ -1082,7 +1082,7 @@ func TestTheContractStaysUnderItsLineCap(t *testing.T) {
 		t.Fatalf("read %s: %v", surfaceDoc, err)
 	}
 	limit, slack := 0, -1
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		m := surfaceCapRe.FindStringSubmatch(line)
 		if m == nil {
 			continue
@@ -1497,10 +1497,10 @@ func jsonFieldNames(t *testing.T, v any) []string {
 	t.Helper()
 	rt := reflect.TypeOf(v)
 	names := make([]string, 0, rt.NumField())
-	for i := range rt.NumField() {
-		tag, _, _ := strings.Cut(rt.Field(i).Tag.Get("json"), ",")
+	for field := range rt.Fields() {
+		tag, _, _ := strings.Cut(field.Tag.Get("json"), ",")
 		if tag == "" || tag == "-" {
-			t.Fatalf("%s.%s carries no json name", rt.Name(), rt.Field(i).Name)
+			t.Fatalf("%s.%s carries no json name", rt.Name(), field.Name)
 		}
 		names = append(names, tag)
 	}

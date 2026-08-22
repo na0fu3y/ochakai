@@ -18,8 +18,10 @@ import (
 // holding it.
 //
 // This is not telemetry. Nothing is reported anywhere — the line goes to
-// stdout, which on Cloud Run is the deployment's own log in the
-// deployment's own project (README, "what it refuses"). What it buys
+// stderr, which on Cloud Run is the deployment's own log in the
+// deployment's own project (README, "what it refuses"). Stderr rather
+// than stdout because stdout is the wire for `ochakai mcp-stdio` and the
+// output of every client command. What it buys
 // there is that a log-based metric can be built from it without ochakai
 // growing a metrics endpoint, a second address space, or a scrape
 // target: the platform the product already requires is the one that

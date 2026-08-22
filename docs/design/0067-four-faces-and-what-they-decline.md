@@ -23,6 +23,10 @@ Status: Accepted(2026-08-02)。**面の配分の現行ドキュメント。**
 [0108](0108-the-context-pack-retires.md) が改訂する — pack は全面から
 退役し、エージェントの読みは search → get になる。§4 の「順位は順位に
 徹する」は search の hits の規則として残る。
+§3 の「MCP 面は streamable HTTP」は
+[0118](0118-a-call-carries-everything-it-needs.md) が改訂する — 転送は
+stateless になり、プロトコルは 2026-07-28 になる。面もツールも動かず、
+`mcp-stdio` が経路であることも変わらない。
 Date: 2026-08-02
 
 ## 0. この記録が決めたこと

@@ -332,15 +332,15 @@ func TestEveryWriteIsScopedIntegration(t *testing.T) {
 	}
 	arg := func(ty reflect.Type) reflect.Value {
 		switch ty {
-		case reflect.TypeOf((*context.Context)(nil)).Elem():
+		case reflect.TypeFor[context.Context]():
 			return reflect.ValueOf(f.readCt)
-		case reflect.TypeOf(""):
+		case reflect.TypeFor[string]():
 			return reflect.ValueOf(f.theirs)
-		case reflect.TypeOf([]byte(nil)):
+		case reflect.TypeFor[[]byte]():
 			return reflect.ValueOf([]byte("bytes"))
-		case reflect.TypeOf(domain.Actor{}):
+		case reflect.TypeFor[domain.Actor]():
 			return reflect.ValueOf(f.reader)
-		case reflect.TypeOf(&domain.Knowledge{}):
+		case reflect.TypeFor[*domain.Knowledge]():
 			return reflect.ValueOf(&domain.Knowledge{Type: "Metric", ID: f.theirs, Title: "x"})
 		}
 		return reflect.Zero(ty)
@@ -372,8 +372,7 @@ func TestEveryWriteIsScopedIntegration(t *testing.T) {
 		// pins, which exists so that attaching costs no database access.
 		// The scope check sits behind it, so on a test database with no
 		// bucket these two never reach it.
-		var unsupported *UnsupportedError
-		if errors.As(err, &unsupported) {
+		if _, ok := errors.AsType[*UnsupportedError](err); ok {
 			continue
 		}
 		if !errors.Is(err, store.ErrNotFound) && !errors.Is(err, ErrForbidden) {

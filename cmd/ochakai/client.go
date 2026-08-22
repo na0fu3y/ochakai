@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -691,9 +692,9 @@ func cmdStats(ctx context.Context, args []string) error {
 	// act on is a statistic, and these three exist to be emptied (design
 	// doc 0049) — so the next step is the text on the line. The key and
 	// the count stay in the first two fields, so the format still cuts.
-	scope := ""
+	var scope strings.Builder
 	for _, p := range prefixes {
-		scope += " --prefix " + p
+		scope.WriteString(" --prefix " + p)
 	}
 	for _, q := range []struct {
 		name  string
@@ -704,7 +705,7 @@ func cmdStats(ctx context.Context, args []string) error {
 		{"failed", st.Queues.Failed, "failed"},
 		{"stale_after", st.Queues.StaleAfter, "stale_after"},
 	} {
-		fmt.Printf("%s\t%d\tochakai list %s%s\n", q.name, q.count, q.lists, scope)
+		fmt.Printf("%s\t%d\tochakai list %s%s\n", q.name, q.count, q.lists, scope.String())
 	}
 	fmt.Printf("window_days\t%d\ncreated\t%d\nverifications\t%d\nworked\t%d\nfailed\t%d\n",
 		st.WindowDays, st.Concepts.Created, st.Review.Verifications,
@@ -1944,30 +1945,40 @@ func readBundle(path string) (map[string][]byte, error) {
 
 // readBundleDir walks root, skipping dot-concepts (.git and friends —
 // bundles live happily in git).
+//
+// Everything is read through an os.Root, so a name that leaves the
+// directory cannot be followed. A bundle is ordinary content — cloned,
+// unpacked, handed over — and a symlink inside one pointing at
+// ~/.ssh/id_rsa used to be read and uploaded under whatever concept id
+// the link was named. Walking already declined to descend a symlinked
+// directory; what it did not decline was a symlinked file, which is the
+// half that reads something. The kernel enforces the boundary now
+// instead of the walk's shape implying it.
 func readBundleDir(root string) (map[string][]byte, error) {
+	dir, err := os.OpenRoot(root)
+	if err != nil {
+		return nil, err
+	}
+	defer dir.Close()
 	files := map[string][]byte{}
-	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+	err = fs.WalkDir(dir.FS(), ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if strings.HasPrefix(d.Name(), ".") && p != root {
+		if strings.HasPrefix(d.Name(), ".") && p != "." {
 			if d.IsDir() {
-				return filepath.SkipDir
+				return fs.SkipDir
 			}
 			return nil
 		}
 		if d.IsDir() {
 			return nil
 		}
-		rel, err := filepath.Rel(root, p)
+		data, err := dir.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		data, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		files[filepath.ToSlash(rel)] = data
+		files[p] = data
 		return nil
 	})
 	if err != nil {
@@ -2050,11 +2061,24 @@ func decodeEntry(data []byte) (*domain.Knowledge, []string, error) {
 // extractTarGz unpacks the OKF bundle under dir, refusing concepts that
 // could escape it (absolute or non-local paths) and anything but regular
 // files.
+//
+// Two guards rather than one, because they answer different questions.
+// filepath.IsLocal reads the name the archive carries and refuses ".."
+// and absolute paths — the archive's own claim, checked before anything
+// touches the disk. os.Root refuses the paths a name cannot describe: a
+// directory under dir that is already a symlink somewhere else, left by
+// an earlier extraction or by whoever owns that directory, which no
+// amount of reading hdr.Name would reveal.
 func extractTarGz(dir string, r io.Reader) (int, error) {
 	gz, err := gzip.NewReader(r)
 	if err != nil {
 		return 0, err
 	}
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return 0, err
+	}
+	defer root.Close()
 	tr := tar.NewReader(gz)
 	n := 0
 	for {
@@ -2072,11 +2096,12 @@ func extractTarGz(dir string, r io.Reader) (int, error) {
 		if !filepath.IsLocal(name) {
 			return n, fmt.Errorf("refusing unsafe path %q in archive", hdr.Name)
 		}
-		dst := filepath.Join(dir, name)
-		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-			return n, err
+		if parent := filepath.Dir(name); parent != "." {
+			if err := root.MkdirAll(parent, 0o755); err != nil {
+				return n, err
+			}
 		}
-		f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+		f, err := root.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 		if err != nil {
 			return n, err
 		}

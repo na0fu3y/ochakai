@@ -356,8 +356,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 
 			for _, op := range []string{"update", "delete"} {
 				_, err := svc.RefuseIfCurated(ctx, id, op)
-				var invalid *InvalidInputError
-				if !errors.As(err, &invalid) {
+				if _, ok := errors.AsType[*InvalidInputError](err); !ok {
 					t.Fatalf("%s %s: got %v, want a refusal", op, tc.ruling, err)
 				}
 				if !strings.Contains(err.Error(), advice[tc.ruling]) {
@@ -436,8 +435,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 			err = svc.RefuseIfRevivingCurated(ctx, id)
-			var invalid *InvalidInputError
-			if !errors.As(err, &invalid) {
+			if _, ok := errors.AsType[*InvalidInputError](err); !ok {
 				t.Fatalf("reviving a deleted %s entry: got %v, want a refusal", status, err)
 			}
 			if !strings.Contains(err.Error(), wantAdvice) {
@@ -553,8 +551,7 @@ func TestReembedIntegration(t *testing.T) {
 	embedder := svc.Embedder
 	svc.Embedder = nil
 	_, err := svc.Reembed(ctx, "", 10)
-	var unsupported *UnsupportedError
-	if !errors.As(err, &unsupported) {
+	if _, ok := errors.AsType[*UnsupportedError](err); !ok {
 		t.Errorf("without an embedder: got %v, want an UnsupportedError naming the setting", err)
 	}
 	svc.Embedder = embedder
@@ -921,8 +918,7 @@ func TestStaleAfterValidationIntegration(t *testing.T) {
 	_, err := svc.Create(ctx, &domain.Knowledge{
 		Type: domain.TypeTerms, ID: uid(t, "bad-stale"), Title: "x", StaleAfter: "30 days",
 	}, actor)
-	var invalid *InvalidInputError
-	if !errors.As(err, &invalid) {
+	if _, ok := errors.AsType[*InvalidInputError](err); !ok {
 		t.Fatalf("create with a relative stale_after: %v, want an invalid-input error", err)
 	}
 }

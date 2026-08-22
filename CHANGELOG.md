@@ -21,6 +21,144 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`ochakai import` no longer reads through a symlink out of the bundle,
+  and `ochakai export` no longer writes through one out of the directory
+  it was given.** A bundle is ordinary content — cloned, unpacked, handed
+  over on a drive — so a link inside one named `revenue.md` and pointing
+  at `~/.ssh/id_rsa` used to be read and written to the knowledge base
+  under that id: a file the importer never looked at, published to
+  everyone the deployment serves. The walk declined to *descend* a
+  symlinked directory and said nothing about reading a symlinked file,
+  which is the half that reads something. On the way back out,
+  `filepath.IsLocal` reads the name an archive carries and cannot see
+  that a directory already on disk is a link somewhere else. Both paths
+  now go through `os.Root`, so the kernel refuses a name that leaves the
+  directory instead of the walk's shape implying it; the name check
+  stays, because the two answer different questions. An ordinary bundle
+  imports exactly as before.
+
+### Changed
+
+- **The Terraform module moves to the Google provider 7.x, and the web UI
+  stops going through `google-beta`.** IAP on Cloud Run went GA in March
+  2026 and `iap_enabled` landed in the GA provider at 7.21, so the one
+  reason the `webui` service was declared against the beta provider is
+  gone. `google-beta` is still declared, for one resource that is still
+  beta — `google_project_service_identity`, the IAP service agent — and
+  the module README now says that instead of the old reason. Checked with
+  `terraform init` and `terraform validate` against the resolved provider
+  (7.45.0); none of 7.0's breaking changes touch this module, and the one
+  that came closest — `google_project_service.disable_on_destroy` losing
+  its default — is a value this module already set explicitly. The
+  operating guide's `gcloud beta run deploy --iap` and `gcloud beta iap
+  web` become plain `gcloud`, both verified present on the GA surface.
+- **Both services ask for a startup CPU boost.** `min_instance_count` is
+  0, so a request arriving after an idle period pays for a start — the
+  pool connects, the migration table is read, Vertex AI is asked once
+  whether it answers. The boost is full CPU for that window and billed
+  for that window. No readiness probe: Cloud Run already withholds
+  traffic until the process listens, and ochakai listens only after
+  migrating, so a probe on `/health` would restate what the port already
+  says.
+- **The image's runtime base is `distroless/static-debian13`.** distroless
+  resolves a bare tag to whatever it currently considers newest, and
+  debian13 is where that points today; naming the version keeps the base
+  from moving on a day nobody chose. Nothing else about the image
+  changes — still static, still nonroot, still no shell and no package
+  manager — and the built image was checked end to end, including
+  reaching a deployment over TLS.
+- **Built on Go 1.27**, and migration 0044 carries the Unicode 17
+  character class that comes with it. The CJK class the lexical index
+  splits on is generated from Go's own
+  `unicode.Han`/`Hiragana`/`Katakana` tables and pinned to them by
+  `TestCJKClassAgreesWithGo`; Unicode 17 gives Han 645 more characters
+  than Unicode 15 did, and the pin reported every one of them the first
+  time the suite ran on 1.27 — which is what it is for. **The migration
+  recomputes every row's search index**, the way migration 0043 did;
+  rehearsed on a base written at 0043, where Japanese, halfwidth and
+  English searches all answer the same before and after. Nothing an
+  operator sets changes.
+- **`go.mod` now names 1.27 as a floor rather than a preference**, which
+  is new: a build older than the class in the database windows fewer
+  characters than the index holds. The pin fails rather than letting that
+  ship, and the floor is what keeps it from being reached. Everything
+  else about 1.27 was checked rather than assumed — the whole suite
+  passes, frozen wire golden files and OpenAPI contract validation
+  included, with `encoding/json` on its new v2 implementation.
+- **What the new characters still cannot do**, recorded in
+  `TestWhatPostgresCanIndexAboveTheBMP`: all 645 live above the BMP, and
+  what becomes a lexeme up there is decided by PostgreSQL's Unicode
+  knowledge rather than by ochakai's class. PostgreSQL 17 reads CJK
+  extension I as blank on both the document and the query side, so a term
+  written in it is found by nothing — no class can change that, and the
+  day a PostgreSQL lifts the limit is a day that test fails and says so.
+- **A filtered semantic search answers with more of the answer.**
+  pgvector's HNSW scan runs before the `WHERE` clause, so a search for
+  ten concepts narrowed by type, tag or path got only whatever survived
+  of its `ef_search` candidates — on a 3,000-row fixture whose filter
+  matched one row in a hundred, one of the ten asked for, with nothing in
+  the response saying the other nine were never looked for. Sizing
+  `ef_search` to the limit, which is what ochakai did, is a guess at how
+  much a filter will discard and is wrong for some filter by
+  construction. Searches now ask for an iterative scan
+  (`hnsw.iterative_scan`, pgvector 0.8.0), which keeps walking the graph
+  instead of stopping at those candidates. **It lifts the ceiling rather
+  than guaranteeing the answer**: measured over twelve fixtures it was
+  never worse, better in half of them, and complete in one, and what ends
+  the scan is the graph running out of reachable matches rather than a
+  budget — raising `hnsw.max_scan_tuples` and `hnsw.scan_mem_multiplier`
+  moved none of it. `strict_order` rather than the faster
+  `relaxed_order`, because a hit's position is what the fusion ranks on. **Nothing to configure**: the
+  store reads the installed pgvector's version once while migrating, and
+  a server older than 0.8.0 keeps exactly today's behaviour, so this adds
+  no requirement to run ochakai (Cloud SQL ships 0.8.1). Deployments
+  small enough that PostgreSQL prefers a sequential scan were never
+  affected — there the answer was always exact.
+- **Log lines carry `severity` and `message`, the two names Cloud
+  Logging reads.** Everything ochakai logs is JSON through `slog`, whose
+  own keys are `level` and `msg` — ordinary fields as far as the platform
+  is concerned, so an entry arrived with no severity of its own and every
+  line ranked equal. An operator could not ask for the warnings, and the
+  warnings are the point: semantic search silently fallen back to
+  lexical, an export truncated after the response began. `severity>=WARNING`
+  now returns exactly the table in [the operating
+  guide](docs/guides/operating.md), and its saved queries, which already
+  spelled the field `jsonPayload.message`, are true as written. `WARN`
+  is spelled `WARNING` on the way out because that is Cloud Logging's
+  word for it; nothing else about a line moves, `time` included. The
+  destination is unchanged and stays stderr — stdout is the wire for
+  `ochakai mcp-stdio` and the output of every client command, which two
+  comments and one guide paragraph had said backwards.
+- **`/mcp` is stateless, and answers at MCP protocol version
+  2026-07-28** (design doc 0118). ochakai speaks MCP through the Go SDK,
+  and that SDK serves the current protocol only from a stateless handler
+  — a session-holding one caps every client at 2025-11-25. ochakai built
+  its handler with default options, so it shipped the newest SDK and
+  refused the newest spec, silently: negotiation succeeds, the tools
+  work, and a client that has moved is never told it was moved back. The
+  mode being given up was never used — no roots, no sampling, no logging
+  (all three deprecated at 2026-07-28), no server-initiated request, and
+  ochakai's state is the knowledge base rather than the connection. No
+  `Mcp-Session-Id` is issued or read, and GET and DELETE on `/mcp` are
+  405 with `Allow: POST`. **Nothing an operator sets changes**, and no
+  counted surface moves.
+- **What this costs, for a client still on 2025-11-25**: at that version
+  a client names itself only in `initialize`, which a stateless
+  deployment answers in a throwaway session, so its `clientInfo` no
+  longer reaches the `producer` field beside the actor — measured, a call
+  that recorded `claude-desktop/1.2` now records nothing there. The
+  identity is untouched: `created_by` is the same person or process it
+  always was, and what falls is the self-declaration design doc 0065 §4
+  calls a record rather than an identity. The `Ochakai-Producer` header
+  is the contract for that field and covers it on any client, and a
+  client that moves to 2026-07-28 gets the fallback back automatically —
+  there, the name rides on every call. Sessions also stopped
+  accumulating (the SDK never expires an idle one), and a deployment is
+  free to run more than one instance, which sessions in one instance's
+  memory had ruled out.
+
 ## [0.26.3] - 2026-08-22
 
 ### Added

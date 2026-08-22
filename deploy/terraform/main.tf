@@ -393,6 +393,12 @@ resource "google_cloud_run_v2_service" "ochakai" {
         # Request-based billing: CPU is only charged while a request is in
         # flight, which is the other half of "~$0 when idle".
         cpu_idle = true
+        # min_instance_count is 0, so a request arriving after an idle
+        # period pays for a start: the pool connects, the migration table
+        # is read, Vertex AI is asked once whether it answers. The boost
+        # is full CPU for that window and billed for that window, which
+        # is the one knob here a person waiting on a page can feel.
+        startup_cpu_boost = true
       }
 
       dynamic "env" {
@@ -518,8 +524,7 @@ resource "google_cloud_run_v2_service_iam_member" "webui_invokes_ochakai" {
 # serve. There is no second image to build, and by default (local.webui_image)
 # the UI is the exact version of the server it fronts.
 resource "google_cloud_run_v2_service" "webui" {
-  count    = var.enable_webui ? 1 : 0
-  provider = google-beta
+  count = var.enable_webui ? 1 : 0
 
   project  = var.project_id
   name     = local.webui_name
@@ -549,7 +554,8 @@ resource "google_cloud_run_v2_service" "webui" {
           cpu    = "1"
           memory = "256Mi"
         }
-        cpu_idle = true
+        cpu_idle          = true
+        startup_cpu_boost = true # as on the server above
       }
 
       dynamic "env" {

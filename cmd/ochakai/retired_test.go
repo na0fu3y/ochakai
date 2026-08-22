@@ -126,7 +126,7 @@ func TestRetiredSpellingsAreNotTaught(t *testing.T) {
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
 		}
-		for _, line := range strings.Split(string(content), "\n") {
+		for line := range strings.SplitSeq(string(content), "\n") {
 			for _, r := range retiredSpellings {
 				for _, form := range r.forms {
 					if strings.Contains(line, form) {

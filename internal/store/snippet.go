@@ -89,7 +89,7 @@ func snippetFor(body string, frags []string) string {
 // without crossing limit — the match itself must stay inside the window.
 func nudgeToBoundary(runes []rune, pos, limit, dir int) int {
 	const reach = 12
-	for i := 0; i < reach; i++ {
+	for i := range reach {
 		p := pos + dir*i
 		if p <= 0 || p >= len(runes) {
 			return min(max(p, 0), len(runes))

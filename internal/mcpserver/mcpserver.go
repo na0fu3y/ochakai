@@ -33,47 +33,62 @@ const (
 )
 
 // Handler returns the streamable HTTP handler serving the MCP endpoint.
+//
+// Stateless, which is what protocol version 2026-07-28 asks for and what
+// the SDK requires before it will speak it at all: a stateful handler
+// caps every client at 2025-11-25 (design doc 0118). A request carries
+// its own protocol version, client identity and capabilities, so there is
+// no Mcp-Session-Id to issue, nothing to expire, and GET and DELETE are
+// 405. ochakai has nothing to keep between calls — no roots, no sampling,
+// no server-initiated request, and its own state is the knowledge base —
+// so the mode it loses is one it never used.
 func Handler(svc *service.Service, version string) http.Handler {
 	server := newServer(svc, version, RetiredToolNames)
-	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil)
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server },
+		&mcp.StreamableHTTPOptions{Stateless: true})
 }
 
 // extraProvider is the part of an MCP request the actor comes from. Tool
 // calls and resource reads carry it alike, and both record provenance, so
 // neither is a special case.
 //
-// The session comes along for the producer: MCP already asks every client
-// to name itself and its version at initialize, which is SPEC §7's
+// The client's name comes along for the producer: MCP asks every client
+// to name itself and its version, which is SPEC §7's
 // "<producer>/<version>" arriving without anyone having to add a header
-// (design doc 0052 §3.3).
+// (design doc 0065 §4).
 type extraProvider interface {
 	GetExtra() *mcp.RequestExtra
-	GetSession() mcp.Session
+	ClientInfo() *mcp.Implementation
 }
 
-// sessionProducer is the initialize-time clientInfo as a producer string,
-// or "" when the client named nothing usable.
+// clientProducer is the calling client's name as a producer string, or ""
+// when it named nothing usable.
+//
+// Read off the request rather than off the session: at protocol version
+// 2026-07-28 the name rides on every call in `_meta`, and there is no
+// session to hold it (design doc 0118 §3). The SDK's accessor falls back
+// to the initialize-time name for an older client that still has a
+// session, so both eras answer here — what the fallback cannot reach is
+// an older client on a stateless deployment, whose name is stated in the
+// initialize its later calls no longer travel with. That is the cost 0118
+// §3 names, and the Ochakai-Producer header is what covers it.
 //
 // It is a fallback, not an override: a caller that sent Ochakai-Producer
-// said what it is on this call, while clientInfo says what opened the
-// session — and a host that proxies several agents through one session
-// distinguishes them only by the header. Silently preferring the session's
-// name would be the misattribution 0027 §5.2 refuses, one level down.
+// said what it is on this call, while clientInfo says what the connection
+// is — and a host that proxies several agents distinguishes them only by
+// the header. Silently preferring the client's own name would be the
+// misattribution 0027 §5.2 refuses, one level down.
 //
 // A clientInfo that does not fit SPEC §7's form is dropped rather than
 // refused. The client did not claim to be sending provenance — the
 // protocol asked it for a name — so failing its tool call over a version
 // string ochakai cannot spell would turn a courtesy into an outage.
-func sessionProducer(req extraProvider) string {
-	ss, ok := req.GetSession().(*mcp.ServerSession)
-	if !ok || ss == nil {
+func clientProducer(req extraProvider) string {
+	info := req.ClientInfo()
+	if info == nil {
 		return ""
 	}
-	params := ss.InitializeParams()
-	if params == nil || params.ClientInfo == nil {
-		return ""
-	}
-	p := params.ClientInfo.Name + "/" + params.ClientInfo.Version
+	p := info.Name + "/" + info.Version
 	if !domain.ValidProducer(p) {
 		return ""
 	}
@@ -81,18 +96,23 @@ func sessionProducer(req extraProvider) string {
 }
 
 // requestActor resolves the actor to record for a tool call from the
-// HTTP headers that carried the call. httpauth.Middleware puts the
-// actor on the request context, but a streamable session is connected
-// once — at initialize — and every later call runs on a context derived
-// from that first request, so the context value is pinned to whoever
-// opened the session. A delegating host (design doc 0027) that reuses
-// one session across end users would then have every write silently
-// misattributed to the first user — the exact failure 0027 §5.2
-// refuses. The middleware has already vetted these headers (a rejected
-// delegation never reaches a handler), so resolution here cannot newly
-// fail; if it somehow does, refuse the write rather than misattribute
-// it. In-process transports (tests, embedding without HTTP) carry no
-// request headers and fall back to the context actor.
+// HTTP headers that carried the call. httpauth.Middleware puts the actor
+// on the request context, and under a stateless handler (design doc 0118)
+// that context is this call's own, so the two now agree. They did not
+// have to: a stateful session is connected once — at initialize — and
+// every later call ran on a context derived from that first request, so
+// the context value was pinned to whoever opened the session, and a
+// delegating host (design doc 0027) reusing one session across end users
+// had every write silently misattributed to the first user — the exact
+// failure 0027 §5.2 refuses.
+//
+// The resolution stays because the header is the authority either way and
+// the guarantee should not rest on which transport mode a deployment
+// happens to be in. The middleware has already vetted these headers (a
+// rejected delegation never reaches a handler), so resolution here cannot
+// newly fail; if it somehow does, refuse the write rather than
+// misattribute it. In-process transports (tests, embedding without HTTP)
+// carry no request headers and fall back to the context actor.
 func requestActor(ctx context.Context, cfg *config.Config, req extraProvider) (domain.Actor, error) {
 	actor := httpauth.Actor(ctx)
 	if extra := req.GetExtra(); cfg != nil && extra != nil && extra.Header != nil {
@@ -103,7 +123,7 @@ func requestActor(ctx context.Context, cfg *config.Config, req extraProvider) (d
 		actor = resolved
 	}
 	if actor.Producer == "" {
-		actor.Producer = sessionProducer(req)
+		actor.Producer = clientProducer(req)
 	}
 	return actor, nil
 }
@@ -111,12 +131,11 @@ func requestActor(ctx context.Context, cfg *config.Config, req extraProvider) (d
 // requestCtx resolves the per-call actor and puts it on the context the
 // service runs under. Not every provenance path takes an actor argument:
 // report_outcome's reporter and the usage events the read tools record
-// are read from the context by the service, and that context is the
-// session's, so they carried the session opener until this call replaced
-// it. Every tool handler goes through here rather than only the ones that
-// record something today — the failure is silent misattribution, so a
-// service change that starts recording on a path this skipped would
-// regress without a symptom.
+// are read from the context by the service, so what this puts there is
+// what they record. Every tool handler goes through here rather than only
+// the ones that record something today — the failure is silent
+// misattribution, so a service change that starts recording on a path
+// this skipped would regress without a symptom.
 func requestCtx(ctx context.Context, cfg *config.Config, req extraProvider) (context.Context, domain.Actor, error) {
 	actor, err := requestActor(ctx, cfg, req)
 	if err != nil {

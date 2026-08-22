@@ -160,8 +160,10 @@ provenance はそれが起きるのを見ていたインスタンスに属する
   409 は三つの条件が共有している(設計ドキュメント
   [0083](../design/0083-an-error-carries-a-code.md))。
 
-**これはテレメトリではない。** 送信先はこのデプロイの stdout で、
-Cloud Run ではこのプロジェクトの Cloud Logging である。そこから先は
+**これはテレメトリではない。** 送信先はこのデプロイの stderr で、
+Cloud Run ではこのプロジェクトの Cloud Logging である(stdout ではない
+— そちらは `ochakai mcp-stdio` のワイヤであり、クライアントコマンドの
+出力である)。そこから先は
 ログベースの指標にできる — ochakai が `/metrics` を生やさず、二つ目の
 アドレス空間もスクレイプ対象も持たずに済むのはそのためである
 (すべては `/api/v1` に載るか、どこにも載らない、設計ドキュメント
@@ -177,8 +179,11 @@ Cloud Run ではこのプロジェクトの Cloud Logging である。そこか�
 ### ログ
 
 すべては `slog` を通した JSON なので、Cloud Logging は手を加えずに
-パースできる。アラートや保存クエリを組む価値があるメッセージは次の
-表の通りである。ほとんどは**劣化しているが動いている**ことを表す
+パースできる。**レベルは `severity` として、本文は `message` として
+届く** — Cloud Logging が読む綴りであり、`severity>=WARNING` で下の表を
+まとめて引けるのはそのためである(slog 自身の綴りは `level` と `msg`
+で、そのままでは全行が同じ重大度で並ぶ)。アラートや保存クエリを組む
+価値があるメッセージは次の表の通りである。ほとんどは**劣化しているが動いている**ことを表す
 warning だが、レベルで絞り込むとこの表を素通りする行が三つ混ざって
 いる: `Error` が一つ(export の失敗)、エラーではないキュレーション
 行為の監査ログが二つ(検証・破棄)である。
@@ -713,10 +718,9 @@ gcloud run services add-iam-policy-binding ochakai --region=$REGION \
   --role=roles/run.invoker
 
 # IAP を前段に立てて非公開でデプロイする — デプロイガイド §1 と同じ $IMAGE。
-# (--iap には gcloud beta コンポーネントが要る; 下の iap web コマンドには
-#  Resource Manager API が要る)
+# (下の iap web コマンドには Resource Manager API が要る)
 gcloud services enable iap.googleapis.com cloudresourcemanager.googleapis.com
-gcloud beta run deploy ochakai-webui \
+gcloud run deploy ochakai-webui \
   --image=$IMAGE --args=serve-ui \
   --region=$REGION --no-allow-unauthenticated --iap \
   --service-account=ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com \
@@ -726,7 +730,7 @@ gcloud beta run deploy ochakai-webui \
 # 組織を IAP 経由で通す(デプロイはすでにサービスに対して IAP の
 # サービスエージェントに run.invoker を付与している — 出力の
 # "Setting IAP service agent")
-gcloud beta iap web add-iam-policy-binding \
+gcloud iap web add-iam-policy-binding \
   --resource-type=cloud-run --service=ochakai-webui --region=$REGION \
   --member=domain:your-org.example --role=roles/iap.httpsResourceAccessor
 ```

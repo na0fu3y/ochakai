@@ -1189,8 +1189,7 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func readBody(w http.ResponseWriter, r *http.Request, limit int64, tooLarge string) ([]byte, bool) {
 	data, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil {
-		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) {
+		if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			writeErrorBody(w, http.StatusRequestEntityTooLarge, domain.CodeTooLarge, tooLarge)
 		} else {
 			writeErrorBody(w, http.StatusBadRequest, domain.CodeInvalid, "read body: "+err.Error())
@@ -1676,8 +1675,7 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 		// An oversized body is not malformed JSON, and calling it that
 		// sends the caller looking for a syntax error in a payload that
 		// is simply too big — readBody already answers 413 here.
-		var maxErr *http.MaxBytesError
-		if errors.As(err, &maxErr) {
+		if maxErr, ok := errors.AsType[*http.MaxBytesError](err); ok {
 			writeErrorBody(w, http.StatusRequestEntityTooLarge, domain.CodeTooLarge,
 				fmt.Sprintf("request body exceeds %d bytes", maxErr.Limit))
 			return false

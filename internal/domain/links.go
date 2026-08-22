@@ -124,7 +124,7 @@ var schemeRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9+.-]*:`)
 func proseLines(body string) []string {
 	var out []string
 	var fence string
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		if fence != "" {
 			if strings.HasPrefix(strings.TrimSpace(line), fence) {
 				fence = ""
@@ -254,8 +254,8 @@ func rewriteLine(line string, rewriteTarget func(string) string) string {
 		}
 	}
 	slices.SortFunc(edits, func(a, b edit) int { return a.lo - b.lo })
-	for i := len(edits) - 1; i >= 0; i-- {
-		e := edits[i]
+	for _, e := range slices.Backward(edits) {
+
 		line = line[:e.lo] + e.text + line[e.hi:]
 	}
 	return line

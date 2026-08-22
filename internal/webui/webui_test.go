@@ -402,11 +402,11 @@ func TestNoTagDeclaresClassTwice(t *testing.T) {
 // the browser actually applies — the first class attribute, since a
 // second one is dropped rather than merged.
 func hidesOnReadOnly(tag string) bool {
-	i := strings.Index(tag, "class=")
-	if i < 0 {
+	_, after, ok := strings.Cut(tag, "class=")
+	if !ok {
 		return false
 	}
-	rest := tag[i+len("class="):]
+	rest := after
 	if rest == "" || (rest[0] != '"' && rest[0] != '\'') {
 		return false
 	}

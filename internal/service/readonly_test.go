@@ -50,11 +50,11 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 	// can be called far enough to hit (or miss) the guard.
 	arg := func(t reflect.Type) reflect.Value {
 		switch t {
-		case reflect.TypeOf((*context.Context)(nil)).Elem():
+		case reflect.TypeFor[context.Context]():
 			return reflect.ValueOf(context.Background())
-		case reflect.TypeOf(&domain.Knowledge{}):
+		case reflect.TypeFor[*domain.Knowledge]():
 			return reflect.ValueOf(&domain.Knowledge{Type: "Metric", ID: "x", Title: "x"})
-		case reflect.TypeOf(&time.Time{}):
+		case reflect.TypeFor[*time.Time]():
 			return reflect.ValueOf((*time.Time)(nil))
 		}
 		return reflect.Zero(t)

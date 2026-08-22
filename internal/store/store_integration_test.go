@@ -275,7 +275,7 @@ func TestIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if err := s.RecordEvents(ctx, domain.EventSearchHit, actor, []string{hot.ID}); err != nil {
 			t.Fatalf("RecordEvents: %v", err)
 		}
@@ -339,7 +339,7 @@ func TestIntegration(t *testing.T) {
 	quiet := newFail("it-fail-quiet", "1回失敗した検証済み", domain.StatusStable, true)
 	draftFail := newFail("it-fail-draft", "1回失敗した草案", domain.StatusDraft, false)
 	clean := newFail("it-fail-clean", "失敗のない検証済み", domain.StatusStable, true)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		if err := s.RecordOutcome(ctx, domain.EventFailed, actor, loud.ID, ""); err != nil {
 			t.Fatalf("RecordOutcome: %v", err)
 		}

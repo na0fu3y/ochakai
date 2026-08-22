@@ -34,6 +34,49 @@ import (
 // "v0.9.0"), falling back to "dev" for in-tree builds.
 var version = ""
 
+// cloudLoggingNames writes slog's two reserved keys under the names Cloud
+// Logging reads: `level` becomes `severity` and `msg` becomes `message`.
+//
+// Without it a line's level is an ordinary field, so Cloud Logging has
+// nothing to set the entry's severity from and every line arrives
+// equal. That is the difference between an operator being able to ask
+// for the warnings and having to know in advance which messages are
+// warnings — and the ones this deployment emits are exactly the ones
+// worth an alert: semantic search silently off, an export truncated
+// after the response began. The operating guide's saved queries already
+// spell the field `jsonPayload.message`, which is what a reader would
+// assume and what only now is true.
+//
+// Only these two. `time` is left where slog puts it: Cloud Run stamps
+// the entry when it reads the line, so a second spelling of the same
+// instant would be a field to keep in agreement for nothing. The
+// destination stays os.Stderr, which is not incidental — stdout is the
+// wire for `ochakai mcp-stdio` and the output of every client command,
+// so a log line there would corrupt a session (design doc 0067 §3).
+//
+// Groups are left alone: these are the top-level keys the platform
+// reserves, and an attribute a caller happened to name "msg" inside a
+// group is that caller's own.
+func cloudLoggingNames(groups []string, a slog.Attr) slog.Attr {
+	if len(groups) > 0 {
+		return a
+	}
+	switch a.Key {
+	case slog.MessageKey:
+		a.Key = "message"
+	case slog.LevelKey:
+		a.Key = "severity"
+		// slog spells it WARN and Cloud Logging spells it WARNING; the
+		// other three levels are spelled the same on both sides, and a
+		// value slog renders some other way is left for the platform to
+		// read as DEFAULT rather than guessed at here.
+		if level, ok := a.Value.Any().(slog.Level); ok && level == slog.LevelWarn {
+			a.Value = slog.StringValue("WARNING")
+		}
+	}
+	return a
+}
+
 func resolveVersion() string {
 	if version != "" {
 		return version
@@ -45,7 +88,7 @@ func resolveVersion() string {
 }
 
 func main() {
-	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{ReplaceAttr: cloudLoggingNames}))
 	slog.SetDefault(log)
 	version = resolveVersion()
 

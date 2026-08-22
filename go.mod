@@ -1,13 +1,24 @@
 module github.com/na0fu3y/ochakai
 
-go 1.26
+// 1.27 is a floor and not a preference, which is unusual here and has
+// one reason: the lexical index is generated from this toolchain's
+// Unicode tables. Migration 0044's CJK character class is what Go's
+// unicode.Han, Hiragana and Katakana answer at Unicode 17, which arrived
+// in 1.27, and store.scriptWithoutSpaces asks the same tables at query
+// time. A build older than the class windows fewer characters than the
+// index holds, and a Japanese term written in one of them stops being
+// findable. TestCJKClassAgreesWithGo fails rather than letting that
+// ship; the floor is what keeps it from being reached.
+go 1.27
 
 // The patch belongs here and not on the `go` line above. A `go`
 // directive naming a patch makes every build require at least that
-// toolchain, so a corporate CI running GOTOOLCHAIN=local on 1.26.2
+// toolchain, so a corporate CI running GOTOOLCHAIN=local on 1.27.0
 // fails at `go install` rather than building. As `toolchain` it is a
-// preference the local setting may decline.
-toolchain go1.26.6
+// preference the local setting may decline — which is the whole
+// difference between a patch, where any of them will do, and the minor
+// above, where they will not.
+toolchain go1.27.0
 
 // Pre-0.9.0 releases are unsupported: superseded by 0.9.0 (the first
 // release the deploy guide and docs are written against; earlier images
