@@ -3,7 +3,10 @@
 Status: Accepted(2026-08-09)。[0003](0003-gcp-only.md) の「Google Cloud
 以外で本番を動かす方法は無い」を改訂する — **認証だけは第二の経路を持つ**。
 secret-zero([0065](0065-identity-and-provenance.md))も、認可を持たない
-ことも、埋め込みが Vertex AI であることも動かさない
+ことも、埋め込みが Vertex AI であることも動かさない。
+**§4 の「email が無い / verified が false」は
+[0116](0116-a-person-recorded-as-a-process-says-so.md) が改訂した** —
+記録の仕方は同じで、黙って行わなくなった
 Date: 2026-08-09
 
 ## 1. 何が起きたか
