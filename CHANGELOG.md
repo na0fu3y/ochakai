@@ -122,6 +122,22 @@ last entry.
 
 ### Fixed
 
+- **The request log says who called on `/mcp`.** The line carries one
+  fact about the caller — whether it was a person or a process, which is
+  what an operator reads a rate by — and on `/mcp` it read `process` for
+  everybody, a person included. The cause is the wiring rather than the
+  log: `restapi.RequestLog` was wrapped *around* `httpauth.Middleware`,
+  so it read the request as it arrived, before the actor was resolved
+  into a derived context, and `httpauth.Actor` handed it its
+  `process/unknown` default. `/api/v1` was never affected — its log sits
+  inside the middleware, because `restapi.Handler` builds its own mux
+  around it — and **nothing stored was ever wrong**: provenance on
+  concepts, revisions and rulings is resolved separately and named the
+  right actor throughout. `/mcp` now nests the same way, which also
+  means a request the middleware refuses (a 401 with no usable token) no
+  longer produces a line there, exactly as it has never produced one
+  under `/api/v1`.
+
 - **`put_concept` no longer says a ruling exists outside the caller's
   scope.** On a deployment with an access policy (design doc 0109), the
   two guards MCP's `put_concept` runs before it writes — the ones that

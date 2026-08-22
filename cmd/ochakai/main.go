@@ -357,21 +357,11 @@ func semanticSearch(ctx context.Context, cfg *config.Config, log *slog.Logger) (
 // allowance is not the place to wait out an API that is not answering.
 const vertexProbeTimeout = 10 * time.Second
 
-func serve(log *slog.Logger) error {
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	svc, cfg, err := setup(ctx, log)
-	if err != nil {
-		return err
-	}
-	// Runs after runServer returns, i.e. after the HTTP server has drained:
-	// Close stops the usage flush loop and drains its buffer one last time,
-	// so a SIGTERM does not discard the events recorded in the last few
-	// seconds (design doc 0029). Ordering matters — flushing before the
-	// server drains would miss the requests still in flight.
-	defer svc.Store.Close()
-
+// routes is the server's whole address space, built where a test can
+// hold it: the wiring here decides what the request log can see, and
+// design doc 0035's habit is to read an invariant from outside rather
+// than to trust that the nesting stayed right.
+func routes(log *slog.Logger, cfg *config.Config, svc *service.Service, version string) *http.ServeMux {
 	mux := http.NewServeMux()
 	// /health, not /healthz: Google Frontends intercept /healthz on
 	// run.app URLs and return their own 404 — discovered the hard way.
@@ -417,9 +407,41 @@ then open http://127.0.0.1:8098. See also: ochakai --help
 	// Its whole surface is one address, so the route is that address; a
 	// deployment whose agents talk MCP would otherwise have a request log
 	// covering the half of its traffic it reads least.
-	mux.Handle("/mcp", restapi.RequestLog(log, "/mcp",
-		httpauth.Middleware(cfg, mcpserver.Handler(svc, version))))
+	// The request log goes *inside* the authentication, which is where
+	// /api/v1 has always had it (restapi.Handler builds its own mux
+	// around it) and where it has to be to read what it prints: the
+	// actor is resolved into a derived context, so a log wrapped around
+	// the middleware sees the request as it arrived and httpauth.Actor
+	// hands it the process/unknown default. The line then said `process`
+	// for every caller — including a person — which is the one thing it
+	// says about who called.
+	//
+	// The cost of the order is the same one /api/v1 already pays: a
+	// request refused by the middleware never reaches the log. A 401
+	// answered by the transport is not a request this server served.
+	mux.Handle("/mcp", httpauth.Middleware(cfg,
+		restapi.RequestLog(log, "/mcp", mcpserver.Handler(svc, version))))
 	mux.Handle("/api/v1/", restapi.AnnounceReadOnly(svc, httpauth.Middleware(cfg, restapi.Handler(svc))))
+
+	return mux
+}
+
+func serve(log *slog.Logger) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	svc, cfg, err := setup(ctx, log)
+	if err != nil {
+		return err
+	}
+	// Runs after runServer returns, i.e. after the HTTP server has drained:
+	// Close stops the usage flush loop and drains its buffer one last time,
+	// so a SIGTERM does not discard the events recorded in the last few
+	// seconds (design doc 0029). Ordering matters — flushing before the
+	// server drains would miss the requests still in flight.
+	defer svc.Store.Close()
+
+	mux := routes(log, cfg, svc, version)
 
 	log.Info("ochakai listening", "addr", cfg.Addr, "version", version,
 		"insecure_dev", cfg.InsecureDev, "endpoints", []string{"/mcp", "/api/v1", "/health"})
