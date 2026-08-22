@@ -37,7 +37,12 @@ func remoteMCP(t *testing.T) (base string, tools []string) {
 			return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "ctx:" + in.Q}}}, nil, nil
 		})
 
-	srv := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s }, nil))
+	// Stateless, because that is what an ochakai deployment serves
+	// (design doc 0118) and the bridge's whole job is to reach one. The
+	// tools stay made-up — what the bridge carries is not this test's
+	// subject — but the transport must not be.
+	srv := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s },
+		&mcp.StreamableHTTPOptions{Stateless: true}))
 	t.Cleanup(srv.Close)
 	return srv.URL, []string{"get_pack", "search_concepts"}
 }

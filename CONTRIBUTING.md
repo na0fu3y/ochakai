@@ -807,7 +807,18 @@ is worth more than the change; this one says it also grows when the
 change is a rendering, since a rendering is the thing a reader is least
 able to reconstruct from the code.
 
-    RECORD-CORPUS-LINES: 9500
+9,500 → 10,000 is 0118, which turns the MCP endpoint stateless so it can
+answer at protocol version 2026-07-28. The decision itself is one line of
+options in one constructor; what needed the room was that the upgrade is
+not free — an older client names itself only in the `initialize` a
+stateless deployment answers in a throwaway session, so its `clientInfo`
+stops reaching the producer field, and a record that only announced the
+new protocol would have left that to be discovered in a ledger. This
+crossing says a corpus grows when a change costs something a reader would
+not otherwise be told about, and that stating the cost is most of the
+record.
+
+    RECORD-CORPUS-LINES: 10000
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

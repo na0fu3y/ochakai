@@ -21,6 +21,36 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **`/mcp` is stateless, and answers at MCP protocol version
+  2026-07-28** (design doc 0118). ochakai speaks MCP through the Go SDK,
+  and that SDK serves the current protocol only from a stateless handler
+  — a session-holding one caps every client at 2025-11-25. ochakai built
+  its handler with default options, so it shipped the newest SDK and
+  refused the newest spec, silently: negotiation succeeds, the tools
+  work, and a client that has moved is never told it was moved back. The
+  mode being given up was never used — no roots, no sampling, no logging
+  (all three deprecated at 2026-07-28), no server-initiated request, and
+  ochakai's state is the knowledge base rather than the connection. No
+  `Mcp-Session-Id` is issued or read, and GET and DELETE on `/mcp` are
+  405 with `Allow: POST`. **Nothing an operator sets changes**, and no
+  counted surface moves.
+- **What this costs, for a client still on 2025-11-25**: at that version
+  a client names itself only in `initialize`, which a stateless
+  deployment answers in a throwaway session, so its `clientInfo` no
+  longer reaches the `producer` field beside the actor — measured, a call
+  that recorded `claude-desktop/1.2` now records nothing there. The
+  identity is untouched: `created_by` is the same person or process it
+  always was, and what falls is the self-declaration design doc 0065 §4
+  calls a record rather than an identity. The `Ochakai-Producer` header
+  is the contract for that field and covers it on any client, and a
+  client that moves to 2026-07-28 gets the fallback back automatically —
+  there, the name rides on every call. Sessions also stopped
+  accumulating (the SDK never expires an idle one), and a deployment is
+  free to run more than one instance, which sessions in one instance's
+  memory had ruled out.
+
 ## [0.26.3] - 2026-08-22
 
 ### Added
