@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.26.3] - 2026-08-22
+
 ### Added
 
 - **The loop's numbers on the review page can be asked about a period
@@ -159,6 +161,34 @@ last entry.
   so this could only fire for an answer that did not come from one — but
   believing such an answer would have put bytes wherever the name
   pointed. The name is checked now and a refusal names it.
+- **A Japanese question stops asking for the particles it is made of.**
+  `queryFragments` kept a run of one or two characters whole without
+  asking whether it held a content character, and a one-character run
+  was asked for as a prefix — so a question written with spaces or latin
+  words in it (`AI が verify を打ってよいか`) sent `が:*` to the index,
+  which matches nearly every Japanese document there is. `contentWindows`
+  had dropped hiragana-only windows for exactly this reason since 0089
+  §4; the branch above it never asked. A run that *is* a word keeps its
+  fragment wherever the content character sits in it (与信, お茶), and a
+  query with nothing else to look for still asks for its grammar
+  (ください, か) rather than for nothing.
+- **A katakana word is asked for whole instead of cut into windows.** A
+  run of Han and hiragana is a sentence nobody here can find the word
+  boundaries in, which is why it is cut into two-character windows — but
+  **a stretch of katakana is not a sentence**, and the script change on
+  either side of it is a word boundary somebody wrote. A question about
+  a スクリーンショット was spending most of its weight on セッ, ット and
+  ショ — fragments belonging to データセット and セッション — and reaching
+  most of the base. A katakana run of five characters or more now leaves
+  the query whole and asks the index for all of its windows at once
+  rather than any of them. The stored side is untouched, so a word
+  inside a longer one still answers (`セッション` finds リモートセッション)
+  and nothing has to be rewritten.
+- **Neither of the two above moves a ranking**: over the golden set
+  every case landed on the rank it already had, and what changed is what
+  stopped arriving underneath it — the candidate set is a seventh
+  smaller and a third less of it comes from the domain the question was
+  not about. Both are query-side, so no migration and no re-embedding.
 - **Halfwidth katakana and fullwidth latin are found by a question
   spelled normally, and the reverse.** They are what a system upstream
   of the reader writes — a warehouse export from something fixed-width,
@@ -5028,7 +5058,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.26.2...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.26.3...HEAD
+[0.26.3]: https://github.com/na0fu3y/ochakai/compare/v0.26.2...v0.26.3
 [0.26.2]: https://github.com/na0fu3y/ochakai/compare/v0.26.1...v0.26.2
 [0.26.1]: https://github.com/na0fu3y/ochakai/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/na0fu3y/ochakai/compare/v0.25.0...v0.26.0
