@@ -1,11 +1,13 @@
 package httpauth
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/base64"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -282,5 +284,62 @@ func TestVerifierDecidesWhetherATokenIsCheckedAtAll(t *testing.T) {
 	own := &config.Config{Verifier: verifierFor(t, iss)}
 	if _, err := callerFrom(own, unsigned); err == nil {
 		t.Error("a deployment that verifies its own tokens accepted an unsigned one")
+	}
+}
+
+// Design doc 0116: a token with no verified email records a person as a
+// process, and nothing about the response says so — so the process says
+// it, once. Once is the whole design: a machine's token has the same
+// shape, so the correct configuration raises this too, and an alarm on
+// every request is one nobody reads.
+func TestATokenWithNoEmailSaysWhoItIsRecordingAsOnce(t *testing.T) {
+	iss := newFakeIssuer(t)
+	v := verifierFor(t, iss)
+
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	for range 2 {
+		id, err := v.Verify(context.Background(), iss.token(t, standardClaims(iss, testAudience)))
+		if err != nil {
+			t.Fatalf("a token this issuer signed should verify: %v", err)
+		}
+		if id.Name != "user-1" || !id.Machine {
+			t.Fatalf("identity = %+v, want the subject as a process (0086 §4)", id)
+		}
+	}
+
+	if got := strings.Count(buf.String(), "carried no email"); got != 1 {
+		t.Errorf("warned %d times, want exactly 1:\n%s", got, buf.String())
+	}
+	if !strings.Contains(buf.String(), "subject=user-1") {
+		t.Errorf("the warning names no subject, so nobody can act on it:\n%s", buf.String())
+	}
+}
+
+// The same verifier says nothing when the issuer vouched for an email:
+// that is the ordinary case, and a warning there would be the alarm that
+// always rings.
+func TestAVerifiedEmailWarnsAboutNothing(t *testing.T) {
+	iss := newFakeIssuer(t)
+	v := verifierFor(t, iss)
+
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() { slog.SetDefault(prev) })
+
+	token := iss.token(t, struct {
+		jwt.Claims
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+	}{standardClaims(iss, testAudience), "tanaka@example.co.jp", true})
+	if _, err := v.Verify(context.Background(), token); err != nil {
+		t.Fatal(err)
+	}
+	if buf.Len() != 0 {
+		t.Errorf("warned about a verified email:\n%s", buf.String())
 	}
 }

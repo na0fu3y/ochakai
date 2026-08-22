@@ -29,7 +29,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ) |
-| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである |
+| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった) |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
@@ -46,7 +46,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**export が却下の理由まで運ぶことは [0104](0104-a-ruling-travels-with-its-reason.md)**(読み戻さないのは同じ) |
 | 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
-| やらないと決めたこと | [0070](0070-what-was-retired-and-why.md) |
+| やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**MCP OAuth コネクタの再実装の出発点は [0116](0116-the-connector-price-changed-not-its-condition.md) が差し替えた** — 戻す条件は 0070 §5 のままで、その日に開くのが 0010 の認可サーバ(863 行)ではなく、測定済みの二つの答え(180 行)になった |
 | REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
 
@@ -198,6 +198,20 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   **Superseded by 0066**。
 - [0060 姿勢は一語で言う](0060-one-word-for-the-posture.md) —
   **Superseded by 0066**。
+- [0117 人が process として記録されるとき、そう言う](0117-a-person-recorded-as-a-process-says-so.md)
+  — **Accepted**。[0086](0086-a-second-way-to-say-who-is-calling.md) §4 の
+  「email が無ければ `sub` を process として記録する」を改訂する —
+  **記録の仕方は一字も変えず、黙って行わなくなる**。三つ目の枝は「機械の
+  トークンはこの形をしている」を理由に置かれたが、**人のトークンもこの形で
+  届く**: 発行者が email を ID トークンにだけ載せる(それが普通の構成である)
+  と、ブラウザで認可を通った人の書き込みが `process:<sub>` 名義になり、
+  401 も 403 も出ない。0065 §3 が委譲について「静かな降格は、明示的な失敗より
+  常に高くつく」と書いた当の形が、二つ目の扉で起きている。**403 にはできない**
+  — email を持たないトークンは機械のものかもしれず、見分ける材料が無いので、
+  拒めば正当な機械の構成を拒む。だから告知で、**プロセスに一度だけ**言う
+  (見分けられない以上、正しい構成でも必ず一度は鳴る。毎回鳴る警報は何も
+  知らせない)。発行者と `sub` を出し、鍵の素材もトークンも出さない。面は
+  一つも動かない — 増えるのは運用者自身のログの一行である。
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
@@ -898,8 +912,25 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 
 ## MCP OAuth コネクタ(撤去済み)
 
+- [0116 コネクタの値段は変わり、その条件は変わらない](0116-the-connector-price-changed-not-its-condition.md)
+  — **Accepted**。[0070](0070-what-was-retired-and-why.md) §5 の「戻すときは
+  revert が出発点になる」を改訂する。0012 が撤去した三週間後に
+  [0086](0086-a-second-way-to-say-who-is-calling.md) が着地しており、
+  **ochakai が認可サーバである必要はなくなっていた** — 認可サーバは運用者が
+  既に動かしている発行者で、デプロイが公開するのは RFC 9728 のメタデータと
+  401 のチャレンジ二つだけ、しかもそこに書く二つの事実は
+  `OCHAKAI_OIDC_AUDIENCE` と `OCHAKAI_OIDC_ISSUER` がそのまま入る。実測で
+  成立した(vendor がホストするクライアントが別ホストの認可サーバを自分で
+  見つけ、自分を登録し、audience に束縛されたトークンで戻り、人として記録
+  された)。**863 行が 180 行になり、環境変数も姿勢も増えない。**
+  それでも**採用しない**: 0070 §1 の四つの観測のうち三つは発生しないが、
+  残る一つ「利用がない」は動いておらず、それが 0012 の撤去理由そのもので
+  ある。**安くなったのは実装であって需要ではない。** 値段は消えたのでは
+  なく運用者の IdP に移っており(登録の許可、`scope: openid`、access token の
+  email)、採用する日の記録が読者に負っているのはその三つである。戻す条件は
+  0070 §5 のまま。
 - [0010 MCP OAuth コネクタサービス](0010-mcp-oauth-connector.md) —
   **Superseded by 0012**。claude.ai / ChatGPT リモートコネクタ向けの
-  公開第二サービス。再実装時はこの設計が出発点。
+  公開第二サービス。**再実装時の出発点はここではなくなった**(0116)。
 - [0012 MCP OAuth コネクタサービスの撤去](0012-retire-mcp-oauth-connector.md) — **Superseded by 0070**。
 - [0039 stdio クライアントへの橋](0039-mcp-stdio-bridge.md) — **Superseded by 0067**。

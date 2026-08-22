@@ -9,6 +9,9 @@ Status: Accepted(2026-08-03)。**「やらないと決めたこと」の現行
 両方 `get_context` から届く」という綴りは
 [0108](0108-the-context-pack-retires.md) が search → get(と
 `linked_from`)に読み替えた** — compile_sql を置かない結論は動かない。
+**§5 のコネクタの再実装の出発点は
+[0116](0116-the-connector-price-changed-not-its-condition.md) が差し替えた** —
+戻す条件は同じで、その日に開くのは 0010 の認可サーバではなくなった。
 Date: 2026-08-03
 
 ## 0. この記録が決めたこと

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -63,6 +64,9 @@ type OIDC struct {
 	keys    *jose.JSONWebKeySet
 	fetched time.Time
 	jwksURI string
+
+	// noEmail carries the one warning of design doc 0116.
+	noEmail sync.Once
 }
 
 // NewOIDC builds a verifier for an issuer and the audience this
@@ -143,10 +147,38 @@ func (o *OIDC) Verify(ctx context.Context, token string) (Identity, error) {
 		return Identity{}, fmt.Errorf("token rejected: %w (this deployment expects issuer %q and audience %q)",
 			err, o.issuer, o.audience)
 	}
-	return identityFrom(claims.Email, claims.EmailVerified, claims.Subject), nil
+	id, byEmail := identityFrom(claims.Email, claims.EmailVerified, claims.Subject)
+	if !byEmail {
+		o.sayTheDowngrade(claims.Subject)
+	}
+	return id, nil
 }
 
-// identityFrom decides what a verified token is recorded as.
+// sayTheDowngrade warns the first time this process records a caller as
+// a process for want of a verified email (design doc 0116).
+//
+// 0065 §3 refuses a silent downgrade at the delegation door — an
+// application that believes it is writing under its users' names, and
+// finds out months later that every entry carries one service account's.
+// This is the same thing one door over: an issuer that leaves email in
+// the ID token rather than the access token records every person as
+// `process:<sub>`, and nothing fails.
+//
+// It is not a refusal, because a machine's token legitimately has this
+// shape and there is nothing here that tells the two apart (0086 §4).
+// It is said once for the same reason: in a deployment whose callers are
+// machines, the correct configuration would otherwise raise the alarm on
+// every request, and an alarm that always rings tells nobody anything.
+func (o *OIDC) sayTheDowngrade(subject string) {
+	o.noEmail.Do(func() {
+		slog.Default().Warn("a verified token carried no email; recording the caller as a process",
+			"issuer", o.issuer, "subject", subject)
+	})
+}
+
+// identityFrom decides what a verified token is recorded as, and says
+// whether the name came from an email — which is what separates a person
+// this issuer vouched for from a subject nobody can read (0116).
 //
 // An email the issuer says it verified is the name a person is known by,
 // and it reads the same way as the Cloud Run path's. An unverified email
@@ -154,15 +186,15 @@ func (o *OIDC) Verify(ctx context.Context, token string) (Identity, error) {
 // told us the claim is the user's own text, and provenance built on that
 // is a name anybody can take. Everything else is recorded by subject,
 // which is what a machine's token carries.
-func identityFrom(email string, verified *bool, subject string) Identity {
+func identityFrom(email string, verified *bool, subject string) (Identity, bool) {
 	if email != "" && (verified == nil || *verified) {
 		// Absent email_verified is treated as verified: several issuers
 		// omit it for accounts they own outright, and refusing those
 		// would leave the common enterprise case unauthenticatable.
 		// A false one is never believed.
-		return Identity{Name: email, Machine: strings.HasSuffix(email, ".gserviceaccount.com")}
+		return Identity{Name: email, Machine: strings.HasSuffix(email, ".gserviceaccount.com")}, true
 	}
-	return Identity{Name: subject, Machine: true}
+	return Identity{Name: subject, Machine: true}, false
 }
 
 // keySet returns the issuer's keys, fetching them when they are missing,

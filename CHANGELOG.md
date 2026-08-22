@@ -42,6 +42,7 @@ last entry.
   to the wire: no endpoint, no parameter, no word. The review trend
   stays the one shape with no axes that design doc 0095 §3 gave it, and
   the queue depths a curator works from are untouched.
+
 ### Changed
 
 - **The re-verification feed has one name again.** `sort=failed` was
@@ -99,6 +100,25 @@ last entry.
   this repository had ever read the page's copy: the previous
   translation shipped 40-50 English strings behind a changelog line
   saying every one of them was done.
+
+- **A deployment that verifies tokens itself says when it is recording a
+  person as a process.** `OCHAKAI_OIDC_ISSUER` deployments record a
+  caller by `sub`, as a process, when the token carries no verified
+  email
+  ([0086](docs/design/0086-a-second-way-to-say-who-is-calling.md) §4) —
+  written for machine tokens, which legitimately look like that. A
+  person's token can arrive the same way: issuers commonly put `email`
+  in the ID token rather than the access token, so somebody who
+  completed a browser authorization writes concepts attributed to a
+  process and **nothing fails**. The server now logs one `WARN` naming
+  the issuer and the subject, the first time it happens in a process —
+  once, because a machine-only deployment is correct and an alarm on
+  every request is one nobody reads
+  ([0117](docs/design/0117-a-person-recorded-as-a-process-says-so.md)).
+  Nothing else moves: the recorded name, the trust tier and every
+  response are unchanged, and the Cloud Run path already refused such a
+  token outright. If the warning appears and your callers are people,
+  map `email` into the access token at the issuer.
 
 ### Fixed
 
