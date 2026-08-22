@@ -3,7 +3,7 @@
 # Requires BuildKit: on the legacy builder (plain gcr.io/cloud-builders/docker
 # on Cloud Build, or docker without DOCKER_BUILDKIT=1) the next line fails
 # with `failed to parse platform : "" is an invalid component`.
-FROM --platform=$BUILDPLATFORM golang:1.26.6 AS build
+FROM --platform=$BUILDPLATFORM golang:1.26.7 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

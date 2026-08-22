@@ -23,6 +23,18 @@ last entry.
 
 ### Changed
 
+- **Built on Go 1.26.7**, the current patch of the release line ochakai
+  targets. Go 1.27 is deliberately not adopted yet: it carries Unicode
+  17, and migration 0036's CJK character class is generated from Go's
+  own `unicode.Han`/`Hiragana`/`Katakana` tables and pinned to them by
+  `TestCJKClassAgreesWithGo`. Under Go 1.27 that test reports 645
+  characters Go now calls Han and the stored class does not — a term a
+  query would window and the index would not, which is a document that
+  cannot be found rather than one ranked badly. The pin caught it before
+  a build could ship it, which is what it is for. Nothing else in the
+  tree objected to Go 1.27: the whole suite passes, the frozen wire
+  golden files included, with `encoding/json` on its new v2
+  implementation.
 - **A filtered semantic search no longer answers short.** pgvector's
   HNSW scan runs before the `WHERE` clause, so a search for ten concepts
   narrowed by type, tag or path got only whatever survived of its
