@@ -28,7 +28,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 領域 | いま読むドキュメント |
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
-| Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない) |
+| Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ) |
 | 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
@@ -107,6 +107,20 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   組み合わせは起動時に断る。ENV 11 → 13。契約は遡及宣言を一つ得る —
   両経路が元から送っていた 401 を全操作に宣言し、info の散文を二経路の
   現在形に書き直す。
+- [0115 二つ目の足場は、検索を待つ](0115-the-second-footing-waits-for-search.md)
+  — **Accepted**。0003 の「それ以外の実行環境をサポートしない」を一行も
+  緩めないまま、**それを撤回してよい条件**を与える。0086 の後に Google
+  Cloud に縛られているのは三つ — データベースの資格情報、埋め込み、
+  ファイルのバイト列 — で、**同じ重さではない**。資格情報とファイルは
+  何が失われるかを言えば運用者の選択になるが、埋め込みは返せない:
+  C8 が乗っているのが検索であり、外では 0114 §2 の言う「退化していない」
+  デプロイ、つまり**別の製品**になる。**支える価値の無い足場を「支える」
+  と宣言するのは、嘘を一つ増やすことである**(§3)。条件は測れる三つ —
+  設定を足さずに有効、secret を増やさない、データ所在地を運用者が選べる —
+  で、機構は選ばない。この記録は改訂そのものではなく、条件が満たされた
+  日に別の番号が 0003 を改訂する(§4)。却下: 外部 API キーの埋め込み、
+  条件より先に二つ目のストレージエンジンを足すこと、「マルチクラウド
+  対応」という言葉、そして条件を書かずに黙っていること。
 - [0003 Google Cloud 前提化](0003-gcp-only.md) — **Accepted**。
   Cloud Run + Cloud SQL IAM を前提にし、トークン・パスワードを持たない
   (secret-zero)。
