@@ -990,7 +990,13 @@ and one tooltip both at once.
 | Prose, banners, hints | ですます |
 | Toasts, `confirm`, `prompt`, error banners | ですます, one sentence |
 | Buttons, tabs, column headings, badges, tile labels | 体言止め, ~8 characters |
-| `title` / `aria-label` | ですます, one sentence, no 。, under 40 characters |
+| `title` | ですます, one sentence, no 。, under 40 characters |
+| `aria-label` | 体言止め — it is the control's *name*, not a description |
+
+The two attributes are split because they are different things: a
+`title` is a description a reader hovers for, an `aria-label` is the
+accessible name a screen reader announces in place of the control. A
+sentence in the second is not a label at all.
 
 A tile label is a noun, not a clause: 「結果報告 / 利用」 rather than
 「使われた concept のうち結果が返ってきたもの」. A tooltip is a sentence,
