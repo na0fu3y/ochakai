@@ -413,16 +413,30 @@ For the web UI, run the bundled proxy on your machine:
 then open http://127.0.0.1:8098. See also: ochakai --help
 `, version)
 	})
+	// A deployment that verifies tokens itself (design doc 0086) and
+	// answers to an https audience can also say so where a client with
+	// no configuration will look: the 401 on /mcp names a metadata
+	// document, and the document names the issuer (RFC 9728). Every
+	// other deployment gets a nil here and is unchanged — including the
+	// well-known address, which stays a 404 like any address this server
+	// does not have.
+	discovery := httpauth.NewDiscovery(cfg)
+	discovery.Mount(mux)
+
 	// /mcp gets the same line as /api/v1 (internal/restapi/requestlog.go).
 	// Its whole surface is one address, so the route is that address; a
 	// deployment whose agents talk MCP would otherwise have a request log
 	// covering the half of its traffic it reads least.
 	mux.Handle("/mcp", restapi.RequestLog(log, "/mcp",
-		httpauth.Middleware(cfg, mcpserver.Handler(svc, version))))
+		discovery.Challenge(httpauth.Middleware(cfg, mcpserver.Handler(svc, version)))))
 	mux.Handle("/api/v1/", restapi.AnnounceReadOnly(svc, httpauth.Middleware(cfg, restapi.Handler(svc))))
 
+	endpoints := []string{"/mcp", "/api/v1", "/health"}
+	if p := discovery.Path(); p != "" {
+		endpoints = append(endpoints, p)
+	}
 	log.Info("ochakai listening", "addr", cfg.Addr, "version", version,
-		"insecure_dev", cfg.InsecureDev, "endpoints", []string{"/mcp", "/api/v1", "/health"})
+		"insecure_dev", cfg.InsecureDev, "endpoints", endpoints)
 	return runServer(ctx, cfg.Addr, mux)
 }
 
