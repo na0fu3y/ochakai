@@ -21,6 +21,24 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`ochakai import` no longer reads through a symlink out of the bundle,
+  and `ochakai export` no longer writes through one out of the directory
+  it was given.** A bundle is ordinary content — cloned, unpacked, handed
+  over on a drive — so a link inside one named `revenue.md` and pointing
+  at `~/.ssh/id_rsa` used to be read and written to the knowledge base
+  under that id: a file the importer never looked at, published to
+  everyone the deployment serves. The walk declined to *descend* a
+  symlinked directory and said nothing about reading a symlinked file,
+  which is the half that reads something. On the way back out,
+  `filepath.IsLocal` reads the name an archive carries and cannot see
+  that a directory already on disk is a link somewhere else. Both paths
+  now go through `os.Root`, so the kernel refuses a name that leaves the
+  directory instead of the walk's shape implying it; the name check
+  stays, because the two answer different questions. An ordinary bundle
+  imports exactly as before.
+
 ### Changed
 
 - **Built on Go 1.27**, and migration 0044 carries the Unicode 17
