@@ -1,4 +1,4 @@
-# ochakai 設計ドキュメント 0115: コネクタの値段は変わり、その条件は変わらない
+# ochakai 設計ドキュメント 0116: コネクタの値段は変わり、その条件は変わらない
 
 Status: Accepted(2026-08-22)。[0070](0070-what-was-retired-and-why.md) §5 の
 「コネクタ — 戻すときは revert が出発点になる」を改訂する — 出発点が
@@ -92,7 +92,7 @@ SECURITY.md の脅威モデルを二経路にすること(0010 §5 に文案が�
 3. **access token に verified email が無ければ、人は process になる。**
    0086 §4 の綴りが、ブラウザを通った人のトークンに当たったときの姿で
    ある。これは §1 の機構が無くても今日すでに起きているので、独立した
-   決定として [0116](0116-a-person-recorded-as-a-process-says-so.md) が
+   決定として [0117](0117-a-person-recorded-as-a-process-says-so.md) が
    持つ。
 
 **採用する日の記録が読者に負っているのは、二つの答えよりもこの三つである。**

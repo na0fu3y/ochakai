@@ -1,4 +1,4 @@
-# ochakai 設計ドキュメント 0116: 人が process として記録されるとき、そう言う
+# ochakai 設計ドキュメント 0117: 人が process として記録されるとき、そう言う
 
 Status: Accepted(2026-08-22)。[0086](0086-a-second-way-to-say-who-is-calling.md) §4 の
 「email が無い / verified が false — `sub` を、process として記録する」を改訂する
@@ -15,7 +15,7 @@ email は人、verified でない email は使わない、そして **email が�
 この形をしている」であり、それは正しい。
 
 **正しくなかったのは、人のトークンもこの形で届きうることである。**
-[0115](0115-the-connector-price-changed-not-its-condition.md) の実験で
+[0116](0116-the-connector-price-changed-not-its-condition.md) の実験で
 実際に踏んだ: ブラウザで認可を通った人の access token に email クレームが
 無く、`identityFrom` は `sub` を返し、`Machine: true` が付いた。その人が
 書いた concept の `created_by` は `process:` である。
@@ -41,7 +41,7 @@ OIDC 経路で起きているのは字義どおり同じことである — 全�
 書かれたのではない。**
 
 そして 0086 §4 がこの綴りを決めたとき、この扉はまだ開いていなかった。
-[0115](0115-the-connector-price-changed-not-its-condition.md) が開けた
+[0116](0116-the-connector-price-changed-not-its-condition.md) が開けた
 のではなく、**開けられることが分かった**のがその実験である。
 
 ## 3. なぜ 403 ではないのか

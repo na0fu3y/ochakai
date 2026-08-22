@@ -56,12 +56,12 @@ export async function viewEditor(id, prefix = '') {
                  placeholder="sales/monthly-revenue"
                  ${editing ? 'disabled' : 'required'}>
           <div class="hint">${editing
-            ? 'concept の置き場所(移動は concept のページから)。'
-            : 'ディレクトリを「/」で区切ったフルパス。最後の区切りが concept の名前(例: 売上、monthly-revenue)。一緒に読まれるべきものは一緒に置く。'}</div>
+            ? 'ナレッジの置き場所です(移動はナレッジのページから行います)。'
+            : 'ディレクトリを「/」で区切ったフルパスです。最後の区切りがナレッジの名前になります(例: 売上、monthly-revenue)。一緒に読まれるべきものは、一緒に置いてください。'}</div>
         </div>`;
 
   view.innerHTML = `
-    <div class="section-title">${editing ? `${esc(entryID)} を編集` : '新しいナレッジの concept'}</div>
+    <div class="section-title">${editing ? `${esc(entryID)} を編集` : 'ナレッジの新規作成'}</div>
     <form class="form" id="editor">
       <div class="row">
         ${idField}
@@ -70,19 +70,13 @@ export async function viewEditor(id, prefix = '') {
           <label class="top" for="e-type">型</label>
           <select id="e-type">${KNOWN_TYPES.map(t =>
             `<option value="${t}"${t === 'Insight' ? ' selected' : ''}>${t}</option>`).join('')}</select>
-          <div class="hint">下のドキュメントの <code>type:</code> を設定します。その型が無いと受け付けられないキーも一緒に入ります。
-          ドキュメントを編集するまでは全体が入れ直され、編集した後はその行だけが変わります。
-          保存されるのはこのドキュメントです。</div>
+          <div class="hint">下のドキュメントの <code>type:</code> を設定します。その型で必須になるキーも一緒に入ります。ドキュメントを編集するまでは全体が入れ直され、編集したあとはその行だけが変わります。保存されるのはこのドキュメントです。</div>
         </div>`}
       </div>
       <div class="field">
         <label class="top" for="e-doc">ドキュメント</label>
         <textarea id="e-doc" rows="26" class="mono" spellcheck="false" required>${esc(doc)}</textarea>
-        <div class="hint"><code>---</code> の行にはさまれた OKF frontmatter、そのあとに markdown。
-        他の concept へは、そのパスへの markdown リンクで結ぶ — <code>[revenue](/metrics/revenue.md)</code> —
-        と、両方向のリンクになります。ochakai が定義していないキーは書いたまま保たれます。
-        サーバーが持つキー(<code>generated</code>・<code>verified</code>・<code>created_by</code>)は
-        あなたが決めるものではないので、書いてあっても無視されます。</div>
+        <div class="hint"><code>---</code> の行にはさまれた OKF frontmatter、そのあとに markdown を書きます。他のナレッジへは、そのパスへの markdown リンク(<code>[revenue](/metrics/revenue.md)</code>)で結ぶと、両方向のリンクになります。ochakai が定義していないキーは書いたまま保たれます。サーバーが持つキー(<code>generated</code>・<code>verified</code>・<code>created_by</code>)は、あなたが決めるものではないため、書いてあっても無視されます。</div>
       </div>
       <div id="editor-error"></div>
       <div class="toolbar" style="justify-content:flex-end">
@@ -131,7 +125,7 @@ export async function viewEditor(id, prefix = '') {
     // stays the only judge of a document; this just saves a round trip on
     // the mistake a text editor makes most (design doc 0044 §2.3).
     if (!/^---\r?\n[\s\S]*?\r?\n---/.test(document_.trim())) {
-      errBox.innerHTML = '<div class="error-banner" role="alert">ドキュメントには YAML frontmatter が要ります: <code>---</code> の行、キー、そして閉じる <code>---</code> の行。</div>';
+      errBox.innerHTML = '<div class="error-banner" role="alert">ドキュメントには YAML frontmatter が必要です: <code>---</code> の行、キー、そして閉じる <code>---</code> の行。</div>';
       return;
     }
     try {
@@ -162,7 +156,7 @@ export async function viewEditor(id, prefix = '') {
       // 412 rather than a 409 because the page writes with If-None-Match
       // and that is a precondition failing (design doc 0083).
       const dupLink = !editing && e.code === 'already_exists'
-        ? ` — <a href="#/k/${idPath(entryId)}">既にある ${esc(entryId)} を開く</a>(それを編集するか、別の ID を選んでください)`
+        ? `(<a href="#/k/${idPath(entryId)}">既にある ${esc(entryId)} を開く</a>か、別の ID を選んでください)`
         : '';
       // The precondition failed: somebody else saved while this form was
       // open. Say that rather than showing the server's sentence about
@@ -170,10 +164,7 @@ export async function viewEditor(id, prefix = '') {
       // they wrote, because the text in this box is now the older of two
       // edits and only the person holding it knows which parts survive.
       if (editing && e.code === 'precondition_failed') {
-        errBox.innerHTML = `<div class="error-banner" role="alert">この concept は、この画面を開いてから誰かが保存しました。
-          上書きを避けるため保存していません — 書いたものはこの欄に残っています。
-          <a href="#/k/${idPath(entryId)}" target="_blank" rel="noopener">新しい版を別タブで開いて</a>、
-          残すべきところを移してから、もう一度この画面を開いてください。</div>`;
+        errBox.innerHTML = `<div class="error-banner" role="alert">このナレッジは、この画面を開いてから他の人が保存しました。上書きを避けるため保存していません。書いた内容は、この欄に残っています。<a href="#/k/${idPath(entryId)}" target="_blank" rel="noopener">新しい版を別タブで開き</a>、残すべきところを移してから、もう一度この画面を開いてください。</div>`;
         return;
       }
       errBox.innerHTML = `<div class="error-banner" role="alert">${editing ? '保存' : '作成'}に失敗しました: ${esc(e.message)}${dupLink}</div>`;

@@ -142,6 +142,43 @@ func TestScopeRefusesAWriteItAllowsAReadOfIntegration(t *testing.T) {
 	}
 }
 
+// TestScopeHidesARulingOutsideItIntegration is the case the reflection
+// walk below cannot reach: the curation guards MCP's put_concept runs
+// ahead of the write only speak when a human has ruled on the id, so a
+// fixture whose out-of-scope concept is an ordinary draft passes without
+// ever asking the question. Both of their refusals name the id and say a
+// human ruled on it — which is the read 0109 §4 answers with a 404.
+func TestScopeHidesARulingOutsideItIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	if _, err := f.svc.Reject(f.adminCtx, f.theirs, "not ours", f.admin); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.svc.RefuseIfCurated(f.readCt, f.theirs, "replace"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("RefuseIfCurated on a ruled-on concept outside the scope returned %v, want ErrNotFound", err)
+	}
+	// And again once the ruling is a tombstone, which is the other guard:
+	// GetTombstone reads a row Get cannot see, so it needs the check of
+	// its own.
+	if err := f.svc.Delete(f.adminCtx, f.theirs, f.admin, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.RefuseIfRevivingCurated(f.readCt, f.theirs); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("RefuseIfRevivingCurated on a deleted ruling outside the scope returned %v, want ErrNotFound", err)
+	}
+	// The surface that calls both: put_concept lands here for an id it
+	// found free, and the answer must be the same 404.
+	_, err := f.svc.CreateKeepingCurated(f.readCt,
+		&domain.Knowledge{Type: "Metric", ID: f.theirs, Title: "x"}, f.reader)
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("CreateKeepingCurated outside the scope returned %v, want ErrNotFound", err)
+	}
+	// Inside the read scope but outside the write scope, both guards say
+	// the thing the caller already knows.
+	if _, err := f.svc.RefuseIfCurated(f.readCt, f.shared, "replace"); !errors.Is(err, ErrForbidden) {
+		t.Errorf("RefuseIfCurated on a readable, unwritable concept returned %v, want ErrForbidden", err)
+	}
+}
+
 // TestScopeNarrowsEveryListingIntegration walks the answers assembled
 // from more than one query — the ones the search filter does not reach —
 // because those are where a boundary leaks by omission rather than by
@@ -283,8 +320,7 @@ func TestEveryWriteIsScopedIntegration(t *testing.T) {
 		"Get": true, "Search": true, "SearchOrList": true, "Revisions": true,
 		"Usage": true, "Browse": true, "Stats": true, "IndexDocument": true,
 		"LogDocument": true, "LogRows": true, "ObjectHistory": true,
-		"GetFile": true, "GetFileMeta": true, "FillFiles": true,
-		"RefuseIfCurated": true, "RefuseIfRevivingCurated": true, "Close": true,
+		"GetFile": true, "GetFileMeta": true, "FillFiles": true, "Close": true,
 		"Policy": true, "RequireAdmin": true,
 		// Whole-bundle operations are refused by RequireAdmin rather than
 		// by an id, and TestPolicyBelongsToAdministratorsIntegration

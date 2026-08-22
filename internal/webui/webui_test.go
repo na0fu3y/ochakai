@@ -186,10 +186,11 @@ func TestFeedNamesDoNotCollideOnStale(t *testing.T) {
 func TestStaleFeedSaysVerifyingDoesNotClearIt(t *testing.T) {
 	page := wholePage(t)
 	// The page is Japanese (C8), so the sentence is checked in the
-	// language a reader meets it in — what is pinned is that the banner
-	// still says verifying does not empty this queue, not which words
-	// say it.
-	if !strings.Contains(page, "<strong>検証してもこのキューは片付きません</strong>") {
+	// language a reader meets it in. The exact words are pinned because a
+	// substring is all a Go test can hold; when the copy is reworded, this
+	// moves with it. The wording rules themselves live in CONTRIBUTING.md
+	// ("The web UI's Japanese") and are checked by jstest/copy.test.js.
+	if !strings.Contains(page, "<strong>このキューは検証しても解消しません。</strong>") {
 		t.Error("the stale feed banner no longer explains that verifying does not empty it")
 	}
 }
@@ -491,7 +492,7 @@ func TestADescriptionIsRenderedAsTheMarkdownItIs(t *testing.T) {
 	}
 }
 
-// The loop strip is the human side of design doc 0051: the review page
+// The loop strip is the human side of design doc 0069 §5: the review page
 // is where the person who runs the loop already is, so the instance's
 // numbers are drawn there rather than on a page of their own.
 //

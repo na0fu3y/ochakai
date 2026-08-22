@@ -79,7 +79,7 @@ export const dirHash = p => '#/dir/' + idPath(String(p).replace(/\/+$/, ''));
 // while an entry's breadcrumb stops at its folder (the entry's own name
 // is right below it, as the heading).
 export function crumbTrail(dirs, leaf) {
-  let prefix = '', out = '<a href="#/" title="ルートの索引">/</a>';
+  let prefix = '', out = '<a href="#/" title="ルートの索引を開きます">/</a>';
   for (const d of dirs) {
     prefix += d + '/';
     out += `<a href="${dirHash(prefix)}">${esc(d)}/</a>`;

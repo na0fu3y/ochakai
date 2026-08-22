@@ -5,7 +5,7 @@ Status: Accepted(2026-08-09)。[0003](0003-gcp-only.md) の「Google Cloud
 secret-zero([0065](0065-identity-and-provenance.md))も、認可を持たない
 ことも、埋め込みが Vertex AI であることも動かさない。
 **§4 の「email が無い / verified が false」は
-[0116](0116-a-person-recorded-as-a-process-says-so.md) が改訂した** —
+[0117](0117-a-person-recorded-as-a-process-says-so.md) が改訂した** —
 記録の仕方は同じで、黙って行わなくなった
 Date: 2026-08-09
 

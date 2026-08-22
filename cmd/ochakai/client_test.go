@@ -1512,3 +1512,40 @@ func TestUnknownCommandSaysWhatIsWrong(t *testing.T) {
 		}
 	}
 }
+
+// TestGetDownloadRefusesAnEscapingName pins the one place a client writes
+// files where the server chose the names. A server holds every file name
+// to a single path segment, so this can only fire for an answer that did
+// not come from an ochakai — which is exactly when believing it would put
+// bytes outside the directory the caller named.
+func TestGetDownloadRefusesAnEscapingName(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(domain.View{
+			ID: "metrics/revenue", Document: "---\ntype: Metric\n---\n\nbody\n",
+			Files: []domain.File{{
+				Name: "../escaped.txt", Path: "metrics/note.txt",
+				MediaType: "text/plain", Size: 3,
+			}},
+		})
+	})
+	mux.HandleFunc("GET /api/v1/bundle/metrics/note.txt", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("pwn"))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	dir := t.TempDir()
+	into := filepath.Join(dir, "files")
+	err := cmdGet(context.Background(), []string{"metrics/revenue", "--download", into, "--url", srv.URL})
+	if err == nil {
+		t.Fatal("cmdGet saved a file the server named ../escaped.txt, want a refusal")
+	}
+	if !strings.Contains(err.Error(), "one path segment") {
+		t.Errorf("error does not say what is wrong: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "escaped.txt")); !os.IsNotExist(err) {
+		t.Errorf("escaped.txt was written outside the download directory")
+	}
+}

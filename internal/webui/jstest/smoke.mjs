@@ -332,6 +332,31 @@ try {
   await check('the current tab says so to a reader who cannot see it',
     await waitFor(`!!document.querySelector('#topnav a[data-route="review"][aria-current="page"]')`), shown);
 
+  // The window and the scope are the stats call's own two parameters, so
+  // these two checks are the round trip: the page asks, the server
+  // answers about that period and that path, and the band redraws. A
+  // control that changed nothing on screen would pass every check above
+  // this one.
+  await waitFor(`!!document.querySelector('#loop-days')`);
+  await evalJS(`(() => { const d = document.querySelector('#loop-days'); if (!d) return;
+    d.value = '7'; d.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  // The band names the window the server answered about (window_days),
+  // not the one the control asked for — a page that drew its own request
+  // back would say 7 whatever came back.
+  await check('the flow numbers can be asked about another period',
+    await waitFor(`${textOf('#loop-stats')}.includes('直近 7 日に起きたこと')`), shown);
+
+  // examples/demo keeps its metrics under metrics/, and a scope the base
+  // does not have would draw the same note over nothing at all.
+  await evalJS(`(() => { const p = document.querySelector('#loop-prefix'); if (!p) return;
+    p.value = 'metrics'; p.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  // Scoped, the misses beside the other numbers are still the whole
+  // instance's and cannot be anything else (design doc 0069 §5.1) — so
+  // the reading says which of its numbers did not narrow.
+  await check('a scoped reading says what it could not scope',
+    await waitFor(`(() => { const t = ${textOf('#loop-stats')};
+      return t.includes('該当なしの検索だけは絞れません') && t.includes('/metrics'); })()`), shown);
+
   // The access policy (design doc 0109 §5). The tab is absent until the
   // server answers for it, so this is also the check that the probe ran
   // at all: CI's deployment has no policy and names no administrators,

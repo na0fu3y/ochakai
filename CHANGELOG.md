@@ -21,7 +21,72 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The loop's numbers on the review page can be asked about a period
+  and a path.** `GET /api/v1/stats` has taken `days` and `prefix` all
+  along (design doc 0069 §5); the page asked for neither, so the only
+  reading a browser offered was the last 30 days over the whole base —
+  a team sharing a deployment could not see its own month, and nobody
+  could look back over a quarter without the CLI. Two controls sit above
+  the numbers now, and the numbers are drawn as two bands: what the base
+  *is*, and what happened *inside the window* — the split design doc
+  0069 §5 already made field by field, which is what makes it visible
+  that the period moves the second band and not the first. Two flow
+  numbers the wire carried and the page did not draw join them: concepts
+  created, and outcomes reported worked and failed. **Scoped, the
+  unanswered searches beside them are still the whole instance's** and
+  cannot be otherwise — a search that found nothing found it nowhere, so
+  there is no id to scope it by (0069 §5.1) — and the reading says so
+  rather than letting that number pass as the team's. Nothing is added
+  to the wire: no endpoint, no parameter, no word. The review trend
+  stays the one shape with no axes that design doc 0095 §3 gave it, and
+  the queue depths a curator works from are untouched.
+
 ### Changed
+
+- **The web UI's Japanese is rewritten to one register.** The page was
+  translated in a single pass and had been reading like two: prose in
+  ですます, tooltips and menu items in 常体, and at least one tooltip in
+  both at once. Register now follows the element — prose and toasts
+  polite, buttons and tile labels 体言止め, a tooltip one polite sentence
+  under 40 characters — and the labels that were relative clauses are
+  nouns: a stat tile says 「結果報告 / 利用」 rather than 「使われた
+  concept のうち結果が返ってきたもの」, and the queue is 「誤りの報告」
+  rather than 「間違いと報告された」. **`concept` no longer reaches the
+  reader**: the page says 「ナレッジ」 for one, 「ナレッジベース」 for all
+  of them, and 「ドキュメント」 for the stored OKF text, while `concept`
+  stays where a reader actually meets it — ids, `put_concept`, and
+  `api/openapi.yaml`. Untranslated metaphors are gone (a feed called
+  itself 「カナリア」 twice), and **the dev banner had been saying the
+  wrong thing**: 「認証が切れています」 describes a session that expired
+  and can be renewed, where `OCHAKAI_MODE=dev` means authentication is
+  off entirely. It says 「認証が無効になっています」 now.
+- **The stray spaces inside the Japanese are gone.** A source line break
+  between two Japanese characters renders as a space, and the page held
+  61 of them — three in the first paragraph of the home page, reading as
+  「ナレッジの id が そのままパスになる」. Nothing had looked, because
+  the defect only exists once a browser lays the text out. Japanese
+  paragraphs are one source line now, the provenance line stopped
+  wrapping particles around an interpolated date (「2026年8月1日 に
+  👤tanaka が作成」 → 「作成 2026年8月1日 👤tanaka」), and the check
+  holds the rule.
+- **A failure message names its operation.** 「失敗しました: 」 was one
+  sentence shared by verifying, rejecting, withdrawing a ruling,
+  changing status, deleting, and detaching a file; each says which it
+  was, because a curator reading the first cannot tell what to retry.
+- **The rules are written down, and checked.** CONTRIBUTING.md's *The
+  web UI's Japanese* carries the register table and the terms that stay
+  English, and `internal/webui/jstest/copy.test.js` reads that same list
+  back. It pulls the copy out of `static/` — string literals only,
+  including the ones inside a template's `${...}`, which is where the
+  half-translated tooltips were hiding — and fails on English left in a
+  reader's sentence, on a plural branch (`n === 1 ? 'draft' : 'drafts'`
+  cannot survive translation into a language with no plural, so it marks
+  copy nobody touched), and on a half-width `?` after kana. Nothing in
+  this repository had ever read the page's copy: the previous
+  translation shipped 40-50 English strings behind a changelog line
+  saying every one of them was done.
 
 - **A deployment that verifies tokens itself says when it is recording a
   person as a process.** `OCHAKAI_OIDC_ISSUER` deployments record a
@@ -36,7 +101,7 @@ last entry.
   the issuer and the subject, the first time it happens in a process —
   once, because a machine-only deployment is correct and an alarm on
   every request is one nobody reads
-  ([0116](docs/design/0116-a-person-recorded-as-a-process-says-so.md)).
+  ([0117](docs/design/0117-a-person-recorded-as-a-process-says-so.md)).
   Nothing else moves: the recorded name, the trust tier and every
   response are unchanged, and the Cloud Run path already refused such a
   token outright. If the warning appears and your callers are people,
@@ -44,6 +109,27 @@ last entry.
 
 ### Fixed
 
+- **`put_concept` no longer says a ruling exists outside the caller's
+  scope.** On a deployment with an access policy (design doc 0109), the
+  two guards MCP's `put_concept` runs before it writes — the ones that
+  refuse to replace or revive knowledge a human has ruled on — read the
+  ledger without the scope check the write itself has. Against an id
+  outside the caller's grant they answered "cannot replace `<id>`: it is
+  rejected" instead of the 404 that hides the address, so an agent could
+  learn that a concept exists there, or existed, and that somebody
+  verified, rejected or deprecated it. The concept's content was never
+  reachable and no write ever landed; what leaked was the address and
+  the ruling. Both are scoped now, and §6's exhaustiveness walk covers
+  them, which is why they were the two it did not. A deployment with no
+  access rules — every deployment before 0109 and every one that has not
+  written a policy since — was never affected.
+- **`ochakai get --download` checks the filenames it is handed.** A
+  server names the files it hands back, and the client wrote them under
+  the download directory without asking whether the name was one path
+  segment. Any ochakai holds every filename to that rule on the way in,
+  so this could only fire for an answer that did not come from one — but
+  believing such an answer would have put bytes wherever the name
+  pointed. The name is checked now and a refusal names it.
 - **Halfwidth katakana and fullwidth latin are found by a question
   spelled normally, and the reverse.** They are what a system upstream
   of the reader writes — a warehouse export from something fixed-width,

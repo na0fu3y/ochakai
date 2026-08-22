@@ -28,8 +28,8 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 領域 | いま読むドキュメント |
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
-| Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない) |
-| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0116](0116-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった) |
+| Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ) |
+| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった) |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
@@ -46,7 +46,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**export が却下の理由まで運ぶことは [0104](0104-a-ruling-travels-with-its-reason.md)**(読み戻さないのは同じ) |
 | 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
-| やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**MCP OAuth コネクタの再実装の出発点は [0115](0115-the-connector-price-changed-not-its-condition.md) が差し替えた** — 戻す条件は 0070 §5 のままで、その日に開くのが 0010 の認可サーバ(863 行)ではなく、測定済みの二つの答え(180 行)になった |
+| やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**MCP OAuth コネクタの再実装の出発点は [0116](0116-the-connector-price-changed-not-its-condition.md) が差し替えた** — 戻す条件は 0070 §5 のままで、その日に開くのが 0010 の認可サーバ(863 行)ではなく、測定済みの二つの答え(180 行)になった |
 | REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
 
@@ -107,6 +107,20 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   組み合わせは起動時に断る。ENV 11 → 13。契約は遡及宣言を一つ得る —
   両経路が元から送っていた 401 を全操作に宣言し、info の散文を二経路の
   現在形に書き直す。
+- [0115 二つ目の足場は、検索を待つ](0115-the-second-footing-waits-for-search.md)
+  — **Accepted**。0003 の「それ以外の実行環境をサポートしない」を一行も
+  緩めないまま、**それを撤回してよい条件**を与える。0086 の後に Google
+  Cloud に縛られているのは三つ — データベースの資格情報、埋め込み、
+  ファイルのバイト列 — で、**同じ重さではない**。資格情報とファイルは
+  何が失われるかを言えば運用者の選択になるが、埋め込みは返せない:
+  C8 が乗っているのが検索であり、外では 0114 §2 の言う「退化していない」
+  デプロイ、つまり**別の製品**になる。**支える価値の無い足場を「支える」
+  と宣言するのは、嘘を一つ増やすことである**(§3)。条件は測れる三つ —
+  設定を足さずに有効、secret を増やさない、データ所在地を運用者が選べる —
+  で、機構は選ばない。この記録は改訂そのものではなく、条件が満たされた
+  日に別の番号が 0003 を改訂する(§4)。却下: 外部 API キーの埋め込み、
+  条件より先に二つ目のストレージエンジンを足すこと、「マルチクラウド
+  対応」という言葉、そして条件を書かずに黙っていること。
 - [0003 Google Cloud 前提化](0003-gcp-only.md) — **Accepted**。
   Cloud Run + Cloud SQL IAM を前提にし、トークン・パスワードを持たない
   (secret-zero)。
@@ -184,7 +198,7 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   **Superseded by 0066**。
 - [0060 姿勢は一語で言う](0060-one-word-for-the-posture.md) —
   **Superseded by 0066**。
-- [0116 人が process として記録されるとき、そう言う](0116-a-person-recorded-as-a-process-says-so.md)
+- [0117 人が process として記録されるとき、そう言う](0117-a-person-recorded-as-a-process-says-so.md)
   — **Accepted**。[0086](0086-a-second-way-to-say-who-is-calling.md) §4 の
   「email が無ければ `sub` を process として記録する」を改訂する —
   **記録の仕方は一字も変えず、黙って行わなくなる**。三つ目の枝は「機械の
@@ -898,7 +912,7 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 
 ## MCP OAuth コネクタ(撤去済み)
 
-- [0115 コネクタの値段は変わり、その条件は変わらない](0115-the-connector-price-changed-not-its-condition.md)
+- [0116 コネクタの値段は変わり、その条件は変わらない](0116-the-connector-price-changed-not-its-condition.md)
   — **Accepted**。[0070](0070-what-was-retired-and-why.md) §5 の「戻すときは
   revert が出発点になる」を改訂する。0012 が撤去した三週間後に
   [0086](0086-a-second-way-to-say-who-is-calling.md) が着地しており、
@@ -917,6 +931,6 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   0070 §5 のまま。
 - [0010 MCP OAuth コネクタサービス](0010-mcp-oauth-connector.md) —
   **Superseded by 0012**。claude.ai / ChatGPT リモートコネクタ向けの
-  公開第二サービス。**再実装時の出発点はここではなくなった**(0115)。
+  公開第二サービス。**再実装時の出発点はここではなくなった**(0116)。
 - [0012 MCP OAuth コネクタサービスの撤去](0012-retire-mcp-oauth-connector.md) — **Superseded by 0070**。
 - [0039 stdio クライアントへの橋](0039-mcp-stdio-bridge.md) — **Superseded by 0067**。

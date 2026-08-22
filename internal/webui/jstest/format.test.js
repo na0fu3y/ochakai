@@ -30,7 +30,7 @@ test('a concept without a title is named by its last segment', () => {
 });
 
 test('a breadcrumb links every directory and escapes every name', () => {
-  assert.equal(crumbTrail([]), '<a href="#/" title="ルートの索引">/</a>');
+  assert.equal(crumbTrail([]), '<a href="#/" title="ルートの索引を開きます">/</a>');
   assert.match(crumbTrail(['a', 'b']), /<a href="#\/dir\/a">a\/<\/a><a href="#\/dir\/a\/b">b\/<\/a>/);
   // The leaf is the current page's own name, as text.
   assert.match(crumbTrail(['a'], '<x>'), /&lt;x&gt;$/);

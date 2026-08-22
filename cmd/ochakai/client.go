@@ -882,6 +882,16 @@ func cmdGet(ctx context.Context, args []string) error {
 			return err
 		}
 		for _, att := range k.Files {
+			// The name decides where the bytes land, and it arrives from
+			// the server — so it is checked here rather than trusted,
+			// exactly as extractTarGz checks the paths in an archive. A
+			// server holds every name to one segment (domain.ValidFileName)
+			// on the way in, so this can only fire for an answer that did
+			// not come from an ochakai; the cost of believing one would be
+			// a write outside the directory the caller named.
+			if !domain.ValidFileName(att.Name) {
+				return fmt.Errorf("refusing to save %q: the server named a file that is not one path segment", att.Name)
+			}
 			data, _, err := c.File(ctx, att.Path)
 			if err != nil {
 				return fmt.Errorf("file %s: %w", att.Name, err)
