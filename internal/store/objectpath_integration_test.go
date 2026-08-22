@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -167,12 +168,7 @@ func TestIntegrationLogCarriesFiles(t *testing.T) {
 }
 
 func containsPath(paths []string, want string) bool {
-	for _, p := range paths {
-		if p == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(paths, want)
 }
 
 // A file's history follows the file when its namespace moves. Left

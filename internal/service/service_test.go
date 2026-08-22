@@ -705,9 +705,8 @@ func TestCheckedFilterRejectsImpossiblePaths(t *testing.T) {
 // spelling that would be a coin toss is refused instead.
 func TestCheckedFilterRefusesFrontmatterKeysWithAFilter(t *testing.T) {
 	for _, key := range []string{"type", "status", "tags", "sources", "stale_after"} {
-		var invalid *InvalidInputError
 		_, err := checkedFilter(store.Filter{Frontmatter: map[string]string{key: "x"}})
-		if !errors.As(err, &invalid) {
+		if _, ok := errors.AsType[*InvalidInputError](err); !ok {
 			t.Errorf("fm.%s error = %v, want an InvalidInputError", key, err)
 			continue
 		}
@@ -741,9 +740,8 @@ func TestCheckedFilterRefusesKeysOKFDoesNotDefine(t *testing.T) {
 	// of them is an OKF key, so all three land here rather than being
 	// second-guessed into the filter beside them.
 	for _, key := range []string{"owner", "question", "tag", "source", "Status", "attrs"} {
-		var invalid *InvalidInputError
 		_, err := checkedFilter(store.Filter{Frontmatter: map[string]string{key: "x"}})
-		if !errors.As(err, &invalid) {
+		if _, ok := errors.AsType[*InvalidInputError](err); !ok {
 			t.Errorf("fm.%s error = %v, want an InvalidInputError", key, err)
 			continue
 		}

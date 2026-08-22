@@ -234,7 +234,7 @@ func pastExpiry(prefix string) string {
 // want the document itself.
 func withoutFrontmatter(cols string) string {
 	var kept []string
-	for _, c := range strings.Split(cols, ",") {
+	for c := range strings.SplitSeq(cols, ",") {
 		if t := strings.TrimSpace(c); !strings.HasSuffix(t, "frontmatter") {
 			kept = append(kept, t)
 		}
@@ -244,7 +244,7 @@ func withoutFrontmatter(cols string) string {
 
 func withoutDoc(cols string) string {
 	var kept []string
-	for _, c := range strings.Split(cols, ",") {
+	for c := range strings.SplitSeq(cols, ",") {
 		t := strings.TrimSpace(c)
 		if t == "doc" || t == "k.doc" || t == "object.doc" {
 			continue

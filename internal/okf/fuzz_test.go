@@ -113,7 +113,7 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 			Title: title, Description: desc,
 			Status: domain.Status(status), StaleAfter: staleAfter, Body: body,
 		}
-		for _, tag := range strings.Split(tags, ",") {
+		for tag := range strings.SplitSeq(tags, ",") {
 			if tag != "" {
 				k.Tags = append(k.Tags, tag)
 			}

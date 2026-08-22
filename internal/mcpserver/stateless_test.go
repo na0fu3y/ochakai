@@ -56,7 +56,7 @@ func rpc(t *testing.T, url, method, body string) (http.Header, map[string]any) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range strings.Split(string(raw), "\n") {
+	for line := range strings.SplitSeq(string(raw), "\n") {
 		line = strings.TrimPrefix(strings.TrimSpace(line), "data: ")
 		if line == "" {
 			continue

@@ -150,15 +150,15 @@ func helpSections(t *testing.T, help string) (preamble string, names []string, b
 
 	const examplesSep = "\n\nExamples:\n"
 	rest := help[fi+len(flagsHeading):]
-	ei := strings.Index(rest, examplesSep)
-	if ei < 0 {
+	before, after, ok := strings.Cut(rest, examplesSep)
+	if !ok {
 		t.Fatalf("help has no %q section:\n%s", examplesSep, help)
 	}
-	examples = "Examples:\n" + rest[ei+len(examplesSep):]
+	examples = "Examples:\n" + after
 
-	lines := strings.Split(rest[:ei], "\n")
+	lines := strings.Split(before, "\n")
 	if len(lines)%2 != 0 {
-		t.Fatalf("flag help has an odd number of lines — a usage string must have wrapped:\n%s", rest[:ei])
+		t.Fatalf("flag help has an odd number of lines — a usage string must have wrapped:\n%s", before)
 	}
 	blocks = make(map[string]string, len(lines)/2)
 	for i := 0; i < len(lines); i += 2 {

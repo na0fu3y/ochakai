@@ -8,6 +8,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 
@@ -353,12 +354,7 @@ func fragmentWindows(frag string) int {
 // first-character rule contentWindows uses would drop ヶ月 and お盆
 // for where the content sits rather than for whether it is there.
 func holdsContent(runes []rune) bool {
-	for _, r := range runes {
-		if contentChar(r) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(runes, contentChar)
 }
 
 // QueryTerms extracts the terms of a query — the names a compound
@@ -814,10 +810,7 @@ func efSearch(limit int) int {
 		defaultEF = 40   // pgvector's own default
 		maxEF     = 1000 // pgvector's ceiling
 	)
-	ef := 4 * limit
-	if ef < defaultEF {
-		ef = defaultEF
-	}
+	ef := max(4*limit, defaultEF)
 	if ef > maxEF {
 		ef = maxEF
 	}

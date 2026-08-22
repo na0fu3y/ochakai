@@ -425,12 +425,7 @@ func ValidListSort(s string) bool { return slices.Contains(ListSorts, s) }
 var Outcomes = []string{EventWorked, EventFailed}
 
 func ValidOutcome(o string) bool {
-	for _, v := range Outcomes {
-		if o == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(Outcomes, o)
 }
 
 // Rulings are the values POST /api/v1/review/{id} accepts in its body
@@ -1211,7 +1206,7 @@ func ValidIDPrefix(prefix string) bool {
 	if len(prefix) > 512 {
 		return false
 	}
-	for _, s := range strings.Split(prefix, "/") {
+	for s := range strings.SplitSeq(prefix, "/") {
 		if !validSegment(s) {
 			return false
 		}

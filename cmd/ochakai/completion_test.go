@@ -49,7 +49,7 @@ func TestCompletionScriptsStayInSync(t *testing.T) {
 			}
 		}
 		for _, values := range enums {
-			for _, v := range strings.Fields(values) {
+			for v := range strings.FieldsSeq(values) {
 				if !strings.Contains(script, v) {
 					t.Errorf("%s script misses enum value %q", shell, v)
 				}
@@ -134,7 +134,7 @@ func caseArms(script string) map[string]string {
 		if end := strings.Index(body, ";;"); end >= 0 {
 			body = body[:end]
 		}
-		for _, name := range strings.Split(script[loc[2]:loc[3]], "|") {
+		for name := range strings.SplitSeq(script[loc[2]:loc[3]], "|") {
 			arms[name] += body
 		}
 	}
@@ -161,12 +161,12 @@ func fishFlags(script string) map[string]map[string]bool {
 	cond := regexp.MustCompile(`__fish_seen_subcommand_from ([a-z -]+)'`)
 	long := regexp.MustCompile(`-l ([a-z-]+)`)
 	flags := map[string]map[string]bool{}
-	for _, line := range strings.Split(script, "\n") {
+	for line := range strings.SplitSeq(script, "\n") {
 		c, l := cond.FindStringSubmatch(line), long.FindStringSubmatch(line)
 		if c == nil || l == nil {
 			continue
 		}
-		for _, cmd := range strings.Fields(c[1]) {
+		for cmd := range strings.FieldsSeq(c[1]) {
 			if flags[cmd] == nil {
 				flags[cmd] = map[string]bool{}
 			}

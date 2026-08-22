@@ -193,7 +193,7 @@ func cleanPath(p string) string {
 // tar interleaves. Never knowledge — skipped without a report, matching
 // how directory imports already treat dot entries.
 func hiddenPath(clean string) bool {
-	for _, seg := range strings.Split(clean, "/") {
+	for seg := range strings.SplitSeq(clean, "/") {
 		if strings.HasPrefix(seg, ".") {
 			return true
 		}

@@ -132,7 +132,7 @@ func designRecords(t *testing.T) []designRecord {
 // exactly one such line (TestDesignRecordsCarryAHeader).
 func statusHeader(content string) string {
 	var header []string
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		if len(header) == 0 {
 			if !strings.HasPrefix(line, "Status:") {
 				continue
@@ -311,7 +311,7 @@ func indexEntry(t *testing.T, index, file string) string {
 	}
 	link := regexp.MustCompile(`\]\(([^)]+)\)`)
 
-	for _, line := range strings.Split(string(content), "\n") {
+	for line := range strings.SplitSeq(string(content), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if !strings.HasPrefix(trimmed, "|") {
 			continue

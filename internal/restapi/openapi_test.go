@@ -15,6 +15,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -224,9 +225,7 @@ func checkedServer(t *testing.T, h http.Handler) *httptest.Server {
 			}
 		}
 
-		for k, vs := range rec.Header() {
-			w.Header()[k] = vs
-		}
+		maps.Copy(w.Header(), rec.Header())
 		w.WriteHeader(rec.Code)
 		_, _ = w.Write(rec.Body.Bytes())
 	}))

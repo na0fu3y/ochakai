@@ -385,7 +385,7 @@ func wireDiff(want, got string) string {
 
 func fingerprintLines(content string) []string {
 	var out []string
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		if line != "" && !strings.HasPrefix(line, "#") {
 			out = append(out, line)
 		}

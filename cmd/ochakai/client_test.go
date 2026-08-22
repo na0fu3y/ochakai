@@ -145,7 +145,7 @@ func TestUsageNamesEveryCommand(t *testing.T) {
 	usage(&b)
 
 	documented := map[string]bool{}
-	for _, line := range strings.Split(b.String(), "\n") {
+	for line := range strings.SplitSeq(b.String(), "\n") {
 		// Command lines are indented two spaces; a description
 		// continued on the next line is indented to its column.
 		if !strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "   ") {

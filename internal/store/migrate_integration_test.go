@@ -404,9 +404,7 @@ func TestMigrateConcurrent(t *testing.T) {
 	var wg sync.WaitGroup
 	errs := make([]error, racers)
 	for i := range racers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			s, err := New(ctx, scopedURL, false)
 			if err != nil {
 				errs[i] = fmt.Errorf("dial: %w", err)
@@ -414,7 +412,7 @@ func TestMigrateConcurrent(t *testing.T) {
 			}
 			defer s.Close()
 			errs[i] = s.Migrate(ctx, 0)
-		}()
+		})
 	}
 	wg.Wait()
 	for i, err := range errs {

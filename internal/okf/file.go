@@ -169,8 +169,8 @@ func resolveTarget(docDir, target string) (string, bool) {
 		return "", false
 	}
 	var p string
-	if strings.HasPrefix(target, "/") {
-		p = path.Clean(strings.TrimPrefix(target, "/"))
+	if after, ok := strings.CutPrefix(target, "/"); ok {
+		p = path.Clean(after)
 	} else {
 		p = path.Clean(path.Join(docDir, target))
 	}

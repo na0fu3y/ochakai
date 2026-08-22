@@ -691,9 +691,9 @@ func cmdStats(ctx context.Context, args []string) error {
 	// act on is a statistic, and these three exist to be emptied (design
 	// doc 0049) — so the next step is the text on the line. The key and
 	// the count stay in the first two fields, so the format still cuts.
-	scope := ""
+	var scope strings.Builder
 	for _, p := range prefixes {
-		scope += " --prefix " + p
+		scope.WriteString(" --prefix " + p)
 	}
 	for _, q := range []struct {
 		name  string
@@ -704,7 +704,7 @@ func cmdStats(ctx context.Context, args []string) error {
 		{"failed", st.Queues.Failed, "failed"},
 		{"stale_after", st.Queues.StaleAfter, "stale_after"},
 	} {
-		fmt.Printf("%s\t%d\tochakai list %s%s\n", q.name, q.count, q.lists, scope)
+		fmt.Printf("%s\t%d\tochakai list %s%s\n", q.name, q.count, q.lists, scope.String())
 	}
 	fmt.Printf("window_days\t%d\ncreated\t%d\nverifications\t%d\nworked\t%d\nfailed\t%d\n",
 		st.WindowDays, st.Concepts.Created, st.Review.Verifications,
