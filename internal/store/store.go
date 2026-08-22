@@ -79,6 +79,11 @@ type Store struct {
 	blobs blob.Store
 	// lastEventPrune throttles knowledge_event pruning (unix seconds).
 	lastEventPrune atomic.Int64
+	// iterativeScan says whether the installed pgvector can be asked to
+	// keep walking the HNSW graph when a filter has discarded most of
+	// what it found (pgvector 0.8.0). Settled once, during migration,
+	// because it is a property of the installation; see hasIterativeScan.
+	iterativeScan bool
 	// log carries what only the store can see. The background flush loop
 	// has no caller to return an error to, so without this a database
 	// that rejects writes loses usage in silence.

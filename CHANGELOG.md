@@ -23,6 +23,24 @@ last entry.
 
 ### Changed
 
+- **A filtered semantic search no longer answers short.** pgvector's
+  HNSW scan runs before the `WHERE` clause, so a search for ten concepts
+  narrowed by type, tag or path got only whatever survived of its
+  `ef_search` candidates — measured on a 3,000-row fixture whose filter
+  matched one row in a hundred, four of the ten asked for, with nothing
+  in the response saying the other six were never looked for. Sizing
+  `ef_search` to the limit, which is what ochakai did, is a guess at how
+  much a filter will discard and is wrong for some filter by
+  construction. Searches now ask for an iterative scan
+  (`hnsw.iterative_scan`, pgvector 0.8.0), which goes back for more until
+  it has the limit or runs out of graph; the fixture returns all ten.
+  `strict_order` rather than the faster `relaxed_order`, because a hit's
+  position is what the fusion ranks on. **Nothing to configure**: the
+  store reads the installed pgvector's version once while migrating, and
+  a server older than 0.8.0 keeps exactly today's behaviour, so this adds
+  no requirement to run ochakai (Cloud SQL ships 0.8.1). Deployments
+  small enough that PostgreSQL prefers a sequential scan were never
+  affected — there the answer was always exact.
 - **Log lines carry `severity` and `message`, the two names Cloud
   Logging reads.** Everything ochakai logs is JSON through `slog`, whose
   own keys are `level` and `msg` — ordinary fields as far as the platform

@@ -624,5 +624,44 @@ func (s *Store) migrateVectorIndexes(ctx context.Context, dim int) error {
 			return fmt.Errorf("create vector index: %w", err)
 		}
 	}
+	s.iterativeScan = s.hasIterativeScan(ctx)
 	return nil
+}
+
+// hasIterativeScan reports whether the installed pgvector can carry on
+// past its first ef_search candidates when a filter has thrown most of
+// them away (`hnsw.iterative_scan`, pgvector 0.8.0).
+//
+// Read from the extension's version rather than by asking for the
+// setting: pgvector's GUCs only exist once its shared library has been
+// loaded into the session, so `current_setting` on a connection that has
+// not yet touched a vector answers "no such setting" for a server that
+// has it — and a pooled connection is a different one each time. The
+// version is a property of the installation and answers the same on any
+// connection.
+//
+// A server too old to have it keeps exactly today's behaviour: this
+// costs nothing and adds no requirement to run ochakai (Cloud SQL ships
+// 0.8.1, the image the tests and compose use 0.8.5).
+func (s *Store) hasIterativeScan(ctx context.Context) bool {
+	var version string
+	if err := s.pool.QueryRow(ctx,
+		`SELECT extversion FROM pg_extension WHERE extname = 'vector'`).Scan(&version); err != nil {
+		return false
+	}
+	return pgvectorHasIterativeScan(version)
+}
+
+// pgvectorHasIterativeScan reads an extension version the way pg_extension
+// spells it. A version it cannot read is treated as too old: the cost of
+// being wrong that way is today's behaviour, and the other way is every
+// vector search failing on a setting the server does not have.
+func pgvectorHasIterativeScan(version string) bool {
+	var major, minor int
+	// Trailing text after the minor is fine: what matters is the pair,
+	// and Sscanf stops where the format runs out.
+	if _, err := fmt.Sscanf(version, "%d.%d", &major, &minor); err != nil {
+		return false
+	}
+	return major > 0 || minor >= 8
 }
