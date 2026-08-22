@@ -5,7 +5,7 @@
 - **[bigquery-catalog/](bigquery-catalog)** — 空のベースを BigQuery から
   埋める二つのジョブ。一つはテーブルのメタデータを毎日投影するもの、もう
   一つはジョブ履歴から golden query の draft を起こすものである(何が既に
-  訊かれているかは、倉庫が自分で記録している)。どちらも Attested
+  訊かれているかは、ウェアハウス側に記録が残っている)。どちらも Attested
   Computation として、その Python を隣に置いて出荷している。コネクタに
   よる取り込みをサーバーの外に留めると、こういう形になる。
 - **[claude-code/](claude-code)** — 想起と書き戻しのループを、Claude Code
@@ -54,8 +54,8 @@ OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
 **書かれているのは日本語である。** ochak.ai のデモは日本語でやると決めた
 からで、[demo.ochak.ai](https://demo.ochak.ai) が見せているのもこのバンドル
 である。日本語なのは人が読む側、つまり題・説明・本文・`question`・呼び名
-(`売上` / `受注額` / `GMV` の区別)と注文状態の和名までで、倉庫から来る
-名前(`sale_price`、`status = 'Complete'`、`traffic_source` の値、
+(`売上` / `受注額` / `GMV` の区別)と注文状態の和名までで、ウェアハウス
+から来る名前(`sale_price`、`status = 'Complete'`、`traffic_source` の値、
 `# Computation` フェンスの SQL)は英語のままである。列は英語で、判断は
 日本語で下る。日本語話者のチームのナレッジベースは実際にこうなるので、
 デモもそうしてある。上の `ochakai search "なぜ売上が落ちているのか"` が

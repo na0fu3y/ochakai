@@ -647,7 +647,7 @@ principal は台帳と同じ綴り(`human:` / `process:`、`*` は全認証済�
 
 **最初の一行が、全員に対して同時に境界を入れる。** 段階的に効かせる
 仕組みは無いので、置いたら別の identity で `ochakai get` と
-`ochakai search` を撃って読み返すこと。全部戻すのは空のポリシーである:
+`ochakai search` を実行して読み返すこと。全部戻すのは空のポリシーである:
 
 ```sh
 echo '{"rules": []}' | ochakai access -f -

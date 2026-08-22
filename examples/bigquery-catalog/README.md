@@ -19,7 +19,7 @@ BigQuery のテーブルメタデータを `BigQuery Table` concept として、
 
 ここにあるのは**毎日走る同期**である(receipt、attester、差分)。
 最初の一回だけ、空のベースにテーブルを入れて眺めたいなら、Python も
-receipt も要らない — 自分で撃ったクエリの答えを `ochakai seed` に渡すと、
+receipt も要らない — 自分で実行したクエリの答えを `ochakai seed` に渡すと、
 draft の OKF バンドルになって出てくる([0085](../../docs/design/0085-the-empty-base-and-what-fills-it.md)):
 
 ```sh
@@ -34,7 +34,7 @@ bq query --max_rows=100000 --format=json --nouse_legacy_sql \
 黙って一部のテーブルだけが入る。`seed` の「seeded N tables」を自分の
 テーブル数と突き合わせること。
 
-`seed` もウェアハウスには接続しない — 撃つのはあなたの `bq` であり、
+`seed` もウェアハウスには接続しない — 実行するのはあなたの `bq` であり、
 ochakai が受け取るのはその出力だけである。出てくる draft の中身を
 書き始めて、同期を毎日回したくなったときに読むのが以下である。
 
@@ -63,7 +63,7 @@ tar czf - -C examples/bigquery-catalog/bundle --exclude='*.py' . |
 |---|---|---|
 | [`skills/build-the-first-catalog`](bundle/skills/build-the-first-catalog.md) | Skill | **ここから** — day-one の順序: 小さく範囲を決め、住所を確定し、テーブルを投影し、一つ verify し、それからやっと computation を付ける |
 | [`jobs/sync-bigquery-catalog`](bundle/jobs/sync-bigquery-catalog.md) | Attested Computation | `runtime: python`、パラメータ、receipt、そして投影が下すすべての判断 |
-| [`jobs/draft-from-query-history`](bundle/jobs/draft-from-query-history.md) | Attested Computation | **コールドスタートのもう半分** — 何度も撃たれているクエリを golden query の draft として書き戻す |
+| [`jobs/draft-from-query-history`](bundle/jobs/draft-from-query-history.md) | Attested Computation | **コールドスタートのもう半分** — 何度も実行されているクエリを golden query の draft として書き戻す |
 | [`skills/run-a-python-job`](bundle/skills/run-a-python-job.md) | Skill | `executor` が指しているもの: どの identity で走らせるか、IAM ロール、receipt のフィールド |
 
 concept と一緒に 2 つのファイルが旅をする。
@@ -104,9 +104,9 @@ verify すること — それはちょうど、IAM ロールを実際に付与�
 ## 何が既に訊かれているか: `draft-from-query-history`
 
 テーブルが入っただけのベースは、**カラム名は答えるが、誰も何を訊いて
-いるかは知らない**。倉庫は自分でそれを記録している — ジョブ履歴である。
+いるかは知らない**。ウェアハウスの側にその記録がある — ジョブ履歴である。
 
-`seed` と同じ形で受け取る。あなたが自分の identity でクエリを撃ち、
+`seed` と同じ形で受け取る。あなたが自分の identity でクエリを実行し、
 答えをパイプで渡す:
 
 ```sh
@@ -124,15 +124,15 @@ bq query --max_rows=100000 --format=json --nouse_legacy_sql \
 `jobs_read` の数を見ること。
 
 リテラルとコメントと空白だけが違う実行は**一つにまとまり**、5 回以上
-撃たれたものが draft として着地する。**LLM は入っていない** — 「この
+実行されたものが draft として着地する。**LLM は入っていない** — 「この
 クエリは何の問いに答えるのか」だけは書けないので、各 draft は空の見出し
 を持って出てくる。そこを埋めるのはあなたか、**あなたの**エージェントで
 ある。サーバーは決定論のままである。
 
 これで初日の一続きが揃う: `seed` でテーブル、この二つ目で問い、そして
 [レビューキュー](../../docs/loop.md)で人が裁定する。全部 draft で着地
-するのは、**何度も撃たれていることは「大事だ」の証拠であって「正しい」
-の証拠ではない**からである。
+するのは、**何度も実行されていることは「大事だ」の証拠であって
+「正しい」の証拠ではない**からである。
 
 ## 何にも触らずに試す
 
