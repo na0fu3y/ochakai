@@ -23,6 +23,21 @@ last entry.
 
 ### Changed
 
+- **Log lines carry `severity` and `message`, the two names Cloud
+  Logging reads.** Everything ochakai logs is JSON through `slog`, whose
+  own keys are `level` and `msg` — ordinary fields as far as the platform
+  is concerned, so an entry arrived with no severity of its own and every
+  line ranked equal. An operator could not ask for the warnings, and the
+  warnings are the point: semantic search silently fallen back to
+  lexical, an export truncated after the response began. `severity>=WARNING`
+  now returns exactly the table in [the operating
+  guide](docs/guides/operating.md), and its saved queries, which already
+  spelled the field `jsonPayload.message`, are true as written. `WARN`
+  is spelled `WARNING` on the way out because that is Cloud Logging's
+  word for it; nothing else about a line moves, `time` included. The
+  destination is unchanged and stays stderr — stdout is the wire for
+  `ochakai mcp-stdio` and the output of every client command, which two
+  comments and one guide paragraph had said backwards.
 - **`/mcp` is stateless, and answers at MCP protocol version
   2026-07-28** (design doc 0118). ochakai speaks MCP through the Go SDK,
   and that SDK serves the current protocol only from a stateless handler
