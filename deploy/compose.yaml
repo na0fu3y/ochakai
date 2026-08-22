@@ -7,7 +7,12 @@ services:
     build:
       context: ..
     ports:
-      - "8080:8080"
+      # Loopback, not every interface. OCHAKAI_MODE=dev below authenticates
+      # nobody and refuses nothing, so a published 8080 is an anonymous,
+      # writable knowledge base offered to whatever network the machine is
+      # on — a comment saying "local only" is not what keeps it local.
+      # http://localhost:8080 is unchanged for whoever is running it.
+      - "127.0.0.1:8080:8080"
     environment:
       OCHAKAI_DATABASE_URL: postgres://ochakai:ochakai@db:5432/ochakai?sslmode=disable
       OCHAKAI_MODE: dev # local only: all requests act as human:anonymous
