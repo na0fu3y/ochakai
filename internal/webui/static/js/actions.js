@@ -88,7 +88,7 @@ export async function moveEntry(from, to) {
     dragId = null;
     const to = prefix + from.split('/').pop();
     if (to === from) return; // dropped on its own directory
-    if (confirm(`${from} → ${to} へ移動しますか?\nこの concept を指している参照は書き換えられ、履歴も付いていきます。`)) {
+    if (confirm(`${from} → ${to} へ移動しますか？\nこのナレッジを指している参照は自動で書き換わり、履歴も付いていきます。`)) {
       moveEntry(from, to);
     }
   });

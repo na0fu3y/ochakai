@@ -21,6 +21,51 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The web UI's Japanese is rewritten to one register.** The page was
+  translated in a single pass and had been reading like two: prose in
+  ですます, tooltips and menu items in 常体, and at least one tooltip in
+  both at once. Register now follows the element — prose and toasts
+  polite, buttons and tile labels 体言止め, a tooltip one polite sentence
+  under 40 characters — and the labels that were relative clauses are
+  nouns: a stat tile says 「結果報告 / 利用」 rather than 「使われた
+  concept のうち結果が返ってきたもの」, and the queue is 「誤りの報告」
+  rather than 「間違いと報告された」. **`concept` no longer reaches the
+  reader**: the page says 「ナレッジ」 for one, 「ナレッジベース」 for all
+  of them, and 「ドキュメント」 for the stored OKF text, while `concept`
+  stays where a reader actually meets it — ids, `put_concept`, and
+  `api/openapi.yaml`. Untranslated metaphors are gone (a feed called
+  itself 「カナリア」 twice), and **the dev banner had been saying the
+  wrong thing**: 「認証が切れています」 describes a session that expired
+  and can be renewed, where `OCHAKAI_MODE=dev` means authentication is
+  off entirely. It says 「認証が無効になっています」 now.
+- **The stray spaces inside the Japanese are gone.** A source line break
+  between two Japanese characters renders as a space, and the page held
+  61 of them — three in the first paragraph of the home page, reading as
+  「ナレッジの id が そのままパスになる」. Nothing had looked, because
+  the defect only exists once a browser lays the text out. Japanese
+  paragraphs are one source line now, the provenance line stopped
+  wrapping particles around an interpolated date (「2026年8月1日 に
+  👤tanaka が作成」 → 「作成 2026年8月1日 👤tanaka」), and the check
+  holds the rule.
+- **A failure message names its operation.** 「失敗しました: 」 was one
+  sentence shared by verifying, rejecting, withdrawing a ruling,
+  changing status, deleting, and detaching a file; each says which it
+  was, because a curator reading the first cannot tell what to retry.
+- **The rules are written down, and checked.** CONTRIBUTING.md's *The
+  web UI's Japanese* carries the register table and the terms that stay
+  English, and `internal/webui/jstest/copy.test.js` reads that same list
+  back. It pulls the copy out of `static/` — string literals only,
+  including the ones inside a template's `${...}`, which is where the
+  half-translated tooltips were hiding — and fails on English left in a
+  reader's sentence, on a plural branch (`n === 1 ? 'draft' : 'drafts'`
+  cannot survive translation into a language with no plural, so it marks
+  copy nobody touched), and on a half-width `?` after kana. Nothing in
+  this repository had ever read the page's copy: the previous
+  translation shipped 40-50 English strings behind a changelog line
+  saying every one of them was done.
+
 ### Fixed
 
 - **`put_concept` no longer says a ruling exists outside the caller's

@@ -21,22 +21,22 @@ matchMedia('(min-width: 761px)').addEventListener('change', e => {
 
 export function viewExplore() {
   const typeChips = KNOWN_TYPES.map(t => `
-    <label class="chip"><input type="checkbox" data-type="${t}" aria-label="type ${t}" ${explore.types.has(t) ? 'checked' : ''}>
+    <label class="chip"><input type="checkbox" data-type="${t}" aria-label="型 ${t}" ${explore.types.has(t) ? 'checked' : ''}>
       <span class="type-ico">${icon(t)}</span>${t}</label>`).join('');
   const extraTypes = [...explore.types].filter(t => !KNOWN_TYPES.includes(t)).map(t => `
-    <label class="chip"><input type="checkbox" data-type="${esc(t)}" aria-label="type ${esc(t)}" checked>
+    <label class="chip"><input type="checkbox" data-type="${esc(t)}" aria-label="型 ${esc(t)}" checked>
       <span class="type-ico">${icon(t)}</span>${esc(t)}</label>`).join('');
   const statusChips = STATUSES.map(s => `
-    <label class="chip"><input type="checkbox" data-status="${s}" aria-label="status ${s}" ${explore.statuses.has(s) ? 'checked' : ''}>${s}</label>`).join('')
+    <label class="chip"><input type="checkbox" data-status="${s}" aria-label="ステータス ${s}" ${explore.statuses.has(s) ? 'checked' : ''}>${s}</label>`).join('')
     // Two rulings, asked independently of the lifecycle value (design doc
     // 0043 §§3.2-3.3). Rejected is the only way to see entries a human
     // turned down: they are hidden from every other listing, which is the
     // point — and being able to read them is how somebody checks what was
     // already declined.
     + `
-    <label class="chip" title="誰かが確認した concept だけ — machine-confirmed か human-reviewed(OKF SPEC §5.3)"><input type="checkbox" id="f-verified"
-      aria-label="確認済みのみ" ${explore.verified ? 'checked' : ''}>✓ confirmed</label>
-    <label class="chip" title="人がレビューして却下した concept だけ — 他の場所では隠れている"><input type="checkbox" id="f-rejected"
+    <label class="chip" title="誰かが確認したナレッジだけに絞ります(machine-confirmed / human-reviewed)"><input type="checkbox" id="f-verified"
+      aria-label="確認済みのみ" ${explore.verified ? 'checked' : ''}>✓ 確認済み</label>
+    <label class="chip" title="人が却下したナレッジだけに絞ります(他の一覧では表示されません)"><input type="checkbox" id="f-rejected"
       aria-label="却下されたもののみ" ${explore.rejected ? 'checked' : ''}>rejected</label>`;
   // Filters collapse into a disclosure on narrow screens; keep it open on
   // wide ones (the summary is hidden there, so it could never be reopened).
@@ -46,25 +46,16 @@ export function viewExplore() {
   <section>
     <div class="searchbox">
       ${explore.ageFeed
-        ? `<div class="feed-banner">検証の古さのフィード — 最後に検証してから時間が経ったものから順に並べています。
-           古びた検証済みクエリを浮かせるためのカナリアです。
-           検索に戻るには <strong>検証の古さ</strong> のチェックを外してください。</div>`
+        ? `<div class="feed-banner"><strong>検証が古い順</strong>に並べています。最後に検証してから時間が経ったナレッジが上に来るので、古くなった検証済みクエリを見つけ直すのに使います。検索に戻るには「検証が古い順」のチェックを外してください。</div>`
         : explore.failedFeed
-        ? `<div class="feed-banner">再検証のフィード — 失敗の報告(report_outcome failed)にまだ応えていない concept を、
-           報告が多いものから順に並べています。開いて中身を確かめ、検証し直すとこのフィードから外れます。
-           検索に戻るには <strong>間違いと報告された</strong> のチェックを外してください。</div>`
+        ? `<div class="feed-banner"><strong>再検証のフィード</strong>です。失敗の報告(<code>report_outcome failed</code>)にまだ応えていないナレッジを、報告の多い順に並べています。中身を確かめて検証し直すと、このフィードから外れます。検索に戻るには「誤りの報告」のチェックを外してください。</div>`
         : explore.source
-        ? `<div class="feed-banner"><code>${esc(explore.source)}</code> を引いている concept — この資料から派生したものすべてです。
-           <a href="#/search">検索に戻る</a>。</div>`
+        ? `<div class="feed-banner"><code>${esc(explore.source)}</code> を引用しているナレッジです。この資料から派生したものを、すべて表示しています。<a href="#/search">検索に戻る</a>。</div>`
         : explore.expiredFeed
-        ? `<div class="feed-banner">期限切れのフィード — 書き手が宣言した <code>stale_after</code> を過ぎた concept を、
-           超過が大きいものから順に並べています。<strong>検証してもこのキューは片付きません</strong>:
-           その日付はサーバーが測ったものではなく書き手の宣言なので、concept を確かめ直したうえで編集し、
-           新しい期限を宣言する(あるいは外す)必要があります。
-           検索に戻るには <strong>期限切れ</strong> のチェックを外してください。</div>`
-        : `<input type="text" id="q" placeholder="メトリクス・検証済みクエリ・insight・用語・テーブルを検索…"
+        ? `<div class="feed-banner"><strong>期限切れのフィード</strong>です。書き手が宣言した <code>stale_after</code> を過ぎたナレッジを、超過の大きい順に並べています。<strong>このキューは検証しても解消しません。</strong>期限はサーバーが測った値ではなく書き手の宣言なので、内容を確かめたうえでナレッジを編集し、新しい期限を宣言する(または外す)必要があります。検索に戻るには「期限切れ」のチェックを外してください。</div>`
+        : `<input type="text" id="q" placeholder="メトリクス・検証済みクエリ・知見・用語・テーブルを検索…"
                   value="${esc(explore.q)}" autocomplete="off">`}
-      <a class="btn write-only" href="#/new" title="concept を作る">＋ concept を作る</a>
+      <a class="btn write-only" href="#/new" title="ナレッジを新規作成します">＋ ナレッジを作成</a>
     </div>
     <details id="filter-details" class="filterbar" ${wide ? 'open' : ''}>
       <summary>絞り込み</summary>
@@ -76,14 +67,14 @@ export function viewExplore() {
         <span class="fb-sep"></span>
         <input type="text" id="f-tag" placeholder="タグ" aria-label="タグ" value="${esc(explore.tag)}" style="width:6rem">
         <input type="text" id="f-prefix" placeholder="パス" aria-label="パスで絞る"
-               title="このパスの下にある concept だけ(例: teams/growth)— ツリーの「ここを検索」がここを埋める"
+               title="このパスの下にあるナレッジだけに絞ります(例: teams/growth)"
                value="${esc(explore.prefix)}" style="width:8rem">
         <span class="fb-sep"></span>
-        <label class="chip" title="検証が古い順 — 検証済みクエリを再確認するためのカナリア"><input
-          type="checkbox" id="f-age" aria-label="検証の古さのフィード" ${explore.ageFeed ? 'checked' : ''}>検証の古さ</label>
-        <label class="chip" title="間違いと報告され(report_outcome failed)、その後検証されていない concept — 再検証のフィード"><input
-          type="checkbox" id="f-failed" aria-label="再検証のフィード" ${explore.failedFeed ? 'checked' : ''}>間違いと報告された</label>
-        <label class="chip" title="著者が宣言した stale_after を過ぎたもの — 検証ではなく、concept を編集すると消える"><input
+        <label class="chip" title="最後の検証が古い順に並べます"><input
+          type="checkbox" id="f-age" aria-label="検証が古い順のフィード" ${explore.ageFeed ? 'checked' : ''}>検証が古い順</label>
+        <label class="chip" title="誤りの報告に応えていないナレッジを並べます"><input
+          type="checkbox" id="f-failed" aria-label="再検証のフィード" ${explore.failedFeed ? 'checked' : ''}>誤りの報告</label>
+        <label class="chip" title="stale_after を過ぎたナレッジを並べます(編集すると解消します)"><input
           type="checkbox" id="f-expired" aria-label="期限切れのフィード" ${explore.expiredFeed ? 'checked' : ''}>期限切れ</label>
       </div>
     </details>
@@ -184,7 +175,7 @@ export async function runSearch(append = false) {
   // knowledge base.
   const scopeNote = explore.prefix
     ? `<div class="truncation-note"><code>/${esc(explore.prefix)}</code> とその下だけに絞っています ·
-         <a href="#" id="scope-clear">全体を検索する</a></div>`
+         <a href="#" id="scope-clear">全体を検索</a></div>`
     : '';
   const wireScope = () => $('#scope-clear')?.addEventListener('click', e => {
     e.preventDefault();
@@ -214,12 +205,12 @@ export async function runSearch(append = false) {
     }
     let html = strong.map(hitCard).join('');
     if (!strong.length) {
-      html = `<div class="empty">「${esc(q)}」に強く一致するものはありません。</div>`;
+      html = `<div class="empty">「${esc(q)}」に強く一致するナレッジはありません。</div>`;
     }
     // Nothing typed: this is the most-searched listing, not everything
     // there is. The feeds say what they are; this one said nothing.
     if (!isFeed && !q) {
-      html = `<div class="truncation-note">まだ検索がありません — よく検索される concept から並べています。</div>` + html;
+      html = `<div class="truncation-note">検索語が未入力です。よく検索されるナレッジから順に表示しています。</div>` + html;
     }
     // The server says the ranking is worse than it normally gives
     // (design doc 0114). The page says it in its own words rather than
@@ -227,21 +218,19 @@ export async function runSearch(append = false) {
     // belongs to whoever is reading it — here, a Japanese-speaking
     // curator wondering why a search they have run before came back thin.
     if (page.degraded) {
-      html = `<div class="truncation-note">埋め込みが使えなかったため、この結果は語の一致だけで並べています —
-        意味は近いが語が違う concept は入っていません。しばらく置いてからもう一度お試しください。</div>` + html;
+      html = `<div class="truncation-note">埋め込みが利用できなかったため、この結果は語の一致だけで並べています。意味が近くても語が異なるナレッジは含まれていません。しばらくしてから、もう一度お試しください。</div>` + html;
     }
     if (weak.length) {
-      html += `<details class="weak-matches"><summary>弱い一致 ${weak.length} 件 —
-        ほとんど関係がなく、おそらくノイズです</summary>${weak.map(hitCard).join('')}</details>`;
+      html += `<details class="weak-matches"><summary>弱い一致 ${weak.length} 件
+        (ほとんど関係がなく、ノイズの可能性が高いものです)</summary>${weak.map(hitCard).join('')}</details>`;
     }
     if (explore.cursor) {
-      html += `<div class="truncation-note">${hits.length} 件の concept を表示 ·
-           <a href="#" id="feed-more">もっと読み込む</a></div>`;
+      html += `<div class="truncation-note">ナレッジ ${hits.length} 件を表示 ·
+           <a href="#" id="feed-more">さらに読み込む</a></div>`;
     } else if (!isFeed && hits.length >= limit) {
       // A search does not page: 50 is the whole contract, and the way on
       // is a narrower question rather than a next page (0050 §2.2).
-      html += `<div class="truncation-note">先頭 ${limit} ${q ? '件の一致' : '件の concept'} を表示
-           (サーバー側の上限)— 絞り込みか、より具体的な問いで狭めてください。</div>`;
+      html += `<div class="truncation-note">先頭 ${limit} 件を表示しています(サーバー側の上限)。絞り込むか、より具体的な問いで範囲を狭めてください。</div>`;
     }
     out.innerHTML = scopeNote + html;
     wireScope();

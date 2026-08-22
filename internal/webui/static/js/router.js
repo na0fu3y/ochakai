@@ -26,7 +26,7 @@ export function route() {
   // not being a link.
   const hash = location.hash;
   if (hash && !hash.startsWith('#/')) return;
-  if (unsaved && unsaved() && !confirm('保存していない変更を捨てますか?')) {
+  if (unsaved && unsaved() && !confirm('保存していない変更を破棄しますか？')) {
     // Put the URL back; replaceState does not re-fire hashchange.
     history.replaceState(null, '', route._current || '#/');
     return;

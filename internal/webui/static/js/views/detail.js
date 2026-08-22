@@ -33,8 +33,8 @@ export const TAB_LABELS = {
   document: 'ドキュメント',
   links: 'リンク',
   files: 'ファイル',
-  linked: 'ここを指しているもの',
-  usage: '利用',
+  linked: '参照元',
+  usage: '利用状況',
   history: '履歴',
 };
 
@@ -67,18 +67,18 @@ export async function viewDetail(id) {
   })();
 
   const prov = [
-    observed.created_by && observed.created_by.name ? `${fmtDate(entry.created_at)} に ${actorStr(observed.created_by)} が作成` : `${fmtDate(entry.created_at)} に作成`,
+    observed.created_by && observed.created_by.name ? `作成 ${fmtDate(entry.created_at)} ${actorStr(observed.created_by)}` : `作成 ${fmtDate(entry.created_at)}`,
     lastVerification(observed)
-      ? `${fmtDate(lastVerification(observed).at)} に ${actorStr(lastVerification(observed).by)} が検証`
-        + ((observed.verified || []).length > 1 ? `(検証 ${observed.verified.length} 件)` : '')
+      ? `検証 ${fmtDate(lastVerification(observed).at)} ${actorStr(lastVerification(observed).by)}`
+        + ((observed.verified || []).length > 1 ? `(計 ${observed.verified.length} 件)` : '')
       : '',
-    observed.rejection ? `${fmtDate(observed.rejection.at)} に ${actorStr(observed.rejection.by)} が却下` : '',
+    observed.rejection ? `却下 ${fmtDate(observed.rejection.at)} ${actorStr(observed.rejection.by)}` : '',
     // updated_by is OKF's generated.by: who the content stands by now,
     // which is not always who created it (design doc 0036 §3.3).
     entry.updated_at && entry.updated_at !== entry.created_at
       ? ((observed.generated || {}).by && observed.generated.by.name
-          ? `${fmtDate(entry.updated_at)} に ${actorStr(observed.generated.by)} が更新`
-          : `${fmtDate(entry.updated_at)} に更新`)
+          ? `更新 ${fmtDate(entry.updated_at)} ${actorStr(observed.generated.by)}`
+          : `更新 ${fmtDate(entry.updated_at)}`)
       : '',
   ].filter(Boolean).join(' · ');
 
@@ -86,7 +86,7 @@ export async function viewDetail(id) {
   // is wrong (OKF SPEC §5.5) — the comparison is a plain date one.
   const staleNote = entry.stale_after
     ? (entry.stale_after <= new Date().toISOString().slice(0, 10)
-        ? `<div class="status-note">${esc(entry.stale_after)} から期限切れです — 確かめ直す頃合いです。</div>`
+        ? `<div class="status-note">${esc(entry.stale_after)} から期限切れです。内容を確かめ直してください。</div>`
         : `<div class="provenance">${esc(entry.stale_after)} まで(stale_after)</div>`)
     : '';
 
@@ -98,14 +98,14 @@ export async function viewDetail(id) {
     <div class="detail-head">
       <span class="type-ico" style="font-size:1.4rem">${icon(entry.type)}</span>
       <h1>${esc(displayTitle(entry))}</h1>
-      <span class="badge status-pick ${esc(entry.status)}" title="ステータスを変える">
+      <span class="badge status-pick ${esc(entry.status)}" title="ステータスを変更します">
         <span aria-hidden="true">${esc(entry.status)}</span>
         <select class="write-only" id="act-status" aria-label="ステータス">
           ${STATUSES.map(s => `<option value="${s}" ${s === entry.status ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
       </span>
-      ${isVerified(entry) ? `<span class="badge verified-mark" title="検証台帳から OKF が導く trust の段(SPEC §5.3)">✓ ${trustOf(entry)}</span>` : ''}
-      ${entry.rejected ? '<span class="badge rejected-mark" title="レビューされ、受け入れられなかった">rejected</span>' : ''}
+      ${isVerified(entry) ? `<span class="badge verified-mark" title="検証台帳から OKF が導く trust の段です(SPEC §5.3)">✓ ${trustOf(entry)}</span>` : ''}
+      ${entry.rejected ? '<span class="badge rejected-mark" title="人がレビューして却下しました">rejected</span>' : ''}
       ${tags}
       <span class="actions write-only">
         <a class="btn small" href="#/edit/${idPath(entry.id)}">編集</a>
@@ -113,12 +113,12 @@ export async function viewDetail(id) {
           <summary class="btn small" title="その他の操作" aria-label="その他の操作">⋯</summary>
           <div class="menu-body">
             <button id="act-verify" title="${isVerified(entry)
-              ? 'もう一度確かめて、やはり正しい — 検証を追記する。レビューのフィードが片付くのはこれによる'
-              : 'この concept を確認する — あなたによる検証として記録されます'}">${isVerified(entry) ? '再検証' : '検証'}</button>
+              ? '検証を追記します。再検証のフィードはこれで解消します'
+              : 'あなたによる検証として記録します'}">${isVerified(entry) ? '再検証' : '検証'}</button>
             ${entry.rejected
-              ? `<button id="act-withdraw" title="裁定を取り下げ、concept を通常の扱いに戻す">却下を取り下げる</button>`
-              : `<button class="danger" id="act-reject" title="レビューして受け入れなかった — 検索から隠れ、理由は次のエージェントのために残る">却下…</button>`}
-            <button id="act-move" title="別のパスへ移す(参照は書き換えられる)">移動…</button>
+              ? `<button id="act-withdraw" title="裁定を取り下げ、通常の扱いに戻します">却下の取り下げ</button>`
+              : `<button class="danger" id="act-reject" title="検索から隠し、理由を次のエージェントのために残します">却下…</button>`}
+            <button id="act-move" title="別のパスへ移します(参照は自動で書き換わります)">移動…</button>
             <button class="danger" id="act-delete">削除…</button>
           </div>
         </details>
@@ -135,8 +135,7 @@ export async function viewDetail(id) {
         <button class="btn small primary" id="move-go">移動</button>
         <button class="btn small" id="move-cancel">キャンセル</button>
       </div>
-      <p class="provenance" style="margin-top:.3rem">concept の新しいパスです。ここを指している参照は
-      書き換えられ、リビジョン・利用回数・ファイルも concept に付いていきます。</p>
+      <p class="provenance" style="margin-top:.3rem">ナレッジの新しいパスです。ここを指している参照は自動で書き換わり、リビジョン・利用回数・ファイルもナレッジに付いていきます。</p>
     </div>
     ${entry.status_note ? `<div class="status-note">${esc(entry.status_note)}</div>` : ''}
     ${staleNote}
@@ -212,15 +211,15 @@ export async function viewDetail(id) {
     // the duplication document-first exists to remove, and the reason
     // design doc 0044 puts the format itself in front of the reader.
     document: () => `
-      <p class="provenance" style="margin:0 0 .8rem">ochakai が保存しているままの concept —
-      OKF の frontmatter と markdown です。「編集」が開くのもこのテキストで、export が書き出すのもこれです。</p>
+      <p class="provenance" style="margin:0 0 .8rem">ochakai が保存しているままのドキュメントです。
+      OKF の frontmatter と markdown で、「編集」が開くのも export が書き出すのも、このテキストです。</p>
       <pre class="mono">${esc(document_)}</pre>`,
     // Read-only: links come from the body's markdown links (design doc
     // 0024), so the body editor is where they are changed.
     links: () => {
       const links = entry.links || [];
-      if (!links.length) return '<div class="empty">本文はまだ他の concept を指していません。</div>';
-      return `<p class="provenance" style="margin:0 0 .8rem">本文の markdown リンクから取られている — 変えるには本文を編集する。</p>`
+      if (!links.length) return '<div class="empty">本文はまだ他のナレッジを指していません。</div>';
+      return `<p class="provenance" style="margin:0 0 .8rem">本文の markdown リンクから取り出しています。変更するには本文を編集してください。</p>`
         + '<table class="kv">' + links.map(l => {
         const target = String(l.target || '').replace(/^ochakai:\/\//, '');
         const href = target ? '#/k/' + idPath(target) : null;
@@ -251,13 +250,12 @@ export async function viewDetail(id) {
         ${cards || '<div class="empty">ファイルはありません。</div>'}
         <div class="toolbar write-only" style="margin-top:1rem">
           <input type="file" id="att-file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,.txt,.csv,.json" multiple hidden>
-          <button class="btn small" id="att-choose">ファイルを選ぶ…</button>
+          <button class="btn small" id="att-choose">ファイルを選択…</button>
           <span class="provenance" id="att-chosen" style="margin:0"></span>
           <button class="btn small primary" id="att-upload">ファイルを追加</button>
         </div>
-        <p class="provenance write-only">形式は問わず、1 ファイル 5 MiB まで。本文から参照しておくと
-        (<code>![alt](${esc(lastSeg)}/name.png)</code> または <code>[name](${esc(lastSeg)}/name.txt)</code>)、
-        見つけられるようになり、OKF export でも残ります。</p>`;
+        <p class="provenance write-only">形式は問わず、1 ファイル 5 MiB までです。本文から参照しておくと
+        (<code>![alt](${esc(lastSeg)}/name.png)</code> または <code>[name](${esc(lastSeg)}/name.txt)</code>)、検索で見つかるようになり、OKF export にも残ります。</p>`;
     },
     linked: () => '<div class="empty">…</div>',
     usage: () => '<div class="empty">…</div>',
@@ -283,12 +281,12 @@ export async function viewDetail(id) {
     });
     body.querySelectorAll('[data-remove-file]').forEach(b => b.addEventListener('click', async () => {
       const path = b.dataset.removeFile;
-      if (!confirm(`${b.dataset.name} を外しますか?変更はリビジョンとして残ります。`)) return;
+      if (!confirm(`${b.dataset.name} を外しますか？変更はリビジョンとして残ります。`)) return;
       try {
         await api(attPath(path), { method: 'DELETE' });
-        toast('外しました。');
+        toast('ファイルを外しました。');
         viewDetail(entry.id);
-      } catch (e) { toast('外せませんでした: ' + e.message); }
+      } catch (e) { toast('ファイルを外せませんでした: ' + e.message); }
     }));
   }
 
@@ -302,17 +300,17 @@ export async function viewDetail(id) {
         <div class="stat-tiles">
           <div class="tile"><div class="num">${u.search_hits ?? 0}</div><div class="lbl">検索ヒット</div></div>
           <div class="tile"><div class="num">${u.fetches ?? 0}</div><div class="lbl">取得</div></div>
-          <div class="tile"><div class="num">${u.worked ?? 0}</div><div class="lbl">うまくいった</div></div>
+          <div class="tile"><div class="num">${u.worked ?? 0}</div><div class="lbl">成功</div></div>
           <div class="tile"><div class="num">${u.failed ?? 0}</div><div class="lbl">失敗</div></div>
         </div>
-        <p class="provenance">${u.last_used_at ? '最後に使われたのは ' + esc(fmtDate(u.last_used_at)) : 'まだ使われていません'}</p>`;
+        <p class="provenance">${u.last_used_at ? '最終利用: ' + esc(fmtDate(u.last_used_at)) : 'まだ使われていません'}</p>`;
     },
     linked: async () => {
       const { hits: entries = [] } = await api('/api/v1/search?links_to=' + encodeURIComponent(entry.id) + '&limit=100');
       return () => (entries && entries.length)
-        ? `<p class="provenance" style="margin:0 0 .8rem">ここを指しているリンクを持つ concept — この concept 自身のリンクはリンクのタブにある。</p>`
+        ? `<p class="provenance" style="margin:0 0 .8rem">このナレッジを指しているナレッジです。このナレッジ自身のリンクは「リンク」タブにあります。</p>`
           + entries.map(hitCard).join('')
-        : '<div class="empty">この concept を指しているものは、まだありません。</div>';
+        : '<div class="empty">このナレッジを指しているものは、まだありません。</div>';
     },
     history: async () => {
       // ?history is the object's own ledger, at the object's own address
@@ -328,7 +326,7 @@ export async function viewDetail(id) {
           </td>
         </tr>`).join('');
       return () => `
-        <p class="provenance" style="margin:0 0 .8rem">すべての変更を新しい順に — 誰が変えたのかと、そのときの concept です。</p>
+        <p class="provenance" style="margin:0 0 .8rem">すべての変更を新しい順に並べています。誰が変えたのかと、そのときのドキュメントです。</p>
         <table class="kv">${rows}</table>`;
     },
   };
@@ -361,12 +359,12 @@ export async function viewDetail(id) {
     const status = statusPick.value;
     try {
       if (await applyStatus(entry.id, status)) {
-        toast(`${status} にしました。`);
+        toast(`ステータスを ${status} にしました。`);
         refreshTree(); // the tree shows status badges
         viewDetail(entry.id);
         return;
       }
-    } catch (e) { toast('失敗しました: ' + e.message); }
+    } catch (e) { toast('ステータスを変更できませんでした: ' + e.message); }
     statusPick.value = entry.status;
   });
   // The Move panel: a destination input seeded with the current path,
@@ -379,18 +377,18 @@ export async function viewDetail(id) {
       await verifyEntry(entry.id);
       toast(isVerified(entry) ? '再検証しました。' : '検証しました。');
       viewDetail(entry.id);
-    } catch (e) { toast('失敗しました: ' + e.message); }
+    } catch (e) { toast('検証できませんでした: ' + e.message); }
   });
   $('#act-reject')?.addEventListener('click', async () => {
     closeMenu();
-    const note = prompt('なぜ受け入れないのか?(裁定として残るので、エージェントは同じ提案を繰り返さなくなる)', '');
+    const note = prompt('却下の理由をご記入ください。裁定として残るため、エージェントは同じ提案を繰り返さなくなります。', '');
     if (note === null) return;
     try {
       await rejectEntry(entry.id, note);
       toast('却下しました。');
       refreshTree(); // the tree hides rejected entries
       viewDetail(entry.id);
-    } catch (e) { toast('失敗しました: ' + e.message); }
+    } catch (e) { toast('却下できませんでした: ' + e.message); }
   });
   $('#act-withdraw')?.addEventListener('click', async () => {
     closeMenu();
@@ -399,7 +397,7 @@ export async function viewDetail(id) {
       toast('却下を取り下げました。');
       refreshTree();
       viewDetail(entry.id);
-    } catch (e) { toast('失敗しました: ' + e.message); }
+    } catch (e) { toast('却下を取り下げられませんでした: ' + e.message); }
   });
   $('#act-move').addEventListener('click', () => {
     closeMenu();
@@ -415,12 +413,12 @@ export async function viewDetail(id) {
   });
   $('#act-delete').addEventListener('click', async () => {
     closeMenu();
-    if (!confirm(`${entry.id} を削除しますか?リビジョンの履歴は残ります。`)) return;
+    if (!confirm(`${entry.id} を削除しますか？リビジョンの履歴は残ります。`)) return;
     try {
       await api(conceptURL(entry.id), { method: 'DELETE' });
       toast('削除しました。');
       refreshTree();
       location.hash = '#/';
-    } catch (e) { toast('失敗しました: ' + e.message); }
+    } catch (e) { toast('削除できませんでした: ' + e.message); }
   });
 }

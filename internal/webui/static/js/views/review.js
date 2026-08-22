@@ -24,19 +24,9 @@ export const review = { staleOnly: false, loaded: [], cursor: '' };
 export function viewReview() {
   view.innerHTML = `
     <div class="section-title">draft のレビューキュー</div>
-    <div class="read-only-note">この ochakai は read-only なので、レビューの操作は
-    表示されません。キューそのものは本物です — 書き込めるデプロイのレビュアーが
-    片付けていくのが、これと同じ列です。</div>
-    <p style="color:var(--muted);max-width:48rem">エージェントが書き戻した draft を、求められている順に並べています。
-    順位を決めるのは検索に出た回数ではなく、実際に読み込まれた回数です — 直近の期間を先に見て、同じなら通算で比べます。
-    正しいものは検証し、そうでないものは却下してください(理由が status_note として残るので、エージェントは
-    同じ提案を繰り返さなくなります)。一度も読まれていない draft は下に沈むので、
-    <em>放置されたものだけ</em> に切り替えると、その仕分けができます。</p>
-    <p style="color:var(--muted);font-size:.9rem;max-width:48rem">検証済みのナレッジには、それ自身のキューが二つあります:
-    <a href="#/search/reported-wrong">間違いと報告された</a>(失敗の報告にまだ応えていない concept)と、
-    <a href="#/search/verification-age">検証の古さ</a>(検証が古いものから順)です。検証し直すと、前者からは消え、
-    後者では最後尾に回ります。三つ目の <a href="#/search/stale">期限切れ</a> は、書き手が宣言した期限を過ぎた
-    concept を並べます。こちらは検証では片付かず、concept を編集して期限を宣言し直すと消えます。</p>
+    <div class="read-only-note">この ochakai は read-only のため、レビューの操作は表示されません。キューそのものは本物です。書き込めるデプロイのレビュアーが解消していくのは、これと同じ列です。</div>
+    <p style="color:var(--muted);max-width:48rem">エージェントが書き戻した draft を、求められている順に並べています。順位を決めるのは検索に出た回数ではなく、実際に読み込まれた回数です。直近の期間を先に見て、同じなら通算で比べます。正しいものは検証し、そうでないものは却下してください(理由が <code>status_note</code> として残るため、エージェントは同じ提案を繰り返さなくなります)。一度も読まれていない draft は下に並ぶので、<em>放置されたものだけ</em>に切り替えると仕分けができます。</p>
+    <p style="color:var(--muted);font-size:.9rem;max-width:48rem">検証済みのナレッジには、それ自身のキューが二つあります。<a href="#/search/reported-wrong">誤りの報告</a>(失敗の報告にまだ応えていないナレッジ)と、<a href="#/search/verification-age">検証が古い順</a>(検証の古いものから順)です。検証し直すと、前者からは消え、後者では最後尾に回ります。三つ目の<a href="#/search/stale">期限切れ</a>は、書き手が宣言した期限を過ぎたナレッジを並べます。こちらは検証では解消せず、ナレッジを編集して期限を宣言し直すと消えます。</p>
     <div id="loop-stats"></div>
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
@@ -74,14 +64,14 @@ function sparkline(weeks) {
     const tall = Math.max(2, Math.round((week.verifications / peak) * h));
     return `<rect class="spark-bar${week.verifications ? '' : ' zero'}"
       x="${i * (w + gap)}" y="${h - tall}" width="${w}" height="${tall}"
-      ><title>${esc(week.from)} から1週間: ${week.verifications} 件</title></rect>`;
+      ><title>${esc(week.from)} からの1週間: ${week.verifications} 件</title></rect>`;
   }).join('');
   const total = weeks.reduce((n, week) => n + week.verifications, 0);
   return `<figure class="spark">
     <svg viewBox="0 0 ${weeks.length * (w + gap) - gap} ${h}" width="${weeks.length * (w + gap) - gap}"
          height="${h}" role="img" aria-label="直近 ${weeks.length} 週の検証数、古い順: ${
       weeks.map(week => week.verifications).join('、')}">${bars}</svg>
-    <figcaption>直近 ${weeks.length} 週の検証 — 計 ${total} 件。左が古い</figcaption>
+    <figcaption>直近 ${weeks.length} 週の検証(計 ${total} 件)。左が古い順です</figcaption>
   </figure>`;
 }
 
@@ -91,7 +81,7 @@ export async function loadLoopStats() {
   let s;
   try { s = await api('/api/v1/stats'); } catch (e) {
     if (out !== $('#loop-stats')) return;
-    out.innerHTML = `<div class="error-banner" role="alert">loop の数字を読み込めませんでした: ${esc(e.message)}</div>`;
+    out.innerHTML = `<div class="error-banner" role="alert">ループの数値を読み込めませんでした: ${esc(e.message)}</div>`;
     return;
   }
   if (out !== $('#loop-stats')) return;
@@ -109,28 +99,21 @@ export async function loadLoopStats() {
   const truncated = s.embedding?.enabled ? (s.embedding.truncated ?? 0) : 0;
   out.innerHTML = `
     <div class="stat-tiles" style="max-width:52rem;margin:.2rem 0 1rem">
-      <div class="tile"><div class="num">${s.concepts?.total ?? 0}</div><div class="lbl">concept</div></div>
-      <div class="tile"><div class="num">${confirmed}</div><div class="lbl">誰かが確認した</div></div>
+      <div class="tile"><div class="num">${s.concepts?.total ?? 0}</div><div class="lbl">ナレッジ</div></div>
+      <div class="tile"><div class="num">${confirmed}</div><div class="lbl">確認済み</div></div>
       <div class="tile"><div class="num">${s.review?.verifications ?? 0}</div><div class="lbl">直近 ${s.window_days} 日の検証</div></div>
       <div class="tile"><div class="num">${s.misses?.recording ? (s.misses.count ?? 0) : '–'}</div>
-        <div class="lbl">何も見つからなかった検索</div></div>
+        <div class="lbl">該当なしの検索</div></div>
       <div class="tile"><div class="num">${s.outcomes?.concepts_reported ?? 0}/${s.outcomes?.concepts_used ?? 0}</div>
-        <div class="lbl">使われた concept のうち結果が返ってきたもの</div></div>
+        <div class="lbl">結果報告 / 利用</div></div>
     </div>` + sparkline(s.review?.weekly) + (dropped ? `
     <p style="max-width:48rem;margin:0 0 1.2rem;color:var(--muted);font-size:.9rem">
-      この ${s.window_days} 日で、記録されたあと失われた観測が ${dropped} 件あります。
-      上の数字は、少なくともその分だけ実際より少なく出ています。利用状況はメモリに溜めて
-      まとめて書き出しているので、居なくなったインスタンスは抱えていた分を持っていきます。</p>` : '') + (truncated ? `
+      この ${s.window_days} 日で、記録されたあとに失われた観測が ${dropped} 件あります。上の数値は、少なくともその分だけ実際より少なく出ています。利用状況はメモリに溜めてまとめて書き出すため、停止したインスタンスは抱えていた分を持ち去ります。</p>` : '') + (truncated ? `
     <p style="max-width:48rem;margin:0 0 1.2rem;color:var(--muted);font-size:.9rem">
-      ${truncated} 件の concept が、埋め込みモデルの入力窓に収まらず<strong>前半だけ</strong>
-      ベクトル検索に載っています(全 ${s.embedding.vectors} 件中)。後半に書かれていることでは
-      見つかりません — 語句そのものが含まれていれば字句検索は当てます。長すぎる concept を
-      分けるか、より広い窓のモデルに移すかのどちらかです。</p>` : '') + (gaps.length ? `
+      ${truncated} 件のナレッジが、埋め込みモデルの入力窓に収まらず<strong>前半だけ</strong>ベクトル検索に載っています(全 ${s.embedding.vectors} 件中)。後半に書かれた内容では見つかりません。語句そのものが含まれていれば字句検索では見つかります。長すぎるナレッジを分けるか、より広い窓のモデルに移すかのどちらかが必要です。</p>` : '') + (gaps.length ? `
     <details style="max-width:48rem;margin:0 0 1.2rem">
-      <summary style="cursor:pointer;color:var(--muted)">答えの無かった検索 — 次に書くもの</summary>
-      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日で何も返さなかった検索を、
-      多く訊かれたものから順に並べています。誰かが片付けるキューではありません: 答えになる concept が書かれれば、
-      この一覧からは自然に消えます。</p>
+      <summary style="cursor:pointer;color:var(--muted)">該当なしの検索(次に書くもの)</summary>
+      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日で何も返さなかった検索を、多く尋ねられた順に並べています。誰かが解消するキューではありません。答えになるナレッジが書かれれば、この一覧からは自然に消えます。</p>
       ${gaps.map(g => `<div style="display:flex;gap:.6rem;align-items:baseline;padding:.25rem 0">
         <span class="badge">${g.count}×</span>
         <a href="#/search" class="mono" data-gap="${esc(g.query)}">${esc(g.query)}</a></div>`).join('')}
@@ -171,8 +154,8 @@ export async function runReview(append = false) {
     }
     out.innerHTML = list.map(reviewCard).join('')
       + (review.cursor
-        ? `<div class="truncation-note">${list.length} 件の draft を表示 ·
-             <a href="#" id="review-more">もっと読み込む</a></div>`
+        ? `<div class="truncation-note">draft ${list.length} 件を表示 ·
+             <a href="#" id="review-more">さらに読み込む</a></div>`
         : '');
     $('#review-more')?.addEventListener('click', e => { e.preventDefault(); runReview(true); });
     wireReviewActions(out);
@@ -197,7 +180,7 @@ export function reviewCard(h) {
     ? `🔍 ヒット ${u.search_hits || 0} · 取得 ${u.fetches || 0}(直近 ${r.days || 0} 日で ${r.fetches || 0})`
     : 'まだ使われていません';
   const outcomeBits = (u.worked || u.failed)
-    ? `${u.failed ? '⚠️ ' : ''}うまくいった ${u.worked || 0} · 失敗 ${u.failed || 0}`
+    ? `${u.failed ? '⚠️ ' : ''}成功 ${u.worked || 0} · 失敗 ${u.failed || 0}`
     : '';
   const meta = [
     who ? esc(who) : '',
@@ -210,7 +193,7 @@ export function reviewCard(h) {
       <span class="type-ico" title="${esc(h.type)}">${icon(h.type)}</span>
       <a class="title" href="${entryHash(h)}" title="ochakai://${esc(h.id)}">${esc(displayTitle(h))}</a>
       <span class="badge draft">draft</span>
-      ${isStaleDraft(h) ? '<span class="badge" title="検索ヒット 0 で動きもない — 落とす候補">🕸️ 放置</span>' : ''}
+      ${isStaleDraft(h) ? '<span class="badge" title="検索ヒット 0 件で動きもありません(削除の候補)">🕸️ 放置</span>' : ''}
       ${tags}
       <span class="actions write-only" style="margin-left:auto;display:flex;gap:.45rem">
         <button class="btn small primary" data-act="verify">✓ 検証</button>
@@ -235,13 +218,15 @@ export function wireReviewActions(container) {
         await verifyEntry(id);
         toast('検証しました。');
       } else {
-        const note = prompt('なぜ受け入れないのか?(裁定として残るので、エージェントは同じ提案を繰り返さなくなる)', '');
+        const note = prompt('却下の理由をご記入ください。裁定として残るため、エージェントは同じ提案を繰り返さなくなります。', '');
         if (note === null) return;
         await rejectEntry(id, note);
         toast('却下しました。');
       }
       refreshTree(); // the tree shows status badges (and hides rejected)
       runReview();
-    } catch (e) { toast('失敗しました: ' + e.message); }
+    } catch (e) {
+      toast((btn.dataset.act === 'verify' ? '検証' : '却下') + 'できませんでした: ' + e.message);
+    }
   }));
 }

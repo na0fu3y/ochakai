@@ -52,7 +52,7 @@ export function dirCard(prefix, d) {
     <div class="head">
       <span class="type-ico">📁</span>
       <a class="title mono" href="${href}">${esc(d.name)}/</a>
-      <span class="count">concept ${d.count} 件</span>
+      <span class="count">ナレッジ ${d.count} 件</span>
     </div>
   </article>`;
 }

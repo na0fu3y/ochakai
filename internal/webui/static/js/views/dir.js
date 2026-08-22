@@ -21,8 +21,7 @@ export async function loadDirIndex(container, prefix, emptyText) {
     const concepts = (res.concepts || []).map(hitCard).join('');
     const files = (res.files || []).map(fileCard).join('');
     const note = res.truncated
-      ? `<div class="truncation-note">この階層の先頭 1000 concept を表示 — これだけ広いディレクトリは
-         サブディレクトリに分けたほうがよいでしょう。</div>` : '';
+      ? `<div class="truncation-note">この階層の先頭 1000 件を表示しています。これだけ広いディレクトリは、サブディレクトリに分けることをおすすめします。</div>` : '';
     container.innerHTML = (dirs + concepts + files + note) || `<div class="empty">${emptyText}</div>`;
   } catch (e) {
     if (!container.isConnected) return;
@@ -42,31 +41,28 @@ export function viewDir(rawPrefix) {
       <div class="section-title" style="margin:0"><span class="type-ico">📁</span> <span class="mono">/${esc(prefix)}</span></div>
       <span class="grow"></span>
       ${clean ? `<a class="btn small" href="#/search/in/${idPath(clean)}"
-        title="${esc(prefix)} の下だけを検索">🔍 ここを検索</a>` : ''}
-      <a class="btn small write-only" href="${newHref}" title="${prefix ? esc(prefix) + ' に' : 'ルートに'} concept を作る">＋ ここに concept を作る</a>
+        title="${esc(prefix)} の下だけを検索します">🔍 ここを検索</a>` : ''}
+      <a class="btn small write-only" href="${newHref}" title="${prefix ? esc(prefix) + ' に' : 'ルートに'}ナレッジを作成します">＋ ここにナレッジを作成</a>
     </div>
     <div id="dir-index"><div class="empty">…</div></div>`;
-  loadDirIndex($('#dir-index'), prefix, 'ここには何もありません — ディレクトリは、その中の concept があってはじめて存在します。');
+  loadDirIndex($('#dir-index'), prefix, 'ここには何もありません。ディレクトリは、その中にナレッジがあってはじめて存在します。');
 }
 
 export function viewHome() {
   view.innerHTML = `
     <div class="section-title" style="font-size:1.5rem">🍵 ochakai</div>
-    <p style="color:var(--muted);max-width:42rem">ナレッジはフォルダのツリーです。concept の id が
-    そのままパスになる(例: <code>queries/sales/monthly-revenue</code>)ので、サイドバーのツリーが
-    入口になります。まとめて読むものは同じ場所に置き、ドキュメントを読むように辿ってください。
-    どこを見ればよいか分からないときに、検索を使います。</p>
+    <p style="color:var(--muted);max-width:42rem">ナレッジはフォルダのツリーです。ナレッジの id がそのままパスになる(例: <code>queries/sales/monthly-revenue</code>)ので、サイドバーのツリーが入口になります。まとめて読むものは同じ場所に置き、文書をたどるように読み進めてください。どこを見ればよいか分からないときに検索を使います。</p>
     <div class="searchbox" style="max-width:36rem">
-      <input type="text" id="home-q" placeholder="メトリクス・検証済みクエリ・insight・用語・テーブルを検索…" autocomplete="off">
+      <input type="text" id="home-q" placeholder="メトリクス・検証済みクエリ・知見・用語・テーブルを検索…" autocomplete="off">
       <a class="btn" id="home-go" href="#/search">検索</a>
     </div>
     <ul class="home-links">
-      <li><a href="#/review">レビューキュー</a> — エージェントが書いた draft を検証・却下する</li>
-      <li><a href="#/search/reported-wrong">間違いと報告された</a> — 検証済みなのに間違いだったナレッジ</li>
+      <li><a href="#/review">レビューキュー</a> — エージェントが書いた draft を検証・却下します</li>
+      <li><a href="#/search/reported-wrong">誤りの報告</a> — 検証済みなのに誤りだったナレッジ</li>
       <!-- Gated twice on purpose: the link is the write affordance, and the
            item around it would otherwise leave a gap in the row. -->
-      <li class="write-only"><a class="write-only" href="#/new">＋ concept を作る</a></li>
-      <li><a href="#" id="home-export" title="ナレッジベースを OKF バンドル(tar.gz)として書き出す">OKF を書き出す</a></li>
+      <li class="write-only"><a class="write-only" href="#/new">＋ ナレッジを作成</a></li>
+      <li><a href="#" id="home-export" title="ナレッジベースを OKF バンドル(tar.gz)として書き出します">OKF の書き出し</a></li>
     </ul>
     <div id="home-index" style="margin-top:1.4rem"><div class="empty">…</div></div>`;
   $('#home-q').addEventListener('keydown', e => {
@@ -75,5 +71,5 @@ export function viewHome() {
   $('#home-go').addEventListener('click', () => { explore.q = $('#home-q').value; });
   $('#home-export').addEventListener('click', downloadBundle);
   if (matchMedia('(pointer: fine)').matches) $('#home-q').focus({ preventScroll: true });
-  loadDirIndex($('#home-index'), '', 'まだナレッジがありません — 最初の concept を作りましょう。');
+  loadDirIndex($('#home-index'), '', 'まだナレッジがありません。最初のナレッジを作成してください。');
 }
