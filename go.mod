@@ -27,7 +27,7 @@ retract [v0.1.0, v0.8.0]
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0
-	cloud.google.com/go/storage v1.64.0
+	cloud.google.com/go/storage v1.65.0
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/modelcontextprotocol/go-sdk v1.7.0
