@@ -8,16 +8,25 @@ import (
 
 // A filtered vector search can answer short, and say nothing about it.
 // The HNSW scan runs before the WHERE clause, so a search asking for ten
-// rows under a filter that matches one row in a hundred gets only what
-// survives of its ef_search candidates — four, on the fixture below —
-// with the response carrying no sign that the other six were never looked
-// for. `hnsw.iterative_scan` (pgvector 0.8.0) is the fix: the scan goes
-// back for more until it has the limit or runs out of graph.
+// rows under a filter matching one row in a hundred gets only what
+// survives of its ef_search candidates — three, on the fixture below —
+// with the response carrying no sign that the other seven were never
+// looked for. `hnsw.iterative_scan` (pgvector 0.8.0) keeps walking the
+// graph instead of stopping at those candidates.
 //
-// Measured here rather than asserted in a comment, and measured against
-// the pgvector the deployment actually has: this is the claim annSearch
-// rests on, and a pgvector that stopped honouring it would otherwise show
-// up as searches that are quietly incomplete.
+// **What that is worth was measured, and it is not "the limit".** Over
+// twelve freshly generated fixtures the pairs were 4/10, 3/3, 3/5, 5/5,
+// 3/6, 3/3, 3/3, 4/6, 3/3, 3/6, 4/5, 3/3: never worse, better in half of
+// them, complete in one. Raising hnsw.max_scan_tuples and
+// hnsw.scan_mem_multiplier moved none of it, so what ends the scan is the
+// graph running out of reachable matches rather than a budget — on
+// uniform random vectors, which build a poor graph. That is the claim
+// annSearch is allowed to rest on: the ceiling is lifted, not the answer
+// guaranteed.
+//
+// So the assertions are the two things that held across every fixture:
+// the truncation reproduces, and iterating never returns fewer rows than
+// not iterating. On the fixed fixture below the pair is 1 and 10.
 //
 // A table of its own, not ochakai's: the subject is what pgvector does
 // under a selective filter, and reaching it through the schema would need
@@ -47,12 +56,18 @@ func TestIterativeScanIsWhatMakesAFilteredSearchAnswerInFull(t *testing.T) {
 	// table lives and dies with its session, so no other test — or run —
 	// can see this one.
 	const table = "iterscan"
+	// Deterministic vectors rather than random ones. A fresh draw each
+	// run makes the numbers below move — measured, they ranged over
+	// 3..5 without the scan and 3..10 with it — and an assertion on a
+	// number a draw decides is a test that fails on Tuesdays. These
+	// vectors trace a curve, so the graph is the same graph every time.
 	if _, err := conn.Exec(ctx, fmt.Sprintf(`
 		CREATE TEMP TABLE %s(id int PRIMARY KEY, kind text, embedding vector(8));
 		INSERT INTO %s
 		SELECT g,
 		       CASE WHEN g %% 100 = 0 THEN 'wanted' ELSE 'other' END,
-		       (SELECT array_agg(random())::vector FROM generate_series(1, 8))
+		       ARRAY[sin(g), cos(g), sin(g * 2), cos(g * 2),
+		             sin(g * 3), cos(g * 3), sin(g * 5), cos(g * 5)]::vector
 		FROM generate_series(1, 3000) g;
 		CREATE INDEX ON %s USING hnsw (embedding vector_cosine_ops);
 		ANALYZE %s;`, table, table, table, table)); err != nil {
@@ -106,14 +121,20 @@ func TestIterativeScanIsWhatMakesAFilteredSearchAnswerInFull(t *testing.T) {
 	// The failure this exists for. If pgvector ever stops truncating here
 	// the setting has become unnecessary rather than wrong — but that is
 	// a thing to find out deliberately, not to assume.
-	if got := rowsUnder("off"); got >= limit {
+	plain := rowsUnder("off")
+	if plain >= limit {
 		t.Errorf("without an iterative scan a filtered search returned %d of %d rows: "+
-			"the truncation this guards against did not reproduce, so the guard proves nothing here", got, limit)
+			"the truncation this guards against did not reproduce, so the guard proves nothing here", plain, limit)
 	}
-	// And the fix, which is the behaviour annSearch depends on.
-	if got := rowsUnder("strict_order"); got != limit {
-		t.Errorf("with hnsw.iterative_scan = strict_order a filtered search returned %d of %d rows, want all of them", got, limit)
+	// And what annSearch buys by asking for the scan: more of the answer,
+	// never less of it.
+	iterating := rowsUnder("strict_order")
+	if iterating < plain {
+		t.Errorf("hnsw.iterative_scan = strict_order returned %d rows where not iterating returned %d: "+
+			"asking for the scan cost rows, which is the one outcome that would make it the wrong default",
+			iterating, plain)
 	}
+	t.Logf("filtered search for %d rows: %d without an iterative scan, %d with one", limit, plain, iterating)
 }
 
 // The wiring: a store that migrated against a pgvector new enough to have

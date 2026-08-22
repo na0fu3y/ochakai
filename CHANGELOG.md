@@ -41,6 +41,27 @@ last entry.
 
 ### Changed
 
+- **The Terraform module moves to the Google provider 7.x, and the web UI
+  stops going through `google-beta`.** IAP on Cloud Run went GA in March
+  2026 and `iap_enabled` landed in the GA provider at 7.21, so the one
+  reason the `webui` service was declared against the beta provider is
+  gone. `google-beta` is still declared, for one resource that is still
+  beta — `google_project_service_identity`, the IAP service agent — and
+  the module README now says that instead of the old reason. Checked with
+  `terraform init` and `terraform validate` against the resolved provider
+  (7.45.0); none of 7.0's breaking changes touch this module, and the one
+  that came closest — `google_project_service.disable_on_destroy` losing
+  its default — is a value this module already set explicitly. The
+  operating guide's `gcloud beta run deploy --iap` and `gcloud beta iap
+  web` become plain `gcloud`, both verified present on the GA surface.
+- **Both services ask for a startup CPU boost.** `min_instance_count` is
+  0, so a request arriving after an idle period pays for a start — the
+  pool connects, the migration table is read, Vertex AI is asked once
+  whether it answers. The boost is full CPU for that window and billed
+  for that window. No readiness probe: Cloud Run already withholds
+  traffic until the process listens, and ochakai listens only after
+  migrating, so a probe on `/health` would restate what the port already
+  says.
 - **The image's runtime base is `distroless/static-debian13`.** distroless
   resolves a bare tag to whatever it currently considers newest, and
   debian13 is where that points today; naming the version keeps the base
@@ -73,19 +94,23 @@ last entry.
   extension I as blank on both the document and the query side, so a term
   written in it is found by nothing — no class can change that, and the
   day a PostgreSQL lifts the limit is a day that test fails and says so.
-- **A filtered semantic search no longer answers short.** pgvector's
-  HNSW scan runs before the `WHERE` clause, so a search for ten concepts
-  narrowed by type, tag or path got only whatever survived of its
-  `ef_search` candidates — measured on a 3,000-row fixture whose filter
-  matched one row in a hundred, four of the ten asked for, with nothing
-  in the response saying the other six were never looked for. Sizing
+- **A filtered semantic search answers with more of the answer.**
+  pgvector's HNSW scan runs before the `WHERE` clause, so a search for
+  ten concepts narrowed by type, tag or path got only whatever survived
+  of its `ef_search` candidates — on a 3,000-row fixture whose filter
+  matched one row in a hundred, one of the ten asked for, with nothing in
+  the response saying the other nine were never looked for. Sizing
   `ef_search` to the limit, which is what ochakai did, is a guess at how
   much a filter will discard and is wrong for some filter by
   construction. Searches now ask for an iterative scan
-  (`hnsw.iterative_scan`, pgvector 0.8.0), which goes back for more until
-  it has the limit or runs out of graph; the fixture returns all ten.
-  `strict_order` rather than the faster `relaxed_order`, because a hit's
-  position is what the fusion ranks on. **Nothing to configure**: the
+  (`hnsw.iterative_scan`, pgvector 0.8.0), which keeps walking the graph
+  instead of stopping at those candidates. **It lifts the ceiling rather
+  than guaranteeing the answer**: measured over twelve fixtures it was
+  never worse, better in half of them, and complete in one, and what ends
+  the scan is the graph running out of reachable matches rather than a
+  budget — raising `hnsw.max_scan_tuples` and `hnsw.scan_mem_multiplier`
+  moved none of it. `strict_order` rather than the faster
+  `relaxed_order`, because a hit's position is what the fusion ranks on. **Nothing to configure**: the
   store reads the installed pgvector's version once while migrating, and
   a server older than 0.8.0 keeps exactly today's behaviour, so this adds
   no requirement to run ochakai (Cloud SQL ships 0.8.1). Deployments

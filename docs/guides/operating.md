@@ -718,10 +718,9 @@ gcloud run services add-iam-policy-binding ochakai --region=$REGION \
   --role=roles/run.invoker
 
 # IAP を前段に立てて非公開でデプロイする — デプロイガイド §1 と同じ $IMAGE。
-# (--iap には gcloud beta コンポーネントが要る; 下の iap web コマンドには
-#  Resource Manager API が要る)
+# (下の iap web コマンドには Resource Manager API が要る)
 gcloud services enable iap.googleapis.com cloudresourcemanager.googleapis.com
-gcloud beta run deploy ochakai-webui \
+gcloud run deploy ochakai-webui \
   --image=$IMAGE --args=serve-ui \
   --region=$REGION --no-allow-unauthenticated --iap \
   --service-account=ochakai-webui@$PROJECT_ID.iam.gserviceaccount.com \
@@ -731,7 +730,7 @@ gcloud beta run deploy ochakai-webui \
 # 組織を IAP 経由で通す(デプロイはすでにサービスに対して IAP の
 # サービスエージェントに run.invoker を付与している — 出力の
 # "Setting IAP service agent")
-gcloud beta iap web add-iam-policy-binding \
+gcloud iap web add-iam-policy-binding \
   --resource-type=cloud-run --service=ochakai-webui --region=$REGION \
   --member=domain:your-org.example --role=roles/iap.httpsResourceAccessor
 ```

@@ -821,15 +821,21 @@ func efSearch(limit int) int {
 // transaction exists only to scope SET LOCAL to this one statement; it
 // reads, so it ends in a rollback.
 //
-// Where pgvector allows it the scan is also iterative, which is the
-// difference between a filtered search answering short and answering.
-// Measured on 20,000 rows whose filter matched 1%: a search for ten rows
-// returned five, and nothing in the response said the other five were
-// never looked for. ef_search alone cannot fix that — it is a guess at
-// how much filtering will discard, and any guess is wrong for some
-// filter — while an iterative scan goes back for more until it has the
-// limit or runs out of graph (pgvector bounds that itself with
-// hnsw.max_scan_tuples).
+// Where pgvector allows it the scan is also iterative, which is what
+// keeps a filtered search from answering short without saying so. The
+// index scan stops at its ef_search candidates and the filter then
+// discards most of them, so a search for ten rows comes back with three
+// and nothing in the response says the other seven were never looked
+// for. ef_search alone cannot fix that: it is a guess at how much
+// filtering will discard, and any guess is wrong for some filter.
+//
+// What iterating buys was measured rather than assumed, and it is a
+// ceiling lifted rather than an answer guaranteed: over twelve fixtures
+// it was never worse, better in half, and complete in one
+// (TestIterativeScanIsWhatMakesAFilteredSearchAnswerInFull carries the
+// numbers). What ends the scan is the graph running out of reachable
+// matches — raising hnsw.max_scan_tuples and hnsw.scan_mem_multiplier
+// moved none of those figures.
 //
 // strict_order rather than relaxed_order, which is the faster of the two
 // and returns rows slightly out of distance order. The ranking is what
