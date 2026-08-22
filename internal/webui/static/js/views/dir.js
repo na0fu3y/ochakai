@@ -58,7 +58,7 @@ export function viewHome() {
     </div>
     <ul class="home-links">
       <li><a href="#/review">レビューキュー</a> — エージェントが書いた draft を検証・却下します</li>
-      <li><a href="#/search/reported-wrong">誤りの報告</a> — 検証済みなのに誤りだったナレッジ</li>
+      <li><a href="#/search/reported-wrong">再検証</a> — 検証済みなのに誤りだったナレッジ</li>
       <!-- Gated twice on purpose: the link is the write affordance, and the
            item around it would otherwise leave a gap in the row. -->
       <li class="write-only"><a class="write-only" href="#/new">＋ ナレッジを作成</a></li>
