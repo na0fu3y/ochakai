@@ -24,7 +24,16 @@ import (
 // breaks. Attachment bytes never move: blobs are content-addressed
 // (design doc 0011). The destination must be a fresh id — a row there,
 // even soft-deleted, already owns that address and its revision history.
-func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Actor) (*domain.Knowledge, error) {
+//
+// within bounds where the rewrite may reach: a non-nil list of prefixes
+// the caller may write, and ErrOutsideScope if a referrer sits outside
+// them (design doc 0129). nil is the administrator's move and the move
+// on a deployment with no policy, both unbounded. The check belongs
+// here rather than in the service for the reason the policy's own
+// partition does (design doc 0124): the referrers are read inside this
+// transaction, under FOR UPDATE, and a check outside it would be
+// answering about a set another writer can still add to.
+func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Actor, within []string) (*domain.Knowledge, error) {
 	k, err := s.Get(ctx, oldID)
 	if err != nil {
 		return nil, err
@@ -132,7 +141,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 			}
 		}
 		k.ID = newID
-		if err := s.rewriteReferences(ctx, tx, oldID, k, actor); err != nil {
+		if err := s.rewriteReferences(ctx, tx, oldID, k, actor, within); err != nil {
 			return err
 		}
 		return s.addRevision(ctx, tx, k, "move", actor)
@@ -160,7 +169,9 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 //
 // Candidates come from the links column, which still holds the pre-move
 // derivation and so is an accurate index of who refers to oldID.
-func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, moved *domain.Knowledge, actor domain.Actor) error {
+func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, moved *domain.Knowledge,
+	actor domain.Actor, within []string,
+) error {
 	newID := moved.ID
 	// FOR UPDATE, because each referrer is read here and written whole
 	// below: the rewrite carries body, links and attrs from this read, so
@@ -187,6 +198,25 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 	referrers, err := pgx.CollectRows(rows, scanKnowledgeDoc)
 	if err != nil {
 		return err
+	}
+	// The blast radius, decided before a single row is written: every
+	// referrer this loop would rewrite has to be one the caller may
+	// write. Refused whole rather than narrowed — a rewrite that skipped
+	// what it may not touch would leave those links pointing at an id
+	// that is gone, which is the one thing a move exists to prevent
+	// (design doc 0129 §2).
+	if within != nil {
+		for i := range referrers {
+			// The moved entry rewrites its own relative links as part of
+			// the move; the caller's right to write it is the right to
+			// write the destination, checked before the transaction.
+			if referrers[i].ID == newID {
+				continue
+			}
+			if !underAny(referrers[i].ID, within) {
+				return ErrOutsideScope
+			}
+		}
 	}
 	now := NowStored()
 	movedDirs := path.Dir(oldID) != path.Dir(newID)
@@ -292,4 +322,17 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		}
 	}
 	return nil
+}
+
+// underAny reports whether id sits at or beneath any of prefixes, on
+// segment boundaries (domain.Under). The empty list matches nothing:
+// a caller holding no write grant may write nowhere, which is not the
+// same as the nil that means "unbounded".
+func underAny(id string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if domain.Under(id, p) {
+			return true
+		}
+	}
+	return false
 }

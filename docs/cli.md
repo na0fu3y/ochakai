@@ -95,11 +95,15 @@ writes everything, which is what ochakai does by default. Writing the
 first rule turns the boundary on for everybody at once, so read the
 policy back before you close the terminal.
 
-The operations that take the bundle as a whole — export, move, reembed,
-and this command — stay with the administrators. Not stats: a caller
-with grants reads their own numbers, and the answer says which subtree
-it counted. The unanswered searches beside them are withheld from a
-scoped caller, having no id to scope by.
+The operations that take the bundle as a whole — export of the whole
+base, reembed, and this command — stay with the administrators. Three
+others do not. `stats`: a caller with grants reads their own numbers,
+and the answer says which subtree it counted, though the unanswered
+searches beside them are withheld, having no id to scope by. `export
+--prefix`: anyone who may read a directory may take its archive, which
+says which directory it is. And `move`, when everything its rewrite
+touches — the concept, the destination, and everything that links at
+the concept — is yours to write.
 
 The policy is one document, replaced whole, so two editors who both
 read it can each drop the other's rules. With --if-match the
@@ -464,6 +468,13 @@ Move (rename) a knowledge concept to a new id. Revisions, usage, and
 files follow, and inbound references (link targets, and
 a `model` key where a document carries one) are rewritten so nothing
 breaks.
+
+Where the deployment has an access policy, a move runs when its whole
+rewrite fits inside what you may write: the concept, the destination,
+and everything that links at the concept. When something you cannot
+write links at it, the move is refused rather than performed without
+those rewrites — the links it skipped would point at an id that is gone
+— and an administrator can move it for you.
 
 Flags:
   -url ochakai use

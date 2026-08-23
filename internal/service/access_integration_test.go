@@ -62,15 +62,7 @@ func newAccessFixture(t *testing.T) *accessFixture {
 	f.readCt = httpauth.WithActor(ctx, f.reader)
 
 	for _, id := range []string{f.mine, f.theirs, f.shared} {
-		doc := "---\ntype: Metric\ntitle: " + id + "\n---\n\nbody\n"
-		d, _, err := okf.Parse([]byte(doc))
-		if err != nil {
-			t.Fatal(err)
-		}
-		d.ID = id
-		if _, err := f.svc.Create(f.adminCtx, &d.Knowledge, f.admin); err != nil {
-			t.Fatalf("seeding %s: %v", id, err)
-		}
+		f.seed(t, id, "body")
 	}
 	// The policy lands last, so the seeding above runs on the deployment
 	// every existing one is: no rules, no boundary.
@@ -88,6 +80,26 @@ func newAccessFixture(t *testing.T) *accessFixture {
 	})
 	return f
 }
+
+// seed creates one concept as the administrator, with body as its prose
+// — which is where a link lives, so a referrer is seeded by naming one
+// (design doc 0024: the links column is derived from the body).
+func (f *accessFixture) seed(t *testing.T, id, body string) {
+	t.Helper()
+	doc := "---\ntype: Metric\ntitle: " + id + "\n---\n\n" + body + "\n"
+	d, _, err := okf.Parse([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.ID = id
+	if _, err := f.svc.Create(f.adminCtx, &d.Knowledge, f.admin); err != nil {
+		t.Fatalf("seeding %s: %v", id, err)
+	}
+}
+
+// linkTo is the prose a referrer carries: the bare form of a link, which
+// is what a move rewrites.
+func linkTo(id string) string { return "See [it](/" + id + ".md)." }
 
 // TestScopeHidesWhatItRefusesIntegration is design doc 0109 §4's claim:
 // outside the scope the address holds nothing. A 403 would answer the
@@ -241,10 +253,12 @@ func TestScopeNarrowsEveryListingIntegration(t *testing.T) {
 }
 
 // TestPolicyBelongsToAdministratorsIntegration: the rules name people
-// and the directories they may see, and the operations that take the
-// bundle as a whole are refused rather than narrowed (0109 §3). Stats
-// left this list — it is narrowed and says so (design doc 0123), which
-// is the split 0109 §3 said could be made later.
+// and the directories they may see, and what is left of the operations
+// that take the bundle as a whole is refused rather than narrowed
+// (0109 §3). Three have left this list, each by a record that found a
+// way to return a part without it passing for the whole — stats (0123),
+// a subtree's archive (0127), and a move that fits (0129) — which is the
+// split 0109 §3 said could be made later, made three times.
 func TestPolicyBelongsToAdministratorsIntegration(t *testing.T) {
 	f := newAccessFixture(t)
 	if _, _, err := f.svc.Policy(f.readCt); !errors.Is(err, ErrForbidden) {
@@ -253,11 +267,85 @@ func TestPolicyBelongsToAdministratorsIntegration(t *testing.T) {
 	if _, _, err := f.svc.SetPolicy(f.readCt, nil, f.reader, nil); !errors.Is(err, ErrForbidden) {
 		t.Errorf("a scoped caller writing the policy returned %v, want ErrForbidden", err)
 	}
-	if _, err := f.svc.Move(f.readCt, f.mine, f.mine+"-2", f.reader); !errors.Is(err, ErrForbidden) {
-		t.Errorf("a scoped caller moving a concept returned %v, want ErrForbidden", err)
+	if err := f.svc.MayArchive(f.readCt, ""); !errors.Is(err, ErrForbidden) {
+		t.Errorf("a scoped caller archiving the whole bundle returned %v, want ErrForbidden", err)
 	}
 	if _, err := f.svc.Stats(f.adminCtx, 0, nil); err != nil {
 		t.Errorf("an administrator asking for stats: %v", err)
+	}
+}
+
+// TestMoveFitsInsideTheScopeIntegration is design doc 0129: a move runs
+// when its whole rewrite — the concept, the destination, and every live
+// concept that references it — sits inside what the caller may write,
+// and is refused whole otherwise.
+func TestMoveFitsInsideTheScopeIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	inside := f.prefix + "/growth/notes"
+	f.seed(t, inside, linkTo(f.mine))
+
+	// The ordinary case a team is in: the concept, the destination and
+	// the one thing that links at it are all theirs.
+	// Not "revenue-2": the assertion below is that the old id is gone
+	// from the referrer's prose, and an id that contains the old one as
+	// a substring cannot tell a rewrite from a no-op.
+	moved := f.prefix + "/growth/turnover"
+	if _, err := f.svc.Move(f.readCt, f.mine, moved, f.reader); err != nil {
+		t.Fatalf("a move whose rewrite stays inside the caller's grant: %v", err)
+	}
+	k, err := f.svc.Get(f.readCt, inside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(k.Body, moved) || strings.Contains(k.Body, f.mine) {
+		t.Errorf("the referrer inside the scope was not rewritten: %q", k.Body)
+	}
+
+	// The three refusals that need no referrer at all.
+	for _, refused := range []struct {
+		name     string
+		from, to string
+		want     error
+	}{
+		{"a destination outside the write scope", moved, f.prefix + "/personnel/revenue", ErrForbidden},
+		{"a source that is readable but not writable", f.shared, f.prefix + "/growth/arr", ErrForbidden},
+		{"a source outside the scope entirely", f.theirs, f.prefix + "/growth/salaries", store.ErrNotFound},
+	} {
+		if _, err := f.svc.Move(f.readCt, refused.from, refused.to, f.reader); !errors.Is(err, refused.want) {
+			t.Errorf("%s returned %v, want %v", refused.name, err, refused.want)
+		}
+	}
+
+	// And the one this record is about: something the caller cannot write
+	// links at the concept, so the rewrite would reach outside.
+	outside := f.prefix + "/personnel/headcount"
+	f.seed(t, outside, linkTo(moved))
+	again := f.prefix + "/growth/topline"
+	if _, err := f.svc.Move(f.readCt, moved, again, f.reader); !errors.Is(err, ErrForbidden) {
+		t.Errorf("a move whose rewrite reaches outside returned %v, want ErrForbidden", err)
+	}
+	// Refused whole: the concept did not move, and the referrer the
+	// caller may write was not rewritten on the way to the one they may
+	// not. Both halves matter — a partial move is the state a move exists
+	// to make impossible.
+	if _, err := f.svc.Get(f.readCt, moved); err != nil {
+		t.Errorf("the refused move left the concept at %s unreadable: %v", moved, err)
+	}
+	if k, err := f.svc.Get(f.readCt, inside); err != nil {
+		t.Fatal(err)
+	} else if !strings.Contains(k.Body, moved) {
+		t.Errorf("the refused move rewrote a referrer before refusing: %q", k.Body)
+	}
+
+	// An administrator's move is the way it gets done, and it rewrites
+	// the referrer the scoped caller could not.
+	if _, err := f.svc.Move(f.adminCtx, moved, again, f.admin); err != nil {
+		t.Fatalf("an administrator moving the same concept: %v", err)
+	}
+	if k, err := f.svc.Get(f.adminCtx, outside); err != nil {
+		t.Fatal(err)
+	} else if !strings.Contains(k.Body, again) {
+		t.Errorf("the administrator's move left the outside referrer pointing at the old id: %q", k.Body)
 	}
 }
 
@@ -394,8 +482,10 @@ func TestEveryWriteIsScopedIntegration(t *testing.T) {
 		"Policy": true, "RequireAdmin": true,
 		// Whole-bundle operations are refused by RequireAdmin rather than
 		// by an id, and TestPolicyBelongsToAdministratorsIntegration
-		// checks them by name.
-		"SetPolicy": true, "Reembed": true, "Move": true,
+		// checks them by name. Move used to be one of them and is not:
+		// it is refused by its id like any other write (design doc 0129),
+		// so the walk below covers it.
+		"SetPolicy": true, "Reembed": true,
 		// ReportOutcome takes a read grant by decision (0109 §4): it is
 		// the machine's observation of a concept it used.
 		"ReportOutcome": true,

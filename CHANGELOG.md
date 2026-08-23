@@ -21,6 +21,38 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **A move runs when its rewrite fits inside what the caller may write.**
+  `ochakai move`, `POST /api/v1/move`, and the web UI's move — the same
+  three addresses, refused until now to anyone an access policy scoped
+  (design doc 0129). Three things have to be the caller's to write and
+  they are the three the move writes: the concept, the destination, and
+  every live concept that links at the concept. A team renaming a
+  concept inside its own directory is that case, and it no longer needs
+  an administrator.
+
+  **Refused whole, never narrowed.** When something the caller may not
+  write links at the concept, the move does not happen — not even the
+  part of it that would have been in scope. Skipping those rewrites
+  would leave links pointing at an id that is gone, which is the one
+  thing a move exists to prevent, and a half-done move is worse than a
+  refused one. Ask an administrator, whose move is unbounded.
+
+  The refusals are three and they say different things. A destination
+  outside the caller's scope is a **403 naming it** — nothing is stored
+  there, so saying so answers no question about what the bundle holds.
+  A concept outside the scope is the **404** a read outside the scope
+  gets. A concept referenced from outside is a **403 that names no
+  referrer**: what the caller learns is that something, somewhere, links
+  at their own concept — no address, no count, no content.
+
+  **Nothing changes on a deployment with no access policy**, which is
+  every deployment that has not written a rule: there is no scope, so
+  there is nothing for a move to fit inside. No endpoint, parameter,
+  flag or tool is added — `export` of the whole base, `reembed` and the
+  access policy itself are what stay with the administrators.
+
 ## [0.27.1] - 2026-08-23
 
 ### Fixed

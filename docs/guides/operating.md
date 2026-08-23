@@ -716,12 +716,21 @@ ochakai access -f policy.json --if-match "$(jq -r .version policy.json)"
 **知っておくべきことが三つある。**
 
 1. **バンドル全体を取る操作は管理者のものになる** — `ochakai export`
-   (`--prefix` の付かない形)・`ochakai move`・`ochakai reembed`。
+   (`--prefix` の付かない形)・`ochakai reembed`。
    **`--prefix` を付けた export は別で、そのディレクトリを読める人なら
    取れる**(設計ドキュメント
    [0127](../design/0127-an-archive-says-which-part-it-is.md)) — アーカイブ
    が自分の範囲を名乗るので、部分をベース全体のバックアップと取り違え
    ようがない。
+   **`ochakai move` も別で、書き換えが自分の範囲に収まるなら動く**(設計
+   ドキュメント
+   [0129](../design/0129-a-move-runs-when-its-rewrite-fits.md)) — 動かす
+   concept・移動先・**その concept を指しているものすべて**が自分の書ける
+   ところにあれば通る。一つでも外にあると**丸ごと断られる**: 書き換えを
+   飛ばせば、飛ばしたリンクが切れた concept を指すことになり、それは move
+   が防ぐために在るものだからである。断られたときは管理者に頼む。
+   「あなたの書けないところから参照されている」という文言は、**どこから
+   かは言わない**。
    **`ochakai stats` は別で、範囲を持つ利用者も自分の数を読める**
    (設計ドキュメント
    [0123](../design/0123-the-numbers-say-what-they-counted.md))。答えの
