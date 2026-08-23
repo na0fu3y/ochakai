@@ -558,7 +558,12 @@ const (
 	// second, unrelated domain is the only one of the two growths that
 	// made the search narrower relative to what it was searching, which
 	// is what adding concepts nobody's question is about should do.
-	evalReachCeiling = 10.54
+	// The bundle's own prose moved it a third time, by a hair: the
+	// Japanese pass over examples/demo cut abstract nominal subjects and
+	// one repeated paragraph, and 10.54 became 10.47 with every rank
+	// unchanged. Words nobody searches for are still words the search
+	// can match on.
+	evalReachCeiling = 10.48
 
 	// Leak: of those, how many came from the other bundle. The two
 	// domains share nothing but the language, so a leaked hit is the
@@ -590,7 +595,10 @@ const (
 	// recall moved instead: three questions that could not find their
 	// concept at all, because the document spelled it ｵｰﾀﾞｰ and the
 	// question spelled it オーダー.
-	evalLeakCeiling = 2.14
+	// The Japanese pass over examples/demo took it 2.14 → 2.10, for the
+	// reason above: less prose in the demo is less Japanese for a kb
+	// question to match on.
+	evalLeakCeiling = 2.12
 
 	// What the dimensions read over this corpus, for the next change to
 	// aim at: english 12.83, mixed 12.43, question 11.97, keyword

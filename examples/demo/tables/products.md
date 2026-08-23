@@ -26,10 +26,9 @@ status: stable
 | `sku` | STRING | 倉庫側の識別子 |
 | `distribution_center_id` | INT64 | 出荷元。`distribution_centers` はカタログ外([データセット](/references/thelook-dataset.md)) |
 
-このテーブルまわりで多い間違いは、定価と実売を混ぜることである。粗利
-にはまだ metric が無い。書く場合は[売上](/metrics/revenue.md)と同じく
-明細側から書く。
+定価と実売を混ぜる間違いが多い。粗利にはまだ metric が無い。書く場合は
+[売上](/metrics/revenue.md)と同じく明細側から書く。
 
-返品率が高い商品を割り出してこのカタログの見直しにかけるのは、
-[返品率の高い商品の見直し](/actions/review-high-return-products.md)の
-仕事である。
+返品率が高い商品を割り出して取り扱いの見直しにかける手順は、
+[返品率の高い商品の見直し](/actions/review-high-return-products.md)に
+ある。
