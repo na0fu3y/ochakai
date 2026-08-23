@@ -21,6 +21,101 @@ last entry.
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-08-23
+
+### Added
+
+- **An archive of one directory can be taken by anyone who may read it,
+  and says that is what it is.** `ochakai export --prefix teams/growth`,
+  or `Accept: application/gzip` on that bundle path — the address that
+  has always read as a subtree. The whole base stays with the
+  administrators (design doc 0127).
+
+  The refusal this lifts was aimed at a danger of a different shape, and
+  measuring said so: `ochakai import` never deletes, so restoring an
+  incomplete export does not lose the rest — and **the hazard it did
+  name was already reachable**, because a subtree archive arrived with a
+  root `index.md` and the filename `ochakai-okf.tar.gz`, indistinguishable
+  from a whole-base backup. So the archive now names itself twice: the
+  root `index.md` carries `bundle_scope` in its frontmatter and a
+  sentence saying what is missing, and a subtree downloads as
+  `ochakai-okf-<subtree>.tar.gz`. **Whole-base archives and every deeper
+  `index.md` are unchanged.**
+
+  For an organization living in a directory of a shared deployment, this
+  is the exit that C1 promises, without the operator having to run it.
+
+
+- **A directory can have its own administrator.** An access rule gains
+  `may_admin`: the rules *under that prefix* are that principal's to
+  edit (design doc 0124). Until now handing a team its own directory
+  meant handing it `OCHAKAI_ADMINS`, and therefore the power to delete
+  every other team's boundary — and an automation that places one grant
+  per organization had to hold that permanently. A prefix administrator
+  reads only the rules they may edit, **and the rules they never saw
+  survive their write**, so the ordinary `ochakai access --json > f;
+  edit; ochakai access -f f` flow is safe to hand them. The `ETag` they
+  get covers what they read, so a rule they cannot see moving does not
+  fail their write; a rule they send outside their prefixes is a 403
+  rather than a silent drop. **`may_admin` at the root is refused** —
+  who may edit the whole policy is what `OCHAKAI_ADMINS` answers, and
+  putting that answer inside the policy is the revolving door 0109 §3
+  named. It implies `may_write`. Migration 0045 adds the column,
+  additive and defaulting to false, so every existing policy means
+  exactly what it meant.
+
+  One thing it does not reach, stated rather than closed: a rule
+  *shallower* than the delegated directory still governs it and stays
+  invisible to that directory's administrator, so the effective access
+  to a subtree can be wider than the rules its own administrator can
+  see.
+
+
+- **`GET /api/v1/stats` answers a caller who holds part of the bundle,
+  and the answer says what it counted.** Design doc 0109 §3 pooled these
+  numbers on the administrator because a subset would give the loop's
+  numbers a second meaning — but `prefix` could already produce that
+  subset, so what made it a second meaning was the answer never saying
+  which one it carried. It says now: a `scope` field carries the
+  prefixes counted, absent when they were the whole bundle, and an empty
+  list means the caller can see none of it (so the zeros are zeros for
+  that reason, not because nothing happened). An administrator asking
+  about one subtree gets the same declaration — the field is about the
+  numbers, not the caller. `ochakai stats` prints it as a `scope` line
+  and the queue hints name the same subtree (design doc 0123).
+- **The unanswered searches are withheld from a scoped caller rather
+  than narrowed**, and say so: a miss carries no concept id, so there is
+  nothing to narrow it by, and showing it unnarrowed would tell one team
+  what every other team searched for. `misses.withheld` on the wire,
+  `misses withheld` in the CLI — a different word from the existing
+  `misses -`, because the remedy is to ask an administrator rather than
+  to change `OCHAKAI_RECORD_MISSES`. `export`, `move`, `reembed` and the
+  access policy stay with the administrators.
+
+
+- **The access policy can be replaced conditionally.** `PUT
+  /api/v1/access` takes an `If-Match` precondition and both operations
+  answer with an `ETag`; a stale one is a 412 and nothing is written
+  (design doc 0120). The policy is one document read, edited and put
+  back whole, so two administrators who each add a rule left only the
+  second one's rule — no error, and the only signal was the person who
+  got dropped saying they could no longer read something. It matters
+  most where grants are placed by automation rather than by hand, which
+  is the shape design doc 0119 describes. Absent means last write wins,
+  as before, so nothing that works today stops working. The version is
+  in the body as `version` too — the way a concept's
+  `summary.content_hash` sits beside its ETag — so the document
+  `ochakai access --json` prints carries what a conditional write of it
+  needs, and `ochakai access -f` takes it straight back. `If-None-Match`
+  on this address is a 400: the policy always exists, so there is no
+  create to guard.
+- **`ochakai access --if-match <version>`**, and the printed policy ends
+  with a `version` line. No new spelling: it is the flag `put` and
+  `delete` already carry.
+- **The web UI's access editor sends the version it read.** A save that
+  would overwrite somebody else's edit now stops and says so, leaving
+  what you typed in the box — what the concept editor already did.
+
 ### Changed
 
 - **The MCP listings say how long they hold.** `tools/list`,
@@ -55,31 +150,6 @@ last entry.
   under a single directory gets the same walk for the same reason, and no
   setting turns it on or off.
 
-### Security
-
-- **Both web-UI commands refuse a cross-site write.** `ochakai ui` has
-  refused one since it was written; `ochakai serve-ui` — the deployed,
-  IAP-fronted one — had no such check, and design doc 0072 §1.2's line
-  that the two modes invert in "whether a browser guard is needed" is
-  what left it that way. What inverts is the bind address and where
-  identity comes from, not whether a write arriving from a browser can
-  be trusted, and the side without the check is the side where a browser
-  holds a credential it did not have to be given. A non-safe request
-  (anything but GET, HEAD and OPTIONS) that a browser says came from
-  another site is now a 403 before the proxy signs and forwards it
-  (design doc 0126). **Nothing that is not a browser changes**: the
-  check reads `Sec-Fetch-Site`, falling back to comparing `Origin` with
-  `Host`, and a request carrying neither header is allowed — so the CLI,
-  an agent over MCP, curl and a generated client send exactly what they
-  sent before, and no endpoint, parameter, header, flag or environment
-  variable is added. Reads are still served, `/health` included.
-  `ochakai serve` is deliberately unchanged: no configuration today lets
-  a browser reach it holding a credential. One tightening on `ochakai
-  ui`: an `Origin` naming a different loopback spelling than the `Host`
-  it reached (`http://localhost:PORT` against `127.0.0.1:PORT`) is now
-  refused — no browser produces that pair.
-
-### Changed
 
 - **BREAKING (non-core REST): a JSON request body is matched exactly and
   may name each key once.** `{"RULING":"verified"}` used to be a 200:
@@ -102,162 +172,6 @@ last entry.
   whose defaults are these two refusals; responses keep v1, because v2's
   marshaling defaults are bytes the frozen surface actually ships.
 
-### Added
-
-- **An archive of one directory can be taken by anyone who may read it,
-  and says that is what it is.** `ochakai export --prefix teams/growth`,
-  or `Accept: application/gzip` on that bundle path — the address that
-  has always read as a subtree. The whole base stays with the
-  administrators (design doc 0127).
-
-  The refusal this lifts was aimed at a danger of a different shape, and
-  measuring said so: `ochakai import` never deletes, so restoring an
-  incomplete export does not lose the rest — and **the hazard it did
-  name was already reachable**, because a subtree archive arrived with a
-  root `index.md` and the filename `ochakai-okf.tar.gz`, indistinguishable
-  from a whole-base backup. So the archive now names itself twice: the
-  root `index.md` carries `bundle_scope` in its frontmatter and a
-  sentence saying what is missing, and a subtree downloads as
-  `ochakai-okf-<subtree>.tar.gz`. **Whole-base archives and every deeper
-  `index.md` are unchanged.**
-
-  For an organization living in a directory of a shared deployment, this
-  is the exit that C1 promises, without the operator having to run it.
-
-### Added
-
-- **A directory can have its own administrator.** An access rule gains
-  `may_admin`: the rules *under that prefix* are that principal's to
-  edit (design doc 0124). Until now handing a team its own directory
-  meant handing it `OCHAKAI_ADMINS`, and therefore the power to delete
-  every other team's boundary — and an automation that places one grant
-  per organization had to hold that permanently. A prefix administrator
-  reads only the rules they may edit, **and the rules they never saw
-  survive their write**, so the ordinary `ochakai access --json > f;
-  edit; ochakai access -f f` flow is safe to hand them. The `ETag` they
-  get covers what they read, so a rule they cannot see moving does not
-  fail their write; a rule they send outside their prefixes is a 403
-  rather than a silent drop. **`may_admin` at the root is refused** —
-  who may edit the whole policy is what `OCHAKAI_ADMINS` answers, and
-  putting that answer inside the policy is the revolving door 0109 §3
-  named. It implies `may_write`. Migration 0045 adds the column,
-  additive and defaulting to false, so every existing policy means
-  exactly what it meant.
-
-  One thing it does not reach, stated rather than closed: a rule
-  *shallower* than the delegated directory still governs it and stays
-  invisible to that directory's administrator, so the effective access
-  to a subtree can be wider than the rules its own administrator can
-  see.
-
-### Added
-
-- **`GET /api/v1/stats` answers a caller who holds part of the bundle,
-  and the answer says what it counted.** Design doc 0109 §3 pooled these
-  numbers on the administrator because a subset would give the loop's
-  numbers a second meaning — but `prefix` could already produce that
-  subset, so what made it a second meaning was the answer never saying
-  which one it carried. It says now: a `scope` field carries the
-  prefixes counted, absent when they were the whole bundle, and an empty
-  list means the caller can see none of it (so the zeros are zeros for
-  that reason, not because nothing happened). An administrator asking
-  about one subtree gets the same declaration — the field is about the
-  numbers, not the caller. `ochakai stats` prints it as a `scope` line
-  and the queue hints name the same subtree (design doc 0123).
-- **The unanswered searches are withheld from a scoped caller rather
-  than narrowed**, and say so: a miss carries no concept id, so there is
-  nothing to narrow it by, and showing it unnarrowed would tell one team
-  what every other team searched for. `misses.withheld` on the wire,
-  `misses withheld` in the CLI — a different word from the existing
-  `misses -`, because the remedy is to ask an administrator rather than
-  to change `OCHAKAI_RECORD_MISSES`. `export`, `move`, `reembed` and the
-  access policy stay with the administrators.
-
-### Fixed
-
-- **A deployment that verifies its own tokens (`OCHAKAI_OIDC_ISSUER`)
-  now reads `Authorization`, so it can run behind Cloud Run IAM.**
-  It could not before: the header precedence written for the
-  Google-verified path applied to both, so such a deployment picked up
-  the token Cloud Run forwards — signature stripped — tried to verify it
-  against the operator's issuer, and answered **401 to every request**
-  while the caller's real credential sat unread in `Authorization` of
-  the same message. The failure read as cryptography for what was a
-  header in the wrong place. That configuration is Google's own
-  two-header split working as documented, and it is a useful one on its
-  own: reachability from Cloud Run IAM, identity from your own IdP. The
-  Cloud Run path is unchanged, where the precedence still has its
-  reason. A request carrying only `X-Serverless-Authorization` to an
-  OIDC deployment is now refused by name (design doc 0121).
-
-### Added
-
-- **The access policy can be replaced conditionally.** `PUT
-  /api/v1/access` takes an `If-Match` precondition and both operations
-  answer with an `ETag`; a stale one is a 412 and nothing is written
-  (design doc 0120). The policy is one document read, edited and put
-  back whole, so two administrators who each add a rule left only the
-  second one's rule — no error, and the only signal was the person who
-  got dropped saying they could no longer read something. It matters
-  most where grants are placed by automation rather than by hand, which
-  is the shape design doc 0119 describes. Absent means last write wins,
-  as before, so nothing that works today stops working. The version is
-  in the body as `version` too — the way a concept's
-  `summary.content_hash` sits beside its ETag — so the document
-  `ochakai access --json` prints carries what a conditional write of it
-  needs, and `ochakai access -f` takes it straight back. `If-None-Match`
-  on this address is a 400: the policy always exists, so there is no
-  create to guard.
-- **`ochakai access --if-match <version>`**, and the printed policy ends
-  with a `version` line. No new spelling: it is the flag `put` and
-  `delete` already carry.
-- **The web UI's access editor sends the version it read.** A save that
-  would overwrite somebody else's edit now stops and says so, leaving
-  what you typed in the box — what the concept editor already did.
-
-### Fixed
-
-- **A caller who is not an administrator can no longer write the first
-  access rule.** On a deployment with no grants every caller passes the
-  whole-bundle check — that is design doc 0109 §2's promise that no rules
-  means no boundary — so `PUT /api/v1/access` used to accept a first rule
-  from anyone, commit it, log `access policy replaced`, and *then* answer
-  **403**, because re-reading the policy on the way out ran the same check
-  against the boundary that had just been created. The status code is the
-  one that says nothing was written, so nothing that saw it could tell a
-  refused write from a landed one, and an automated caller retrying
-  replaced the policy again each time. The refusal now happens before the
-  write, naming the lockout: a policy is edited by the principals
-  `OCHAKAI_ADMINS` names, and placing the first rule is what hands the
-  policy to them (design doc 0122, amending 0109 §3). **Nothing that
-  worked stops working** — every call this refuses already ended in a 403,
-  since the check on the way out could never pass. Clearing the policy is
-  unchanged, as is the separate 400 a deployment that names no
-  administrators gets. The web UI's access editor now says why a save was
-  refused instead of passing the message through.
-- **`ochakai import` no longer reads through a symlink out of the bundle,
-  and `ochakai export` no longer writes through one out of the directory
-  it was given.** A bundle is ordinary content — cloned, unpacked, handed
-  over on a drive — so a link inside one named `revenue.md` and pointing
-  at `~/.ssh/id_rsa` used to be read and written to the knowledge base
-  under that id: a file the importer never looked at, published to
-  everyone the deployment serves. The walk declined to *descend* a
-  symlinked directory and said nothing about reading a symlinked file,
-  which is the half that reads something. On the way back out,
-  `filepath.IsLocal` reads the name an archive carries and cannot see
-  that a directory already on disk is a link somewhere else. Both paths
-  now go through `os.Root`, so the kernel refuses a name that leaves the
-  directory instead of the walk's shape implying it; the name check
-  stays, because the two answer different questions. An ordinary bundle
-  imports exactly as before.
-- **`GET /api/v1/access` answered `{"rules": null}` on a deployment with
-  no grants**, where `api/openapi.yaml` declares `rules` a required
-  array. Every deployment starts in that state; no integration test had
-  read an empty policy over the wire, so the contract check had nothing
-  to check, and a client generated from the spec would have refused the
-  most ordinary response there is. It is `[]` now (design doc 0120 §6).
-
-### Changed
 
 - **The Terraform module moves to the Google provider 7.x, and the web UI
   stops going through `google-beta`.** IAP on Cloud Run went GA in March
@@ -409,7 +323,88 @@ last entry.
   been proposed as sweeps by a reading of the tree; the tool is what
   settled them.
 
+### Fixed
+
+- **A deployment that verifies its own tokens (`OCHAKAI_OIDC_ISSUER`)
+  now reads `Authorization`, so it can run behind Cloud Run IAM.**
+  It could not before: the header precedence written for the
+  Google-verified path applied to both, so such a deployment picked up
+  the token Cloud Run forwards — signature stripped — tried to verify it
+  against the operator's issuer, and answered **401 to every request**
+  while the caller's real credential sat unread in `Authorization` of
+  the same message. The failure read as cryptography for what was a
+  header in the wrong place. That configuration is Google's own
+  two-header split working as documented, and it is a useful one on its
+  own: reachability from Cloud Run IAM, identity from your own IdP. The
+  Cloud Run path is unchanged, where the precedence still has its
+  reason. A request carrying only `X-Serverless-Authorization` to an
+  OIDC deployment is now refused by name (design doc 0121).
+
+
+- **A caller who is not an administrator can no longer write the first
+  access rule.** On a deployment with no grants every caller passes the
+  whole-bundle check — that is design doc 0109 §2's promise that no rules
+  means no boundary — so `PUT /api/v1/access` used to accept a first rule
+  from anyone, commit it, log `access policy replaced`, and *then* answer
+  **403**, because re-reading the policy on the way out ran the same check
+  against the boundary that had just been created. The status code is the
+  one that says nothing was written, so nothing that saw it could tell a
+  refused write from a landed one, and an automated caller retrying
+  replaced the policy again each time. The refusal now happens before the
+  write, naming the lockout: a policy is edited by the principals
+  `OCHAKAI_ADMINS` names, and placing the first rule is what hands the
+  policy to them (design doc 0122, amending 0109 §3). **Nothing that
+  worked stops working** — every call this refuses already ended in a 403,
+  since the check on the way out could never pass. Clearing the policy is
+  unchanged, as is the separate 400 a deployment that names no
+  administrators gets. The web UI's access editor now says why a save was
+  refused instead of passing the message through.
+- **`ochakai import` no longer reads through a symlink out of the bundle,
+  and `ochakai export` no longer writes through one out of the directory
+  it was given.** A bundle is ordinary content — cloned, unpacked, handed
+  over on a drive — so a link inside one named `revenue.md` and pointing
+  at `~/.ssh/id_rsa` used to be read and written to the knowledge base
+  under that id: a file the importer never looked at, published to
+  everyone the deployment serves. The walk declined to *descend* a
+  symlinked directory and said nothing about reading a symlinked file,
+  which is the half that reads something. On the way back out,
+  `filepath.IsLocal` reads the name an archive carries and cannot see
+  that a directory already on disk is a link somewhere else. Both paths
+  now go through `os.Root`, so the kernel refuses a name that leaves the
+  directory instead of the walk's shape implying it; the name check
+  stays, because the two answer different questions. An ordinary bundle
+  imports exactly as before.
+- **`GET /api/v1/access` answered `{"rules": null}` on a deployment with
+  no grants**, where `api/openapi.yaml` declares `rules` a required
+  array. Every deployment starts in that state; no integration test had
+  read an empty policy over the wire, so the contract check had nothing
+  to check, and a client generated from the spec would have refused the
+  most ordinary response there is. It is `[]` now (design doc 0120 §6).
+
 ### Security
+
+- **Both web-UI commands refuse a cross-site write.** `ochakai ui` has
+  refused one since it was written; `ochakai serve-ui` — the deployed,
+  IAP-fronted one — had no such check, and design doc 0072 §1.2's line
+  that the two modes invert in "whether a browser guard is needed" is
+  what left it that way. What inverts is the bind address and where
+  identity comes from, not whether a write arriving from a browser can
+  be trusted, and the side without the check is the side where a browser
+  holds a credential it did not have to be given. A non-safe request
+  (anything but GET, HEAD and OPTIONS) that a browser says came from
+  another site is now a 403 before the proxy signs and forwards it
+  (design doc 0126). **Nothing that is not a browser changes**: the
+  check reads `Sec-Fetch-Site`, falling back to comparing `Origin` with
+  `Host`, and a request carrying neither header is allowed — so the CLI,
+  an agent over MCP, curl and a generated client send exactly what they
+  sent before, and no endpoint, parameter, header, flag or environment
+  variable is added. Reads are still served, `/health` included.
+  `ochakai serve` is deliberately unchanged: no configuration today lets
+  a browser reach it holding a credential. One tightening on `ochakai
+  ui`: an `Origin` naming a different loopback spelling than the `Host`
+  it reached (`http://localhost:PORT` against `127.0.0.1:PORT`) is now
+  refused — no browser produces that pair.
+
 
 - **A release carries its attestations as a file beside the archives**,
   `ochakai_X.Y.Z.intoto.jsonl`. The archives and the image have carried
@@ -5487,7 +5482,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.26.3...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/na0fu3y/ochakai/compare/v0.26.3...v0.27.0
 [0.26.3]: https://github.com/na0fu3y/ochakai/compare/v0.26.2...v0.26.3
 [0.26.2]: https://github.com/na0fu3y/ochakai/compare/v0.26.1...v0.26.2
 [0.26.1]: https://github.com/na0fu3y/ochakai/compare/v0.26.0...v0.26.1
