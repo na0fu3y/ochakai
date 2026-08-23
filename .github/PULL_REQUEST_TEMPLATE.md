@@ -9,6 +9,10 @@ context, including the store integration test and the fuzz targets).
 
 - [ ] `scripts/check` is clean — add `--db` when the change touches the store
 - [ ] Behavior changes come with tests
+- [ ] Behavior changes have a line under `## [Unreleased]` in `CHANGELOG.md`
+      — the `changelog` workflow checks for one when a non-test file under
+      `internal/` or `cmd/` moves; if this change is not behavior, label the
+      PR `no-changelog` and say why above
 
 ## Surfaces and contract
 
