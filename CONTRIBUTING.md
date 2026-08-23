@@ -273,6 +273,13 @@ sessions off the CLI write commands, which the dev instance would record
 as the anonymous human — agent writes go through the MCP tools, whose
 connection carries the process identity
 ([kb/bundle/policies/ai-human-identity.md](kb/bundle/policies/ai-human-identity.md)).
+On a contributor's machine the session-start hook also brings that
+instance up — `docker compose up -d` when Docker is running and nothing
+answers on :8080, and a first load of `kb/bundle` when the instance is
+empty and the bundle carries no `verified:` key, so that nothing is
+ruled on. Both loop hooks stay silent by design when the instance is
+down, which for a fortnight read as "nothing relevant" while the stack
+was simply not running; recall now says so once per session instead.
 That deny list is the one permissions entry that is not a personal
 choice; everything else about permissions belongs in
 `.claude/settings.local.json`, which is not tracked.
