@@ -564,13 +564,12 @@ const (
 	// unchanged. Words nobody searches for are still words the search
 	// can match on.
 	//
-	// And back up to 10.49 when insights/reading-revenue was given the
-	// magnitudes it was missing: a longer document is matched by more
-	// questions, which is the price of the content and not a ranking
-	// change — recall stayed 1.00 and **every one of the 88 cases landed
-	// on the rank it landed on before**. Both passes together still leave
-	// the search narrower than the 10.54 they started from.
-	evalReachCeiling = 10.51
+	// Then 10.47 → 10.44, when the same Insight was rewritten around the
+	// magnitudes it had been missing. Measured numbers and the checks
+	// they support took the place of prose about how to read, so the
+	// document says more and matches less. recall stayed 1.00 and **every
+	// one of the 88 cases landed on the rank it landed on before**.
+	evalReachCeiling = 10.46
 
 	// Leak: of those, how many came from the other bundle. The two
 	// domains share nothing but the language, so a leaked hit is the
@@ -604,9 +603,9 @@ const (
 	// question spelled it オーダー.
 	// The Japanese pass over examples/demo took it 2.14 → 2.10, for the
 	// reason above: less prose in the demo is less Japanese for a kb
-	// question to match on. Giving reading-revenue its magnitudes put
-	// 0.01 of that back (2.10 → 2.11), the mirror of the same reason.
-	evalLeakCeiling = 2.13
+	// question to match on. Rewriting reading-revenue around its numbers
+	// took another 0.01 (2.10 → 2.09), the mirror of the same reason.
+	evalLeakCeiling = 2.11
 
 	// What the dimensions read over this corpus, for the next change to
 	// aim at: english 12.83, mixed 12.43, question 11.97, keyword
