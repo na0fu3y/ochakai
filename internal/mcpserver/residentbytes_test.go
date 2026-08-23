@@ -57,21 +57,32 @@ func declaredCap(t *testing.T, content []byte, re *regexp.Regexp, name string) i
 }
 
 // residentBytes is what a client keeps for the whole conversation: the
-// instructions, and every tool's name, description and schemas, as the
-// wire carries them.
+// instructions, and every tool entry as the wire carries it.
 //
-// *Both* schemas, because the wire carries both and a client holds what
-// the wire gave it. Counting the input schema alone is what let 14,986
-// bytes of output schema — more than everything this number did count —
-// sit outside a budget whose whole subject is what an agent holds
-// (design doc 0103). They are nil today; the loop reads them anyway, so
-// the next one to declare an output schema pays for it here rather than
-// discovering that the budget was never watching that half.
+// **The whole entry, marshalled, rather than a sum of the fields worth
+// naming.** That is the difference between this budget measuring the
+// surface and the budget measuring whatever somebody remembered to add
+// to a sum. It has been the latter twice. Counting the input schema
+// alone let 14,986 bytes of output schema — more than everything the
+// number did count — sit outside a budget whose whole subject is what an
+// agent holds, and design doc 0103 added the second schema to the sum.
+// Adding a term is not a fix for that shape of bug: annotations were
+// still outside it, so six tools' worth of hints and the JSON around
+// every field were sent on every turn and counted on none. A field the
+// SDK or a future spec revision adds is now counted the day it appears,
+// which is the only version of this check that cannot go quietly wrong
+// again.
+//
+// It also closes an escape hatch that a sum of named fields leaves open:
+// `annotations.title` is free text. Prose moved there would have been
+// invisible to a budget whose entire purpose is to make prose visible.
 //
 // Measured from a real session rather than from the source, for the
 // reason design doc 0035 gives: the schema a client receives is
 // generated from struct tags, and a count that read the tags would miss
-// whatever the generator adds around them.
+// whatever the generator adds around them. Marshalling the entry the
+// session returned takes that one step further — the bytes counted are
+// the bytes that arrived.
 func residentBytes(t *testing.T) (total int, perTool map[string]int) {
 	t.Helper()
 	ctx := context.Background()
@@ -82,23 +93,30 @@ func residentBytes(t *testing.T) (total int, perTool map[string]int) {
 	}
 	perTool = map[string]int{}
 	for _, tool := range res.Tools {
-		schema, err := json.Marshal(tool.InputSchema)
+		entry, err := json.Marshal(tool)
 		if err != nil {
-			t.Fatalf("marshal %s schema: %v", tool.Name, err)
+			t.Fatalf("marshal %s: %v", tool.Name, err)
 		}
-		out := 0
+		perTool[tool.Name] = len(entry)
+		total += len(entry)
+
+		// The breakdown only. These are the parts worth naming when the
+		// cap is hit, and they do not have to add up to the line above —
+		// the whole entry is what counts, and the difference is the JSON
+		// around them.
+		if schema, err := json.Marshal(tool.InputSchema); err == nil {
+			perTool[tool.Name+" (schema)"] = len(schema)
+		}
 		if tool.OutputSchema != nil {
-			outSchema, err := json.Marshal(tool.OutputSchema)
-			if err != nil {
-				t.Fatalf("marshal %s output schema: %v", tool.Name, err)
+			if outSchema, err := json.Marshal(tool.OutputSchema); err == nil {
+				perTool[tool.Name+" (output schema)"] = len(outSchema)
 			}
-			out = len(outSchema)
-			perTool[tool.Name+" (output schema)"] = out
 		}
-		n := len(tool.Name) + len(tool.Description) + len(schema) + out
-		perTool[tool.Name] = n
-		perTool[tool.Name+" (schema)"] = len(schema)
-		total += n
+		if tool.Annotations != nil {
+			if ann, err := json.Marshal(tool.Annotations); err == nil {
+				perTool[tool.Name+" (annotations)"] = len(ann)
+			}
+		}
 	}
 	// The ordinary posture's instructions, which is what connect(t)
 	// serves and what all but one deployment sends. A sandbox appends a
@@ -118,6 +136,10 @@ func TestMCPStaysUnderItsResidentByteCap(t *testing.T) {
 		names = append(names, name)
 	}
 	sort.Slice(names, func(i, j int) bool { return perTool[names[i]] > perTool[names[j]] })
+	// A bare tool name is its whole entry, which is what the total is
+	// made of; the parenthesised rows are parts of that entry, printed
+	// because they are where the bytes usually went. They do not sum to
+	// it — the rest is the JSON around them.
 	breakdown := &strings.Builder{}
 	fmt.Fprintf(breakdown, "  %-16s %6d\n", "instructions", len(instructions))
 	for _, name := range names {
