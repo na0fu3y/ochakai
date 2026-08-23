@@ -214,15 +214,24 @@ Download the whole knowledge base as an OKF bundle (markdown + YAML
 frontmatter) into dir, or stream the tar.gz to stdout with "-".
 Your knowledge is yours.
 
+With --prefix it is one directory of the base instead, which anyone
+who may read that directory can take. A subtree bundle says so in its
+root index.md and in the name it streams under, because a part of a
+base and the whole of one are otherwise the same shape — and the day
+that matters is the day somebody restores it.
+
 Flags:
   -no-files
     	export the markdown only, skipping file bytes
+  -prefix directory
+    	export one directory of the bundle rather than the whole base: the archive carries that subtree, says so in its root index.md, and is not a backup of the base. Anyone who may read the directory may take it; the whole base stays with the administrators
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
   ochakai export ./knowledge
   ochakai export - > ochakai-okf.tar.gz
+  ochakai export --prefix teams/growth - > growth.tar.gz   # one directory, not a backup of the base
   ochakai export --no-files - > concepts.tar.gz   # bytes are in GCS; copy them from there
 ```
 

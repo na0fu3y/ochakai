@@ -268,6 +268,10 @@ input[type=date]:not(:focus):invalid, input[type=date]:not(:focus):placeholder-s
 }
 .weak-matches .card { opacity: .75; }
 .truncation-note { color: var(--muted); font-size: .86rem; text-align: center; padding: .8rem 0; }
+/* Where the tree starts, when that is not the bundle's root. Quiet, and
+   above the first node, because it is context rather than an entry. */
+.walked-from { color: var(--muted); font-size: .8rem; padding: 0 0 .4rem; word-break: break-all; }
+.walked-from a { margin-right: .35rem; }
 .feed-banner {
   background: var(--accent-weak); border: 1px solid var(--border); border-radius: 8px;
   padding: .55rem .9rem; margin-bottom: 1rem; font-size: .92rem; color: var(--accent-strong);

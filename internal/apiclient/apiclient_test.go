@@ -355,7 +355,7 @@ func TestExportStreamsBody(t *testing.T) {
 				}
 				_, _ = w.Write([]byte("tarball-bytes"))
 			})
-			rc, err := c.Export(context.Background(), tc.files)
+			rc, err := c.Export(context.Background(), tc.files, "")
 			if err != nil {
 				t.Fatal(err)
 			}

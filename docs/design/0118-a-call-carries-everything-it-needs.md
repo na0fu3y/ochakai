@@ -7,7 +7,7 @@ HTTP」を改訂する — 面もツールも一つも動かず、変わるの�
 [0065](0065-identity-and-provenance.md) §4 の「無ければ initialize の
 `clientInfo` をフォールバックとして読む」を改訂する(§3)。
 **同じプロトコルが list に足した TTL のヒントを ochakai 自身が答えるのは
-[0127](0127-a-listing-says-how-long-it-holds.md)** — セッションが無くなった
+[0128](0128-a-listing-says-how-long-it-holds.md)** — セッションが無くなった
 ぶん、一覧は接続ごとに引き直される。
 Date: 2026-08-23
 

@@ -3794,3 +3794,87 @@ func TestAccessPolicyCarriesItsVersionAndHonoursIfMatch(t *testing.T) {
 		t.Fatalf("a document carrying the version it was read at: %s", resp.Status)
 	}
 }
+
+// Design doc 0127: an archive of a subtree says it is one, in the two
+// places its reader meets it — the name it arrives under, and the root
+// index.md inside it. Before this, a subtree and a whole base were the
+// same shape, so a part of a base could be kept as a backup and found
+// wanting on the day it was restored.
+func TestRESTIntegrationASubtreeArchiveSaysItIsOne(t *testing.T) {
+	lockLiveAttachments(t)
+	srv, _ := newIntegrationServer(t)
+	root := testdb.Unique(t, "restscope")
+	ids := []string{root + "/teams/growth/revenue", root + "/glossary/arr"}
+	for _, id := range ids {
+		putDoc(t, srv.URL, id, []byte("---\ntype: Metric\ntitle: "+id+"\n---\n\nbody\n"), false).Body.Close()
+	}
+	removeEntries(t, srv, ids...)
+
+	read := func(t *testing.T, at string) (disposition string, rootIndex string, paths []string) {
+		t.Helper()
+		resp, err := getArchive(t, srv.URL+"/api/v1/bundle"+at, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		gz, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tr := tar.NewReader(gz)
+		for {
+			h, err := tr.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			paths = append(paths, h.Name)
+			if h.Name == "index.md" {
+				b, err := io.ReadAll(tr)
+				if err != nil {
+					t.Fatal(err)
+				}
+				rootIndex = string(b)
+			}
+		}
+		return resp.Header.Get("Content-Disposition"), rootIndex, paths
+	}
+
+	// The whole base is exactly what it was.
+	disp, index, _ := read(t, "/")
+	if !strings.Contains(disp, `filename="ochakai-okf.tar.gz"`) {
+		t.Errorf("the whole base arrived as %q", disp)
+	}
+	if strings.Contains(index, "bundle_scope") {
+		t.Errorf("a whole-base archive declared a scope:\n%s", index)
+	}
+
+	// A subtree names itself twice.
+	sub := root + "/teams/growth"
+	disp, index, paths := read(t, "/"+sub)
+	if !strings.Contains(disp, "ochakai-okf-"+strings.ReplaceAll(sub, "/", "-")+".tar.gz") {
+		t.Errorf("a subtree archive arrived as %q, want its own name", disp)
+	}
+	if !strings.Contains(index, `bundle_scope: "`+sub+`"`) {
+		t.Errorf("the root index carries no bundle_scope:\n%s", index)
+	}
+	if !strings.Contains(index, "not a whole-base backup") {
+		t.Errorf("the root index does not say what it is to a person:\n%s", index)
+	}
+	// And it is still a bundle: full paths, its own indexes, and nothing
+	// from outside the subtree.
+	var carried bool
+	for _, p := range paths {
+		if p == sub+"/revenue.md" {
+			carried = true
+		}
+		if strings.Contains(p, "glossary") {
+			t.Errorf("the subtree archive carried %q from outside it", p)
+		}
+	}
+	if !carried {
+		t.Errorf("the subtree archive is missing its own concept: %v", paths)
+	}
+}

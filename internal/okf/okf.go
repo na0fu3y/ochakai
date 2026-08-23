@@ -284,7 +284,11 @@ var reservedKeys = func() map[string]bool {
 // documents, and OKF says nothing about a directory of pure data, so
 // there is no index.md there to list it in. The file is in the archive
 // either way, at its own path — what enters the bundle leaves it (§3.2).
-func Indexes(entries []domain.Knowledge, files []domain.File) map[string][]byte {
+// Indexes generates the index.md of every directory in the bundle.
+//
+// scope names the subtree when this is an archive of one, so the root
+// index can say so (design doc 0127); "" is a whole base.
+func Indexes(entries []domain.Knowledge, files []domain.File, scope string) map[string][]byte {
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 	root := &dir{}
 	for _, k := range entries {
@@ -296,7 +300,7 @@ func Indexes(entries []domain.Knowledge, files []domain.File) map[string][]byte 
 		root.insertFile(strings.Split(f.Path, "/"), f)
 	}
 	out := map[string][]byte{}
-	root.writeIndexes(out, "")
+	root.writeIndexes(out, "", scope)
 	return out
 }
 
@@ -362,7 +366,7 @@ func (d *dir) subdirNames() []string {
 // Index files carry no frontmatter (SPEC §6) — except the bundle root,
 // where an okf_version declaration is the one permitted block (§11) — and
 // list their entries with relative links, as in the spec's examples.
-func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
+func (d *dir) writeIndexes(files map[string][]byte, prefix, scope string) {
 	var dirs, concepts []IndexLine
 	for _, name := range d.subdirNames() {
 		noun := "concepts"
@@ -387,10 +391,14 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix string) {
 	for _, f := range d.files {
 		fileLines = append(fileLines, FileIndexLine(f.Name, f.MediaType, f.Size))
 	}
-	files[prefix+"index.md"] = IndexDocument(strings.TrimSuffix(prefix, "/"),
-		[]IndexSection{{Lines: dirs}, {Lines: concepts}, {Heading: FileSection, Lines: fileLines}})
+	sections := []IndexSection{{Lines: dirs}, {Lines: concepts}, {Heading: FileSection, Lines: fileLines}}
+	if prefix == "" && scope != "" {
+		files["index.md"] = SubtreeIndexDocument(scope, sections)
+	} else {
+		files[prefix+"index.md"] = IndexDocument(strings.TrimSuffix(prefix, "/"), sections)
+	}
 	for name, sub := range d.subdirs {
-		sub.writeIndexes(files, prefix+name+"/")
+		sub.writeIndexes(files, prefix+name+"/", scope)
 	}
 }
 

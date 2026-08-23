@@ -26,7 +26,7 @@ last entry.
 - **The MCP listings say how long they hold.** `tools/list`,
   `resources/list` and `resources/templates/list` now answer with a TTL
   hint of five minutes; `resources/read` keeps answering zero (design doc
-  0127). This is a correction rather than an addition: protocol
+  0128). This is a correction rather than an addition: protocol
   2026-07-28 added the field, the SDK has been filling it in on every
   response with zero, and the spec reads zero as *consider this
   immediately stale* — so ochakai was telling every client its tool list
@@ -38,6 +38,22 @@ last entry.
   renamed tool name keeps answering for. A concept is knowledge and
   changes when somebody writes it, which is why the read is not cached.
   Nothing is added to an agent's context and no counted surface moves.
+- **The web UI starts where the knowledge does.** A caller granted one
+  directory (design doc 0109) opened the page on a root holding one
+  directory holding one directory, and two clicks stood between them and
+  their own knowledge every time it loaded. The sidebar and the home
+  listing now walk past the levels that hold **one directory and nothing
+  else**, and both begin at the first level with something to choose
+  between. A line above the tree names the path walked and links back to
+  the bundle's root.
+
+  It hides nothing: the step is taken only when the level has no concepts
+  and no files of its own, so what is skipped is a corridor rather than a
+  room. Ids are unchanged everywhere — a walked page still spells
+  `teams/growth/metrics/revenue` in full, because a second spelling of an
+  address is what this must not buy. An administrator whose base lives
+  under a single directory gets the same walk for the same reason, and no
+  setting turns it on or off.
 
 ### Security
 
@@ -85,6 +101,28 @@ last entry.
   produce neither shape. Bodies are read through `encoding/json/v2`,
   whose defaults are these two refusals; responses keep v1, because v2's
   marshaling defaults are bytes the frozen surface actually ships.
+
+### Added
+
+- **An archive of one directory can be taken by anyone who may read it,
+  and says that is what it is.** `ochakai export --prefix teams/growth`,
+  or `Accept: application/gzip` on that bundle path — the address that
+  has always read as a subtree. The whole base stays with the
+  administrators (design doc 0127).
+
+  The refusal this lifts was aimed at a danger of a different shape, and
+  measuring said so: `ochakai import` never deletes, so restoring an
+  incomplete export does not lose the rest — and **the hazard it did
+  name was already reachable**, because a subtree archive arrived with a
+  root `index.md` and the filename `ochakai-okf.tar.gz`, indistinguishable
+  from a whole-base backup. So the archive now names itself twice: the
+  root `index.md` carries `bundle_scope` in its frontmatter and a
+  sentence saying what is missing, and a subtree downloads as
+  `ochakai-okf-<subtree>.tar.gz`. **Whole-base archives and every deeper
+  `index.md` are unchanged.**
+
+  For an organization living in a directory of a shared deployment, this
+  is the exit that C1 promises, without the operator having to run it.
 
 ### Added
 

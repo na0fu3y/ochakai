@@ -10,7 +10,7 @@ import (
 )
 
 // A listing says how long it holds, and a knowledge read does not
-// (design doc 0127). Both halves matter: the SDK fills this field in on
+// (design doc 0128). Both halves matter: the SDK fills this field in on
 // the way out whether or not ochakai decides it, so "we set no TTL" is
 // not a state the wire has — it is the wire saying "immediately stale".
 func TestAListingSaysHowLongItHolds(t *testing.T) {

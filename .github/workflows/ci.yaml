@@ -238,18 +238,22 @@ jobs:
         env:
           OCHAKAI_TEST_SMOKE_REQUIRED: "1"
 
-  # The workflows themselves. Every other check in this repository reads
-  # Go, YAML that describes the API, or the repository's settings; the
-  # four files in this directory are the one thing that decides what runs
-  # with which token and reads nothing.
+  # The workflows themselves, and `dependabot.yml` beside them — zizmor
+  # collects what GitHub reads, and letting it choose is what keeps this
+  # and `scripts/check actions` looking at one set. Every other check in
+  # this repository reads Go, YAML that describes the API, or the
+  # repository's settings; these files are the one thing that decides what
+  # runs with which token, and nothing else read them.
   #
   # It reports nothing today, which is the condition design doc 0035
   # §3.1 puts on a check before it may exist: the properties zizmor
   # audits are ones this repository already keeps by hand — actions
   # pinned by commit SHA, `persist-credentials: false` on every checkout,
   # the narrowest `permissions`, and no untrusted value reaching a `run:`
-  # through an expression. So this buys no cleanup. What it buys is that
-  # the next file added here cannot quietly drop one of them.
+  # through an expression. It reported one thing on the way in, and the
+  # fix is in `dependabot.yml`: a version update now waits out a cooldown.
+  # What this buys from here on is that the next file added cannot quietly
+  # drop one of them.
   #
   # `persona` stays at its default. At `pedantic` there are eighteen more
   # findings, and the ones that carry weight say the `services:` image is

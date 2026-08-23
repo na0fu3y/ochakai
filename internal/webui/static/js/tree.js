@@ -2,6 +2,7 @@
 // navigation (design docs 0014, 0016).
 
 import { READ_ONLY, api } from './api.js';
+import { descendSingleRoad } from './descend.js';
 import { $ } from './dom.js';
 import { esc } from './escape.js';
 import { dirHash, displayTitle, idPath } from './format.js';
@@ -12,7 +13,18 @@ import { icon } from './vocab.js';
 // directories, loaded one level per request; the root is the top-level
 // segments. Expanded nodes survive navigation within the session and
 // are restored (re-fetched) on a tree refresh.
-export const browse = { open: new Set() }; // keys: prefix
+export const browse = {
+  open: new Set(), // keys: prefix
+  // root is the level the tree starts at, which is not always the
+  // bundle's root — see descendSingleRoad. Read by the home page so
+  // that what it lists and what the sidebar shows are one answer.
+  root: '',
+  // ready resolves when root holds that answer. The home view renders
+  // from the same boot as the tree and got there first, so reading root
+  // without waiting listed the corridor the sidebar had just walked
+  // past — the two panels disagreeing about where the base begins.
+  ready: Promise.resolve(),
+};
 
 // knownDirs are the directory prefixes the tree has loaded, plus the
 // root — the completions offered where a destination path is typed.
@@ -25,11 +37,24 @@ export function knownDirs() {
 // refreshTree (re)loads the root level; wireNodes then reloads every
 // node restored as open. Called at boot, from the ↻ button, and after
 // writes that change what the tree shows (create, delete, status).
-export async function refreshTree() {
+export function refreshTree() {
+  const done = loadTree();
+  // Every refresh republishes the answer, because a write can turn a
+  // corridor into a room (or back).
+  browse.ready = done.catch(() => {});
+  return done;
+}
+
+async function loadTree() {
   const tree = $('#tree');
   try {
-    const res = await api('/api/v1/bundle/index.md');
-    tree.innerHTML = levelHTML(res, '') || '<div class="empty">まだナレッジがありません。</div>';
+    const walked = await descendSingleRoad(
+      await api('/api/v1/bundle/index.md'), '',
+      p => api(`/api/v1/bundle/${idPath(p.replace(/\/$/, ''))}/index.md`));
+    browse.root = walked.prefix;
+    const body = levelHTML(walked.level, walked.prefix);
+    tree.innerHTML = (walkedFromHTML(walked.prefix) + body)
+      || '<div class="empty">まだナレッジがありません。</div>';
     wireNodes(tree);
     // A deep link may have rendered before the tree existed (boot) or
     // before this refresh; re-reveal the current entry or directory in
@@ -45,6 +70,16 @@ export async function refreshTree() {
   }
 }
 $('#tree-refresh').addEventListener('click', refreshTree);
+
+// walkedFromHTML names the corridor the tree skipped, with the way back
+// to the real root. The tree starting somewhere other than the bundle's
+// root is a thing a reader has to be able to see, and undo: without this
+// line the page would be claiming an address it does not have.
+function walkedFromHTML(prefix) {
+  if (!prefix) return '';
+  return `<div class="walked-from"><a href="${dirHash('')}" title="バンドルの一番上を開きます">/</a>${
+    esc(prefix.replace(/\/$/, ''))} から表示しています</div>`;
+}
 
 export function nodeHTML(prefix, label, count) {
   // The ＋ prefills the editor's ID with this directory — no retyping the

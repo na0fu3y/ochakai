@@ -6,7 +6,7 @@
 #                          CGO_ENABLED=0 build
 #   scripts/check ui       the web UI's own tests (node --test)
 #   scripts/check lint     golangci-lint
-#   scripts/check actions  zizmor, over .github/workflows
+#   scripts/check actions  zizmor, over this repository
 #   scripts/check vuln     govulncheck
 #   scripts/check --db …   run a throwaway PostgreSQL for the store tests
 #
@@ -272,7 +272,12 @@ run_lint() {
 }
 
 # The workflows, audited by the tool CI's `actions` job runs. Offline, so
-# this and CI answer the same thing from the same bytes.
+# this and CI answer the same thing from the same bytes — and over the
+# same bytes: both hand it the repository root and let it collect, which
+# is more than the workflows — `dependabot.yml` is in the set, and a first
+# version of this step that named `.github/workflows` passed locally while
+# CI failed on that file. Whatever the tool decides to read, both read
+# it.
 #
 # zizmor is neither a Go tool nor a Node one, so unlike every other step
 # here there is no runtime already required for something else to run it
@@ -290,12 +295,12 @@ run_actions() {
 	esac
 	if command -v zizmor >/dev/null 2>&1; then
 		step "zizmor $(zizmor --version | awk '{print $2}') (on PATH, not the pinned $v)"
-		zizmor --offline .github/workflows/
+		zizmor --offline .
 		return
 	fi
 	if command -v uvx >/dev/null 2>&1; then
 		step "zizmor $v"
-		uvx "zizmor@$v" --offline .github/workflows/
+		uvx "zizmor@$v" --offline .
 		return
 	fi
 	step "workflow audit skipped (no zizmor and no uvx; CI runs it)"

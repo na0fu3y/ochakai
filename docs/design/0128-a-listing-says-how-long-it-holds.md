@@ -1,4 +1,4 @@
-# ochakai 設計ドキュメント 0127: 一覧は、いつまで持つかを言う
+# ochakai 設計ドキュメント 0128: 一覧は、いつまで持つかを言う
 
 Status: Accepted(2026-08-23)。[0118](0118-a-call-carries-everything-it-needs.md)
 が転送を stateless にしたぶんの後始末で、**プロトコル 2026-07-28 が
