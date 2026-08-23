@@ -44,7 +44,7 @@ func TestReembedCursorEmpty(t *testing.T) {
 
 func TestReembedCursorRefusals(t *testing.T) {
 	var inputErr *InvalidInputError
-	listingCursor := encodeCursor("usage", []*string{ptr("74"), ptr("2026-07-14T02:33:41Z")}, "insights/seasonality")
+	listingCursor := encodeCursor("usage", []*string{new("74"), new("2026-07-14T02:33:41Z")}, "insights/seasonality")
 
 	for _, tc := range []struct {
 		name, cursor string

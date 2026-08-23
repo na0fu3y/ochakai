@@ -395,7 +395,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 	// together — the merge is where the saving actually was.
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "put_concept",
-		Annotations: nonDestructive,
+		Annotations: replacingWrite,
 		Description: "Write a concept: created if the id is free, replaced if it is taken.\n" +
 			"The document you send is the whole concept — a key you leave out is cleared, so on a " +
 			"replace, get_concept first and send back what you are not changing. Every change is " +
@@ -496,7 +496,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "report_outcome",
-		Annotations: nonDestructive,
+		Annotations: recordingWrite,
 		Description: "Report whether knowledge you acted on actually worked — the last edge of the " +
 			"write-back loop. After running an attested computation, or SQL you wrote from a " +
 			"metric definition, report worked, or failed with what went wrong in note: failed " +
@@ -538,14 +538,39 @@ var writeTools = []string{"put_concept", "report_outcome"}
 // never change a concept (they may bump usage counters — telemetry the hint
 // deliberately ignores). Writes are non-destructive because history is kept
 // as revisions, and no tool on this surface is destructive — the one that
-// was, delete_concept, left with design doc 0076. The values are immutable
-// and shared across tools.
+// was, delete_concept, left with design doc 0076. The values are
+// immutable: readOnly is shared by the four reads, and the two writes
+// each have their own, for the reason below.
+//
+// openWorldHint is false on all six, and it is the one hint whose default
+// is wrong here: the spec's own example for a closed world is a memory
+// tool, and every tool on this surface reads or writes this deployment's
+// own base and reaches nothing else. Left unsaid it defaults to true,
+// which would tell a client these calls go somewhere unbounded — the
+// opposite of what ochakai refuses to do (design doc 0081: no LLM, no
+// SQL, and the only hosts it contacts are Google Cloud APIs in the
+// caller's own project).
+//
+// idempotentHint is where the two writes stop being one thing, so they no
+// longer share a value. put_concept is a replace at an address: the same
+// document written twice lands the same concept, and an identical write
+// is recorded as no revision at all. report_outcome is not — every call
+// is another outcome, which is the point (design doc 0069: the loop is
+// measured by how often knowledge was used and how often it failed), so a
+// client that retried it would move a counter the curator reads. The
+// hint says which of the two a retry is safe on, and that is exactly the
+// question a retry has to answer.
 var (
-	readOnly       = &mcp.ToolAnnotations{ReadOnlyHint: true}
-	nonDestructive = &mcp.ToolAnnotations{DestructiveHint: boolPtr(false)}
+	readOnly = &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: new(false)}
+	// A write whose repeat lands the same concept.
+	replacingWrite = &mcp.ToolAnnotations{
+		DestructiveHint: new(false), IdempotentHint: true, OpenWorldHint: new(false),
+	}
+	// A write whose repeat is a second record.
+	recordingWrite = &mcp.ToolAnnotations{
+		DestructiveHint: new(false), OpenWorldHint: new(false),
+	}
 )
-
-func boolPtr(b bool) *bool { return &b }
 
 // parseKnowledgeURI extracts the concept id from a canonical knowledge URI
 // (ochakai://<id>). ok is false when the URI lacks the scheme or what

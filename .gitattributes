@@ -1,0 +1,14 @@
+# Line endings are LF in the repository, on every machine that clones it.
+#
+# Two files here are goldens a test regenerates and compares byte for byte
+# — docs/cli.md (TestCLIReferenceIsCurrent) and api/openapi.frozen.txt —
+# and two are shell scripts CI executes, scripts/check and scripts/mcpb. A
+# Windows checkout with core.autocrlf at its default would rewrite all four
+# on the way in, so `-update` would report a whole-file diff and a script
+# would fail on its shebang. This is what keeps a contributor's platform
+# out of the diff.
+* text=auto eol=lf
+
+# The only binaries tracked here: four web UI screenshots and the MCP
+# bundle's icon. Named so git neither converts nor tries to diff them.
+*.png binary

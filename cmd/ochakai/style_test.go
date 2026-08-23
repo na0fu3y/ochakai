@@ -19,13 +19,11 @@ var ansi = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 // rather than a second output format nobody can grep.
 func TestStyledLineStripsBackToThePlainOne(t *testing.T) {
 	page := &apiclient.SearchResult{Hits: []domain.SearchHit{{
-		Summary: domain.Summary{
-			ID:          "metrics/revenue",
-			Status:      domain.StatusStable,
-			Title:       "売上",
-			Description: "完了した注文の合計",
-		},
-		Snippet: "…返品を差し引く…",
+		ID:          "metrics/revenue",
+		Status:      domain.StatusStable,
+		Title:       "売上",
+		Description: "完了した注文の合計",
+		Snippet:     "…返品を差し引く…",
 	}}}
 
 	plain, _ := capture(t, func() { printHits(page, "") })

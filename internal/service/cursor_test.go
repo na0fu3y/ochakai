@@ -25,14 +25,14 @@ func TestCursorRoundTrip(t *testing.T) {
 	}{
 		{sort: "verified_at", keys: []*string{&at}, id: "metrics/revenue"},
 		{sort: "verified_at", keys: []*string{nil}, id: "glossary/completed-order"},
-		{sort: "usage", keys: []*string{ptr("74"), &at}, id: "insights/seasonality"},
-		{sort: "failed", keys: []*string{ptr("3"), ptr("0"), nil}, id: "queries/broken"},
+		{sort: "usage", keys: []*string{new("74"), &at}, id: "insights/seasonality"},
+		{sort: "failed", keys: []*string{new("3"), new("0"), nil}, id: "queries/broken"},
 		{sort: "source", keys: nil, id: "tables/shop-orders"},
 		// An id with the separator the encoding joins on, and one with a
 		// character base64url has to survive.
-		{sort: "stale_after", keys: []*string{ptr("2026-12-31")}, id: "a/b?c+d"},
+		{sort: "stale_after", keys: []*string{new("2026-12-31")}, id: "a/b?c+d"},
 		// An empty ordering value is a value, not an absent one.
-		{sort: "stale_after", keys: []*string{ptr("")}, id: "x"},
+		{sort: "stale_after", keys: []*string{new("")}, id: "x"},
 	} {
 		enc := encodeCursor(tc.sort, tc.keys, tc.id)
 		got, err := decodeCursor(enc, tc.sort, len(tc.keys))
@@ -64,7 +64,7 @@ func TestCursorRoundTrip(t *testing.T) {
 // a position here.
 func TestCursorRefusals(t *testing.T) {
 	var inputErr *InvalidInputError
-	usage := encodeCursor("usage", []*string{ptr("74"), ptr("2026-07-14T02:33:41Z")}, "insights/seasonality")
+	usage := encodeCursor("usage", []*string{new("74"), new("2026-07-14T02:33:41Z")}, "insights/seasonality")
 
 	for _, tc := range []struct {
 		name, cursor, sort, want string
@@ -114,7 +114,7 @@ func TestSearchRefusesACursor(t *testing.T) {
 func TestCursorKeysMatchTheOrder(t *testing.T) {
 	at := time.Date(2026, 7, 14, 2, 33, 41, 19778000, time.UTC)
 	hit := domain.SearchHit{
-		Summary: domain.Summary{ID: "metrics/revenue", StaleAfter: "2026-12-31", VerifiedAt: &at, CreatedAt: at},
+		ID: "metrics/revenue", StaleAfter: "2026-12-31", VerifiedAt: &at, CreatedAt: at,
 		// search_hits and fetches differ on purpose: the usage feed ranks
 		// by reads, and a cursor built from the listings it was ranked by
 		// until now would pass every other assertion here.
@@ -148,13 +148,13 @@ func TestCursorKeysMatchTheOrder(t *testing.T) {
 
 	// A feed whose ordering value is absent carries the absence, which is
 	// the never-verified tail of two of them.
-	unverified := domain.SearchHit{Summary: domain.Summary{ID: "x"}, Usage: &domain.Usage{}}
+	unverified := domain.SearchHit{ID: "x", Usage: &domain.Usage{}}
 	if k := cursorKeys("verified_at", unverified); len(k) != 1 || k[0] != nil {
 		t.Errorf("a never-verified entry's cursor key = %v, want the absent one", k)
 	}
 	// A listing whose hits carry no usage object at all must still produce
 	// a position rather than panic: score-0 listings share one wire shape.
-	if k := cursorKeys("usage", domain.SearchHit{Summary: domain.Summary{ID: "x"}}); len(k) != 3 || *k[0] != "0" {
+	if k := cursorKeys("usage", domain.SearchHit{ID: "x"}); len(k) != 3 || *k[0] != "0" {
 		t.Errorf("a hit with no usage totals = %v, want a zero position", k)
 	}
 }
@@ -163,7 +163,7 @@ func TestCursorKeysMatchTheOrder(t *testing.T) {
 // nothing behind it must not hand one out, or every walk gains a trailing
 // request that returns nothing (design doc 0050 §2.3).
 func TestNextCursorOnlyWhenMoreFollows(t *testing.T) {
-	hits := []domain.SearchHit{{Summary: domain.Summary{ID: "a", StaleAfter: "2026-01-01"}}}
+	hits := []domain.SearchHit{{ID: "a", StaleAfter: "2026-01-01"}}
 	if got := nextCursor("stale_after", hits, false); got != "" {
 		t.Errorf("the last page handed out a cursor: %q", got)
 	}
@@ -174,8 +174,6 @@ func TestNextCursorOnlyWhenMoreFollows(t *testing.T) {
 		t.Error("a page with more behind it handed out no cursor")
 	}
 }
-
-func ptr(s string) *string { return &s }
 
 // encodeRaw builds a cursor body the encoder would never produce, for the
 // refusals that a well-formed one cannot reach.
@@ -231,7 +229,7 @@ func TestBrowseCursorCarriesBothRunsAndItsDirectory(t *testing.T) {
 		!strings.Contains(err.Error(), "sales") || !strings.Contains(err.Error(), "glossary") {
 		t.Errorf("a cursor from another directory = %v, want a refusal naming both", err)
 	}
-	if _, err := decodeBrowseCursor(encodeCursor("usage", []*string{ptr("7"), ptr("x")}, "sales/"), "sales/"); err == nil {
+	if _, err := decodeBrowseCursor(encodeCursor("usage", []*string{new("7"), new("x")}, "sales/"), "sales/"); err == nil {
 		t.Error("a cursor from the usage feed resumed a level")
 	}
 	// The root has no name of its own, so the refusal gives it one rather

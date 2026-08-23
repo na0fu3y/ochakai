@@ -52,7 +52,7 @@ func TestCheckedLimit(t *testing.T) {
 }
 
 func hit(id string, status domain.Status) domain.SearchHit {
-	return domain.SearchHit{Summary: domain.Summary{Type: domain.TypeMetrics, ID: id, Status: status}}
+	return domain.SearchHit{Type: domain.TypeMetrics, ID: id, Status: status}
 }
 
 // verifiedHit is hit plus a confirmation. The rank boost keys off the

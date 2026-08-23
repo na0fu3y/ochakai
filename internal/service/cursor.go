@@ -127,7 +127,10 @@ func cursorKeys(sort string, h domain.SearchHit) []*string {
 	case "verified_at":
 		return []*string{cursorTime(h.VerifiedAt)}
 	case "stale_after":
-		return []*string{cursorText(h.StaleAfter)}
+		// A pointer to the text, never nil: an empty ordering value is
+		// still a value and not a NULL, and the feeds that order by text
+		// only list rows that have one.
+		return []*string{new(h.StaleAfter)}
 	case "usage":
 		u := usageOf(h)
 		return []*string{cursorCount(u.Recent.Fetches), cursorCount(u.Fetches), cursorTime(&h.CreatedAt)}
@@ -168,10 +171,6 @@ func cursorCount(n int64) *string {
 	s := strconv.FormatInt(n, 10)
 	return &s
 }
-
-// cursorText carries a text ordering key. An empty one is still a value,
-// not a NULL — the feeds that order by text only list rows that have it.
-func cursorText(s string) *string { return &s }
 
 // nextCursor returns the cursor for the page after hits, or "" when the
 // listing ended. more says whether the store had a row beyond the page:

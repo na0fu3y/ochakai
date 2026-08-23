@@ -810,10 +810,7 @@ func efSearch(limit int) int {
 		defaultEF = 40   // pgvector's own default
 		maxEF     = 1000 // pgvector's ceiling
 	)
-	ef := max(4*limit, defaultEF)
-	if ef > maxEF {
-		ef = maxEF
-	}
+	ef := min(max(4*limit, defaultEF), maxEF)
 	return ef
 }
 

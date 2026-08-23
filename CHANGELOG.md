@@ -189,6 +189,79 @@ last entry.
   accumulating (the SDK never expires an idle one), and a deployment is
   free to run more than one instance, which sessions in one instance's
   memory had ruled out.
+- **The MCP tools say whether a retry is safe, and that the world they
+  reach is closed.** Two hints were left at their spec defaults, and both
+  defaults were wrong here. `openWorldHint` defaults to true — "this call
+  goes somewhere unbounded" — where every tool on this surface reads or
+  writes this deployment's own base and reaches nothing else; it is false
+  on all six now. `idempotentHint` is where the two writes stop being one
+  thing: `put_concept` is a replace at an address, so the same document
+  written twice lands the same concept and an identical write is recorded
+  as no revision at all, while `report_outcome` is another outcome every
+  time it is called, which is the point — a client that retried it would
+  move a counter the curator reads. They no longer share an annotation.
+  Nothing an operator sets changes, no tool is added or removed, and the
+  hints are annotations rather than schema, so no counted surface moves.
+- **`scripts/check core` runs `go fix -diff`**, and the tree it now holds
+  still. Since Go 1.26 `go fix` is not the pre-1.0 API renamer its name
+  comes from: it runs the modernizers, and `-diff` prints the patch
+  instead of applying it, exiting non-zero when it is not empty — the
+  shape design doc 0035 §3.1 asks of a check, silent on a clean tree, so
+  a finding always means new code written in an older idiom. Unlike the
+  linter there is no version to pin, because it ships with the toolchain
+  `go.mod` already names. Applying it once touched twelve files and
+  changed no behaviour: `new(expr)` for the four `&x`-returning helpers,
+  which are gone now that their callers say it directly; `reflect.Pointer`
+  for `reflect.Ptr`; one `if` that was spelling `min`; a loop-variable
+  copy Go 1.22 made redundant; and embedded struct literals written as
+  the fields they set. What it did *not* report is worth as much, because
+  the fixers for those ran as well: `slicessort` read twelve
+  `sort.Slice` and `sort.SliceStable` calls and left every one, and
+  `stringsseq` left all eight `range strings.Split` loops — seven range
+  over an index, which a value-only iterator cannot hand back. Both had
+  been proposed as sweeps by a reading of the tree; the tool is what
+  settled them.
+
+### Security
+
+- **A release carries its attestations as a file beside the archives**,
+  `ochakai_X.Y.Z.intoto.jsonl`. The archives and the image have carried
+  provenance attestations for a long time, but the attestations lived only
+  in GitHub's attestation store, which `gh attestation verify` reads and
+  two readers cannot: an OSS
+  review that walks release assets — OpenSSF Scorecard's Signed-Releases
+  scored this repository 0 while every artifact was signed — and anyone
+  verifying without reaching github.com, who now has `gh attestation
+  verify <file> --bundle <this>` offline. The guarantee is unchanged; what
+  changed is that it is reachable. The upload happens before the release
+  is published, for the reason the step above it already gives.
+- **Both base images are pinned by digest as well as tag.** A tag is a
+  name its owner can repoint — `nonroot` is rebuilt in place — so the same
+  commit built twice was not necessarily the same image. Dependabot reads
+  the tag-and-digest pair and opens the pull request that moves both, so
+  the pin is a value somebody bumps in a commit rather than one that goes
+  stale.
+- **The release archives are byte-reproducible.** goreleaser stamped the
+  build's wall clock into the binaries, so rebuilding a tag produced
+  different archives and a different `checksums.txt`; they now carry the
+  commit's own timestamp, which is a property of the tag rather than of
+  the runner. `-trimpath` was already removing the other half.
+- **No workflow leaves its token in the checkout.** `persist-credentials:
+  false` on every one of them now — it was set on the Scorecard job alone
+  and missing from the other eight, none of which pushes with git: the
+  release jobs talk to GHCR through the registry login and to `gh`, which
+  reads its token from the environment. The token in `.git/config` was
+  readable by every later step and used by none of them.
+- **govulncheck runs weekly as well as on every commit**, because a
+  vulnerability published against an already-pinned dependency arrives on
+  somebody else's schedule. The other four jobs in that file decline a
+  scheduled run.
+- **CodeQL analyses the Go on push, on pull requests and weekly.** The
+  linters in `.golangci.yml` are local by design and none of them can see
+  a request parameter reach a SQL string; this is the analysis that
+  follows a value across packages. It reports into code scanning beside
+  Scorecard's SARIF and does not gate a merge. Design doc 0035 §3.1's
+  rule applies to it too: if it reports on a clean tree, it comes out.
 
 ## [0.26.3] - 2026-08-22
 
