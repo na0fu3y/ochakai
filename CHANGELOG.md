@@ -21,6 +21,23 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A deployment that verifies its own tokens (`OCHAKAI_OIDC_ISSUER`)
+  now reads `Authorization`, so it can run behind Cloud Run IAM.**
+  It could not before: the header precedence written for the
+  Google-verified path applied to both, so such a deployment picked up
+  the token Cloud Run forwards — signature stripped — tried to verify it
+  against the operator's issuer, and answered **401 to every request**
+  while the caller's real credential sat unread in `Authorization` of
+  the same message. The failure read as cryptography for what was a
+  header in the wrong place. That configuration is Google's own
+  two-header split working as documented, and it is a useful one on its
+  own: reachability from Cloud Run IAM, identity from your own IdP. The
+  Cloud Run path is unchanged, where the precedence still has its
+  reason. A request carrying only `X-Serverless-Authorization` to an
+  OIDC deployment is now refused by name (design doc 0121).
+
 ### Added
 
 - **The access policy can be replaced conditionally.** `PUT

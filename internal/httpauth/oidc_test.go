@@ -343,3 +343,72 @@ func TestAVerifiedEmailWarnsAboutNothing(t *testing.T) {
 		t.Errorf("warned about a verified email:\n%s", buf.String())
 	}
 }
+
+// Design doc 0121: the two paths do not read the same header, and the
+// configuration this fixes is an OIDC deployment behind Cloud Run IAM —
+// Google's own two-header split, where the platform checks
+// X-Serverless-Authorization and the application checks Authorization.
+// Preferring the Google header there answered 401 to every request while
+// the caller's real credential sat in the message unread.
+func TestOIDCReadsTheCallersHeaderNotCloudRuns(t *testing.T) {
+	iss := newFakeIssuer(t)
+	cfg := &config.Config{Verifier: verifierFor(t, iss)}
+	var seen domain.Actor
+	h := Middleware(cfg, http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		seen = Actor(r.Context())
+	}))
+	token := iss.token(t, struct {
+		jwt.Claims
+		Email         string `json:"email"`
+		EmailVerified bool   `json:"email_verified"`
+	}{standardClaims(iss, "ochakai"), "tanaka@example.co.jp", true})
+
+	// What Cloud Run forwards after its own IAM check: the signature is
+	// stripped, and this issuer never minted it.
+	googles := "Bearer " + fakeIDToken(`{"email":"caller@example.iam.gserviceaccount.com"}`)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/search?q=x", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-Serverless-Authorization", googles)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("an OIDC deployment behind Cloud Run IAM answered %d: %s", rec.Code, rec.Body)
+	}
+	if seen.Name != "tanaka@example.co.jp" || seen.Kind != domain.ActorHuman {
+		t.Errorf("recorded actor = %+v; want the person the issuer vouched for", seen)
+	}
+
+	// The Cloud Run header alone is not a credential here, and the
+	// refusal says where the token should have been rather than
+	// reporting a signature failure for a header in the wrong place.
+	req = httptest.NewRequest(http.MethodGet, "/api/v1/search?q=x", nil)
+	req.Header.Set("X-Serverless-Authorization", googles)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("got %d, want 401", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "reads Authorization") {
+		t.Errorf("the refusal does not say which header this deployment reads: %s", body)
+	}
+}
+
+// And the Cloud Run path keeps the precedence its own reason still
+// supports: there, one of the two headers was validated in front of the
+// process, so reading the other would let an authorized caller be
+// recorded as somebody else.
+func TestCloudRunPathStillPrefersTheServerlessHeader(t *testing.T) {
+	cfg := &config.Config{} // no verifier
+	h := http.Header{}
+	h.Set("Authorization", "Bearer "+fakeIDToken(`{"email":"impostor@example.com"}`))
+	h.Set("X-Serverless-Authorization", "Bearer "+fakeIDToken(`{"email":"real@example.com"}`))
+	token, err := callerToken(cfg, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor, err := callerFrom(cfg, token)
+	if err != nil || actor.Name != "real@example.com" {
+		t.Errorf("actor = %+v, err = %v; want the header Cloud Run validated", actor, err)
+	}
+}

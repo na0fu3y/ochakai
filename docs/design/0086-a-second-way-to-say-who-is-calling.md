@@ -6,7 +6,10 @@ secret-zero([0065](0065-identity-and-provenance.md))も、認可を持たない
 ことも、埋め込みが Vertex AI であることも動かさない。
 **§4 の「email が無い / verified が false」は
 [0117](0117-a-person-recorded-as-a-process-says-so.md) が改訂した** —
-記録の仕方は同じで、黙って行わなくなった
+記録の仕方は同じで、黙って行わなくなった。**この経路が資格情報をどの
+ヘッダで受け取るかは [0121](0121-each-path-reads-its-own-header.md)** —
+自分で検証するデプロイは `Authorization` だけを読む(検証の中身も記録
+される名前も動かない)
 Date: 2026-08-09
 
 ## 1. 何が起きたか

@@ -115,18 +115,62 @@ func authenticated(cfg *config.Config, h http.Header) (domain.Actor, int, error)
 			domain.Actor{Kind: domain.ActorHuman, Name: "anonymous"},
 			h.Values(OnBehalfOfHeader), []string{"*"})
 	}
-	// When both headers are present, Cloud Run validates only
-	// X-Serverless-Authorization — so it must take precedence here,
-	// or an authorized caller could impersonate via Authorization.
-	token := bearerFrom(h.Get("X-Serverless-Authorization"))
-	if token == "" {
-		token = bearerFrom(h.Get("Authorization"))
+	token, err := callerToken(cfg, h)
+	if err != nil {
+		return domain.Actor{}, http.StatusUnauthorized, err
 	}
 	actor, err := callerFrom(cfg, token)
 	if err != nil {
 		return domain.Actor{}, http.StatusUnauthorized, err
 	}
 	return delegate(actor, h.Values(OnBehalfOfHeader), cfg.Delegators)
+}
+
+// callerToken picks the header the caller's credential is in, which is
+// not the same header on the two paths (design doc 0121).
+//
+// On the Cloud Run path both may arrive and only one of them was
+// checked: Google validates X-Serverless-Authorization in preference to
+// Authorization, so this must prefer it too — otherwise an authorized
+// caller could put somebody else's name in Authorization and be recorded
+// as them.
+//
+// A deployment that verifies its own tokens reads Authorization and
+// nothing else. The reason for the precedence above is that one header
+// was validated in front of the process; here neither was, so there is
+// no impersonation to prevent — the verifier checks whichever token it
+// is handed. What preferring the Google header does instead is shadow
+// the caller's real credential with one this issuer never minted, and
+// **that is Google's own two-header split working exactly as
+// documented**: a client that must satisfy Cloud Run IAM *and* carry an
+// application token puts the Google token in X-Serverless-Authorization
+// and its own in Authorization. Reading the first turned that
+// configuration — an OIDC deployment behind Cloud Run IAM, which is
+// belt and braces rather than an exotic request — into a service that
+// answered 401 to every request while a valid credential sat in the
+// message unread.
+func callerToken(cfg *config.Config, h http.Header) (string, error) {
+	if _, ok := cfg.Verifier.(Verifier); ok && cfg.Verifier != nil {
+		if token := bearerFrom(h.Get("Authorization")); token != "" {
+			return token, nil
+		}
+		// Naming it rather than falling back: the fallback would read a
+		// token minted for Google's check against this deployment's
+		// issuer, and answer "signature does not verify" — an error
+		// about cryptography for what is a header being in the wrong
+		// place (design doc 0117's shape: say it instead of doing the
+		// confusing thing quietly).
+		if h.Get("X-Serverless-Authorization") != "" {
+			return "", errors.New(
+				"this deployment verifies its own tokens and reads Authorization; " +
+					"the credential arrived in X-Serverless-Authorization, which is Cloud Run's header for the check it makes in front of the process")
+		}
+		return "", nil
+	}
+	if token := bearerFrom(h.Get("X-Serverless-Authorization")); token != "" {
+		return token, nil
+	}
+	return bearerFrom(h.Get("Authorization")), nil
 }
 
 // callerFrom resolves the caller by whichever of the two checks this

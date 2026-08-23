@@ -819,7 +819,26 @@ crossing says a corpus grows when a change costs something a reader would
 not otherwise be told about, and that stating the cost is most of the
 record.
 
-    RECORD-CORPUS-LINES: 10000
+10,000 → 10,500 is 0119, 0120 and 0121, and what they have in common is
+an order: one record written ahead of need, and two written because it
+sent somebody to look. 0119 says nothing new about the product — it
+writes down the shape one operator running ochakai for many
+organizations would use, and names the change that would close it — and
+then 0120 and 0121 are the first two pieces of homework it lists. **The
+second of those found a configuration that had been broken since the day
+0086 landed**: an OIDC deployment behind Cloud Run IAM answered 401 to
+every request, because the header precedence written for the
+Google-verified path was still applying to a path nothing verifies in
+front of. Nobody had reported it, because nobody had a reason to build
+that configuration until a record said what it was for. So this crossing
+names a pressure the earlier ones did not: **a corpus grows when a record
+written ahead of need sends somebody to read code nobody had a reason to
+run.** The 7,000 crossing said the cheapest place to find a record that
+stopped being true is a release audit; this one says the second cheapest
+is writing down a shape you have not built yet, because the writing is
+what makes the gap between the shape and the code legible.
+
+    RECORD-CORPUS-LINES: 10500
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded
