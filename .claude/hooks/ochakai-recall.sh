@@ -29,9 +29,21 @@ case $prompt in
 /*) exit 0 ;; # slash commands are not knowledge questions
 esac
 
-hits=$(ochakai search "$prompt" --limit "${OCHAKAI_RECALL_LIMIT:-8}" --json 2>/dev/null) || exit 0
-
 session=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null) || session=""
+
+if ! hits=$(ochakai search "$prompt" --limit "${OCHAKAI_RECALL_LIMIT:-8}" --json 2>/dev/null); then
+	# Down. Say so once per session rather than never: for a fortnight
+	# this hook's silence read as "nothing relevant" while the instance
+	# was simply not running. session-start.sh brings it up when Docker
+	# is there; this is the line for when it could not.
+	[ -n "$session" ] || exit 0
+	marker="${TMPDIR:-/tmp}/ochakai-down-$session"
+	[ -e "$marker" ] && exit 0
+	: >"$marker" 2>/dev/null || true
+	printf 'The dogfood ochakai instance at %s is not answering, so this session has no recall and no write-back (kb/README.md). `docker compose -f deploy/compose.yaml up -d` brings it up; say so to the user rather than working as if there were nothing to recall.\n' "$OCHAKAI_URL"
+	exit 0
+fi
+
 if [ -n "$session" ]; then
 	# The search answered, so the write-back nudge has somewhere to send
 	# the agent — even when the answer was empty.

@@ -15,6 +15,12 @@ ochakai use http://localhost:8080
 ochakai import kb/bundle
 ```
 
+Claude Code のセッションでは `.claude/hooks/session-start.sh` がこれを
+代わりに行う — Docker が動いていれば compose を上げ、インスタンスが
+**空で、かつバンドルに `verified:` キーが一つも無いとき**だけ import
+する(draft しか無いバンドルの読み込みは何も裁定しない)。バンドルが
+検証を運ぶようになったら、import は下の規則どおり人の手に戻る。
+
 そこから先 — 誰がどの identity で書くか、レビューの回し方、ここへの
 書き戻し — は
 [skills/run-the-dogfood-loop](bundle/skills/run-the-dogfood-loop.md) と
