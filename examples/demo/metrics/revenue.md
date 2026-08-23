@@ -20,8 +20,9 @@ unit: USD
 
 売上は、[完了した注文](/glossary/completed-order.md)に属する
 [明細](/tables/order-items.md)の `sale_price` を、明細の `created_at`
-で束ねて合計したものである。式は `SUM(sale_price)` だけなので、この数字
-で揉めるときは、たいていどの行が入るかで揉めている。
+で束ねて合計したものである。これが売上の定義である。式は
+`SUM(sale_price)` だけなので、この数字で揉めるときは、たいていどの行が
+入るかで揉めている。
 
 自明ではない点が三つある。
 
