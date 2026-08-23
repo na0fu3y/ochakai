@@ -78,6 +78,66 @@ last entry.
   read-only rule is unchanged too: on a frozen deployment the whole
   editor is absent, as it was.
 
+### Fixed
+
+- **A frontmatter this instance's keys could not be appended to no
+  longer breaks the document.** The trust family ochakai publishes
+  (`generated` / `verified` / `created_by`) is appended to a stored
+  document's frontmatter as lines, and the lines were written at column
+  0 whatever column the frontmatter was at. A mapping indented by a
+  space — unusual YAML, and valid YAML — is *ended* by a key less
+  indented than itself, so what came back out of `GET` with
+  `Accept: text/markdown`, out of `ochakai get`, and out of a bundle
+  export was a document that no longer parsed, carrying keys the write
+  path could then no longer take off again. The same append ran on the
+  way in, where it stored such a document in a form that no longer
+  parsed and dropped the claim it had just taken out of it.
+
+  The line surgery beside it had the same shape of fault twice more, and
+  both times what was lost was a key the writer owned rather than one of
+  ours. A flow mapping's keys do not have lines of their own, so taking
+  out "the lines this key occupies" took the neighbour with it:
+  `{type: Metric, generated: x}` arrived with a type and was stored
+  without one. And the parser counts a bare carriage return as a line
+  break where the surgery counts only `\n`, so a frontmatter holding one
+  was numbered a line ahead of where the cut landed — `generated` was
+  read on one line and a *different* line was removed.
+
+  The keys are now written at the frontmatter mapping's own column, and
+  the append checks its own work: it goes on only if taking it off again
+  gives back the document that came in. A frontmatter whose lines do not
+  answer to keys is not addressed at all — a flow mapping, one numbered
+  in line breaks the cut does not count, and one carrying a `...` or
+  `--- ` marker, where the mapping stops before the block does — and one
+  the keys cannot be appended to is left exactly as it arrived: no
+  surgery in either direction — nothing is taken out of it on the way in and
+  nothing is put back on the way out, so it still round-trips byte for
+  byte, and what it loses is only this instance's provenance *in the
+  markdown export*. Every other reader of provenance is unaffected: the
+  JSON representations, the trust tier and `trust=` read the ledgers,
+  never the document. Nothing ochakai writes and nothing written by hand
+  in the ordinary way is one of these shapes, so no stored document
+  moves — the only documents this reaches are the ones it was
+  corrupting.
+
+- **Normalizing a stored document is idempotent, so sending back what a
+  read handed you answers `unchanged`.** The two normalizations a write
+  applies — CRLF to LF, and exactly one newline at the end (design doc
+  0075 §3) — did not hold on a text whose carriage returns sat against a
+  line ending. `\r\r\n` had its CRLF replaced and was left holding a new
+  one, and a document ending in a bare CR kept it and had a newline
+  appended after it: both stored a CRLF, out of a document the CRLF rule
+  had just been applied to, and only the *next* normalization folded it.
+  The user-visible effect was a `PUT` of the exact bytes a read returned
+  answering `plan: updated` and writing a second revision of identical
+  content.
+
+  **This moves the content hash of a stored document that ends in a bare
+  CR or contains a `\r\r\n`** — the first write after upgrading rewrites
+  it once, with the carriage returns gone, and settles there. A carriage
+  return in the middle of a line is nobody's line ending and still
+  stays.
+
 ## [0.27.1] - 2026-08-23
 
 ### Fixed

@@ -65,14 +65,57 @@ const ClaimKey = "received"
 // exactly one newline. Nothing else — no NFC normalization of the
 // content, which design doc 0022 applies to keys (ids, filenames, link
 // targets, queries) and deliberately not to what a writer wrote.
+//
+// Carriage returns are cut wherever a line ending would be left holding
+// one, which is what makes those two rules hold at all. Replacing "\r\n"
+// in "\r\r\n" leaves a CR against the new LF, and trimming only newlines
+// off a text ending in a bare CR puts the appended one right after it —
+// both store a CRLF out of a document the first rule was applied to.
+//
+// It is the same thing as saying the function is idempotent, and that is
+// the property a writer depends on: PUTting back the bytes a read handed
+// it is normalizing what is already normalized, and the answer it is owed
+// is `unchanged` rather than a second revision of identical content.
+//
+// A carriage return that is nobody's line ending — one in the middle of a
+// line — is the writer's, and stays.
 func NormalizeText(raw []byte) []byte {
-	s := strings.TrimPrefix(string(raw), "\ufeff")
-	s = strings.ReplaceAll(s, "\r\n", "\n")
-	s = strings.TrimRight(s, "\n")
+	s := foldCRLF(strings.TrimPrefix(string(raw), "\ufeff"))
+	s = strings.TrimRight(s, "\n\r")
 	if s == "" {
 		return nil
 	}
 	return []byte(s + "\n")
+}
+
+// foldCRLF turns every CRLF into an LF, taking with it the carriage
+// returns run up against one: after it, no CR in the text is followed by
+// an LF, which a single pass of strings.ReplaceAll cannot say.
+func foldCRLF(s string) string {
+	if !strings.Contains(s, "\r") {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	cr := 0 // carriage returns held back until what follows them is known
+	for i := range len(s) {
+		switch s[i] {
+		case '\r':
+			cr++
+		case '\n':
+			cr = 0 // they were the front of this line ending
+			b.WriteByte('\n')
+		default:
+			for ; cr > 0; cr-- {
+				b.WriteByte('\r')
+			}
+			b.WriteByte(s[i])
+		}
+	}
+	for ; cr > 0; cr-- {
+		b.WriteByte('\r')
+	}
+	return b.String()
 }
 
 // splitFrontmatter cuts a normalized document into the text inside its
@@ -176,16 +219,14 @@ type lineRange struct{ from, to int }
 // that key is going away too, in which case the blank line between them
 // separates nothing and goes with them.
 //
-// Frontmatter that does not parse as a mapping yields nothing: a document
-// that cannot be read is one no write path stores, and guessing at its
-// shape here could only damage it.
+// Frontmatter the surgery cannot address yields nothing (mappingKeys):
+// a document whose shape cannot be read in lines is one to leave exactly
+// as it arrived, since guessing at it could only damage it.
 func ownedKeyRanges(fm string, lines int, owned func(string) bool) []lineRange {
-	var root yaml.Node
-	if err := yaml.Unmarshal([]byte(fm), &root); err != nil ||
-		len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
+	pairs, ok := mappingKeys(fm)
+	if !ok {
 		return nil
 	}
-	pairs := root.Content[0].Content
 	all := strings.Split(fm, "\n")
 	var out []lineRange
 	for i := 0; i+1 < len(pairs); i += 2 {
@@ -209,6 +250,78 @@ func ownedKeyRanges(fm string, lines int, owned func(string) bool) []lineRange {
 	}
 	return out
 }
+
+// mappingKeys reads a frontmatter block's top-level keys. It is the
+// precondition the removal here rests on, since the removal works in
+// whole lines: ok is false for a block whose lines do not answer to
+// keys, and four shapes are that block.
+//
+// One that is not a mapping at all has no keys to address.
+//
+// A *flow* mapping — `{type: Metric, generated: x}` — has keys that do
+// not own their lines: one line can hold two of them and one key can be
+// half a line, so "the lines this key occupies" is not something that
+// can be taken out. Doing it anyway stored a document that arrived
+// saying `type: Metric` with no type at all, and cut another one off
+// mid-mapping at `{type: Metric,`. A flow *value* under a block key is
+// addressable and stays so: it is the key's own line and its
+// continuations, which is what a line range already means here.
+//
+// A block carrying a line break the parser counts and this file does not
+// is numbered in lines that are not the ones being cut — every range
+// here is a line number the parser reported, applied to lines split on
+// "\n". A frontmatter holding a bare carriage return was numbered a line
+// ahead of the cut, so `generated` was read on one line and a *different*
+// line was removed.
+//
+// A document marker ends the mapping before the block ends, so a key
+// written at the end of the block joins nothing. That one is the append
+// failing rather than the removal, and it is still the removal that has
+// to decline it: what a stored document must never hold is a key one
+// direction can take out and the other cannot put back, since then the
+// export form and the document it was made from differ by a key nobody
+// appended.
+//
+// Everything ochakai writes and everything an author writes by hand is
+// the addressable case; the rest arrives, is stored byte for byte, and
+// comes back out, which is what the bundle promises it (design doc 0075
+// §1). What it does not get is the surgery — no key is taken out of it
+// on the way in and none is put back on the way out.
+func mappingKeys(fm string) (pairs []*yaml.Node, ok bool) {
+	var root yaml.Node
+	if err := yaml.Unmarshal([]byte(fm), &root); err != nil ||
+		len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
+		return nil, false
+	}
+	m := root.Content[0]
+	if m.Style&yaml.FlowStyle != 0 || strings.ContainsAny(fm, yamlLineBreaks) ||
+		hasDocumentMarker(fm) {
+		return nil, false
+	}
+	return m.Content, true
+}
+
+// hasDocumentMarker reports whether any line of a block is YAML's
+// start-of-document or end-of-document marker. Both have to sit at
+// column 0 to be one, which is why the lines are read as they come
+// rather than trimmed.
+func hasDocumentMarker(fm string) bool {
+	for line := range strings.SplitSeq(fm, "\n") {
+		for _, m := range []string{"---", "..."} {
+			if line == m || strings.HasPrefix(line, m+" ") || strings.HasPrefix(line, m+"\t") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// yamlLineBreaks are the line breaks the YAML parser counts and
+// strings.Split on "\n" does not — a carriage return, and the three
+// Unicode ones. NormalizeText folds every CRLF, so what is left of them
+// in a stored document is deliberate bytes rather than a line ending
+// anybody meant.
+const yamlLineBreaks = "\r\u0085\u2028\u2029"
 
 // MoveServerKeys is what a write path does with the keys this instance
 // owns: it takes them out of the received document's frontmatter, and
@@ -239,12 +352,10 @@ func MoveServerKeys(raw []byte) (doc []byte, claimed []string, claim map[string]
 	if !ok || fm == "" {
 		return stripped, nil, nil
 	}
-	var root yaml.Node
-	if err := yaml.Unmarshal([]byte(fm), &root); err != nil ||
-		len(root.Content) == 0 || root.Content[0].Kind != yaml.MappingNode {
+	pairs, ok := mappingKeys(fm)
+	if !ok {
 		return stripped, nil, nil
 	}
-	pairs := root.Content[0].Content
 	moved := map[string]any{}
 	for i := 0; i+1 < len(pairs); i += 2 {
 		if pairs[i].Value == ClaimKey {
@@ -271,8 +382,19 @@ func MoveServerKeys(raw []byte) (doc []byte, claimed []string, claim map[string]
 	if err != nil {
 		return stripped, nil, nil
 	}
-	out := appendFrontmatter(stripped, block)
-	return out, claimed, ClaimOf(out)
+	out := appendFrontmatter(stripped, block, func(key string) bool { return key == ClaimKey })
+	claim = ClaimOf(out)
+	if claim == nil {
+		// The claim did not go in, so the keys do not come out: what is
+		// stored is the document as it arrived, its own trust family still
+		// in it. Taking a key off a document and failing to put it back
+		// under ClaimKey is the one loss no later release can undo (design
+		// doc 0075 §3.1), and the export form of a document this instance
+		// cannot append to carries no observation to collide with it
+		// (appendFrontmatter).
+		return raw, nil, nil
+	}
+	return out, claimed, claim
 }
 
 // keepTimestampText makes every timestamp under n decode as the text it
@@ -413,12 +535,72 @@ func ClaimNote(keys []string) string {
 // frontmatter, which is where every key this instance adds goes: the
 // stored document is the writer's own bytes, so nothing already in it
 // moves (design doc 0046 §2.2).
-func appendFrontmatter(raw, block []byte) []byte {
+//
+// The block is written at the mapping's own column, because a key less
+// indented than the mapping it is meant to join does not join it. A
+// frontmatter indented by one space is unusual YAML and valid YAML, and
+// appending `generated:` at column 0 ended the mapping instead of
+// extending it — leaving an export form that no longer parses, with keys
+// StripServerKeys could then no longer find.
+//
+// Indentation is not the only shape a line-append cannot extend, and
+// rather than enumerate them here this checks its own work: the block
+// goes on only if stripping owned back off gives the document that came
+// in, which is the property the two operations owe each other stated
+// where it is enforced instead of discovered. It is also why the column
+// is read off the text rather than out of a parse — a guess that is
+// wrong costs the keys, never the document, and it saves an export the
+// parse it would otherwise pay per entry.
+//
+// What cannot be appended to is handed back untouched, as a document
+// with no frontmatter at all already was: inventing a place for the keys
+// would corrupt the file, and an export form missing this instance's
+// observations is a gap in what the markdown says where the alternative
+// is a document that no longer parses. Every other reader of provenance
+// is unaffected — the JSON representations, the ledgers, the trust tier
+// read what this instance recorded, never the document's bytes.
+func appendFrontmatter(raw, block []byte, owned func(string) bool) []byte {
 	fm, rest, ok := splitFrontmatter(string(raw))
 	if !ok {
 		return raw
 	}
-	return []byte("---\n" + fm + string(block) + "---\n" + rest)
+	out := []byte("---\n" + fm + indentBlock(string(block), frontmatterIndent(fm)) + "---\n" + rest)
+	if !bytes.Equal(stripKeys(out, owned), raw) {
+		return raw
+	}
+	return out
+}
+
+// frontmatterIndent is how far a frontmatter block's mapping is indented,
+// read off the first line that is a key rather than a blank or a comment.
+func frontmatterIndent(fm string) int {
+	for line := range strings.SplitSeq(fm, "\n") {
+		trimmed := strings.TrimLeft(line, " ")
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		return len(line) - len(trimmed)
+	}
+	return 0
+}
+
+// indentBlock shifts a rendered block right by n columns, keeping every
+// line's own indentation relative to the block. Blank lines stay blank:
+// trailing spaces are not something to add to a document.
+func indentBlock(block string, n int) string {
+	if n <= 0 || block == "" {
+		return block
+	}
+	pad := strings.Repeat(" ", n)
+	var b strings.Builder
+	for line := range strings.SplitSeq(strings.TrimSuffix(block, "\n"), "\n") {
+		if line != "" {
+			b.WriteString(pad)
+		}
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	return b.String()
 }
 
 // WithServerKeys is the inverse: it appends this instance's observations
@@ -438,7 +620,7 @@ func WithServerKeys(raw []byte, k *domain.Knowledge) ([]byte, error) {
 	// A document with no frontmatter has nowhere for the keys to go, and
 	// inventing a block would corrupt the file — appendFrontmatter hands
 	// such a file back untouched.
-	return appendFrontmatter(raw, owned), nil
+	return appendFrontmatter(raw, owned, func(key string) bool { return serverOwnedKeys[key] }), nil
 }
 
 // serverKeysFor is the trust family this instance would publish for k —
