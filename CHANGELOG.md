@@ -158,6 +158,38 @@ last entry.
   accumulating (the SDK never expires an idle one), and a deployment is
   free to run more than one instance, which sessions in one instance's
   memory had ruled out.
+- **The MCP tools say whether a retry is safe, and that the world they
+  reach is closed.** Two hints were left at their spec defaults, and both
+  defaults were wrong here. `openWorldHint` defaults to true — "this call
+  goes somewhere unbounded" — where every tool on this surface reads or
+  writes this deployment's own base and reaches nothing else; it is false
+  on all six now. `idempotentHint` is where the two writes stop being one
+  thing: `put_concept` is a replace at an address, so the same document
+  written twice lands the same concept and an identical write is recorded
+  as no revision at all, while `report_outcome` is another outcome every
+  time it is called, which is the point — a client that retried it would
+  move a counter the curator reads. They no longer share an annotation.
+  Nothing an operator sets changes, no tool is added or removed, and the
+  hints are annotations rather than schema, so no counted surface moves.
+- **`scripts/check core` runs `go fix -diff`**, and the tree it now holds
+  still. Since Go 1.26 `go fix` is not the pre-1.0 API renamer its name
+  comes from: it runs the modernizers, and `-diff` prints the patch
+  instead of applying it, exiting non-zero when it is not empty — the
+  shape design doc 0035 §3.1 asks of a check, silent on a clean tree, so
+  a finding always means new code written in an older idiom. Unlike the
+  linter there is no version to pin, because it ships with the toolchain
+  `go.mod` already names. Applying it once touched twelve files and
+  changed no behaviour: `new(expr)` for the four `&x`-returning helpers,
+  which are gone now that their callers say it directly; `reflect.Pointer`
+  for `reflect.Ptr`; one `if` that was spelling `min`; a loop-variable
+  copy Go 1.22 made redundant; and embedded struct literals written as
+  the fields they set. What it did *not* report is worth as much, because
+  the fixers for those ran as well: `slicessort` read twelve
+  `sort.Slice` and `sort.SliceStable` calls and left every one, and
+  `stringsseq` left all eight `range strings.Split` loops — seven range
+  over an index, which a value-only iterator cannot hand back. Both had
+  been proposed as sweeps by a reading of the tree; the tool is what
+  settled them.
 
 ## [0.26.3] - 2026-08-22
 

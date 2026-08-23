@@ -93,7 +93,7 @@ func TestSameContent(t *testing.T) {
 			Description: "monthly revenue", Tags: []string{"sales"},
 			Status: StatusStable, StatusNote: "checked",
 			Sources: []Source{
-				{Resource: "policies/revenue.md", ID: "rev", UsageCount: intp(0)},
+				{Resource: "policies/revenue.md", ID: "rev", UsageCount: new(0)},
 				{Resource: "https://example.test/ga4", LastModified: "2026-05-30"},
 			},
 			UsageWindow: &UsageWindow{From: "2026-06-01", To: "2026-06-30"},
@@ -174,8 +174,6 @@ func TestSameContent(t *testing.T) {
 	}
 }
 
-func intp(n int) *int { return &n }
-
 // The OKF v0.2 families carry their own shape rules (SPEC §5.1, §10.2).
 // domain holds the predicate; service turns a false into a 400 and the
 // bundle parser turns it into a note (design doc 0036 §3.4).
@@ -188,8 +186,8 @@ func TestOKFFamilyValidation(t *testing.T) {
 		"a resource is enough":        {true, func() bool { return Source{Resource: "policies/rev.md"}.Valid() }},
 		"source date must be a date":  {false, func() bool { return Source{Resource: "r", LastModified: "2026-06"}.Valid() }},
 		"source date may be absent":   {true, func() bool { return Source{Resource: "r"}.Valid() }},
-		"usage_count may not be < 0":  {false, func() bool { return Source{Resource: "r", UsageCount: intp(-1)}.Valid() }},
-		"usage_count may be 0":        {true, func() bool { return Source{Resource: "r", UsageCount: intp(0)}.Valid() }},
+		"usage_count may not be < 0":  {false, func() bool { return Source{Resource: "r", UsageCount: new(-1)}.Valid() }},
+		"usage_count may be 0":        {true, func() bool { return Source{Resource: "r", UsageCount: new(0)}.Valid() }},
 		"per-source window is dated":  {false, func() bool { return Source{Resource: "r", UsageWindow: &UsageWindow{From: "nope"}}.Valid() }},
 		"parameter needs a name":      {false, func() bool { return Parameter{Type: "integer"}.Valid() }},
 		"parameter needs a type":      {false, func() bool { return Parameter{Name: "year"}.Valid() }},

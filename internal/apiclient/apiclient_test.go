@@ -37,7 +37,7 @@ func TestSearchBuildsQueryAndDecodesHits(t *testing.T) {
 		}
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.SearchHit{
-			{Summary: domain.Summary{Type: domain.TypeMetrics, ID: "revenue", Title: "売上"}, Score: 0.9},
+			{Type: domain.TypeMetrics, ID: "revenue", Title: "売上", Score: 0.9},
 		}})
 	})
 	page, err := c.Search(context.Background(), SearchParams{
@@ -84,7 +84,7 @@ func TestSearchUsageSortDecodesUsage(t *testing.T) {
 	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
 		got = r.URL.Query()
 		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.SearchHit{
-			{Summary: domain.Summary{Type: domain.TypeInsights, ID: "draft-a", Title: "草案"},
+			{Type: domain.TypeInsights, ID: "draft-a", Title: "草案",
 				Usage: &domain.Usage{SearchHits: 7, Fetches: 2}},
 		}})
 	})
@@ -190,7 +190,7 @@ func TestBacklinksAsksTheSearchFaceWithLinksTo(t *testing.T) {
 			t.Error("a reverse lookup sent a query; it has no text to rank by")
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"hits": []domain.SearchHit{
-			{Summary: domain.Summary{Type: domain.TypeInsights, ID: "revenue-reading", Title: "売上の読み方"}},
+			{Type: domain.TypeInsights, ID: "revenue-reading", Title: "売上の読み方"},
 		}})
 	})
 	entries, err := c.Backlinks(context.Background(), "metrics/revenue", 0)

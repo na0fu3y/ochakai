@@ -1347,8 +1347,8 @@ func TestGetPrintsTheRulingAndWhy(t *testing.T) {
 // prints the reason (design doc 0104 §3).
 func TestPrintHitsNamesTurnedDownRowsWithoutChangingThem(t *testing.T) {
 	page := &apiclient.SearchResult{Hits: []domain.SearchHit{
-		{Summary: domain.Summary{ID: "metrics/a", Status: domain.StatusDraft, Title: "A", Rejected: true}, Score: 1},
-		{Summary: domain.Summary{ID: "metrics/b", Status: domain.StatusStable, Title: "B"}, Score: 0.5},
+		{ID: "metrics/a", Status: domain.StatusDraft, Title: "A", Rejected: true, Score: 1},
+		{ID: "metrics/b", Status: domain.StatusStable, Title: "B", Score: 0.5},
 	}}
 	stdout, stderr := capture(t, func() { printHits(page, "") })
 	for _, want := range []string{"ochakai://metrics/a\tdraft\tA", "ochakai://metrics/b\tstable\tB"} {
@@ -1383,7 +1383,7 @@ func TestPrintHitsNamesTurnedDownRowsWithoutChangingThem(t *testing.T) {
 func TestPrintHitsLeadsWithTheOrderingKeyOnlyWhenThereIsOne(t *testing.T) {
 	verified := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
 	hit := domain.SearchHit{
-		Summary: domain.Summary{ID: "metrics/revenue", Status: domain.StatusStable, Title: "売上", StaleAfter: "2026-12-31", VerifiedAt: &verified},
+		ID: "metrics/revenue", Status: domain.StatusStable, Title: "売上", StaleAfter: "2026-12-31", VerifiedAt: &verified,
 		// A lexical deployment's score, well above RRF's ~1/60 ceiling:
 		// whichever scale it is on, it must not reach the line.
 		Score: 1.73,

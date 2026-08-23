@@ -42,8 +42,9 @@ jobs:
           restore-keys: |
             test-go-${{ hashFiles('go.sum') }}-
             test-go-
-      # gofmt, go vet, go test -race, and the CGO_ENABLED=0 build. Run
-      # through the script contributors run so the two cannot drift.
+      # gofmt, go vet, go fix -diff, go test -race, and the CGO_ENABLED=0
+      # build. Run through the script contributors run so the two cannot
+      # drift.
       - run: scripts/check core
         env:
           OCHAKAI_TEST_DATABASE_URL: postgres://t:t@localhost:55433/t?sslmode=disable

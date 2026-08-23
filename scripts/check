@@ -2,13 +2,14 @@
 # check: run the checks CI runs, in the order CI runs them.
 #
 #   scripts/check          everything (core, ui, lint, vuln)
-#   scripts/check core     gofmt, go vet, go test -race, CGO_ENABLED=0 build
+#   scripts/check core     gofmt, go vet, go fix -diff, go test -race,
+#                          CGO_ENABLED=0 build
 #   scripts/check ui       the web UI's own tests (node --test)
 #   scripts/check lint     golangci-lint
 #   scripts/check vuln     govulncheck
 #   scripts/check --db …   run a throwaway PostgreSQL for the store tests
 #
-# CI's test job runs `scripts/check core`, so those four stay identical by
+# CI's test job runs `scripts/check core`, so those five stay identical by
 # construction. The lint and vuln jobs run their tools directly — lint via
 # the golangci-lint action, which installs a released binary instead of
 # building one from source — so this script takes the linter version from
@@ -198,6 +199,19 @@ run_core() {
 	}
 	step "go vet"
 	go vet ./...
+	# `go fix` since Go 1.26 is not the pre-1.0 API renamer its name comes
+	# from: it runs the modernizers — new(expr), min/max, range-over-int,
+	# SplitSeq, wg.Go, slices and maps — and `-diff` prints the patch
+	# instead of applying it, exiting non-zero when it is not empty. That
+	# is the shape design doc 0035 §3.1 asks of a check: on a clean tree
+	# it says nothing, so a finding always means new code written in an
+	# older idiom. Unlike golangci-lint there is no version to pin — it
+	# ships with the toolchain go.mod already names.
+	step "go fix -diff"
+	go fix -diff ./... || {
+		echo "check: the fixes above are what \`go fix ./...\` would apply" >&2
+		exit 1
+	}
 	step "go test -race"
 	if [ -z "${OCHAKAI_TEST_DATABASE_URL:-}" ]; then
 		# Named rather than "store tests": four packages need a database,

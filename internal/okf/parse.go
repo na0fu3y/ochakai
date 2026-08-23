@@ -357,7 +357,9 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		setAttr(ClaimKey, claim)
 	}
 
-	return &Doc{Verified: hasVerified, Claimed: claimed, Knowledge: domain.Knowledge{
+	return &Doc{
+		Verified:    hasVerified,
+		Claimed:     claimed,
 		Type:        typ,
 		ID:          fm.id,
 		Title:       fm.title,
@@ -377,7 +379,7 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		Attrs:       attrs,
 		Body:        strings.TrimSpace(body),
 		Doc:         string(stored),
-	}}, fm.typ, notes, nil
+	}, fm.typ, notes, nil
 }
 
 // The v0.2 family readers. All of them follow the same rule: never reject

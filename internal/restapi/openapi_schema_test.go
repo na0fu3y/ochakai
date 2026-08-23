@@ -144,7 +144,7 @@ func (d *specDoc) lookup(t *testing.T, path string) *specSchema {
 // fields it never emits left out.
 func jsonFields(t *testing.T, typ reflect.Type) map[string]bool {
 	t.Helper()
-	for typ.Kind() == reflect.Ptr {
+	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 	if typ.Kind() != reflect.Struct {
@@ -152,7 +152,6 @@ func jsonFields(t *testing.T, typ reflect.Type) map[string]bool {
 	}
 	out := map[string]bool{}
 	for field := range typ.Fields() {
-		field := field
 		if !field.IsExported() {
 			continue
 		}
