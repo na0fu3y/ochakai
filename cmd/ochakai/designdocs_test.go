@@ -770,3 +770,84 @@ func citableFile(path string) bool {
 	}
 	return false
 }
+
+// indexRowCapRe reads the most records one row of the index's opening
+// table may cite: "INDEX-ROW-RECORDS: 10", declared beside RECORD-LINES in
+// CONTRIBUTING.md (design doc 0128 §2.3).
+var indexRowCapRe = regexp.MustCompile(`(?m)^\s*INDEX-ROW-RECORDS: (\d+)$`)
+
+// indexTableRowRe is one row of the opening table: the area, then the cell
+// naming what to read. The header and the separator have no area text.
+var indexTableRowRe = regexp.MustCompile(`^\|\s*([^|]+?)\s*\|(.*)\|\s*$`)
+
+// recordLinkRe is a link to a numbered record: "[0109](0109-….md)". The
+// number is taken from the target, not the text, so a mislabeled link
+// counts the record it actually opens.
+var recordLinkRe = regexp.MustCompile(`\]\((\d{4})-[^)]*\.md\)`)
+
+// TestIndexRowsCiteFewRecords holds design doc 0128 §2.3: no row of the
+// index's opening table names more records than CONTRIBUTING.md's
+// INDEX-ROW-RECORDS, and the declared number is the widest row's count —
+// so folding a row is what lowers it, and nothing lowers it silently.
+//
+// The table exists so that a reader reaches an area's current state
+// without following its amendment chain (0048 §2.4). A row citing nine
+// records has moved the chain into the table. The ceiling only goes
+// down: 0128 §2.4 names the order the widest rows are folded in, and 3
+// — a record, its amendment, and one more — is where it stops.
+func TestIndexRowsCiteFewRecords(t *testing.T) {
+	content, err := os.ReadFile(contributing)
+	if err != nil {
+		t.Fatalf("read %s: %v", contributing, err)
+	}
+	m := indexRowCapRe.FindStringSubmatch(string(content))
+	if m == nil {
+		t.Fatalf("%s declares no INDEX-ROW-RECORDS line; design doc 0128 §2.3 puts one there", contributing)
+	}
+	limit, err := strconv.Atoi(m[1])
+	if err != nil {
+		t.Fatalf("%s: INDEX-ROW-RECORDS %q: %v", contributing, m[1], err)
+	}
+
+	index, err := os.ReadFile(designIndex)
+	if err != nil {
+		t.Fatalf("read %s: %v", designIndex, err)
+	}
+	// The opening table is the first table in the file; its rows end at
+	// the next heading.
+	widest, widestRow := 0, ""
+	inTable := false
+	for line := range strings.SplitSeq(string(index), "\n") {
+		if inTable && strings.HasPrefix(line, "## ") {
+			break
+		}
+		row := indexTableRowRe.FindStringSubmatch(strings.TrimSpace(line))
+		if row == nil || strings.HasPrefix(row[1], "-") || row[1] == "領域" {
+			continue
+		}
+		inTable = true
+		seen := map[string]bool{}
+		for _, link := range recordLinkRe.FindAllStringSubmatch(row[2], -1) {
+			seen[link[1]] = true
+		}
+		if len(seen) > limit {
+			t.Errorf("the index's opening table row %q cites %d records, over the INDEX-ROW-RECORDS %d in %s.\n"+
+				"A row is the one line a reader reaches an area's current state from (0048 §2.4); the\n"+
+				"chain of amendments it now lists is what it was meant to spare them. Do not add the\n"+
+				"record to the row: write the one that restates the area and supersedes the rest\n"+
+				"(design doc 0128 §2.2).", row[1], len(seen), limit, contributing)
+		}
+		if len(seen) > widest {
+			widest, widestRow = len(seen), row[1]
+		}
+	}
+	if !inTable {
+		t.Fatalf("%s has no opening table to read", designIndex)
+	}
+	if widest < limit {
+		t.Errorf("INDEX-ROW-RECORDS is %d in %s, but the widest row of the index's opening table\n"+
+			"(%q) cites %d. The ceiling only moves down (design doc 0128 §2.3): set it to %d in\n"+
+			"the PR that folded the row, so the next fold is the one that lowers it again.",
+			limit, contributing, widestRow, widest, widest)
+	}
+}

@@ -17,7 +17,11 @@ PR の中に残る。
 Google Cloud への依存、意図してやらないこと)。外形の変わらない内部変更は
 PR の説明で足り、まだリリースに乗っていない決定の改訂は新しい番号ではなく
 元のドキュメントの差し替えになる — 基準は
-[0048](0048-decision-records-for-wire-contracts.md)。
+[0048](0048-decision-records-for-wire-contracts.md)。番号は**領域の決定**に
+与え、その内側の規則(誰が最初の行を書けるか、数が何を含むか)は PR と
+CHANGELOG に置く。リリース済みの記録を改訂するときは差分ではなく領域の
+現在の姿を一本に書き、下の早見表の一行が挙げる記録の数には天井がある
+— [0128](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)。
 
 ## 現行ドキュメント早見表
 
@@ -43,7 +47,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)**。**却下の理由がどこまで運ばれるかは [0104](0104-a-ruling-travels-with-its-reason.md)**(CLI の出力と export へ) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
-| 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md) |
+| 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md)。**番号は領域の決定に与え、その内側の規則には与えないことと、この表の一行が挙げてよい記録の数の天井は [0128](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)**(0048 §2.1 / §2.2 を改訂) |
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**export が却下の理由まで運ぶことは [0104](0104-a-ruling-travels-with-its-reason.md)**(読み戻さないのは同じ) |
 | 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**MCP OAuth コネクタの再実装の出発点は [0116](0116-the-connector-price-changed-not-its-condition.md) が差し替えた** — 戻す条件は 0070 §5 のままで、その日に開くのが 0010 の認可サーバ(863 行)ではなく、測定済みの二つの答え(180 行)になった |
@@ -189,6 +193,14 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   改訂は、新しい番号ではなく元のドキュメントの差し替え**(0034 の先例を
   規則にする)。既存 47 本は書き換えず、代わりに index に現行ドキュメントの
   早見表を置き、英語要約の維持義務を現行ドキュメントだけに縮める。
+- [0128 番号は領域の決定に与え、その内側の規則には与えない](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)
+  — **Accepted**。0048 §2.1 / §2.2 を改訂。観測できるかは領域を選ぶ基準で
+  あって粒を選ぶ基準ではなく、0109 が一週間に五つの改訂を受けて早見表の
+  一行に九本が並んだ。**領域の内側の規則は番号を取らず PR と CHANGELOG に
+  置き、リリース済みの親を改訂するときは差分ではなく領域の現在の姿を
+  一本に書いて親と改訂を吸収する**(skill の手順 7 を規則にする)。
+  早見表の一行が挙げる記録の数に `INDEX-ROW-RECORDS` の天井を置き、向きは
+  下だけ — 今日の最大 10 から始め、広い行から畳んで 3 で止まる。
 
 ## 認証・認可と provenance
 

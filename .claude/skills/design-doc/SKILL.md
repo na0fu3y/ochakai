@@ -37,6 +37,15 @@ spelling, an error message), and docs- or tests-only changes. When
 unsure, ask whether somebody will reopen this in three months. If not,
 the PR is enough.
 
+**That list picks areas, not grain** (0128 §2.1). A rule *inside* an
+area that already has a current record — who may write the first policy
+row, what a scoped caller's counts include, whether a prefix can hold
+its own administrator — is observable and still takes no number. Ask:
+will the parent record plus the CHANGELOG answer the question in three
+months? If yes, write the PR description and the CHANGELOG entry and
+stop. Only when the parent's own text now contradicts the rule is it an
+amendment, and step 7 below says what an amendment looks like.
+
 **A doc that has not reached a release is revised by replacing it, not by
 taking a new number** (0048 §2.3). Immutability is a promise about
 decisions somebody could be depending on; nobody depends on an unreleased
@@ -129,10 +138,14 @@ the old row is left standing. Cutting it is part of superseding, not
 tidying to do later: the row of a replaced record describes the old world
 in the present tense and nobody rereads it.
 
-**7. Avoid amendment chains.** If this would be the *second* partial
-amendment stacked on the same doc, do not add another diff. Write a full
-replacement that states the area's whole current picture, and mark the
-older docs **Superseded**.
+**7. Amend a released record by replacing it** (0128 §2.2). Do not
+stack a diff on it: write the record that states the area's whole
+current picture, and mark the parent and every amendment on it
+**Superseded**. An unreleased parent is simply edited (0048 §2.3). The
+index's opening table enforces the shape from its side —
+`TestIndexRowsCiteFewRecords` fails a row that cites more records than
+CONTRIBUTING's `INDEX-ROW-RECORDS`, and that number only goes down; if
+your record would be the one over, the fold is the PR to write.
 
 ## What the checks hold, and what they cannot
 

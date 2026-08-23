@@ -428,6 +428,18 @@ indexes, performance, dependencies, a new spelling within an existing
 decision — belongs in the PR description instead. If you are unsure, ask
 whether anybody will reopen the question in three months.
 
+That picks the *areas*. It does not pick the *grain*, and for four weeks
+after 0048 the corpus grew at the same rate as before it, one rule at a
+time: who may write the first policy row, what a scoped caller's counts
+include, whether a prefix can hold its own administrator — each
+observable, each inside a decision already on file. So
+[0128](docs/design/0128-a-number-is-for-an-area-not-a-rule-inside-it.md)
+adds the grain: **a number is for an area's decision; a rule inside it
+takes none.** If the parent record and the CHANGELOG answer the question
+somebody reopens in three months, the PR and the CHANGELOG are where the
+rule goes. Only when the parent's own text now contradicts the rule is
+it an amendment — and then see the replacement rule below, not a diff.
+
 Docs are immutable decision records; the incremental history lives in
 them and in PRs. What the repo must keep readable is the *current*
 state per area, so when a design doc lands:
@@ -453,16 +465,31 @@ state per area, so when a design doc lands:
   decision cell); full rows are kept only for what is current, and a test
   holds it — cutting the old row is part of superseding, not tidying for
   later.
-- Avoid amendment chains. If the new decision would be the second
-  partial amendment stacked on the same doc, don't add another diff:
-  write it as a full replacement that states the area's whole current
-  picture and mark the older docs Superseded.
+- Amend a *released* record by replacing it, not by stacking a diff on
+  it (0128 §2.2): the new record states the area's whole current picture
+  and marks the parent and every amendment on it Superseded. This used
+  to be a step in the `design-doc` skill that nothing checked, and 0109
+  took five amendments in a week; what checks it now is the table
+  ceiling below.
 - Keep it under the ceiling below. A record is prose somebody reads.
 
 ### How long a record gets
 
     RECORD-LINES: 300
     RECORD-CAP-FROM: 0065
+    INDEX-ROW-RECORDS: 10
+
+`INDEX-ROW-RECORDS` is the third number, and the only one that moves in
+one direction. It bounds how many records one row of the index's opening
+table may cite, and `TestIndexRowsCiteFewRecords` holds it equal to the
+widest row — so folding a row is what lowers it and nothing lowers it
+quietly. The table is the one line a reader reaches an area's current
+state from (0048 §2.4); on 2026-08-23 four rows cited eight to ten
+records each, which is the amendment chain moved into the table. The
+number starts at that day's maximum and comes down one fold per PR,
+widest row first, until it reaches 3 — a record, its amendment, and one
+more — and stays there. A PR that would cite a fourth writes the fold
+instead (0128 §2.3, §2.4).
 
 0048 narrowed *what* earns a number. It said nothing about *how much*,
 and the corpus grew accordingly — record count and total lines both

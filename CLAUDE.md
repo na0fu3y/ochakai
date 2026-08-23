@@ -20,9 +20,17 @@ A numbered doc is for a decision **a user can observe**
 shape of the wire, the stored form and its round trip, what identity and
 provenance mean, a new Google Cloud dependency, or something ochakai
 refuses to do. Internal changes that leave the outside unchanged belong
-in the PR description instead. **A doc that has not reached a release is
-revised by replacing it, not by taking a new number** — immutability is a
-promise about decisions somebody could be depending on.
+in the PR description instead. **And a number is for an area's decision,
+not a rule inside it**
+([0128](docs/design/0128-a-number-is-for-an-area-not-a-rule-inside-it.md)):
+if the parent record plus the CHANGELOG answer the question somebody
+reopens in three months, the rule goes in the PR and the CHANGELOG, not
+a record. **A doc that has not reached a release is revised by replacing
+it, not by taking a new number** — immutability is a promise about
+decisions somebody could be depending on — and a released one is amended
+by a record that restates the whole area and supersedes it, never by a
+diff stacked on it. The index's opening table has a ceiling on how many
+records one row may cite (`INDEX-ROW-RECORDS`, down only, checked).
 
 When one is needed, it lands in the same PR as the change and the index
 stays truthful — the `design-doc` skill has the full procedure (new
