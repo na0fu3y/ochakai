@@ -48,9 +48,17 @@ func answerOf[T any](t *testing.T, res *mcp.CallToolResult) T {
 
 func connect(t *testing.T) *mcp.ClientSession {
 	t.Helper()
+	return connectWith(t, nil)
+}
+
+// connectWith is connect against a deployment of a stated posture — the
+// config is what decides which tools get registered (design doc 0040
+// §2.3), so a test about a posture needs to set it.
+func connectWith(t *testing.T, cfg *config.Config) *mcp.ClientSession {
+	t.Helper()
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	if _, err := newServer(&service.Service{}, "test", RetiredToolNames).Connect(ctx, st, nil); err != nil {
+	if _, err := newServer(&service.Service{Config: cfg}, "test", RetiredToolNames).Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil).Connect(ctx, ct, nil)

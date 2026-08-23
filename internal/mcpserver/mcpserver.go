@@ -251,6 +251,10 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 	// it decides which registration a call reaches.
 	s.AddReceivingMiddleware(answerForRetiredNames(retired))
 
+	// How long a listing holds (design doc 0127). After the handler, so
+	// it reads the result the registrations below produce.
+	s.AddReceivingMiddleware(answerHowLongAListingHolds(listTTL))
+
 	// Expose concepts as MCP resources so clients can @-mention them by their
 	// canonical ochakai:// URI. Only the template is advertised — enumerating
 	// every concept in resources/list would flood the client, so discovery stays

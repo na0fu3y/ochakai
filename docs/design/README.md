@@ -38,7 +38,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md) |
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4([0093](0093-the-budget-governs-the-whole-response.md) が予算の側を改訂)。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
-| サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。**MCP の転送が stateless になり、プロトコルが 2026-07-28 になることは [0118](0118-a-call-carries-everything-it-needs.md)**(0067 §3 を改訂 — 面もツールも動かない)。MCP のツール 7 本とその境界は [0076](0076-two-tools-leave-mcp.md) と、**7 本目を割った [0096](0096-a-listing-is-not-a-search-here-either.md)**。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂)。**CLI の行の第一列が「読み手が並べてくれと言った鍵」だけになることは [0110](0110-the-first-column-is-the-key-you-asked-for.md)**(0068 §3 の CLI への適用。`search` と逆引きからスコア列が落ちる)。**その行に太字と dim が付くのは [0111](0111-weight-for-the-eye-and-only-for-an-eye.md)**(端末のときだけ。パイプが受け取るバイト列は変わらない) |
+| サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。**MCP の転送が stateless になり、プロトコルが 2026-07-28 になることは [0118](0118-a-call-carries-everything-it-needs.md)**(0067 §3 を改訂 — 面もツールも動かない)。**一覧がいつまで持つかを自分で答えることは [0127](0127-a-listing-says-how-long-it-holds.md)**(構築時に決まる三つの一覧だけ。concept の読みは 0 のまま)。MCP のツール 7 本とその境界は [0076](0076-two-tools-leave-mcp.md) と、**7 本目を割った [0096](0096-a-listing-is-not-a-search-here-either.md)**。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂)。**CLI の行の第一列が「読み手が並べてくれと言った鍵」だけになることは [0110](0110-the-first-column-is-the-key-you-asked-for.md)**(0068 §3 の CLI への適用。`search` と逆引きからスコア列が落ちる)。**その行に太字と dim が付くのは [0111](0111-weight-for-the-eye-and-only-for-an-eye.md)**(端末のときだけ。パイプが受け取るバイト列は変わらない) |
 | Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂)。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**クロスサイトの書き込みを二つの配信経路の両方が断ることは [0126](0126-a-browser-says-where-it-came-from.md)**(0072 §1.1・§1.2 を改訂 — `serve` には置かない) |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)**。**却下の理由がどこまで運ばれるかは [0104](0104-a-ruling-travels-with-its-reason.md)**(CLI の出力と export へ) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂) |
@@ -593,6 +593,28 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   が「認可でも identity でもない、記録である」と呼んだ**自称**の側で、
   `created_by` は動かず、`Ochakai-Producer` が代替で、クライアントが
   移った日に自動的に戻る。数える表面は一つも動かない。
+- [0127 一覧は、いつまで持つかを言う](0127-a-listing-says-how-long-it-holds.md)
+  — **Accepted**。0118 が stateless にしたぶんの後始末。2026-07-28 は
+  list の結果に `ttlMs` を足しており、**SDK はそれを応答のたびに埋めて
+  いた — 0 で**。仕様は 0 を「直ちに古いとみなすべき」と読むので、
+  ochakai は全クライアントに「この一覧はいま古い」と言っていた。**誰も
+  そう決めていない** — ゼロ値がそう言っていただけで、`omitempty` が
+  無いので黙って省略されもしない。決定は、**構築時に決まる三つの一覧
+  (`tools/list`・`resources/list`・`resources/templates/list`)が 5 分
+  持つと答える**こと。`newServer` のあとに登録するものは無いので一つの
+  プロセスの中では定数であり、数字が答えているのは「一覧がいつまで
+  正しいか」ではなく**プロセスが入れ替わったあと古い答えをいつまで信じて
+  よいか**である — それを変えるのはリリースしか無く、5 分は改名された
+  名前が答え続ける一リリース(0088)の内側に収まる。**`resources/read` は
+  0 のまま**: 線は「一覧かどうか」ではなく**知識かどうか**で、concept は
+  誰かが書けば変わる。`cacheScope` は SDK の既定 `public` が正しい —
+  一覧は姿勢の性質であって呼び出し元の性質ではなく、認可は呼び出しごとに
+  効く(0109)— ので実装は無いが、0109 のあとでは確かめる価値のある一致
+  なのでテストが固定している。**エージェントのコンテキストは一バイトも
+  減らない**(MCP-BYTES はツールの項目を数えており、応答の封筒ではない)。
+  出どころは報告ではなく調査で、それでも足す側に立つのは、これが追加では
+  なく**訂正**だからである。断ったもの: デプロイが選べる値にすること
+  (ENV が増え、運用者が答えられない問いが増える)。
 - [0068 面はどう足され、どう降ろされるか](0068-how-a-face-is-added-and-removed.md)
   — **Accepted**。**面を足す規則と降ろす規則の現行ドキュメント**(0050 /
   0056 / 0058 / 0062 の四冊を一冊にまとめたもので、決定は一つも動いて
