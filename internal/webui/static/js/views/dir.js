@@ -6,7 +6,7 @@ import { dirCard, fileCard, hitCard } from '../cards.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { crumbTrail, idPath } from '../format.js';
-import { revealInTree } from '../tree.js';
+import { browse, revealInTree } from '../tree.js';
 import { explore } from './explore.js';
 
 // loadDirIndex fetches one browse level and renders it into container
@@ -71,5 +71,15 @@ export function viewHome() {
   $('#home-go').addEventListener('click', () => { explore.q = $('#home-q').value; });
   $('#home-export').addEventListener('click', downloadBundle);
   if (matchMedia('(pointer: fine)').matches) $('#home-q').focus({ preventScroll: true });
-  loadDirIndex($('#home-index'), '', 'まだナレッジがありません。最初のナレッジを作成してください。');
+  // The same level the sidebar starts at: a caller whose knowledge sits
+  // under one directory should not have to walk the corridor twice, once
+  // in each panel (design doc 0075 §2 keeps the address whole either
+  // way). Awaited, because both panels render from one boot and this one
+  // is faster — without it the home page lists the corridor the sidebar
+  // has just walked past.
+  const box = $('#home-index');
+  browse.ready.then(() => {
+    if (!box.isConnected) return; // navigated away while the tree loaded
+    loadDirIndex(box, browse.root, 'まだナレッジがありません。最初のナレッジを作成してください。');
+  });
 }

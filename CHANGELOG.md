@@ -21,6 +21,25 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The web UI starts where the knowledge does.** A caller granted one
+  directory (design doc 0109) opened the page on a root holding one
+  directory holding one directory, and two clicks stood between them and
+  their own knowledge every time it loaded. The sidebar and the home
+  listing now walk past the levels that hold **one directory and nothing
+  else**, and both begin at the first level with something to choose
+  between. A line above the tree names the path walked and links back to
+  the bundle's root.
+
+  It hides nothing: the step is taken only when the level has no concepts
+  and no files of its own, so what is skipped is a corridor rather than a
+  room. Ids are unchanged everywhere — a walked page still spells
+  `teams/growth/metrics/revenue` in full, because a second spelling of an
+  address is what this must not buy. An administrator whose base lives
+  under a single directory gets the same walk for the same reason, and no
+  setting turns it on or off.
+
 ### Security
 
 - **Both web-UI commands refuse a cross-site write.** `ochakai ui` has
