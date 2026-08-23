@@ -191,6 +191,47 @@ last entry.
   been proposed as sweeps by a reading of the tree; the tool is what
   settled them.
 
+### Security
+
+- **A release carries its attestations as a file beside the archives**,
+  `ochakai_X.Y.Z.intoto.jsonl`. The archives and the image have carried
+  provenance attestations for a long time, but the attestations lived only
+  in GitHub's attestation store, which `gh attestation verify` reads and
+  two readers cannot: an OSS
+  review that walks release assets — OpenSSF Scorecard's Signed-Releases
+  scored this repository 0 while every artifact was signed — and anyone
+  verifying without reaching github.com, who now has `gh attestation
+  verify <file> --bundle <this>` offline. The guarantee is unchanged; what
+  changed is that it is reachable. The upload happens before the release
+  is published, for the reason the step above it already gives.
+- **Both base images are pinned by digest as well as tag.** A tag is a
+  name its owner can repoint — `nonroot` is rebuilt in place — so the same
+  commit built twice was not necessarily the same image. Dependabot reads
+  the tag-and-digest pair and opens the pull request that moves both, so
+  the pin is a value somebody bumps in a commit rather than one that goes
+  stale.
+- **The release archives are byte-reproducible.** goreleaser stamped the
+  build's wall clock into the binaries, so rebuilding a tag produced
+  different archives and a different `checksums.txt`; they now carry the
+  commit's own timestamp, which is a property of the tag rather than of
+  the runner. `-trimpath` was already removing the other half.
+- **No workflow leaves its token in the checkout.** `persist-credentials:
+  false` on every one of them now — it was set on the Scorecard job alone
+  and missing from the other eight, none of which pushes with git: the
+  release jobs talk to GHCR through the registry login and to `gh`, which
+  reads its token from the environment. The token in `.git/config` was
+  readable by every later step and used by none of them.
+- **govulncheck runs weekly as well as on every commit**, because a
+  vulnerability published against an already-pinned dependency arrives on
+  somebody else's schedule. The other four jobs in that file decline a
+  scheduled run.
+- **CodeQL analyses the Go on push, on pull requests and weekly.** The
+  linters in `.golangci.yml` are local by design and none of them can see
+  a request parameter reach a SQL string; this is the analysis that
+  follows a value across packages. It reports into code scanning beside
+  Scorecard's SARIF and does not gate a merge. Design doc 0035 §3.1's
+  rule applies to it too: if it reports on a clean tree, it comes out.
+
 ## [0.26.3] - 2026-08-22
 
 ### Added

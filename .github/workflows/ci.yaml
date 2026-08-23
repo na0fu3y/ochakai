@@ -3,11 +3,28 @@ on:
   push:
     branches: [main]
   pull_request:
+  # govulncheck is the one job that answers a question the repository does
+  # not ask: whether somebody else published a vulnerability against a
+  # dependency this tree already pinned. That answer changes on days
+  # nothing is committed here, so it is also on a clock — the same shape
+  # scorecard.yaml already uses, and the reason every other job below
+  # declines a scheduled run.
+  schedule:
+    - cron: "17 3 * * 2"
+# Read-only, and nothing below asks for more: no job here pushes, comments
+# or publishes. `persist-credentials: false` on every checkout is the
+# other half — without it the job's token is left in `.git/config`, where
+# any later step (a build script, a tool run from the tree) can read it.
+# The two together are what makes a compromised step in this file cost
+# nothing.
 permissions:
   contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
+    # A scheduled run is govulncheck's alone; this job answers only to a
+    # commit.
+    if: github.event_name != 'schedule'
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -23,6 +40,8 @@ jobs:
           --health-retries 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # see the note above `permissions`
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -64,8 +83,13 @@ jobs:
           key: test-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
   lint:
     runs-on: ubuntu-latest
+    # A scheduled run is govulncheck's alone; this job answers only to a
+    # commit.
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # see the note above `permissions`
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -113,6 +137,9 @@ jobs:
   # the page would then be tested against instead of the real one.
   webui:
     runs-on: ubuntu-latest
+    # A scheduled run is govulncheck's alone; this job answers only to a
+    # commit.
+    if: github.event_name != 'schedule'
     services:
       postgres:
         image: pgvector/pgvector:pg17
@@ -128,10 +155,22 @@ jobs:
           --health-retries 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # see the note above `permissions`
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: false # same shared-key problem as in the test job
+      # Named, because this job is the one place a Node version decides
+      # anything: `scripts/check ui` passes a glob to `node --test`, and
+      # the smoke below drives Chrome over the DevTools Protocol with
+      # Node's own global WebSocket. Both are recent enough that the
+      # runner image's default has already moved under them once. 24 is
+      # the line under long-term support; there is no package.json to say
+      # it in, so it is said here.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
       # The unit half first: it is the part that fails for a reason in
       # the code rather than a reason in the plumbing.
       - run: scripts/check ui
@@ -176,6 +215,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # see the note above `permissions`
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
@@ -186,8 +227,13 @@ jobs:
   # This job runs README.md's own steps verbatim.
   quickstart:
     runs-on: ubuntu-latest
+    # A scheduled run is govulncheck's alone; this job answers only to a
+    # commit.
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # see the note above `permissions`
       # --build: the compose file also names a published `image:`, and
       # without --build compose is free to reuse that instead of building
       # the commit under test. The point of this job is to catch a break

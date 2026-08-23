@@ -1,0 +1,57 @@
+# CodeQL: the one analysis in this repository that follows a value from
+# where it arrives to where it is used.
+#
+# The linters in .golangci.yml are deliberately local — each reads one
+# function and reports nothing on a clean tree (design doc 0035 §3.1).
+# That rule is what keeps them trustworthy, and it is also their ceiling:
+# none of them can see a request parameter reach a SQL string, because the
+# two are in different packages. ochakai builds SQL and serves HTTP, so
+# that is the question worth asking of it, and CodeQL's taint analysis is
+# what asks it.
+#
+# It also answers OpenSSF Scorecard, which recognises CodeQL, Sonar and
+# Snyk and scored this repository 0 on SAST while golangci-lint and
+# govulncheck both ran — the same shape as Signed-Releases, where the work
+# was done and the scanner looked elsewhere. Findings land in this
+# repository's code-scanning tab beside Scorecard's own SARIF.
+#
+# 0035 §3.1's rule applies here too: if this reports on a clean tree,
+# it comes out. It does not gate a merge — a required status check is a
+# promise about a tool whose query set moves on GitHub's schedule, not
+# this repository's.
+name: codeql
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # Query packs are updated by GitHub, so a finding can appear on a week
+  # nothing was committed — the same reason govulncheck runs on a clock.
+  schedule:
+    - cron: "41 4 * * 3"
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # checkout
+      security-events: write # upload the results to code scanning
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The toolchain go.mod names, so CodeQL extracts against the same
+      # standard library the build uses rather than the runner's default.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false # same shared-key problem as in ci.yaml
+      - uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          languages: go
+          # `security-extended` over the default `security`: this is not a
+          # merge gate, so a lower-confidence finding costs a read rather
+          # than a blocked pull request.
+          queries: security-extended
+      - uses: github/codeql-action/autobuild@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      - uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6

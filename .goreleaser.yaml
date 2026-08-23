@@ -24,6 +24,13 @@ builds:
       - CGO_ENABLED=0
     flags:
       - -trimpath
+    # Without this the binaries carry the build's wall clock, so the same
+    # tag rebuilt tomorrow produces different archives and a different
+    # checksums.txt — and "verify the checksum yourself" stops being
+    # something a reader can act on. The commit's own timestamp is the one
+    # value that is a property of the tag rather than of the runner.
+    # -trimpath above removes the other half, the build machine's paths.
+    mod_timestamp: "{{ .CommitTimestamp }}"
     # main.version is the only variable the source lets us stamp; see
     # cmd/ochakai/main.go. .Tag rather than .Version because .Version
     # strips the leading "v", and every other path that reports a

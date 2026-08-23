@@ -20,7 +20,16 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      # persist-credentials: false on both jobs' checkouts. Neither pushes
+      # with git — this one talks to GHCR with the registry login below,
+      # and `binaries` uses `gh`, which reads GH_TOKEN from the
+      # environment — so the token left in `.git/config` would be readable
+      # by every later step and used by none of them. That matters most in
+      # `binaries`, which runs goreleaser over the tree with
+      # `contents: write` in scope.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
@@ -64,6 +73,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           # goreleaser derives the version from the tag and walks the
           # history to find the previous one; a shallow clone has
           # neither.
@@ -127,13 +137,42 @@ jobs:
           gh release edit "$TAG" --notes-file "$RUNNER_TEMP/notes.md"
       # The image carries provenance; the archives people actually
       # download should too.
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+      - id: attest
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
             dist/*.tar.gz
             dist/*.zip
             dist/*.mcpb
             dist/checksums.txt
+      # The same attestations, beside the archives rather than only in
+      # GitHub's attestation store. This adds no guarantee — `gh
+      # attestation verify` already reads the store — it adds a
+      # *reachable* one, for the two readers that cannot: an OSS review
+      # walking release assets (OpenSSF Scorecard's Signed-Releases looks
+      # for a `.intoto.jsonl`, and scored this repository 0 while every
+      # artifact above was attested), and anyone verifying without
+      # reaching github.com, who now has `gh attestation verify <file>
+      # --bundle <this>` offline.
+      #
+      # `.intoto.jsonl` is what the file is rather than a name chosen to
+      # be found: the action appends one JSON bundle per line as it
+      # attests each subject, and emits the eight above as one file.
+      #
+      # Scorecard averages over the last five releases, so this moves the
+      # score across five tags rather than at the next one.
+      - name: Attach the attestation bundle
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          # ochakai_X.Y.Z, the spelling every other asset uses — the tag
+          # without its leading v, the way scripts/mcpb names the bundle.
+          name="ochakai_${TAG#v}.intoto.jsonl"
+          cp "$BUNDLE" "$RUNNER_TEMP/$name"
+          gh release upload "$TAG" "$RUNNER_TEMP/$name" --clobber
       # Publishing is last, because a published release is immutable
       # here: GitHub answers 422 to an asset upload against one, and
       # everything above this line is an addition to what goreleaser
