@@ -179,6 +179,41 @@ func (s *Service) RequireAdmin(ctx context.Context, op string) error {
 	return fmt.Errorf("%w: %s takes the whole bundle, which is an administrator's operation", ErrForbidden, op)
 }
 
+// MayArchive decides who may take the OKF archive at a bundle path
+// (design doc 0127).
+//
+// **The whole bundle is the administrator's**, and asking for the root
+// is how it is asked for: an archive of everything a scoped caller can
+// see would be the shape 0109 §3 refused, a part of a base with nothing
+// naming the whole it came from.
+//
+// **A subtree belongs to whoever may read it.** The archive carries the
+// concepts and files that caller could already fetch one at a time, so
+// refusing it withheld convenience rather than knowledge — and now that
+// the archive says which subtree it is, in its root index.md and in its
+// own filename, taking one no longer produces something that can be
+// mistaken for a backup of the base.
+func (s *Service) MayArchive(ctx context.Context, prefix string) error {
+	sc, err := s.scope(ctx)
+	if err != nil {
+		return err
+	}
+	if sc.Everything() {
+		return nil
+	}
+	if prefix == "" {
+		return fmt.Errorf("%w: the archive of the whole bundle is an administrator's operation; ask for a "+
+			"directory this caller may read and the archive of it says which one it is (design doc 0127)",
+			ErrForbidden)
+	}
+	if !sc.MayRead(prefix) {
+		// The same answer a read outside the scope gets: whether
+		// something is at this address is the boundary itself (0109 §4).
+		return store.ErrNotFound
+	}
+	return nil
+}
+
 // narrow forces the caller's read scope onto a filter, intersecting it
 // with whatever prefixes the caller asked for. The bool is false when
 // nothing is left — the caller asked about a subtree they cannot see,

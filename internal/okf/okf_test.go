@@ -680,7 +680,7 @@ func TestIndexesListFilesBesideTheConcepts(t *testing.T) {
 		{Name: "chart.png", Path: "insights/chart.png", MediaType: "image/png", Size: 2048},
 		{Name: "orders.csv", Path: "seeds/orders.csv", MediaType: "text/csv", Size: 12},
 	}
-	idx := Indexes(entries, files)
+	idx := Indexes(entries, files, "")
 
 	got := string(idx["insights/index.md"])
 	if !strings.Contains(got, "## Files") {
@@ -699,7 +699,7 @@ func TestIndexesListFilesBesideTheConcepts(t *testing.T) {
 
 	// A bundle with no loose files renders exactly as it did before the
 	// section existed: no heading, no blank section.
-	for path, doc := range Indexes(entries, nil) {
+	for path, doc := range Indexes(entries, nil, "") {
 		if strings.Contains(string(doc), "Files") {
 			t.Errorf("%s carries a Files section with no files:\n%s", path, doc)
 		}

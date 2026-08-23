@@ -45,6 +45,9 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 		// (design doc 0109). SetPolicy is the write here, and it is
 		// guarded like every other one.
 		"Policy": true, "RequireAdmin": true,
+		// Whether this caller may take the archive at a path is the same
+		// kind of question, asked of a read (design doc 0127).
+		"MayArchive": true,
 	}
 	// Zero arguments of the right type for each parameter, so every method
 	// can be called far enough to hit (or miss) the guard.

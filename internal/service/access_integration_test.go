@@ -748,3 +748,37 @@ func TestRootPrefixAdminIsRefusedIntegration(t *testing.T) {
 		t.Errorf("the refusal does not name where that answer lives: %v", err)
 	}
 }
+
+// Design doc 0127: the whole bundle stays the administrator's, and a
+// subtree belongs to whoever may read it. The refusal that used to
+// cover both was there because a part of a base and the whole of one
+// arrived looking identical, which the archive now says.
+func TestArchiveOfASubtreeBelongsToWhoeverMayReadItIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	for _, tc := range []struct {
+		name   string
+		ctx    context.Context
+		prefix string
+		want   error
+	}{
+		{"an administrator takes the whole bundle", f.adminCtx, "", nil},
+		{"an administrator takes a subtree", f.adminCtx, f.prefix + "/personnel", nil},
+		{"a scoped caller takes what they may read", f.readCt, f.prefix + "/growth", nil},
+		{"and the directory everybody reads", f.readCt, f.prefix + "/glossary", nil},
+		{"but not the whole bundle", f.readCt, "", ErrForbidden},
+		{"and not a subtree they cannot read", f.readCt, f.prefix + "/personnel", store.ErrNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := f.svc.MayArchive(tc.ctx, tc.prefix)
+			if tc.want == nil {
+				if err != nil {
+					t.Fatalf("got %v, want the archive", err)
+				}
+				return
+			}
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("got %v, want %v", err, tc.want)
+			}
+		})
+	}
+}

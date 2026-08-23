@@ -194,7 +194,8 @@ _ochakai() {
       _arguments '--limit[max concepts per pass]:limit:' '--once[a single pass]' '--json[print JSON]' '--url[server URL]:url:'
       ;;
     export)
-      _arguments '--no-files[export the markdown only]' '--url[server URL]:url:' '1:directory:_files -/'
+      _arguments '--no-files[export the markdown only]' '--prefix[export one directory, not the base]:prefix:' \
+        '--url[server URL]:url:' '1:directory:_files -/'
       ;;
     seed)
       _arguments '--project[warehouse project for the resource address]:project:' '--prefix[id prefix]:prefix:' '1:file:_files'
@@ -276,7 +277,7 @@ _ochakai() {
     delete)        opts="--if-match --url" ;;
     purge|move)    opts="--url" ;;
     reembed)       opts="--limit --once --json --url" ;;
-    export)        opts="--url --no-files" ;;
+    export)        opts="--url --no-files --prefix" ;;
     seed)          opts="--project --prefix" ;;
     import)        opts="--dry-run --strict --url" ;;
     whoami)        opts="--json --url" ;;
@@ -373,6 +374,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to 
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'
 complete -c ochakai -n '__fish_seen_subcommand_from export' -l no-files -d 'export the markdown only'
+complete -c ochakai -n '__fish_seen_subcommand_from export' -l prefix -x -d 'export one directory, not the base'
 complete -c ochakai -n '__fish_seen_subcommand_from seed' -l project -x -d 'warehouse project for the resource address'
 complete -c ochakai -n '__fish_seen_subcommand_from seed' -l prefix -x -d 'id prefix'
 complete -c ochakai -n '__fish_seen_subcommand_from export' -a '(__fish_complete_directories)'

@@ -32,7 +32,7 @@ func knowledgeOf(docs []Doc) []domain.Knowledge {
 
 func bundle(t *testing.T, entries []domain.Knowledge) map[string][]byte {
 	t.Helper()
-	files := Indexes(entries, nil)
+	files := Indexes(entries, nil, "")
 	for i := range entries {
 		doc, err := Document(&entries[i])
 		if err != nil {

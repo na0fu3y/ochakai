@@ -40,10 +40,33 @@ type IndexLine struct {
 // cut off at a limit that says nothing is a listing that lies about what
 // the directory holds (design doc 0014's cut-off, kept and made visible).
 func IndexDocument(dir string, sections []IndexSection, notes ...string) []byte {
+	return indexDocument(dir, "", sections, notes...)
+}
+
+// SubtreeIndexDocument is IndexDocument for the root of an archive that
+// carries one subtree rather than a whole base (design doc 0127). The
+// scope is written where the two readers of an archive meet it: a key in
+// the frontmatter, for anything reading the bundle, and a sentence in
+// the body, for the person who unpacked it months later and is deciding
+// whether this is the backup they were looking for.
+//
+// Only the root says it. Every deeper index.md is the same document a
+// whole-base archive would carry at that path, because it *is* that
+// document — what the archive is missing is above them, not below.
+func SubtreeIndexDocument(scope string, sections []IndexSection, notes ...string) []byte {
+	return indexDocument("", scope, sections, notes...)
+}
+
+func indexDocument(dir, scope string, sections []IndexSection, notes ...string) []byte {
 	var b strings.Builder
-	if dir == "" {
+	switch {
+	case dir == "" && scope != "":
+		fmt.Fprintf(&b, "---\nokf_version: %q\nbundle_scope: %q\n---\n\n# ochakai knowledge bundle: %s\n\n"+
+			"This bundle is the **%s** subtree of a larger knowledge base, not a whole-base backup: "+
+			"everything outside %s is missing from it by design.\n\n", Version, scope, scope, scope, scope)
+	case dir == "":
 		fmt.Fprintf(&b, "---\nokf_version: %q\n---\n\n# ochakai knowledge bundle\n\n", Version)
-	} else {
+	default:
 		fmt.Fprintf(&b, "# %s\n\n", dir)
 	}
 	for _, s := range sections {

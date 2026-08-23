@@ -658,12 +658,16 @@ func (c *Client) Stats(ctx context.Context, days int, prefixes []string) (*domai
 // (design doc 0046 §3.5): an archive is the bundle at a path, so it is
 // answered at the address of that path rather than at an endpoint named
 // after downloading.
-func (c *Client) Export(ctx context.Context, files bool) (io.ReadCloser, error) {
+// A non-empty prefix takes the archive of that subtree instead of the
+// whole base — the same address a read of it uses, asked for as an
+// archive (design doc 0127).
+func (c *Client) Export(ctx context.Context, files bool, prefix string) (io.ReadCloser, error) {
 	var q url.Values
 	if !files {
 		q = url.Values{"files": {"false"}}
 	}
-	resp, err := c.doAccept(ctx, http.MethodGet, "/api/v1/bundle/", q, nil, "application/gzip")
+	path := "/api/v1/bundle/" + strings.TrimSuffix(strings.TrimPrefix(prefix, "/"), "/")
+	resp, err := c.doAccept(ctx, http.MethodGet, path, q, nil, "application/gzip")
 	if err != nil {
 		return nil, err
 	}

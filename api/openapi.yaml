@@ -583,6 +583,25 @@ paths:
         it came from, because this is a copy of a subtree rather than a
         move of one.
 
+
+        **An archive of a subtree says it is one**, in the two places
+        its reader meets it (design doc 0127): the root `index.md`
+        carries `bundle_scope` in its frontmatter and a sentence naming
+        what is missing, and the `Content-Disposition` filename is
+        `ochakai-okf-<subtree>.tar.gz` rather than `ochakai-okf.tar.gz`.
+        Deeper `index.md` files are unchanged — what a subtree archive
+        lacks is above them, not below. A whole-base archive is exactly
+        what it was.
+
+
+        **Who may take it**: the whole bundle (the root) is an
+        administrator's, and a subtree belongs to whoever may read it
+        (design docs 0109 §3, 0127). A path outside the caller's read
+        scope answers 404, as every other read of it does. Refusing a
+        subtree bought nothing once the archive stopped being mistakable
+        for a backup of the base: it carries what its caller could
+        already fetch one concept at a time.
+
         Written as it is read — indexes first, then concepts in batches,
         then one file at a time — so the server never holds the whole
         bundle in memory. Because the response starts before the last
