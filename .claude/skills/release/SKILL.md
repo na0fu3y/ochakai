@@ -61,7 +61,15 @@ them, so a forgotten bump is a red test rather than a stale page:
 the hits rather than replacing them.
 
 Read the unreleased entries as you go and confirm they match what
-actually landed (`git log v<prev>..origin/main --oneline`). A missing
+actually landed. The commits that go missing are the ones that widen no
+surface — a search fix, a ranking change — because nothing counts them;
+`git log v<prev>..origin/main --stat` and a look at every PR that moved
+a non-test file under `internal/` is the sweep that found #709, #715 and
+#716 after the fact. The `changelog` workflow now asks this of every PR,
+so a miss here means somebody labeled one `no-changelog`; read those.
+Then check that nothing landed *below* `## [Unreleased]`: a PR branched
+before the previous release and merged after it drops its entry into the
+section that was just tagged, and git raises no conflict. A missing
 entry is much cheaper to fix now than after the tag.
 
 Run `scripts/check` and open the PR. Merge it before tagging.
@@ -74,9 +82,16 @@ tag message and release body.
 
 ```bash
 git fetch origin && git checkout -B rel origin/main
-git tag -a vX.Y.Z -F -
+git tag -a vX.Y.Z --cleanup=verbatim -F notes.md
 git push origin vX.Y.Z
 ```
+
+**`--cleanup=verbatim` is not optional.** Without it git strips every
+line that starts with `#` as a comment — and the release notes are
+Markdown, so `## 検索` and every heading under it vanish silently. The
+tag looks fine in `git tag -l`; the gap shows on the Releases page.
+v0.26.3 was tagged twice for this reason. Read the result back before
+pushing: `git tag -l --format='%(contents)' vX.Y.Z | head -20`.
 
 Pushing runs [release.yaml](../../../.github/workflows/release.yaml): one
 job publishes the multi-arch image to GHCR with SBOM and provenance, the
@@ -149,6 +164,19 @@ curl -s https://proxy.golang.org/github.com/na0fu3y/ochakai/@latest
 
 `./ochakai version` must print the tag — a mismatch means the ldflags
 wiring broke, and it is the one failure the automation cannot see.
+
+If `gh attestation verify oci://…` hangs — it does on some networks,
+and so does `docker pull`, while a plain `curl` to the registry answers
+— do not wait on it. Read the manifest digest over HTTP and ask the
+attestation store directly; one hit is the same proof:
+
+```bash
+token=$(curl -s "https://ghcr.io/token?scope=repository:na0fu3y/ochakai:pull" | jq -r .token)
+digest=$(curl -sI -H "Authorization: Bearer $token" \
+  -H "Accept: application/vnd.oci.image.index.v1+json" \
+  https://ghcr.io/v2/na0fu3y/ochakai/manifests/X.Y.Z | tr -d '\r' | awk 'tolower($1)=="docker-content-digest:" {print $2}')
+gh api "repos/na0fu3y/ochakai/attestations/$digest" --jq '.attestations | length'   # expect 1
+```
 
 ## Why the ceremony
 

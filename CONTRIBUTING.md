@@ -1115,6 +1115,13 @@ out from a review costs you the time you spent writing it, not only the
 time it takes to read.
 
 - Keep PRs small and focused; include tests for behavior changes.
+- A behavior change gets a line under `## [Unreleased]` in
+  `CHANGELOG.md`. The `changelog` workflow fails a PR that moves a
+  non-test file under `internal/` or `cmd/` without touching the
+  changelog, and one whose entry landed below the first released
+  heading (a branch cut before a release, merged after it); the
+  `no-changelog` label is the way out when the change is not behavior,
+  and the description says why.
 - A PR that widens a surface — a REST operation, an MCP tool, a CLI
   command, an environment variable — names which of
   [docs/surface.md](docs/surface.md)'s eight conditions it serves, updates
@@ -1166,8 +1173,12 @@ commits are English:
 
 ```sh
 git fetch origin && git checkout -B rel origin/main
-git tag -a v0.14.0 -F -   # then push: git push origin v0.14.0
+git tag -a v0.14.0 --cleanup=verbatim -F notes.md   # then push: git push origin v0.14.0
 ```
+
+`--cleanup=verbatim` because the notes are Markdown: without it git
+drops every `#`-led line as a comment, and the headings are gone before
+anyone reads the tag.
 
 Pushing the tag runs [release.yaml](.github/workflows/release.yaml): one
 job publishes the multi-arch image to GHCR with SBOM and provenance, the

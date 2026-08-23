@@ -1,0 +1,68 @@
+# A behavior change that widens no surface passes every check this
+# repository has — surface_test.go counts entries, frozenwire_test.go
+# watches the wire, and a search fix that changes which concepts come
+# back touches neither. Three of those shipped without a CHANGELOG entry
+# in two consecutive releases (#709 in 0.26.2, #715 and #716 in 0.26.3),
+# each found by hand during release prep. A trap sprung three times is a
+# check, not a reminder (design doc 0035).
+#
+# Its own workflow rather than a job in ci.yaml so that adding or removing
+# the `no-changelog` label re-runs this and only this.
+name: changelog
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+permissions:
+  contents: read
+jobs:
+  entry:
+    runs-on: ubuntu-latest
+    # The label is the way out for a change that is behavior on paper and
+    # not in practice — a comment rewrite, a rename under internal/ — and
+    # it is visible on the PR, which a skipped check is not.
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The merge-base is what the diff is against; a shallow clone
+          # has no history to find it in.
+          fetch-depth: 0
+      - name: A behavior change carries a CHANGELOG entry, under Unreleased
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          # What counts as behavior: anything under internal/ or cmd/ that
+          # is not a test. The web UI's sources live under internal/ too,
+          # which is deliberate — #514 was a UI change nobody wrote down.
+          behavior=$(git diff --name-only "$BASE...$HEAD" -- internal cmd |
+            grep -Ev '_test\.go$|^internal/webui/jstest/|/testdata/' || true)
+          if [ -z "$behavior" ]; then
+            echo "no behavior change under internal/ or cmd/; nothing to write down"
+            exit 0
+          fi
+          if git diff --quiet "$BASE...$HEAD" -- CHANGELOG.md; then
+            printf '::error file=CHANGELOG.md::This PR changes behavior but adds no CHANGELOG entry. Add one under ## [Unreleased], or label the PR no-changelog and say why in the description.\n'
+            printf 'Behavior files changed:\n%s\n' "$behavior"
+            exit 1
+          fi
+          # The entry has to land above the first released heading. A PR
+          # branched before a release and merged after it puts its lines
+          # into the section that was just tagged — git sees no conflict,
+          # and the entry is then in a release it was not part of.
+          released=$(git show "$HEAD:CHANGELOG.md" | grep -nE '^## \[[0-9]' | head -1 | cut -d: -f1)
+          [ -n "$released" ] || exit 0 # no released section yet; nothing to land under
+          # Added lines below that heading are stray — except the compare
+          # links at the very bottom, which a release PR adds to legitimately.
+          stray=$(git diff -U0 "$BASE...$HEAD" -- CHANGELOG.md |
+            awk -v r="$released" '
+              /^@@/ { split($3, a, /[+,]/); below = (a[2] + 0 > r); next }
+              /^\+\+\+/ { next }
+              below && /^\+/ && !/^\+\[[^]]+\]: / { print }')
+          if [ -n "$stray" ]; then
+            printf '::error file=CHANGELOG.md,line=%s::This PR edits CHANGELOG.md below the first released heading (line %s). Move the entry under ## [Unreleased] — it is probably sitting in the section that was tagged after this branch was cut.\n' "$released" "$released"
+            exit 1
+          fi
+          echo "CHANGELOG entry present under Unreleased"
