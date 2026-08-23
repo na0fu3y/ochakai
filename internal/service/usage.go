@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/store"
@@ -161,26 +162,55 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 		return nil, Invalidf("days must be between 1 and %d: raw events and misses are pruned after %d days, "+
 			"so nothing answers for the time before that", maxStatsWindow, maxStatsWindow)
 	}
-	// The numbers describe the whole base — the queues the loop is
-	// measured by, and the totals a deployment reports on itself — so a
-	// scoped caller does not get a partial version of them (design doc
-	// 0109 §3). Narrowing was the other option and it would have given
-	// the same words two meanings.
-	if err := s.RequireAdmin(ctx, "stats"); err != nil {
-		return nil, err
-	}
+	now := time.Now().UTC()
 	f, err := checkedFilter(store.Filter{Prefixes: prefixes})
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC()
+	// A scoped caller reads their own numbers, and the answer says which
+	// ones (design doc 0123). 0109 §3 pooled these on the administrator
+	// because a subset would be "a second meaning for numbers the loop is
+	// measured by" — but `prefix` could already produce that subset, so
+	// what made it a second meaning was an answer that did not say which
+	// one it carried. It says now, for every caller: an administrator
+	// asking about one subtree gets the same declaration.
+	sc, err := s.scope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	scoped := !sc.Everything()
+	visible := true
+	if scoped {
+		f, visible, err = s.narrow(ctx, f)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if !visible {
+		// The caller holds no grant here, or asked about a subtree
+		// outside the ones they hold. The answer counts nothing, and
+		// says it counts nothing — not a refusal, for the reason a read
+		// outside the scope is a 404 rather than a 403: an error would
+		// say the subtree is there. An empty prefix list cannot express
+		// this, because in a filter it means the whole bundle.
+		return emptyStats(now, days, s.Config), nil
+	}
 	st, err := s.Store.Stats(ctx, now.AddDate(0, 0, -days), f.Prefixes)
 	if err != nil {
 		return nil, err
 	}
 	st.At = now
 	st.WindowDays = days
+	st.Scope = scopeOf(scoped, f.Prefixes)
 	st.Misses.Recording = s.Config == nil || s.Config.RecordMisses
+	if scoped {
+		// The misses are the whole instance's — a question that found
+		// nothing has no id to scope by (0069) — so a caller who reads
+		// part of the bundle is told they are withheld rather than shown
+		// what every other team searched for.
+		st.Misses.Withheld = true
+		st.Misses.Count, st.Misses.Queries = 0, nil
+	}
 	// A sandbox says so beside its own numbers: everything counted here
 	// is about to be erased, and a caller that does not know that may
 	// curate into it (design doc 0087).
@@ -197,4 +227,47 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 		st.Embedding = domain.StatsEmbedding{Enabled: true, Vectors: vectors, Truncated: truncated}
 	}
 	return st, nil
+}
+
+// scopeOf is what the answer declares it covers: the prefixes counted,
+// and nothing when they were the whole bundle. An administrator asking
+// about one subtree declares it too — the field is about the numbers,
+// not about the caller (design doc 0123).
+func scopeOf(scoped bool, prefixes []string) []string {
+	if !scoped && len(prefixes) == 0 {
+		return nil
+	}
+	return prefixes
+}
+
+// emptyStats is the answer for a caller who can see none of what these
+// numbers count. It is built here rather than by asking the store for a
+// subtree that does not exist: there is no prefix that reliably matches
+// nothing, and an empty prefix list means the opposite of nothing.
+//
+// The vocabularies are carried with zeros for the reason StatsConcepts
+// gives — so a reader never has to tell "none" from "not reported".
+func emptyStats(now time.Time, days int, cfg *config.Config) *domain.Stats {
+	st := &domain.Stats{
+		At:         now,
+		WindowDays: days,
+		Scope:      []string{},
+		Concepts: domain.StatsConcepts{
+			Status: zeroedCounts(domain.Statuses),
+			Trust:  zeroedCounts(domain.Trusts),
+		},
+	}
+	st.Misses.Recording = cfg == nil || cfg.RecordMisses
+	st.Misses.Withheld = true
+	st.Sandbox = cfg != nil && cfg.Sandbox
+	st.InsecureDev = cfg != nil && cfg.InsecureDev
+	return st
+}
+
+func zeroedCounts[T ~string](values []T) map[string]int64 {
+	m := make(map[string]int64, len(values))
+	for _, v := range values {
+		m[string(v)] = 0
+	}
+	return m
 }

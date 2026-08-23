@@ -242,7 +242,9 @@ func TestScopeNarrowsEveryListingIntegration(t *testing.T) {
 
 // TestPolicyBelongsToAdministratorsIntegration: the rules name people
 // and the directories they may see, and the operations that take the
-// bundle as a whole are refused rather than narrowed (0109 §3).
+// bundle as a whole are refused rather than narrowed (0109 §3). Stats
+// left this list — it is narrowed and says so (design doc 0123), which
+// is the split 0109 §3 said could be made later.
 func TestPolicyBelongsToAdministratorsIntegration(t *testing.T) {
 	f := newAccessFixture(t)
 	if _, _, err := f.svc.Policy(f.readCt); !errors.Is(err, ErrForbidden) {
@@ -250,9 +252,6 @@ func TestPolicyBelongsToAdministratorsIntegration(t *testing.T) {
 	}
 	if _, _, err := f.svc.SetPolicy(f.readCt, nil, f.reader, nil); !errors.Is(err, ErrForbidden) {
 		t.Errorf("a scoped caller writing the policy returned %v, want ErrForbidden", err)
-	}
-	if _, err := f.svc.Stats(f.readCt, 0, nil); !errors.Is(err, ErrForbidden) {
-		t.Errorf("a scoped caller asking for stats returned %v, want ErrForbidden", err)
 	}
 	if _, err := f.svc.Move(f.readCt, f.mine, f.mine+"-2", f.reader); !errors.Is(err, ErrForbidden) {
 		t.Errorf("a scoped caller moving a concept returned %v, want ErrForbidden", err)
@@ -545,5 +544,83 @@ func TestEmptyPolicyHasAVersionThatGuardsTheFirstGrant(t *testing.T) {
 	other := []domain.AccessRule{{Prefix: f.prefix + "/glossary", Principal: domain.AnyPrincipal}}
 	if _, _, err := f.svc.SetPolicy(f.adminCtx, other, f.admin, &empty); !errors.Is(err, store.ErrConflict) {
 		t.Fatalf("a second signup racing on the empty policy should conflict, got %v", err)
+	}
+}
+
+// Design doc 0123: the loop's numbers are narrowed to what the caller
+// can see, and the answer says which subtrees it counted — that
+// declaration is what keeps a partial answer from being a second
+// meaning for the same words.
+func TestScopedStatsCountTheCallersOwnSubtreeAndSayItIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+
+	whole, err := f.svc.Stats(f.adminCtx, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if whole.Scope != nil {
+		t.Errorf("an administrator asking about the whole bundle declared scope %v, want none", whole.Scope)
+	}
+	if whole.Misses.Withheld {
+		t.Error("misses withheld from an administrator")
+	}
+
+	// The reader holds growth and the shared glossary, and nothing else.
+	mine, err := f.svc.Stats(f.readCt, 0, nil)
+	if err != nil {
+		t.Fatalf("a scoped caller asking for stats: %v", err)
+	}
+	if len(mine.Scope) == 0 {
+		t.Fatal("a scoped answer declared no scope; a partial count that does not say so is the thing 0109 §3 refused")
+	}
+	for _, p := range mine.Scope {
+		if !strings.HasPrefix(p, f.prefix+"/") {
+			t.Errorf("declared scope %q is outside the caller's grants", p)
+		}
+	}
+	if mine.Concepts.Total >= whole.Concepts.Total {
+		t.Errorf("scoped total %d is not smaller than the whole base's %d",
+			mine.Concepts.Total, whole.Concepts.Total)
+	}
+
+	// The misses are the instance's and have no id to narrow by, so they
+	// are withheld rather than shown — and said to be, not zeroed.
+	if !mine.Misses.Withheld {
+		t.Error("a scoped caller was given the whole instance's unanswered searches")
+	}
+	if mine.Misses.Count != 0 || len(mine.Misses.Queries) != 0 {
+		t.Errorf("withheld misses still carried data: %+v", mine.Misses)
+	}
+
+	// An administrator who asks about one subtree gets the same
+	// declaration: the field is about the numbers, not about the caller.
+	part, err := f.svc.Stats(f.adminCtx, 0, []string{f.prefix + "/growth"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(part.Scope) != 1 || part.Scope[0] != f.prefix+"/growth" {
+		t.Errorf("an administrator's scoped call declared %v", part.Scope)
+	}
+}
+
+// A caller who can see none of what these numbers count gets zeros that
+// say they are zeros for that reason — an empty declared scope — rather
+// than a refusal, for the reason a read outside the scope is a 404.
+func TestStatsOutsideEveryGrantCountNothingAndSaySoIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	st, err := f.svc.Stats(f.readCt, 0, []string{f.prefix + "/personnel"})
+	if err != nil {
+		t.Fatalf("asking about a subtree outside every grant: %v", err)
+	}
+	if st.Scope == nil || len(st.Scope) != 0 {
+		t.Errorf("declared scope = %v, want an empty list", st.Scope)
+	}
+	if st.Concepts.Total != 0 {
+		t.Errorf("counted %d concepts the caller cannot see", st.Concepts.Total)
+	}
+	// The vocabularies still travel with zeros, so a reader never has to
+	// tell "none" from "not reported".
+	if len(st.Concepts.Status) != len(domain.Statuses) || len(st.Concepts.Trust) != len(domain.Trusts) {
+		t.Errorf("the empty answer dropped a vocabulary: %+v", st.Concepts)
 	}
 }

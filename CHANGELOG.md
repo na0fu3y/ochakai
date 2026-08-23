@@ -21,6 +21,29 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **`GET /api/v1/stats` answers a caller who holds part of the bundle,
+  and the answer says what it counted.** Design doc 0109 §3 pooled these
+  numbers on the administrator because a subset would give the loop's
+  numbers a second meaning — but `prefix` could already produce that
+  subset, so what made it a second meaning was the answer never saying
+  which one it carried. It says now: a `scope` field carries the
+  prefixes counted, absent when they were the whole bundle, and an empty
+  list means the caller can see none of it (so the zeros are zeros for
+  that reason, not because nothing happened). An administrator asking
+  about one subtree gets the same declaration — the field is about the
+  numbers, not the caller. `ochakai stats` prints it as a `scope` line
+  and the queue hints name the same subtree (design doc 0123).
+- **The unanswered searches are withheld from a scoped caller rather
+  than narrowed**, and say so: a miss carries no concept id, so there is
+  nothing to narrow it by, and showing it unnarrowed would tell one team
+  what every other team searched for. `misses.withheld` on the wire,
+  `misses withheld` in the CLI — a different word from the existing
+  `misses -`, because the remedy is to ask an administrator rather than
+  to change `OCHAKAI_RECORD_MISSES`. `export`, `move`, `reembed` and the
+  access policy stay with the administrators.
+
 ### Fixed
 
 - **A deployment that verifies its own tokens (`OCHAKAI_OIDC_ISSUER`)

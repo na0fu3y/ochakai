@@ -29,7 +29,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
-| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
+| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**`stats` が範囲を持つ呼び出し元にも答えることは [0123](0123-the-numbers-say-what-they-counted.md)**(0109 §3 を改訂 — 答えが自分の範囲を宣言する)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
@@ -641,6 +641,30 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   スコープ外の読みは **404**。**塞げないものが一つあり、そう書いてある**:
   可視な concept の本文が隠した id を名指していれば読める(0075 §3 が
   サーバによる文書の書き換えを禁じている)。
+- [0123 数は、何を数えたかを言う](0123-the-numbers-say-what-they-counted.md)
+  — **Accepted**。0109 §3 の「バンドル全体を取る操作は管理者のものになる」
+  から **`stats` だけを外す**。0109 §3 の理由(部分集合はループを測る数に
+  二つ目の意味を与える)は正しく、**対象が広すぎた** — `stats` は 0041 以来
+  `prefix` を取り、部分集合はその日も出せた。二つ目の意味を作っていたのは
+  部分集合の存在ではなく、**答えがどちらを運んでいるかを言わないこと**で
+  ある。決定は、応答が `scope`(数えた prefix、全体なら載らない)を持ち、
+  範囲を持つ呼び出し元は自分の数を読めること。**管理者が `prefix` で訊いた
+  ときも同じ宣言が付く** — 欄は数についてであって呼び出し元についてでは
+  ない。**空の一覧は「あなたには何も見えない」**で、全部ゼロなのが「何も
+  起きなかった」ではないと言うためにこの形が要る(空の prefix 一覧は
+  フィルタでは全体を意味する)。[0114](0114-a-degraded-ranking-says-so.md)
+  が退化したランキングに置いた形の再適用である。**絞れない二つは絞れないと
+  言う**: miss は id を持たない(0069 §5.1)ので差し止め(`withheld`)、
+  ゼロにはしない — `recording: false` と別の語なのは直し方が違うから
+  (設定を変える / 管理者に訊く)。dropped は全体のまま(失われた時点で
+  何についてか分からず、上の数の信頼度の脚注である)。**export・`move`・
+  `reembed`・ポリシー自身は管理者のまま** — それぞれ理由がまだ効いており、
+  export は「欠けたアーカイブもバックアップと呼ばれる」ので宣言では直らない。
+  §5 で一つ直した: `Queues` の注釈が「prefix で絞られない」と書いていたが
+  store は既に絞っていた。応答専用スキーマへの追加なので凍結の外
+  ([0082](0082-what-the-freeze-holds-still.md) §2)で、数える面はどれも
+  動かない。却下: miss を絞って見せる、403 のまま据え置く、`scope` を常に
+  載せる、`withheld` を `recording` に畳む、export も同時に割る。
 - [0120 ポリシーは、読んだままの姿でだけ置き換わる](0120-the-policy-is-replaced-only-as-it-was-read.md)
   — **Accepted**。0109 §2 の「文書一枚を丸ごと置き換える」に**前提条件**を
   足す。二人が同じポリシーを読んで一行ずつ足すと、後に保存したほうの文書に
