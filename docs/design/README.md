@@ -39,7 +39,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md) |
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4([0093](0093-the-budget-governs-the-whole-response.md) が予算の側を改訂)。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。**MCP の転送が stateless になり、プロトコルが 2026-07-28 になることは [0118](0118-a-call-carries-everything-it-needs.md)**(0067 §3 を改訂 — 面もツールも動かない)。MCP のツール 7 本とその境界は [0076](0076-two-tools-leave-mcp.md) と、**7 本目を割った [0096](0096-a-listing-is-not-a-search-here-either.md)**。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂)。**CLI の行の第一列が「読み手が並べてくれと言った鍵」だけになることは [0110](0110-the-first-column-is-the-key-you-asked-for.md)**(0068 §3 の CLI への適用。`search` と逆引きからスコア列が落ちる)。**その行に太字と dim が付くのは [0111](0111-weight-for-the-eye-and-only-for-an-eye.md)**(端末のときだけ。パイプが受け取るバイト列は変わらない) |
-| Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂)。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)** |
+| Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂)。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**クロスサイトの書き込みを二つの配信経路の両方が断ることは [0126](0126-a-browser-says-where-it-came-from.md)**(0072 §1.1・§1.2 を改訂 — `serve` には置かない) |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)**。**却下の理由がどこまで運ばれるかは [0104](0104-a-ruling-travels-with-its-reason.md)**(CLI の出力と export へ) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
@@ -47,7 +47,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**export が却下の理由まで運ぶことは [0104](0104-a-ruling-travels-with-its-reason.md)**(読み戻さないのは同じ) |
 | 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**MCP OAuth コネクタの再実装の出発点は [0116](0116-the-connector-price-changed-not-its-condition.md) が差し替えた** — 戻す条件は 0070 §5 のままで、その日に開くのが 0010 の認可サーバ(863 行)ではなく、測定済みの二つの答え(180 行)になった |
-| REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md) |
+| REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md)。**本文の鍵の照合が完全一致で、同じ鍵の重複が 400 になることは [0125](0125-a-body-names-each-field-once.md)**(0064 §2 が決めた規則を、書かれたとおりに効かせたもの) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
@@ -536,6 +536,23 @@ JSON キーと MCP ツール名だけである。`change` の語彙に残って�
   ルートは fragment に居るのでパスは `/` である。a11y は網羅ではなく
   「無いと使えない」四つ: toast が live region、移動後にフォーカスが主領域へ、
   現在のタブに `aria-current`、エラーバナーが `role="alert"`。
+- [0126 ブラウザは、どこから来たかを言う](0126-a-browser-says-where-it-came-from.md)
+  — **Accepted**。安全でないメソッドのクロスサイト要求は、`ochakai ui` と
+  `ochakai serve-ui` の**両方で** 403 になる。0072 §1.2 は「二つのモードは
+  ブラウザガードの要否がすべて反転している」と書いていたが、反転して
+  いるのはバインド先と identity の出所であって、**ブラウザから来た
+  書き込みを信じてよいかではない** — そして条件が揃っているのは検査を
+  持たない側だった。IAP を前置したデプロイではブラウザが資格情報を持ち、
+  `readJSON` は `Content-Type` を見ないので `text/plain` のフォームが
+  preflight 無しで四つの POST に届く。**買っているのは、この検査が
+  何をしないかである**: `Sec-Fetch-Site` も `Origin` も無い要求は通るので、
+  CLI・エージェント・curl は一行も変わらず、表面はどの次元も動かない。
+  読み(GET)は断らない — 断れば `/health` とページが道連れになる。
+  `ochakai serve` には置かない(§5): ブラウザが資格情報を持って届く構成が
+  今日は一つも無く、発火しない検査を足さないという 0035 §3.1 の規則が
+  そのまま効く。DNS リバインディング防御は残る — 攻撃ページの `Origin` と
+  `Host` は互いに一致するので、**クロスオリジンの検査が原理的に見えない
+  唯一の攻撃がそれ**である。
 - [0006 Web UI の二つの配信経路](0006-web-ui-serving.md) — **Superseded by 0072**。
 - [0014 フォルダブラウズ](0014-folder-browse.md) — **Superseded by 0046**。
   prefix によるツリー閲覧。
@@ -913,6 +930,20 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   閉じられないことである)。遡らない(§5)。対象は名前だけで、フラグも
   出力の形も保存形も含まない。[0082](0082-what-the-freeze-holds-still.md) が
   REST 側で緩めたぶんとの釣り合いであり、面の数は動かない。
+- [0125 本文は、鍵を一度だけ名指す](0125-a-body-names-each-field-once.md)
+  — **Accepted**。0064 §2 の「宣言していないボディキーは 400 で名指す」を、
+  **書かれたとおりに効かせる**。規則の追加ではなく、規則を実施するはずの
+  機構に半分しか無かったという話である: `encoding/json` は鍵を大小を
+  区別せずに突き合わせるので `{"RULING":"verified"}` が 200 になっていた
+  (`DisallowUnknownFields` は**当たってしまう鍵については何も言わない**)。
+  同じ関数のもう一つが、繰り返された鍵の最後の値を黙って採ること —
+  §20.2 が `?limit=10&limit=50` について「求められたとおりの答えは無い」と
+  言ったのと同じ問いで、向きが一つに決まっているぶんだけ悪い。**決定は
+  二つとも 400 で鍵を名指す**で、配列として反復してよいというクエリ側の
+  例外は本文には無い(JSON は集合を配列で綴れる)。機構は
+  `encoding/json/v2` の既定で、**読む側だけ**を移す —— v2 は marshal の
+  既定も変えており、それは凍結された面が運んでいるバイト列である。
+  0107 の凍結の範囲(OKF コア)は動かず、触れる四操作はその外にある。
 - [0107 凍結が握るのは OKF コアである](0107-the-freeze-holds-the-okf-core.md)
   — **Accepted**。凍結の範囲を bundle の往復(`GET` / `PUT` / `DELETE
   /api/v1/bundle/{path}`)と `GET /api/v1/search` の 4 操作に狭め、残りの

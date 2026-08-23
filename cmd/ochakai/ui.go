@@ -71,34 +71,33 @@ func uiHandler(target string, tokens oauth2.TokenSource) (http.Handler, error) {
 			}
 		}
 	})
-	return localBrowserGuard(webUIMux(stripDelegation(proxy))), nil
+	return loopbackHostGuard(crossOriginGuard(webUIMux(stripDelegation(proxy)))), nil
 }
 
-// localBrowserGuard fends off the two ways a web page in the user's
-// browser could abuse a loopback proxy that signs requests as them. The
-// listener is already bound to 127.0.0.1, so a network peer can't reach
-// it; these guards are about the browser the user drives.
+// loopbackHostGuard fends off the way a web page in the user's browser
+// could abuse a loopback proxy that signs requests as them and that the
+// cross-origin check cannot see. The listener is already bound to
+// 127.0.0.1, so a network peer can't reach it; this guard is about the
+// browser the user drives.
 //
-//   - Host header: rejects non-loopback names, stopping DNS rebinding (a
-//     malicious page pointing its own hostname at 127.0.0.1 to get
-//     same-origin access).
-//   - Origin header: rejects cross-site writes (CSRF). A direct
-//     fetch('http://127.0.0.1:PORT/...') from evil.com carries the right
-//     Host but a foreign Origin; without this check a text/plain POST is
-//     a "simple request" (no CORS preflight) and would be proxied with
-//     the user's token. Same-origin UI requests send no Origin (GET) or a
-//     loopback Origin, so they pass.
+// Host header: rejects non-loopback names, stopping DNS rebinding — a
+// malicious page pointing its own hostname at 127.0.0.1 to get
+// same-origin access. That is precisely the attack crossOriginGuard is
+// blind to: the page's Origin and the Host it reaches agree, because the
+// attacker owns both, and Sec-Fetch-Site says same-origin. This guard
+// runs first and reads the one thing that still gives it away.
 //
-// kubectl proxy learned the rebinding half the hard way; the CSRF half is
-// the same lesson one step further.
-func localBrowserGuard(next http.Handler) http.Handler {
+// The cross-site half of this function is gone: it hand-rolled the
+// Origin comparison that net/http.CrossOriginProtection now makes, and
+// makes better — the standard check reads Sec-Fetch-Site as well, and
+// serve-ui, which never had this function, gets the same rule from the
+// same place (design doc 0126).
+//
+// kubectl proxy learned the rebinding lesson the hard way.
+func loopbackHostGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !isLoopbackHost(r.Host) {
 			http.Error(w, "unexpected Host header (DNS rebinding guard): open the UI via http://127.0.0.1 or http://localhost", http.StatusForbidden)
-			return
-		}
-		if origin := r.Header.Get("Origin"); origin != "" && !isLoopbackOrigin(origin) {
-			http.Error(w, "cross-origin request refused (CSRF guard): this UI is only for the local browser", http.StatusForbidden)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -116,14 +115,4 @@ func isLoopbackHost(host string) bool {
 		return true
 	}
 	return false
-}
-
-// isLoopbackOrigin reports whether an Origin header ("scheme://host[:port]")
-// points at the local machine — the only origin the UI is served from.
-func isLoopbackOrigin(origin string) bool {
-	u, err := url.Parse(origin)
-	if err != nil || u.Host == "" {
-		return false
-	}
-	return isLoopbackHost(u.Host)
 }

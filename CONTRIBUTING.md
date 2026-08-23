@@ -838,7 +838,29 @@ stopped being true is a release audit; this one says the second cheapest
 is writing down a shape you have not built yet, because the writing is
 what makes the gap between the shape and the code legible.
 
-    RECORD-CORPUS-LINES: 10500
+10,500 → 11,000 is 0125 and 0126, and both come from the same unusual
+place: **neither was reported, and neither decided anything new.** They
+came out of a survey that asked what recent recommendations this tree had
+not taken and what it should retire — and the answer to the second half
+was almost nothing, while the first half turned up two rules the project
+had already written down and only half kept. 0064 §2 said an undeclared
+body key is a 400 naming it, and `DisallowUnknownFields` reports the keys
+that match no field while saying nothing about a key that matches one it
+should not, so a spelling the contract never declared was answered 200.
+0072 §1.2 read the browser guard as a property of the loopback mode, and
+the deployed mode — the one where a browser holds a credential it did not
+have to be given — had none. In both cases the standard library had since
+grown the answer the tree was writing by hand, and **that is what made the
+gap visible**: comparing the code against a newer standard answer is a
+reason to re-read the rule, and re-reading is where a half-kept rule
+shows. So this crossing names a pressure the earlier ones did not: **a
+corpus grows when the toolchain catches up to a rule the project wrote
+itself.** The 10,000 crossing said a record written ahead of need sends
+somebody to read code nobody had a reason to run; this one says a standard
+that arrives late does the same thing to code somebody had every reason to
+trust, because it had a record behind it.
+
+    RECORD-CORPUS-LINES: 11000
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

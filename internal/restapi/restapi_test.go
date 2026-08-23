@@ -489,6 +489,49 @@ func TestUnknownBodyFieldsAreRejected(t *testing.T) {
 	}
 }
 
+// TestMisspeltCaseIsAnUnknownField pins the half of design doc 0064 §2
+// that was written and not kept until 0122: encoding/json v1 matched a
+// field name without regard to case, so a body naming RULING reached a
+// handler that had declared ruling and was answered 200. The rule was
+// always that a key the operation does not declare is a 400 naming it,
+// and "ruling" spelt another way is not a key it declares.
+func TestMisspeltCaseIsAnUnknownField(t *testing.T) {
+	h := Handler(&service.Service{})
+	for _, body := range []string{
+		`{"RULING":"verified"}`,
+		`{"Ruling":"verified"}`,
+	} {
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/review/metrics/revenue", strings.NewReader(body)))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("POST review %s = %d, want 400 (body: %s)", body, rec.Code, rec.Body)
+		}
+		if !strings.Contains(rec.Body.String(), "unknown field") {
+			t.Errorf("body %q does not name the unknown field", rec.Body)
+		}
+	}
+}
+
+// TestRepeatedBodyFieldIsRejected pins 0122's other refusal: a name
+// given twice used to be answered with the last of them, which decided
+// silently which of two values the caller meant. Naming the field is
+// what makes the answer actionable, so the message carries it.
+func TestRepeatedBodyFieldIsRejected(t *testing.T) {
+	h := Handler(&service.Service{})
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/v1/review/metrics/revenue",
+		strings.NewReader(`{"ruling":"verified","ruling":"rejected"}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST review with a repeated field = %d, want 400 (body: %s)", rec.Code, rec.Body)
+	}
+	// The quotes around the name are escaped in the JSON error body, so
+	// the assertion looks for the name and the reason, not the spelling
+	// of the message.
+	if !strings.Contains(rec.Body.String(), "ruling") || !strings.Contains(rec.Body.String(), "twice") {
+		t.Errorf("body %q does not say which field appeared twice", rec.Body)
+	}
+}
+
 // TestTrailingBodyContentIsRejected pins the other half of readJSON's
 // strictness: content after the JSON value is a 400, not silently
 // discarded.
