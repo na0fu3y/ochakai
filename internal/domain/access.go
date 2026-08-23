@@ -33,6 +33,20 @@ type AccessRule struct {
 	// would be writing blind, and the read it would need to do the job
 	// safely (If-Match) would be the thing refused.
 	MayWrite bool `json:"may_write"`
+	// MayAdmin lets this principal edit the rules under Prefix — the
+	// grants for one subtree, delegated to whoever runs it, so that
+	// placing a boundary for a new team is not an operation that can
+	// also remove every other team's (design doc 0124). It implies
+	// MayWrite, which implies reading: administering a directory you
+	// cannot read is the blind write MayWrite's own comment refuses.
+	//
+	// **Never at the root.** "Who may edit the whole policy" is the one
+	// answer that cannot live inside the policy, because whoever holds it
+	// can grant themselves anything — 0109 §3's revolving door, and the
+	// reason OCHAKAI_ADMINS is configuration. A subtree's editors are a
+	// different question: a full administrator put them there and can
+	// take them away.
+	MayAdmin bool `json:"may_admin,omitempty"`
 
 	GrantedAt time.Time `json:"granted_at,omitzero"`
 	GrantedBy string    `json:"granted_by,omitempty"`
@@ -102,6 +116,17 @@ func ValidateAccessRules(rules []AccessRule) ([]AccessRule, error) {
 		if r.Prefix != "" && !ValidIDPrefix(r.Prefix) {
 			return nil, fmt.Errorf("invalid prefix %q", r.Prefix)
 		}
+		if r.MayAdmin && r.Prefix == "" {
+			return nil, fmt.Errorf(
+				"may_admin at the root would put \"who may edit this policy\" inside the policy, "+
+					"where whoever holds it can grant themselves anything: name %q in OCHAKAI_ADMINS instead "+
+					"(design doc 0109 §3)", r.Principal)
+		}
+		if r.MayAdmin && !r.MayWrite {
+			// Fixed rather than refused: the pair has one reading, and a
+			// caller that asked for the wider of the two meant it.
+			r.MayWrite = true
+		}
 		if !ValidPrincipal(r.Principal) {
 			return nil, fmt.Errorf("invalid principal %q: spell it human:<name>, process:<name>, or %q",
 				r.Principal, AnyPrincipal)
@@ -158,7 +183,14 @@ func AccessPolicyVersion(rules []AccessRule) string {
 	h := sha256.New()
 	for _, r := range sorted {
 		write := "r"
-		if r.MayWrite {
+		switch {
+		case r.MayAdmin:
+			// A third spelling rather than a wider one: a rule that
+			// grants no administration hashes exactly as it did before
+			// this field existed, so no stored policy's version moved
+			// when it was added.
+			write = "rwa"
+		case r.MayWrite:
 			write = "rw"
 		}
 		fmt.Fprintf(h, "%s\x00%s\x00%s\n", r.Prefix, r.Principal, write)

@@ -43,7 +43,7 @@ const accessPolicyLockID int64 = 0xacce55
 // (domain.MaxAccessRules) and read once per request that needs it.
 func (s *Store) AccessPolicy(ctx context.Context) (*AccessPolicy, error) {
 	rows, err := s.pool.Query(ctx, `
-		SELECT prefix, principal, may_write, granted_at, granted_by
+		SELECT prefix, principal, may_write, may_admin, granted_at, granted_by
 		  FROM access_rule
 		 ORDER BY prefix, principal`)
 	if err != nil {
@@ -53,7 +53,7 @@ func (s *Store) AccessPolicy(ctx context.Context) (*AccessPolicy, error) {
 	p := &AccessPolicy{}
 	for rows.Next() {
 		var r domain.AccessRule
-		if err := rows.Scan(&r.Prefix, &r.Principal, &r.MayWrite, &r.GrantedAt, &r.GrantedBy); err != nil {
+		if err := rows.Scan(&r.Prefix, &r.Principal, &r.MayWrite, &r.MayAdmin, &r.GrantedAt, &r.GrantedBy); err != nil {
 			return nil, fmt.Errorf("scan access rule: %w", err)
 		}
 		p.Rules = append(p.Rules, r)
@@ -88,7 +88,9 @@ func (s *Store) AccessPolicy(ctx context.Context) (*AccessPolicy, error) {
 // are an observation of who changed the policy, and a caller that could
 // write them could write somebody else's name into the record of a
 // grant they made themselves.
-func (s *Store) ReplaceAccessPolicy(ctx context.Context, rules []domain.AccessRule, by domain.Actor, ifMatch *string) error {
+func (s *Store) ReplaceAccessPolicy(ctx context.Context, rules []domain.AccessRule, by domain.Actor,
+	ifMatch *string, within []string,
+) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin access policy write: %w", err)
@@ -97,15 +99,28 @@ func (s *Store) ReplaceAccessPolicy(ctx context.Context, rules []domain.AccessRu
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, accessPolicyLockID); err != nil {
 		return fmt.Errorf("lock access policy: %w", err)
 	}
+	current, err := accessRulesTx(ctx, tx)
+	if err != nil {
+		return err
+	}
+	// What the caller was looking at, which is what a precondition of
+	// theirs is about. A prefix administrator reads and replaces the
+	// rules under their own subtrees and never sees the rest, so a
+	// version over the whole policy would fail their write whenever a
+	// rule they cannot see moved (design doc 0124).
+	visible, outside := current, []domain.AccessRule(nil)
+	if within != nil {
+		visible, outside = partitionByPrefixes(current, within)
+	}
 	if ifMatch != nil {
-		current, err := accessRulesTx(ctx, tx)
-		if err != nil {
-			return err
-		}
-		if got := domain.AccessPolicyVersion(current); got != strings.Trim(*ifMatch, `"`) {
+		if got := domain.AccessPolicyVersion(visible); got != strings.Trim(*ifMatch, `"`) {
 			return fmt.Errorf("%w: access policy is at version %s", ErrConflict, got)
 		}
 	}
+	// The rules outside the caller's reach are carried over, not deleted.
+	// They cannot be in the document — the caller never read them — so a
+	// document that omits them says nothing about them.
+	rules = append(append([]domain.AccessRule{}, rules...), outside...)
 	if _, err := tx.Exec(ctx, `DELETE FROM access_rule`); err != nil {
 		return fmt.Errorf("clear access policy: %w", err)
 	}
@@ -113,8 +128,8 @@ func (s *Store) ReplaceAccessPolicy(ctx context.Context, rules []domain.AccessRu
 		batch := &pgx.Batch{}
 		for _, r := range rules {
 			batch.Queue(`
-				INSERT INTO access_rule (prefix, principal, may_write, granted_by)
-				VALUES ($1, $2, $3, $4)`, r.Prefix, r.Principal, r.MayWrite, by.String())
+				INSERT INTO access_rule (prefix, principal, may_write, may_admin, granted_by)
+				VALUES ($1, $2, $3, $4, $5)`, r.Prefix, r.Principal, r.MayWrite, r.MayAdmin, by.String())
 		}
 		if err := tx.SendBatch(ctx, batch).Close(); err != nil {
 			return fmt.Errorf("write access policy: %w", err)
@@ -130,7 +145,7 @@ func (s *Store) ReplaceAccessPolicy(ctx context.Context, rules []domain.AccessRu
 // precondition is compared against. It reads what AccessPolicy reads;
 // the order does not matter here, because the version imposes its own.
 func accessRulesTx(ctx context.Context, tx pgx.Tx) ([]domain.AccessRule, error) {
-	rows, err := tx.Query(ctx, `SELECT prefix, principal, may_write FROM access_rule`)
+	rows, err := tx.Query(ctx, `SELECT prefix, principal, may_write, may_admin FROM access_rule`)
 	if err != nil {
 		return nil, fmt.Errorf("read access policy: %w", err)
 	}
@@ -138,7 +153,7 @@ func accessRulesTx(ctx context.Context, tx pgx.Tx) ([]domain.AccessRule, error) 
 	var out []domain.AccessRule
 	for rows.Next() {
 		var r domain.AccessRule
-		if err := rows.Scan(&r.Prefix, &r.Principal, &r.MayWrite); err != nil {
+		if err := rows.Scan(&r.Prefix, &r.Principal, &r.MayWrite, &r.MayAdmin); err != nil {
 			return nil, fmt.Errorf("scan access rule: %w", err)
 		}
 		out = append(out, r)
@@ -147,4 +162,32 @@ func accessRulesTx(ctx context.Context, tx pgx.Tx) ([]domain.AccessRule, error) 
 		return nil, fmt.Errorf("read access policy: %w", err)
 	}
 	return out, nil
+}
+
+// partitionByPrefixes splits rules into the ones a caller administering
+// prefixes may see and replace, and the ones that must survive their
+// write untouched. A rule is theirs when its own prefix sits at or under
+// one of theirs, matched on segment boundaries like every other prefix
+// question here (0075 §6) — so an administrator of "teams/growth" holds
+// the rules about "teams/growth/metrics" and none about "teams".
+//
+// The shallower rule is deliberately not theirs even though it governs
+// their subtree: they could otherwise widen their own reach by editing
+// the rule that contains them.
+func partitionByPrefixes(rules []domain.AccessRule, prefixes []string) (inside, outside []domain.AccessRule) {
+	for _, r := range rules {
+		mine := false
+		for _, p := range prefixes {
+			if domain.Under(r.Prefix, p) {
+				mine = true
+				break
+			}
+		}
+		if mine {
+			inside = append(inside, r)
+		} else {
+			outside = append(outside, r)
+		}
+	}
+	return inside, outside
 }

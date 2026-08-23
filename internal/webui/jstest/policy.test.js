@@ -93,3 +93,29 @@ test('a principal is the wildcard or an actor the ledger can spell', () => {
     assert.equal(validPrincipal(no), false, no);
   }
 });
+
+test('may_admin implies may_write, and the root refuses it', () => {
+  // The page sends what the server would infer anyway, so a rule read
+  // back matches the one that was typed (design doc 0124).
+  const [rule] = parsePolicyDocument(
+    '{"rules":[{"prefix":"teams/growth","principal":"human:lead@example.co.jp","may_admin":true}]}');
+  assert.equal(rule.may_admin, true);
+  assert.equal(rule.may_write, true, 'may_admin implies may_write');
+
+  // Who may edit the whole policy is the one answer the policy cannot
+  // carry, and the refusal names where it lives instead.
+  assert.throws(
+    () => parsePolicyDocument('{"rules":[{"prefix":"","principal":"human:x@example.co.jp","may_admin":true}]}'),
+    /OCHAKAI_ADMINS/);
+  assert.throws(
+    () => parsePolicyDocument('{"rules":[{"prefix":"a","principal":"*","may_admin":"yes"}]}'),
+    /may_admin/);
+});
+
+test('a policy that delegates nothing reads as it did before may_admin', () => {
+  const doc = policyDocument([{ prefix: 'sales', principal: '*', may_write: false }]);
+  assert.equal(doc.includes('may_admin'), false);
+  const withAdmin = policyDocument([
+    { prefix: 'sales', principal: 'human:lead@example.co.jp', may_write: true, may_admin: true }]);
+  assert.equal(withAdmin.includes('"may_admin": true'), true);
+});

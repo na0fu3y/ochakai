@@ -13,6 +13,10 @@ Status: Accepted(2026-08-17)。**認可の現行ドキュメント。**
 [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)** — `If-Match` を
 送った置き換えは、読んだときの版をポリシーがまだ持っている間だけ landing
 する。置き換えの規則も付与だけを持つことも管理者の床も動かない。
+**§3 の「ポリシーを編集できるのは `OCHAKAI_ADMINS` だけ」を、一つの
+subtree について改訂したのは [0124](0124-a-directory-can-have-its-own-administrator.md)** —
+`may_admin` を持つ principal はその prefix 以下の規則だけを読み書きし、
+床(誰が完全な管理者か)は動かない。
 **§3 の管理者の床を呼び出し元の側から読み直したのは
 [0122](0122-the-first-rule-is-an-administrators-to-write.md)** — 最初の
 一行を置けるのも `OCHAKAI_ADMINS` だけで、外の呼び出し元は書く前に断る

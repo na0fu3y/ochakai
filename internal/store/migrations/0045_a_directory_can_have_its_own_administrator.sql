@@ -1,0 +1,22 @@
+-- A directory can have its own administrator (design doc 0124).
+--
+-- 0041 gave a grant two powers, read and write, and left the third with
+-- the deployment's configuration: whoever OCHAKAI_ADMINS names edits the
+-- policy, all of it. That is the right floor for the whole document —
+-- "who may edit this policy" cannot be an answer the policy carries,
+-- because whoever holds it can grant themselves anything — but it is too
+-- coarse for one subtree. Handing a team its own directory meant handing
+-- somebody the power to remove every other team's boundary, and an
+-- automated caller that places a grant per organization had to hold it
+-- permanently.
+--
+-- may_admin is that third power, bounded by the prefix it sits on: the
+-- rules under this directory are this principal's to edit, and no rule
+-- outside it is. The root is refused in domain.ValidateAccessRules
+-- rather than here — a check constraint could express it, and the
+-- refusal a caller reads should name OCHAKAI_ADMINS, which SQL cannot.
+--
+-- Additive and default false, so every policy written before this
+-- migration means exactly what it meant: no directory has an
+-- administrator of its own until somebody grants one.
+ALTER TABLE access_rule ADD COLUMN IF NOT EXISTS may_admin boolean NOT NULL DEFAULT false;
