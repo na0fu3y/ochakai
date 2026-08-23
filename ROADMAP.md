@@ -157,3 +157,19 @@ it.
   was retired in 0.9.0 ([0070 §2](docs/design/0070-what-was-retired-and-why.md));
   [0070 §5](docs/design/0070-what-was-retired-and-why.md) names revert as the starting point
   if it ever comes back.
+- **A tenant column, or a hosted edition.** There is no hosted ochakai,
+  and a process that holds several organizations behind a tenant column is
+  refused: the boundary between organizations is an address that already
+  exists — a deployment (one Cloud Run service and one database) for an
+  organization that needs isolation, a directory under
+  [0109](docs/design/0109-a-directory-has-readers-and-writers.md)'s grants
+  for one that accepts a shared failure domain — and that is also the shape
+  in which one operator could run ochakai for dozens of organizations
+  without it becoming a different product
+  ([0119](docs/design/0119-an-operated-fleet-is-deployments-or-directories.md)).
+  The record names the four existing decisions that keep that shape open,
+  the price an operator pays today, and the order in which the product may
+  move — the public-invoke self-verifying posture first, then the splits
+  0109 §3 foresaw; a change that breaks one of the four is the change that
+  closes it, and fleet tooling belongs with the operator, not in this
+  repository.
