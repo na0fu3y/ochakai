@@ -43,6 +43,66 @@ func TestServeUIHandlerServesIndexAndHealth(t *testing.T) {
 	}
 }
 
+// The gap design doc 0123 closed, from the side that had it: a page on
+// another site makes the curator's browser POST here, IAP authenticates
+// that browser because it is the curator's, and the write arrives signed
+// by a person who never asked for it. The four writes a form can reach
+// are the ones with no preflight to stop them — a POST whose body is
+// JSON typed into a text/plain form is a "simple request" — so the
+// refusal has to happen before the proxy forwards.
+//
+// The reads in the same table are the other half of the decision: a
+// cross-site GET is still served, because refusing it would take
+// /health and the page itself down with it.
+func TestServeUIRefusesACrossSiteWrite(t *testing.T) {
+	var reached bool
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached = true
+	}))
+	defer upstream.Close()
+	u, err := url.Parse(upstream.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := serveUIHandler(newServiceProxy(u, staticServiceTokens{tok: "t"}, nil, slog.New(slog.DiscardHandler)))
+
+	cases := []struct {
+		name, method, path, secFetchSite string
+		want                             int
+	}{
+		{"the curation page's own write", http.MethodPost, "/api/v1/review/metrics/revenue", "same-origin", http.StatusOK},
+		{"a rule the curator saved", http.MethodPut, "/api/v1/access", "same-origin", http.StatusOK},
+		{"a client that is not a browser", http.MethodPost, "/api/v1/review/metrics/revenue", "", http.StatusOK},
+		{"another site's ruling", http.MethodPost, "/api/v1/review/metrics/revenue", "cross-site", http.StatusForbidden},
+		{"another site's outcome", http.MethodPost, "/api/v1/usage/metrics/revenue", "cross-site", http.StatusForbidden},
+		{"another site's move", http.MethodPost, "/api/v1/move", "cross-site", http.StatusForbidden},
+		{"another site's reembed", http.MethodPost, "/api/v1/reembed", "cross-site", http.StatusForbidden},
+		{"another site's MCP call", http.MethodPost, "/mcp", "cross-site", http.StatusForbidden},
+		{"another site's read", http.MethodGet, "/api/v1/search?q=x", "cross-site", http.StatusOK},
+		{"another site's health check", http.MethodGet, "/health", "cross-site", http.StatusOK},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			reached = false
+			req := httptest.NewRequest(c.method, c.path, strings.NewReader(`{}`))
+			if c.secFetchSite != "" {
+				req.Header.Set("Sec-Fetch-Site", c.secFetchSite)
+				req.Header.Set("Origin", "https://evil.example")
+			}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != c.want {
+				t.Fatalf("%s %s = %d, want %d (body: %s)", c.method, c.path, rec.Code, c.want, rec.Body)
+			}
+			// /health is answered here, so only the proxied paths say
+			// anything about what reached the upstream.
+			if c.path != "/health" && reached != (c.want == http.StatusOK) {
+				t.Errorf("reached upstream = %v, want %v", reached, c.want == http.StatusOK)
+			}
+		})
+	}
+}
+
 // The page always talks to its own origin, so an upstream is not
 // optional: without OCHAKAI_URL serve-ui must refuse to start rather
 // than serve a UI whose every API call would 404.

@@ -85,7 +85,13 @@ func serveUIHandler(proxy http.Handler) http.Handler {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
-	return mux
+	// This is the one deployment a browser reaches holding a credential
+	// it did not have to be given: IAP authenticates the person at the
+	// browser, so a page on another site can make that browser write here
+	// and the write arrives signed. `ochakai ui` has refused that since
+	// it was written; this had nothing, and now both get it from the same
+	// place (design doc 0123). /health is a GET, so it is untouched.
+	return crossOriginGuard(mux)
 }
 
 // newServiceProxy reverse-proxies to target as this service (not as the

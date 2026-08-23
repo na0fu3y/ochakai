@@ -21,7 +21,7 @@ import (
 
 // webUIMux serves the embedded page and its modules at /, and routes
 // /api/v1 and /mcp through proxy. Callers add their own extras
-// (serve-ui's /health) and wrapping (ui's localBrowserGuard).
+// (serve-ui's /health) and wrapping (ui's loopbackHostGuard).
 //
 // The two API patterns are more specific than "/", so they win the
 // ServeMux match however the page's own asset paths are spelled.
@@ -35,6 +35,29 @@ func webUIMux(proxy http.Handler) *http.ServeMux {
 	mux.Handle("/api/v1/", proxy)
 	mux.Handle("/mcp", proxy)
 	return mux
+}
+
+// crossOriginGuard refuses a write a browser says came from another
+// site, and is the one rule both web-UI commands share for the same
+// reason: a browser reaches ochakai only through one of them, and only
+// there does an ambient credential exist for a foreign page to spend
+// (design doc 0123).
+//
+// The check is the standard library's. It reads Sec-Fetch-Site, which
+// every browser has sent since 2023, and falls back to comparing the
+// Origin header's host with the Host header. What it does *not* do is
+// what makes it free here: a request carrying neither header is allowed,
+// so the CLI, an agent over MCP and curl are untouched — nothing to
+// send, nothing to configure, and no token to keep. GET, HEAD and
+// OPTIONS are always allowed, which is what leaves serve-ui's /health
+// where design doc 0006 put it.
+//
+// It is not enough on its own for `ochakai ui`, and loopbackHostGuard is
+// why: a page at attacker.example pointed at 127.0.0.1 sends a Host and
+// an Origin that agree with each other, so this check passes it. The
+// rebinding guard is what does not.
+func crossOriginGuard(next http.Handler) http.Handler {
+	return http.NewCrossOriginProtection().Handler(next)
 }
 
 // assets serves the embedded UI, read-only and revalidatable.

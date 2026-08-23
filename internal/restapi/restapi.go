@@ -16,7 +16,13 @@ package restapi
 
 import (
 	"context"
+	// v1 writes the responses and keeps writing them: design doc 0122
+	// moved what this package *reads*, and v2's marshaler differs in
+	// ways the frozen wire would feel. The alias keeps which is which
+	// visible at every call site rather than in the import block alone.
 	"encoding/json"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -1688,10 +1694,19 @@ func writeDocument(w http.ResponseWriter, status int, k *domain.Knowledge) {
 // discarded. Before design doc 0064 §2 neither was checked — a body key a
 // server did not yet know was a 200 that dropped it, the same false-green
 // shape ?dry_run= had as a query parameter before this doc closed that one.
+//
+// It reads through encoding/json/v2 because 0064 §2's rule was written
+// here and only half kept: v1 matches field names without regard to case,
+// so `{"RULING":…}` reached a handler that had declared `ruling`, and v1
+// takes the last of a repeated name, so a body naming `ruling` twice was
+// answered without either value being the one the caller could predict.
+// Both are the refusal this function exists to make, and design doc 0122
+// is where they became one. The strictness is the decoder's default now,
+// which is why the string surgery that used to recover a field name from
+// an error message is gone with it.
 func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
+	dec := jsontext.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20))
+	if err := jsonv2.UnmarshalDecode(dec, v, jsonv2.RejectUnknownMembers(true)); err != nil {
 		// An oversized body is not malformed JSON, and calling it that
 		// sends the caller looking for a syntax error in a payload that
 		// is simply too big — readBody already answers 413 here.
@@ -1700,14 +1715,28 @@ func readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 				fmt.Sprintf("request body exceeds %d bytes", maxErr.Limit))
 			return false
 		}
-		if field, ok := strings.CutPrefix(err.Error(), `json: unknown field "`); ok {
-			writeError(w, service.Invalidf("unknown field %q", strings.TrimSuffix(field, `"`)))
+		// errors.Is on the wrapped sentinel rather than the == the two
+		// packages' own examples use: the sentinel is what identifies the
+		// refusal either way, and == is what errorlint stops us writing
+		// (.golangci.yml — a comparison that starts failing the day a
+		// layer wraps).
+		if serr, ok := errors.AsType[*jsonv2.SemanticError](err); ok && errors.Is(serr.Err, jsonv2.ErrUnknownName) {
+			writeError(w, service.Invalidf("unknown field %q", serr.JSONPointer.LastToken()))
+			return false
+		}
+		if serr, ok := errors.AsType[*jsontext.SyntacticError](err); ok && errors.Is(serr.Err, jsontext.ErrDuplicateName) {
+			writeError(w, service.Invalidf(
+				"field %q appears twice: an object names each field once, and answering for the last of them "+
+					"would decide silently which of the two you meant", serr.JSONPointer.LastToken()))
 			return false
 		}
 		writeErrorBody(w, http.StatusBadRequest, domain.CodeInvalid, "invalid JSON: "+err.Error())
 		return false
 	}
-	if dec.More() {
+	// The decoder read one value; anything after it is content nobody
+	// declared, so it is refused rather than dropped. io.EOF is the only
+	// answer that means the body ended there.
+	if _, err := dec.ReadToken(); !errors.Is(err, io.EOF) {
 		writeError(w, service.Invalidf("request body must be a single JSON value"))
 		return false
 	}

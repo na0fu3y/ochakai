@@ -174,11 +174,24 @@ func TestUIHandlerRejectsForeignHost(t *testing.T) {
 }
 
 // CSRF guard: a cross-site page reaching 127.0.0.1 directly carries the
-// loopback Host (passing the rebinding guard) but a foreign Origin. The
-// UI's own requests send no Origin or a loopback one and must reach the
-// backend. A foreign Origin must be refused before the proxy signs and
-// forwards the write.
-func TestUIHandlerRejectsForeignOrigin(t *testing.T) {
+// loopback Host (passing the rebinding guard) but says where it came
+// from. The UI's own requests must reach the backend; a foreign one must
+// be refused before the proxy signs and forwards the write.
+//
+// Since design doc 0123 the rule is net/http's rather than this
+// package's, so the cases below are the ones that rule decides:
+// Sec-Fetch-Site when the browser sent it, the Origin/Host comparison
+// when it did not, and neither header meaning a client that is not a
+// browser. serve-ui is held to the same rule by
+// TestServeUIRefusesACrossSiteWrite; this is the loopback half.
+//
+// "http://localhost:8098" against a Host of "127.0.0.1:8098" is refused
+// now and was allowed before: the old check asked only whether the
+// Origin was some loopback name, and the standard one asks whether it is
+// *this* one. No browser produces that pair — it fetches the host the
+// page was served from — so what the tightening costs is a leniency
+// nobody could reach.
+func TestUIHandlerRefusesACrossSiteWrite(t *testing.T) {
 	var reached bool
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		reached = true
@@ -188,27 +201,90 @@ func TestUIHandlerRejectsForeignOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for origin, want := range map[string]int{
-		"":                          http.StatusOK, // same-origin GET, or a non-browser client
-		"http://127.0.0.1:8098":     http.StatusOK,
-		"http://localhost:8098":     http.StatusOK,
-		"https://evil.example":      http.StatusForbidden,
-		"http://127.0.0.1.evil.com": http.StatusForbidden,
-		"null":                      http.StatusForbidden, // opaque origin (sandboxed iframe, data: page)
-	} {
-		reached = false
-		req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8098/api/v1/search", nil)
-		if origin != "" {
-			req.Header.Set("Origin", origin)
-		}
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
-		if rec.Code != want {
-			t.Errorf("Origin %q: POST = %d, want %d", origin, rec.Code, want)
-		}
-		if reachedBackend := reached; reachedBackend != (want == http.StatusOK) {
-			t.Errorf("Origin %q: reached backend = %v, want %v", origin, reachedBackend, want == http.StatusOK)
-		}
+	cases := []struct {
+		name, secFetchSite, origin string
+		want                       int
+	}{
+		{"no headers at all (curl, the CLI, an agent)", "", "", http.StatusOK},
+		{"the page's own fetch", "same-origin", "http://127.0.0.1:8098", http.StatusOK},
+		{"a form the page submitted to itself", "same-origin", "", http.StatusOK},
+		{"another site's page", "cross-site", "https://evil.example", http.StatusForbidden},
+		{"another site's form, no Origin", "cross-site", "", http.StatusForbidden},
+		{"a subdomain of the same site", "same-site", "https://ui.evil.example", http.StatusForbidden},
+		{"an older browser: Origin only", "", "https://evil.example", http.StatusForbidden},
+		{"a hostname that merely starts the same", "", "http://127.0.0.1.evil.com", http.StatusForbidden},
+		{"another loopback spelling than this Host", "", "http://localhost:8098", http.StatusForbidden},
+		{"an opaque origin (sandboxed iframe, data: page)", "", "null", http.StatusForbidden},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			reached = false
+			req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:8098/api/v1/search", nil)
+			req.Host = "127.0.0.1:8098"
+			if c.secFetchSite != "" {
+				req.Header.Set("Sec-Fetch-Site", c.secFetchSite)
+			}
+			if c.origin != "" {
+				req.Header.Set("Origin", c.origin)
+			}
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, req)
+			if rec.Code != c.want {
+				t.Errorf("POST = %d, want %d (body: %s)", rec.Code, c.want, rec.Body)
+			}
+			if reached != (c.want == http.StatusOK) {
+				t.Errorf("reached backend = %v, want %v", reached, c.want == http.StatusOK)
+			}
+		})
+	}
+}
+
+// A read is not a write, and the guard says so: GET is a safe method, so
+// a cross-site page can still be told no by the browser's own rules
+// without ochakai refusing to serve its page. This is also what keeps
+// serve-ui's /health answering (design doc 0006) — it is a GET.
+func TestUIHandlerAllowsCrossSiteReads(t *testing.T) {
+	h, err := uiHandler("http://ochakai.internal", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8098/", nil)
+	req.Host = "127.0.0.1:8098"
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	req.Header.Set("Origin", "https://evil.example")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Errorf("cross-site GET / = %d, want 200", rec.Code)
+	}
+}
+
+// The rebinding guard still has work the cross-origin check cannot do:
+// a page at attacker.example resolving to 127.0.0.1 sends a Host and an
+// Origin that agree with each other, and Sec-Fetch-Site says
+// same-origin, so the cross-origin check passes it. The Host is what
+// gives it away, and loopbackHostGuard runs first.
+func TestUIHandlerRejectsRebindingThatLooksSameOrigin(t *testing.T) {
+	var reached bool
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached = true
+	}))
+	defer backend.Close()
+	h, err := uiHandler(backend.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "http://placeholder/api/v1/search", nil)
+	req.Host = "attacker.example:8098"
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	req.Header.Set("Origin", "http://attacker.example:8098")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("rebound POST = %d, want 403", rec.Code)
+	}
+	if reached {
+		t.Error("a rebound request reached the backend")
 	}
 }
 

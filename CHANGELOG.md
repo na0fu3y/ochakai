@@ -21,6 +21,53 @@ last entry.
 
 ## [Unreleased]
 
+### Security
+
+- **Both web-UI commands refuse a cross-site write.** `ochakai ui` has
+  refused one since it was written; `ochakai serve-ui` — the deployed,
+  IAP-fronted one — had no such check, and design doc 0072 §1.2's line
+  that the two modes invert in "whether a browser guard is needed" is
+  what left it that way. What inverts is the bind address and where
+  identity comes from, not whether a write arriving from a browser can
+  be trusted, and the side without the check is the side where a browser
+  holds a credential it did not have to be given. A non-safe request
+  (anything but GET, HEAD and OPTIONS) that a browser says came from
+  another site is now a 403 before the proxy signs and forwards it
+  (design doc 0123). **Nothing that is not a browser changes**: the
+  check reads `Sec-Fetch-Site`, falling back to comparing `Origin` with
+  `Host`, and a request carrying neither header is allowed — so the CLI,
+  an agent over MCP, curl and a generated client send exactly what they
+  sent before, and no endpoint, parameter, header, flag or environment
+  variable is added. Reads are still served, `/health` included.
+  `ochakai serve` is deliberately unchanged: no configuration today lets
+  a browser reach it holding a credential. One tightening on `ochakai
+  ui`: an `Origin` naming a different loopback spelling than the `Host`
+  it reached (`http://localhost:PORT` against `127.0.0.1:PORT`) is now
+  refused — no browser produces that pair.
+
+### Changed
+
+- **BREAKING (non-core REST): a JSON request body is matched exactly and
+  may name each key once.** `{"RULING":"verified"}` used to be a 200:
+  design doc 0064 §2 decided an undeclared body key is a 400 naming it,
+  and `encoding/json` matched names without regard to case, so a
+  spelling the contract never declared reached the handler anyway —
+  `DisallowUnknownFields` reports keys that match no field and says
+  nothing about a key that matches one it should not. The same decoder
+  silently took the last of a repeated key, so
+  `{"ruling":"verified","ruling":"rejected"}` was answered as
+  `rejected`: a decided answer where the caller cannot know which of the
+  two values decided it, on the operation that records a ruling. Both
+  are now a 400 naming the field, the shape an unrecognized query
+  parameter already had (design doc 0122). The four operations that read
+  a body — `POST /api/v1/move`, `POST /api/v1/review/{id}`, `POST
+  /api/v1/usage/{id}`, `PUT /api/v1/access` — are outside the frozen OKF
+  core (design doc 0107), so this is BREAKING here and carries a record.
+  The CLI, the web UI and any client generated from `api/openapi.yaml`
+  produce neither shape. Bodies are read through `encoding/json/v2`,
+  whose defaults are these two refusals; responses keep v1, because v2's
+  marshaling defaults are bytes the frozen surface actually ships.
+
 ### Fixed
 
 - **A deployment that verifies its own tokens (`OCHAKAI_OIDC_ISSUER`)

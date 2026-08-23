@@ -39,8 +39,16 @@ info:
 
     **An unrecognized JSON body key is a 400, naming it** (design doc
     0064), the same rule applied to the body: `POST /api/v1/move`,
-    `POST /api/v1/review/{id}` and `POST /api/v1/usage/{id}` reject a key
-    their schema does not declare.
+    `POST /api/v1/review/{id}`, `POST /api/v1/usage/{id}` and
+    `PUT /api/v1/access` reject a key their schema does not declare.
+    **The comparison is exact** (design doc 0122): `RULING` is not
+    `ruling`, so it is an unrecognized key like any other.
+
+    **A repeated JSON body key is a 400, naming it** (design doc 0122) —
+    the sibling of the repeated query key below. A body may name each key
+    once; `{"ruling":"verified","ruling":"rejected"}` has no answer that
+    is what was asked, and answering for the last of them would decide
+    silently which of the two the caller meant.
 
 
     **`Accept` is read as a set of names, not as a ranking** (design doc
