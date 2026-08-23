@@ -43,7 +43,7 @@ func TestServeUIHandlerServesIndexAndHealth(t *testing.T) {
 	}
 }
 
-// The gap design doc 0123 closed, from the side that had it: a page on
+// The gap design doc 0126 closed, from the side that had it: a page on
 // another site makes the curator's browser POST here, IAP authenticates
 // that browser because it is the curator's, and the write arrives signed
 // by a person who never asked for it. The four writes a form can reach

@@ -178,7 +178,7 @@ func TestUIHandlerRejectsForeignHost(t *testing.T) {
 // from. The UI's own requests must reach the backend; a foreign one must
 // be refused before the proxy signs and forwards the write.
 //
-// Since design doc 0123 the rule is net/http's rather than this
+// Since design doc 0126 the rule is net/http's rather than this
 // package's, so the cases below are the ones that rule decides:
 // Sec-Fetch-Site when the browser sent it, the Origin/Host comparison
 // when it did not, and neither header meaning a client that is not a

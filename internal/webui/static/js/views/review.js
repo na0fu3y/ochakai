@@ -134,7 +134,7 @@ export async function loadLoopStats() {
   if (my !== loadLoopStats._seq || out !== $('#loop-stats')) return;
   const trust = s.concepts?.trust || {};
   const confirmed = (trust['human-reviewed'] || 0) + (trust['machine-confirmed'] || 0);
-  const gaps = s.misses?.recording ? (s.misses.queries || []) : [];
+  const gaps = (s.misses?.recording && !s.misses?.withheld) ? (s.misses.queries || []) : [];
   // Shown only when it happened. The tiles above are the always-there
   // numbers; this is a fault in the measurement behind them, and a
   // permanent "0 lost" line would be one more thing to read past.
@@ -149,9 +149,19 @@ export async function loadLoopStats() {
   // not and cannot: a search that found nothing found it nowhere, so
   // there is no id to scope it by (design doc 0069 §5.1). Wherever one
   // is drawn beside a scoped number, it says which it is.
-  const scoped = !!review.prefix;
+  //
+  // Which subtrees were counted is the server's answer, not this page's
+  // request: a caller whose grants cover part of the bundle gets their
+  // own numbers whether or not they picked a prefix here (design doc
+  // 0123). `scope` absent means the whole bundle.
+  const scope = Array.isArray(s.scope) ? s.scope : null;
+  const scoped = scope !== null;
+  const withheld = !!s.misses?.withheld;
+  const scopeText = scoped
+    ? (scope.length ? scope.map(p => `<code>/${esc(p)}</code>`).join('、') : 'あなたに見えている範囲')
+    : '';
   out.innerHTML = (scoped ? `
-    <p style="max-width:48rem;margin:0 0 .8rem;color:var(--muted);font-size:.9rem"><code>/${esc(review.prefix)}</code> の下だけを数えています。<strong>該当なしの検索だけは絞れません。</strong>何も返さなかった検索にはナレッジの id が無いため、どこで尋ねられたかを言えないからです。その数と一覧はインスタンス全体のものです。下のキューの帯と draft の一覧も絞っていません。</p>` : '') + `
+    <p style="max-width:48rem;margin:0 0 .8rem;color:var(--muted);font-size:.9rem">${scopeText} の下だけを数えています。<strong>該当なしの検索だけは絞れません。</strong>何も返さなかった検索にはナレッジの id が無いため、どこで尋ねられたかを言えないからです。${withheld ? 'そのため、範囲を持つ利用者には出していません — 全体の数は管理者に尋ねてください。' : 'その数と一覧はインスタンス全体のものです。'}下のキューの帯と draft の一覧も絞っていません。</p>` : '') + `
     <div class="tile-band">いまの姿</div>
     <div class="stat-tiles band" style="max-width:52rem;margin:0 0 1rem">
       <div class="tile"><div class="num">${s.concepts?.total ?? 0}</div><div class="lbl">ナレッジ</div></div>
@@ -165,8 +175,8 @@ export async function loadLoopStats() {
         <div class="lbl">成功 / 失敗の報告</div></div>
       <div class="tile"><div class="num">${s.outcomes?.concepts_reported ?? 0}/${s.outcomes?.concepts_used ?? 0}</div>
         <div class="lbl">結果報告 / 利用</div></div>
-      <div class="tile"><div class="num">${s.misses?.recording ? (s.misses.count ?? 0) : '–'}</div>
-        <div class="lbl">該当なしの検索${scoped ? '(全体)' : ''}</div></div>
+      <div class="tile"><div class="num">${(withheld || !s.misses?.recording) ? '–' : (s.misses.count ?? 0)}</div>
+        <div class="lbl">該当なしの検索${withheld ? '(非公開)' : (scoped ? '(全体)' : '')}</div></div>
     </div>` + sparkline(s.review?.weekly) + (dropped ? `
     <p style="max-width:48rem;margin:0 0 1.2rem;color:var(--muted);font-size:.9rem">
       この ${s.window_days} 日で、記録されたあとに失われた観測が ${dropped} 件あります。上の数値は、少なくともその分だけ実際より少なく出ています。利用状況はメモリに溜めてまとめて書き出すため、停止したインスタンスは抱えていた分を持ち去ります。</p>` : '') + (truncated ? `

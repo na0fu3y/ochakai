@@ -1,4 +1,4 @@
-# ochakai 設計ドキュメント 0123: ブラウザは、どこから来たかを言う
+# ochakai 設計ドキュメント 0126: ブラウザは、どこから来たかを言う
 
 Status: Accepted(2026-08-23)。[0072](0072-the-web-ui-serves-and-edits-documents.md)
 §1.1・§1.2 の「ブラウザガードは `ochakai ui` 側の要件」を改訂する —
@@ -36,7 +36,7 @@ Date: 2026-08-23
   他人のサイトのページがそのブラウザに書かせられるなら、**その人が
   頼んでいない書き込みが、その人の名前で台帳に載る**。
 - **preflight は止めてくれない。** `readJSON` は `Content-Type` を
-  見ない([0122](0122-a-body-names-each-field-once.md) が触ったのは
+  見ない([0125](0125-a-body-names-each-field-once.md) が触ったのは
   中身であって、この検査ではない)。だから
   `enctype="text/plain"` のフォームで JSON をそのまま本文にできて、
   フォーム送信は "simple request" なので CORS の事前検査が起きない。

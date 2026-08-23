@@ -91,7 +91,7 @@ func uiHandler(target string, tokens oauth2.TokenSource) (http.Handler, error) {
 // Origin comparison that net/http.CrossOriginProtection now makes, and
 // makes better — the standard check reads Sec-Fetch-Site as well, and
 // serve-ui, which never had this function, gets the same rule from the
-// same place (design doc 0123).
+// same place (design doc 0126).
 //
 // kubectl proxy learned the rebinding lesson the hard way.
 func loopbackHostGuard(next http.Handler) http.Handler {

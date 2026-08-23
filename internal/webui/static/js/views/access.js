@@ -57,6 +57,7 @@ function ruleRow(r) {
     <td>${who}</td>
     <td class="flag">✓</td>
     <td class="flag">${r.may_write ? '✓' : '<span style="color:var(--muted)">—</span>'}</td>
+    <td class="flag">${r.may_admin ? '✓' : '<span style="color:var(--muted)">—</span>'}</td>
     <td style="color:var(--muted);font-size:.86rem">${by}</td>
   </tr>`;
 }
@@ -71,12 +72,12 @@ export function renderAccess(rules, open = false, version = '') {
   const table = rules.length ? `
     <div class="scroll-x">
       <table class="rules">
-        <thead><tr><th>ディレクトリ</th><th>対象</th><th class="flag">読取</th><th class="flag">書込</th>
+        <thead><tr><th>ディレクトリ</th><th>対象</th><th class="flag">読取</th><th class="flag">書込</th><th class="flag">付与</th>
           <th>設定者</th></tr></thead>
         <tbody>${rules.map(ruleRow).join('')}</tbody>
       </table>
     </div>
-    <p style="color:var(--muted);max-width:48rem;font-size:.9rem">付与だけの表です。拒否の行はありません。<strong>「書込」は「読取」を含みます。</strong>ディレクトリはセグメント境界で照合するため、
+    <p style="color:var(--muted);max-width:48rem;font-size:.9rem">付与だけの表です。拒否の行はありません。<strong>「書込」は「読取」を、「付与」は「書込」を含みます。</strong>「付与」はそのディレクトリ以下の<em>規則そのもの</em>を編集できるという意味で、その相手には他のディレクトリの規則は見えず、保存しても消えません。バンドル全体への「付与」は置けません — ポリシー全体を誰が編集できるかは <code>OCHAKAI_ADMINS</code> が答えます。ディレクトリはセグメント境界で照合するため、
     <code>sales</code> は <code>sales/orders</code> に当たり、<code>sales-legacy/orders</code> には当たりません。深い行が浅い行を打ち消すことはなく足し算になるので、<code>sales</code> を書ける人は
     <code>sales/sample</code> も書けます。表に無いところは、その人には <strong>404</strong> です。見えないのではなく、無いものとして答えます。</p>
     <p style="color:var(--muted);max-width:48rem;font-size:.9rem">バンドル全体にまたがる操作
@@ -143,8 +144,21 @@ async function saveAccess(rules, version) {
     // The precondition failed: somebody replaced the policy while this
     // page held it. Saying so is the whole point — the alternative was
     // this save quietly removing their rules.
-    errBox.innerHTML = e.code === 'precondition_failed'
-      ? `<div class="error-banner" role="alert">このページを開いたあとに、別の誰かがポリシーを保存しました。上書きせずに止めています。書いたものは残っているので、ページを読み込み直して編集をやり直してください。</div>`
-      : `<div class="error-banner" role="alert">保存できませんでした: ${esc(e.message)}</div>`;
+    //
+    // The forbidden branch shows only on a deployment with no grants:
+    // reading the policy is open while there are no rules, so this page
+    // is here for everybody, and only the save learns that placing the
+    // first rule is an administrator's operation (design doc 0122).
+    // Nothing was written, and saying so is the difference from what
+    // this used to do.
+    let message;
+    if (e.code === 'precondition_failed') {
+      message = 'このページを開いたあとに、別の誰かがポリシーを保存しました。上書きせずに止めています。書いたものは残っているので、ページを読み込み直して編集をやり直してください。';
+    } else if (e.code === 'forbidden') {
+      message = 'アクセスポリシーを編集できるのは <code>OCHAKAI_ADMINS</code> が名指す管理者だけです。付与が一つも無いあいだは誰でもこのページを読めますが、最初の一行を置けるのは管理者だけで、何も書き込んでいません。';
+    } else {
+      message = `保存できませんでした: ${esc(e.message)}`;
+    }
+    errBox.innerHTML = `<div class="error-banner" role="alert">${message}</div>`;
   }
 }

@@ -7,7 +7,7 @@ Status: Accepted(2026-08-03)。**Web UI の現行ドキュメント。**
 記録されるかは [0065](0065-identity-and-provenance.md) §5 が持つ。
 ページが一枚ではなく一式の ES モジュールになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)(§1 を改訂 — ビルドなし・フレームワークなし・CDN なしはそのまま)。
 **クロスサイトの書き込みを断る規則が二つの経路の両方に掛かることは
-[0123](0123-a-browser-says-where-it-came-from.md)**(§1.1・§1.2 を改訂 —
+[0126](0126-a-browser-says-where-it-came-from.md)**(§1.1・§1.2 を改訂 —
 反転しているのはバインド先と identity の出所であって、ブラウザから来た
 書き込みを信じてよいかではない。DNS リバインディング防御が `ui` 固有で
 あることは変わらない)。

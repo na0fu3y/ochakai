@@ -625,6 +625,12 @@ gcloud run services update ochakai --region "$REGION" \
   --update-env-vars OCHAKAI_ADMINS=human:ops@example.co.jp
 ```
 
+**順序を間違えると、断られる。** 最初の一行を置こうとする呼び出し元が
+`OCHAKAI_ADMINS` に居なければ 403 で、**何も書かれない**(設計ドキュメント
+[0122](../design/0122-the-first-rule-is-an-administrators-to-write.md))。
+最初の一行が入った瞬間からポリシーは管理者のものになるので、その一行を
+置けるのも管理者だけである。
+
 ポリシーは JSON 文書一枚で、表示と置き換えだけがある。**git に入れて
 レビューする**のが想定した使い方である。
 
@@ -643,7 +649,8 @@ ochakai access -f policy.json         # 置き換え、置いた結果が印字�
 ```
 
 読み方は一行ずつで足りる — 「この principal はこのディレクトリ以下を
-読める、`may_write` なら書ける」。拒否規則は無く、**どの規則も付与しな
+読める、`may_write` なら書ける、`may_admin` ならそこ以下の規則そのものを
+編集できる」。拒否規則は無く、**どの規則も付与しな
 かったものは読めない**。照合はセグメント境界なので `sales` は
 `sales/orders` に当たり `sales-legacy/orders` には当たらない。
 principal は台帳と同じ綴り(`human:` / `process:`、`*` は全認証済み
@@ -677,13 +684,41 @@ ochakai access -f policy.json --if-match "$(jq -r .version policy.json)"
 と本文の `version` の両方に載る。**空のポリシーにも版がある** — 最初の
 一行こそ二つの登録処理が競う書き込みである。
 
+**ディレクトリごと預けるなら、`may_admin` を使う**(設計ドキュメント
+[0124](../design/0124-a-directory-can-have-its-own-administrator.md))。
+チームや、組織ごとに一行足す自動化に渡すのはこれで、渡した相手は
+**その prefix 以下の規則しか読めず、書けない**。他のディレクトリの規則は
+その相手の保存を跨いで残るので、`ochakai access --json > f` → 編集 →
+`-f f` の手順をそのまま渡してよい。
+
+```json
+{"rules": [
+  {"prefix": "teams/growth", "principal": "human:lead@example.co.jp", "may_admin": true}
+]}
+```
+
+**バンドル全体への `may_admin` は置けない。** ポリシー全体を誰が編集
+できるかという答えは、そのポリシーの中には置けない — それは
+`OCHAKAI_ADMINS` の仕事である。そして**渡した相手より浅い規則は、その
+相手には見えないし消せない**: `prefix: ""` に `*` の読み取りを与えて
+あれば `teams/growth` にも効き、`teams/growth` の管理者はそれを知らない。
+預ける前に、上から効いている行がないか読み返すこと。
+
 **知っておくべきことが三つある。**
 
-1. **バンドル全体を取る操作は管理者のものになる** — `ochakai stats`・
-   `ochakai export`・`ochakai move`・`ochakai reembed`。部分集合の
-   stats は数に二つ目の意味を与え、欠けた export もバックアップと呼ばれ
-   てしまうからで、絞るのではなく断っている。cron の `stats --exit-code`
-   を回しているなら、その呼び出し元を管理者にする。
+1. **バンドル全体を取る操作は管理者のものになる** — `ochakai export`・
+   `ochakai move`・`ochakai reembed`。欠けた export もバックアップと
+   呼ばれてしまうからで、絞るのではなく断っている。
+   **`ochakai stats` は別で、範囲を持つ利用者も自分の数を読める**
+   (設計ドキュメント
+   [0123](../design/0123-the-numbers-say-what-they-counted.md))。答えの
+   `scope` 行が何を数えたかを言い、全体を数えたときだけ出ない。ただし
+   **該当なしの検索(miss)は差し止められる** — 何も返さなかった検索には
+   id が無いので絞れず、絞らずに見せれば他のチームが何を探したかを教えて
+   しまう。`misses withheld` と出るのはそれで、ゼロではない。
+   cron の `stats --exit-code` を回しているなら、その呼び出し元の
+   キューだけを見ることになる — インスタンス全体を見張りたいなら、
+   その呼び出し元を管理者にする。
 2. **スコープ外は 404 で、403 ではない。** 「そこに何かあるか」への
    答えが境界そのものである。書けるが読めない、は起こらない。
 3. **本文の散文は塞げない。** 読める concept の本文が隠した id を名指し

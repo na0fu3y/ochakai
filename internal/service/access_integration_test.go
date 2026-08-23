@@ -242,7 +242,9 @@ func TestScopeNarrowsEveryListingIntegration(t *testing.T) {
 
 // TestPolicyBelongsToAdministratorsIntegration: the rules name people
 // and the directories they may see, and the operations that take the
-// bundle as a whole are refused rather than narrowed (0109 §3).
+// bundle as a whole are refused rather than narrowed (0109 §3). Stats
+// left this list — it is narrowed and says so (design doc 0123), which
+// is the split 0109 §3 said could be made later.
 func TestPolicyBelongsToAdministratorsIntegration(t *testing.T) {
 	f := newAccessFixture(t)
 	if _, _, err := f.svc.Policy(f.readCt); !errors.Is(err, ErrForbidden) {
@@ -250,9 +252,6 @@ func TestPolicyBelongsToAdministratorsIntegration(t *testing.T) {
 	}
 	if _, _, err := f.svc.SetPolicy(f.readCt, nil, f.reader, nil); !errors.Is(err, ErrForbidden) {
 		t.Errorf("a scoped caller writing the policy returned %v, want ErrForbidden", err)
-	}
-	if _, err := f.svc.Stats(f.readCt, 0, nil); !errors.Is(err, ErrForbidden) {
-		t.Errorf("a scoped caller asking for stats returned %v, want ErrForbidden", err)
 	}
 	if _, err := f.svc.Move(f.readCt, f.mine, f.mine+"-2", f.reader); !errors.Is(err, ErrForbidden) {
 		t.Errorf("a scoped caller moving a concept returned %v, want ErrForbidden", err)
@@ -300,6 +299,77 @@ func TestNoPolicyIsTheDeploymentThatCameBeforeIntegration(t *testing.T) {
 		domain.Actor{Kind: domain.ActorHuman, Name: "stranger@example.com"}, nil)
 	if err == nil {
 		t.Error("a deployment naming no administrator accepted a first rule; nobody could have undone it")
+	}
+}
+
+// TestFirstRuleBelongsToAnAdministratorIntegration is the other half of
+// that floor (design doc 0122, amending 0109 §3): a deployment that does
+// name administrators, a policy that is still empty, and a caller who is
+// not one of them.
+//
+// Every caller passes the administrator check while there are no rules —
+// 0109 §2 promises exactly that — so this write used to land, and only
+// the read on the way back out noticed that the policy it had just
+// created did not belong to whoever wrote it. The rows were committed,
+// the log said "access policy replaced", and the caller was handed a 403
+// with no version and no body: an answer that says nothing was written.
+// A caller retrying it would replace the policy again, each time.
+func TestFirstRuleBelongsToAnAdministratorIntegration(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.New(ctx, testdb.Private(t, "aclfirst"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{
+		Store:  s,
+		Log:    slog.New(slog.DiscardHandler),
+		Config: &config.Config{Admins: []string{"human:ops@example.co.jp"}},
+	}
+	admin := domain.Actor{Kind: domain.ActorHuman, Name: "ops@example.co.jp"}
+	adminCtx := httpauth.WithActor(ctx, admin)
+	outsider := domain.Actor{Kind: domain.ActorHuman, Name: "tanaka@example.co.jp"}
+	outsiderCtx := httpauth.WithActor(ctx, outsider)
+
+	// The outsider may do everything else here: there are no rules, so
+	// there is no boundary (0109 §2). Only the policy is not theirs.
+	if _, err := svc.Stats(outsiderCtx, 0, nil); err != nil {
+		t.Fatalf("stats on a deployment with no policy: %v", err)
+	}
+	rules := []domain.AccessRule{{Prefix: "aclfirst/growth", Principal: domain.PrincipalOf(outsider), MayWrite: true}}
+	if _, _, err := svc.SetPolicy(outsiderCtx, rules, outsider, nil); !errors.Is(err, ErrForbidden) {
+		t.Errorf("a caller outside OCHAKAI_ADMINS writing the first rule returned %v, want ErrForbidden", err)
+	}
+	// The refusal has to be a refusal: read as the administrator, who is
+	// allowed to see the policy either way, and find it still empty.
+	if got, _, err := svc.Policy(adminCtx); err != nil {
+		t.Fatalf("reading the policy as the administrator: %v", err)
+	} else if len(got) != 0 {
+		t.Errorf("the refused write left %d rule(s) behind; a 403 says nothing was written", len(got))
+	}
+	// The administrator writes the same document, and gets it back —
+	// with the version, which is what a conditional replacement needs
+	// (0120) and what the refusal above could not have returned.
+	stored, version, err := svc.SetPolicy(adminCtx, rules, admin, nil)
+	if err != nil {
+		t.Fatalf("the administrator writing the first rule: %v", err)
+	}
+	if len(stored) != 1 || version == "" {
+		t.Errorf("the write answered with %d rule(s) and version %q", len(stored), version)
+	}
+	t.Cleanup(func() {
+		if _, _, err := svc.SetPolicy(adminCtx, nil, admin, nil); err != nil {
+			t.Logf("clearing the policy: %v", err)
+		}
+	})
+	// And now that a policy exists, the outsider is refused by the check
+	// at the top of the operation instead — the same answer, from the
+	// side 0109 always covered.
+	if _, _, err := svc.SetPolicy(outsiderCtx, nil, outsider, nil); !errors.Is(err, ErrForbidden) {
+		t.Errorf("a scoped caller clearing the policy returned %v, want ErrForbidden", err)
 	}
 }
 
@@ -474,5 +544,207 @@ func TestEmptyPolicyHasAVersionThatGuardsTheFirstGrant(t *testing.T) {
 	other := []domain.AccessRule{{Prefix: f.prefix + "/glossary", Principal: domain.AnyPrincipal}}
 	if _, _, err := f.svc.SetPolicy(f.adminCtx, other, f.admin, &empty); !errors.Is(err, store.ErrConflict) {
 		t.Fatalf("a second signup racing on the empty policy should conflict, got %v", err)
+	}
+}
+
+// Design doc 0123: the loop's numbers are narrowed to what the caller
+// can see, and the answer says which subtrees it counted — that
+// declaration is what keeps a partial answer from being a second
+// meaning for the same words.
+func TestScopedStatsCountTheCallersOwnSubtreeAndSayItIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+
+	whole, err := f.svc.Stats(f.adminCtx, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if whole.Scope != nil {
+		t.Errorf("an administrator asking about the whole bundle declared scope %v, want none", whole.Scope)
+	}
+	if whole.Misses.Withheld {
+		t.Error("misses withheld from an administrator")
+	}
+
+	// The reader holds growth and the shared glossary, and nothing else.
+	mine, err := f.svc.Stats(f.readCt, 0, nil)
+	if err != nil {
+		t.Fatalf("a scoped caller asking for stats: %v", err)
+	}
+	if len(mine.Scope) == 0 {
+		t.Fatal("a scoped answer declared no scope; a partial count that does not say so is the thing 0109 §3 refused")
+	}
+	for _, p := range mine.Scope {
+		if !strings.HasPrefix(p, f.prefix+"/") {
+			t.Errorf("declared scope %q is outside the caller's grants", p)
+		}
+	}
+	if mine.Concepts.Total >= whole.Concepts.Total {
+		t.Errorf("scoped total %d is not smaller than the whole base's %d",
+			mine.Concepts.Total, whole.Concepts.Total)
+	}
+
+	// The misses are the instance's and have no id to narrow by, so they
+	// are withheld rather than shown — and said to be, not zeroed.
+	if !mine.Misses.Withheld {
+		t.Error("a scoped caller was given the whole instance's unanswered searches")
+	}
+	if mine.Misses.Count != 0 || len(mine.Misses.Queries) != 0 {
+		t.Errorf("withheld misses still carried data: %+v", mine.Misses)
+	}
+
+	// An administrator who asks about one subtree gets the same
+	// declaration: the field is about the numbers, not about the caller.
+	part, err := f.svc.Stats(f.adminCtx, 0, []string{f.prefix + "/growth"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(part.Scope) != 1 || part.Scope[0] != f.prefix+"/growth" {
+		t.Errorf("an administrator's scoped call declared %v", part.Scope)
+	}
+}
+
+// A caller who can see none of what these numbers count gets zeros that
+// say they are zeros for that reason — an empty declared scope — rather
+// than a refusal, for the reason a read outside the scope is a 404.
+func TestStatsOutsideEveryGrantCountNothingAndSaySoIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	st, err := f.svc.Stats(f.readCt, 0, []string{f.prefix + "/personnel"})
+	if err != nil {
+		t.Fatalf("asking about a subtree outside every grant: %v", err)
+	}
+	if st.Scope == nil || len(st.Scope) != 0 {
+		t.Errorf("declared scope = %v, want an empty list", st.Scope)
+	}
+	if st.Concepts.Total != 0 {
+		t.Errorf("counted %d concepts the caller cannot see", st.Concepts.Total)
+	}
+	// The vocabularies still travel with zeros, so a reader never has to
+	// tell "none" from "not reported".
+	if len(st.Concepts.Status) != len(domain.Statuses) || len(st.Concepts.Trust) != len(domain.Trusts) {
+		t.Errorf("the empty answer dropped a vocabulary: %+v", st.Concepts)
+	}
+}
+
+// Design doc 0124: a prefix administrator edits the rules under the
+// subtrees a full administrator granted them, and nothing else. The
+// whole point is that placing a boundary for one team is not an
+// operation that can also remove every other team's.
+func TestPrefixAdminEditsOnlyItsOwnSubtreeIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	lead := domain.Actor{Kind: domain.ActorHuman, Name: "lead@example.co.jp"}
+	leadCtx := httpauth.WithActor(context.Background(), lead)
+	growth := f.prefix + "/growth"
+
+	// A full administrator hands one subtree to its lead.
+	rules, version, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules = append(rules, domain.AccessRule{
+		Prefix: growth, Principal: domain.PrincipalOf(lead), MayAdmin: true,
+	})
+	if _, _, err := f.svc.SetPolicy(f.adminCtx, rules, f.admin, &version); err != nil {
+		t.Fatal(err)
+	}
+
+	// The lead reads the rules they may edit, and no others.
+	mine, myVersion, err := f.svc.Policy(leadCtx)
+	if err != nil {
+		t.Fatalf("a prefix administrator reading the policy: %v", err)
+	}
+	for _, r := range mine {
+		if !domain.Under(r.Prefix, growth) {
+			t.Errorf("a prefix administrator was shown %q, outside %q", r.Prefix, growth)
+		}
+	}
+	if myVersion == version {
+		t.Error("the version a prefix administrator holds covers the whole policy; a change elsewhere would fail their write")
+	}
+
+	// They may place a rule under their own subtree.
+	mine = append(mine, domain.AccessRule{
+		Prefix: growth + "/metrics", Principal: "human:sato@example.co.jp", MayWrite: true,
+	})
+	if _, _, err := f.svc.SetPolicy(leadCtx, mine, lead, &myVersion); err != nil {
+		t.Fatalf("a prefix administrator placing a rule in their own subtree: %v", err)
+	}
+
+	// And the rules they never saw survived it — the danger the whole
+	// document replacement would otherwise carry.
+	whole, _, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var glossary bool
+	for _, r := range whole {
+		if r.Prefix == f.prefix+"/glossary" {
+			glossary = true
+		}
+	}
+	if !glossary {
+		t.Error("a prefix administrator's write removed a rule outside their subtree")
+	}
+}
+
+// The escalation this refuses: a rule outside the caller's own
+// subtrees, which is how a subtree would grow into the bundle. Refused,
+// not dropped — a rule silently discarded is a boundary the caller
+// believes they placed.
+func TestPrefixAdminCannotReachOutsideItsSubtreeIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	lead := domain.Actor{Kind: domain.ActorHuman, Name: "lead@example.co.jp"}
+	leadCtx := httpauth.WithActor(context.Background(), lead)
+	growth := f.prefix + "/growth"
+
+	rules, version, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules = append(rules, domain.AccessRule{
+		Prefix: growth, Principal: domain.PrincipalOf(lead), MayAdmin: true,
+	})
+	if _, _, err := f.svc.SetPolicy(f.adminCtx, rules, f.admin, &version); err != nil {
+		t.Fatal(err)
+	}
+	mine, myVersion, err := f.svc.Policy(leadCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		rule domain.AccessRule
+	}{
+		{"the root", domain.AccessRule{Principal: domain.PrincipalOf(lead), MayWrite: true}},
+		{"another team", domain.AccessRule{
+			Prefix: f.prefix + "/personnel", Principal: domain.PrincipalOf(lead), MayWrite: true}},
+		{"the level above their own", domain.AccessRule{
+			Prefix: f.prefix, Principal: domain.PrincipalOf(lead), MayAdmin: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, _, err := f.svc.SetPolicy(leadCtx, append(append([]domain.AccessRule{}, mine...), tc.rule),
+				lead, &myVersion); !errors.Is(err, ErrForbidden) {
+				t.Fatalf("reaching %s returned %v, want ErrForbidden", tc.name, err)
+			}
+		})
+	}
+}
+
+// The floor 0109 §3 put under the policy, unmoved: "who may edit the
+// whole policy" cannot be an answer the policy carries, so may_admin at
+// the root is refused where it is written rather than where it is used.
+func TestRootPrefixAdminIsRefusedIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	rules, version, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules = append(rules, domain.AccessRule{Principal: "human:x@example.co.jp", MayAdmin: true})
+	_, _, err = f.svc.SetPolicy(f.adminCtx, rules, f.admin, &version)
+	if _, ok := errors.AsType[*InvalidInputError](err); !ok {
+		t.Fatalf("may_admin at the root returned %v, want an invalid-input refusal", err)
+	}
+	if !strings.Contains(err.Error(), "OCHAKAI_ADMINS") {
+		t.Errorf("the refusal does not name where that answer lives: %v", err)
 	}
 }

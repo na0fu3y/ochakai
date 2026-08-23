@@ -25,6 +25,9 @@ export function policyDocument(rules) {
     prefix: r.prefix || '',
     principal: r.principal || '',
     may_write: r.may_write === true,
+    // Carried only where it is set, so a policy that delegates nothing
+    // reads exactly as it did before this field existed (design doc 0124).
+    ...(r.may_admin === true ? { may_admin: true } : {}),
   }));
   return JSON.stringify({ rules: body }, null, 2) + '\n';
 }
@@ -65,13 +68,21 @@ export function parsePolicyDocument(text) {
     if (r.may_write !== undefined && typeof r.may_write !== 'boolean') {
       throw new Error(`${n} 番目の may_write が true / false ではありません。`);
     }
+    if (r.may_admin !== undefined && typeof r.may_admin !== 'boolean') {
+      throw new Error(`${n} 番目の may_admin が true / false ではありません。`);
+    }
+    if (r.may_admin === true && raw.trim().replace(/^\/+|\/+$/g, '') === '') {
+      throw new Error(`${n} 番目: バンドル全体の may_admin は置けません。ポリシー全体を編集できるのは誰かという答えは、そのポリシーの中には置けないためです(OCHAKAI_ADMINS で名指します)。`);
+    }
     // The same trim the server does before it stores the prefix, so the
     // duplicate below is caught against the row as it will be kept
     // rather than as it was typed: "sales/" and "sales" are one grant.
     const rule = {
       prefix: raw.trim().replace(/^\/+|\/+$/g, ''),
       principal: r.principal.trim(),
-      may_write: r.may_write === true,
+      // may_admin implies may_write, the way may_write implies reading.
+      may_write: r.may_write === true || r.may_admin === true,
+      ...(r.may_admin === true ? { may_admin: true } : {}),
     };
     const key = rule.prefix + '\u0000' + rule.principal;
     if (seen.has(key)) {

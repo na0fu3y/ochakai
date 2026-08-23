@@ -90,7 +90,7 @@ func serveUIHandler(proxy http.Handler) http.Handler {
 	// browser, so a page on another site can make that browser write here
 	// and the write arrives signed. `ochakai ui` has refused that since
 	// it was written; this had nothing, and now both get it from the same
-	// place (design doc 0123). /health is a GET, so it is untouched.
+	// place (design doc 0126). /health is a GET, so it is untouched.
 	return crossOriginGuard(mux)
 }
 

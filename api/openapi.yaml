@@ -41,10 +41,10 @@ info:
     0064), the same rule applied to the body: `POST /api/v1/move`,
     `POST /api/v1/review/{id}`, `POST /api/v1/usage/{id}` and
     `PUT /api/v1/access` reject a key their schema does not declare.
-    **The comparison is exact** (design doc 0122): `RULING` is not
+    **The comparison is exact** (design doc 0125): `RULING` is not
     `ruling`, so it is an unrecognized key like any other.
 
-    **A repeated JSON body key is a 400, naming it** (design doc 0122) —
+    **A repeated JSON body key is a 400, naming it** (design doc 0125) —
     the sibling of the repeated query key below. A body may name each key
     once; `{"ruling":"verified","ruling":"rejected"}` has no answer that
     is what was asked, and answering for the last of them would decide
@@ -2434,6 +2434,34 @@ components:
             caller that could change a concept it cannot read would be
             writing blind, and the If-Match read it needs to do that
             safely would be the thing refused.
+        may_admin:
+          type: boolean
+          description: >
+            Grants editing the **rules under this prefix** — the grants
+            for one subtree, delegated to whoever runs it, so that
+            placing a boundary for one team is not an operation that can
+            also remove every other team's (design doc 0124). Implies
+            `may_write`, which implies reading.
+
+
+            A caller holding it reads and replaces only the rules at or
+            under the prefixes it names, matched on segment boundaries;
+            everything else is invisible to them and survives their write
+            untouched, and the `ETag` they are given covers what they can
+            see. A rule they send outside those prefixes is a **403**
+            rather than a rule quietly dropped.
+
+
+            **Refused at the root.** "Who may edit the whole policy" is
+            the one answer that cannot live inside the policy, because
+            whoever holds it can grant themselves anything — name that
+            principal in `OCHAKAI_ADMINS` instead (design doc 0109 §3).
+
+
+            What it does not reach: a shallower rule that governs the
+            same subtree belongs to whoever administers *that* prefix, so
+            the effective access to a directory can be wider than the
+            rules its own administrator can see.
         granted_at:
           type: string
           format: date-time
@@ -2912,6 +2940,24 @@ components:
       type: object
       properties:
         at: { type: string, format: date-time, description: When the server computed this. }
+        scope:
+          type: array
+          items: { type: string }
+          description: >
+            The subtrees these counts cover, **absent when they cover the
+            whole bundle** and present whenever they do not — because the
+            caller asked with `prefix`, or because an access policy grants
+            them part of the bundle (design doc 0123). An empty array
+            means the caller can see none of what is counted here, and
+            every number below is zero for that reason rather than
+            because nothing happened.
+
+
+            Two of the numbers are the instance's however this is set,
+            because neither can be scoped: `misses` have no concept id to
+            scope by (which is why a scoped caller gets them withheld
+            rather than narrowed), and `dropped` counts events the server
+            lost before it knew what they were about.
         window_days: { type: integer, description: How far back the flow numbers reach. }
         sandbox:
           type: boolean
@@ -3057,6 +3103,18 @@ components:
                 deployment keeps none (it reads no identity either), and any
                 deployment can turn recording off with
                 OCHAKAI_RECORD_MISSES=false.
+            withheld:
+              type: boolean
+              description: >
+                Present and true when the caller reads part of the bundle
+                (`scope` above) and these are the whole instance's, so
+                they are not shown. A miss carries no concept id (design
+                doc 0069), so there is nothing to narrow it by, and
+                showing it unnarrowed would tell one team what every
+                other team searched for. Like `recording: false` it makes
+                the two fields below meaningless rather than zero; unlike
+                it, the remedy is to ask an administrator rather than to
+                change a setting (design doc 0123). Absent otherwise.
             count: { type: integer, description: Every miss in the window, including queries not listed below. }
             queries:
               type: array

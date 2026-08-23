@@ -41,7 +41,7 @@ func webUIMux(proxy http.Handler) *http.ServeMux {
 // site, and is the one rule both web-UI commands share for the same
 // reason: a browser reaches ochakai only through one of them, and only
 // there does an ambient credential exist for a foreign page to spend
-// (design doc 0123).
+// (design doc 0126).
 //
 // The check is the standard library's. It reads Sec-Fetch-Site, which
 // every browser has sent since 2023, and falls back to comparing the

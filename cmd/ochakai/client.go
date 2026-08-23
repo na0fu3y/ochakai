@@ -632,7 +632,7 @@ func cmdUsage(ctx context.Context, args []string) error {
 func cmdStats(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"stats",
-		"Usage: ochakai stats [flags]\n\nShow the improvement loop as the instance sees it: what the knowledge\nbase is made of now, how much each queue is holding, what review did\nlately, what callers reported, and what they searched for and did not\nfind. `usage` measures one concept; this measures the base.\n\nOne line per number, so it composes: cron it and diff the output, or\ngrep one line out of it for a prompt or a dashboard. The gap lines are\nthe questions that came back empty, most-asked first — the list of what\nto write next.\n\nThe three queue lines — drafts waiting to be published or turned down,\nconcepts whose failure reports are unanswered, concepts past the expiry\ntheir author declared — carry the command that lists that queue, with\nthe scope you asked under, so the next step is the text on the line.\nThe verification-age feed is not one of them: it ranks every verified\nconcept rather than holding the ones that need something, so its size is\nthe size of the knowledge base and never reaches zero.\nWith --exit-code the command exits 2 while any of the three is\nnon-empty and 0 when all are, which is how a scheduled job goes red on\nwork nobody has picked up. An error still exits 1, so \"unreachable\"\ncannot be read as \"nothing to do\".",
+		"Usage: ochakai stats [flags]\n\nShow the improvement loop as the instance sees it: what the knowledge\nbase is made of now, how much each queue is holding, what review did\nlately, what callers reported, and what they searched for and did not\nfind. `usage` measures one concept; this measures the base.\n\nA scope line says what the numbers cover whenever that is not the whole\nbundle — because a prefix was given, or because an access policy grants\nyou part of it. Then `misses` reads `withheld` rather than a count: an\nunanswered search carries no id, so it cannot be scoped, and the\ninstance's own list is an administrator's to read.\n\nOne line per number, so it composes: cron it and diff the output, or\ngrep one line out of it for a prompt or a dashboard. The gap lines are\nthe questions that came back empty, most-asked first — the list of what\nto write next.\n\nThe three queue lines — drafts waiting to be published or turned down,\nconcepts whose failure reports are unanswered, concepts past the expiry\ntheir author declared — carry the command that lists that queue, with\nthe scope you asked under, so the next step is the text on the line.\nThe verification-age feed is not one of them: it ranks every verified\nconcept rather than holding the ones that need something, so its size is\nthe size of the knowledge base and never reaches zero.\nWith --exit-code the command exits 2 while any of the three is\nnon-empty and 0 when all are, which is how a scheduled job goes red on\nwork nobody has picked up. An error still exits 1, so \"unreachable\"\ncannot be read as \"nothing to do\".",
 		"  ochakai stats\n  ochakai stats --days 7\n  ochakai stats --prefix teams/growth       # our subtree only\n  ochakai stats --json | jq .queues.drafts\n  ochakai stats --exit-code                 # in CI: red while somebody owes a review\n")
 	days := fs.Int("days", 0, "how far back the flow numbers reach, 1-180 (default: 30; raw events are pruned after 180 days)")
 	var prefixes repeated
@@ -679,6 +679,17 @@ func cmdStats(ctx context.Context, args []string) error {
 	// Tab-separated key/value, like `usage`: the vocabularies are printed
 	// in their own order (domain.Statuses, domain.Trusts) so a value
 	// added to either shows up here without this command being edited.
+	// What the numbers cover, printed before them and only when it is
+	// not the whole bundle — so a partial answer is never read as a
+	// whole one (design doc 0123). Empty means the caller can see none
+	// of what is counted here.
+	if st.Scope != nil {
+		if len(st.Scope) == 0 {
+			fmt.Print("scope\t-\n")
+		} else {
+			fmt.Printf("scope\t%s\n", strings.Join(st.Scope, " "))
+		}
+	}
 	fmt.Printf("concepts\t%d\n", st.Concepts.Total)
 	for _, s := range domain.Statuses {
 		fmt.Printf("%s\t%d\n", s, st.Concepts.Status[string(s)])
@@ -692,8 +703,19 @@ func cmdStats(ctx context.Context, args []string) error {
 	// act on is a statistic, and these three exist to be emptied (design
 	// doc 0049) — so the next step is the text on the line. The key and
 	// the count stay in the first two fields, so the format still cuts.
+	// The scope the server says it counted, in preference to the one that
+	// was asked for: a caller with grants under one directory gets their
+	// own numbers whether or not they passed --prefix (design doc 0123),
+	// and the hint has to name the subtree the counts actually came from.
+	// A server that declares none is one that predates the field, and
+	// then what was asked for is the best answer available — a hint that
+	// quietly dropped the prefix would send a reader to the whole base.
+	hintPrefixes := prefixes
+	if len(st.Scope) > 0 {
+		hintPrefixes = st.Scope
+	}
 	var scope strings.Builder
-	for _, p := range prefixes {
+	for _, p := range hintPrefixes {
 		scope.WriteString(" --prefix " + p)
 	}
 	for _, q := range []struct {
@@ -746,6 +768,15 @@ func cmdStats(ctx context.Context, args []string) error {
 	} else {
 		fmt.Printf("vectors\t%d\ntruncated\t%d\n",
 			st.Embedding.Vectors, st.Embedding.Truncated)
+	}
+	if st.Misses.Withheld {
+		// Withheld, not zero and not "not kept": these are the whole
+		// instance's, a miss has no id to scope by, and showing them
+		// would say what every other team searched for (design doc
+		// 0123). The word differs from the one below because the
+		// remedy does: this one is answered by asking an administrator.
+		fmt.Print("misses\twithheld\n")
+		return pendingWork(st.Queues, *exitCode)
 	}
 	if !st.Misses.Recording {
 		// Not zero — unknown. A deployment that keeps no questions must
@@ -2127,7 +2158,7 @@ func extractTarGz(dir string, r io.Reader) (int, error) {
 func cmdAccess(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"access",
-		"Usage: ochakai access [flags]\n\nShow the access policy, or replace it with the document from -f or\nstdin. Only an administrator (OCHAKAI_ADMINS) may do either.\n\nEach rule grants one principal — human:<name>, process:<name>, or *\nfor every authenticated caller — the right to read under one directory,\nand to write there when may_write is true. Prefixes match on segment\nboundaries, so sales covers sales/orders and does not cover\nsales-legacy/orders; the empty prefix is the whole bundle. There are no\ndeny rules: what no rule grants is not readable, and a caller sees a\n404 rather than a refusal, because whether something is there is the\nboundary itself.\n\nA deployment with no rules has no boundary — every caller reads and\nwrites everything, which is what ochakai does by default. Writing the\nfirst rule turns the boundary on for everybody at once, so read the\npolicy back before you close the terminal.\n\nThe operations that take the bundle as a whole — stats, export, move,\nreembed, and this command — stay with the administrators.\n\nThe policy is one document, replaced whole, so two editors who both\nread it can each drop the other's rules. With --if-match the\nreplacement lands only if the policy still has the version you read,\nand fails instead.",
+		"Usage: ochakai access [flags]\n\nShow the access policy, or replace it with the document from -f or\nstdin. Only an administrator (OCHAKAI_ADMINS) may do either.\n\nEach rule grants one principal — human:<name>, process:<name>, or *\nfor every authenticated caller — the right to read under one directory,\nto write there when may_write is true, and to edit the rules under it\nwhen may_admin is. A may_admin caller reads and replaces only the rules\nat or under the directories it administers; the rest are invisible and\nsurvive its write. may_admin at the root is refused — who may edit the\nwhole policy is what OCHAKAI_ADMINS answers. Prefixes match on segment\nboundaries, so sales covers sales/orders and does not cover\nsales-legacy/orders; the empty prefix is the whole bundle. There are no\ndeny rules: what no rule grants is not readable, and a caller sees a\n404 rather than a refusal, because whether something is there is the\nboundary itself.\n\nA deployment with no rules has no boundary — every caller reads and\nwrites everything, which is what ochakai does by default. Writing the\nfirst rule turns the boundary on for everybody at once, so read the\npolicy back before you close the terminal.\n\nThe operations that take the bundle as a whole — export, move, reembed,\nand this command — stay with the administrators. Not stats: a caller\nwith grants reads their own numbers, and the answer says which subtree\nit counted. The unanswered searches beside them are withheld from a\nscoped caller, having no id to scope by.\n\nThe policy is one document, replaced whole, so two editors who both\nread it can each drop the other's rules. With --if-match the\nreplacement lands only if the policy still has the version you read,\nand fails instead.",
 		"  ochakai access\n  ochakai access --json > policy.json\n  ochakai access -f policy.json\n  ochakai access -f policy.json --if-match \"$(jq -r .version policy.json)\"\n  echo '{\"rules\":[]}' | ochakai access -f -   # remove every boundary\n")
 	file := fs.String("f", "", "replace the policy with the JSON document in this file (`-` or unset with a pipe: stdin). Without it, the policy is printed")
 	asJSON := fs.Bool("json", false, "print the policy as JSON — the same document -f takes back")

@@ -26,6 +26,20 @@ type Stats struct {
 	// At is when the server computed this — the answers are not a
 	// snapshot of one instant, since each is its own query.
 	At time.Time `json:"at"`
+	// Scope is the subtrees the counts cover, absent when they cover the
+	// whole bundle. It is what lets a partial answer be read as one:
+	// design doc 0109 §3 pooled these numbers on the administrator
+	// because a subset of them would be "a second meaning for numbers the
+	// loop is measured by", and the second meaning came from the answer
+	// not saying which one it carried, not from the subset existing —
+	// `prefix` had always been able to produce it (design doc 0123).
+	//
+	// Two of the numbers below are the instance's however this is set,
+	// because neither can be scoped: Misses have no id to scope by
+	// (design doc 0069), which is why a scoped caller gets them withheld
+	// rather than narrowed, and Dropped counts events the server lost
+	// before it knew what they were about.
+	Scope []string `json:"scope,omitempty"`
 	// WindowDays is how far back the flow numbers reach.
 	WindowDays int `json:"window_days"`
 
@@ -54,8 +68,10 @@ type Stats struct {
 	// the key it returns it under: how much each review queue is
 	// holding, right now. It travels here as a sibling of the rest
 	// because 0049 §3.1 kept the place for it, and it is counted by that
-	// face's own query — the same three numbers, from one implementation,
-	// unscoped by any prefix.
+	// face's own query — the same three numbers, from one
+	// implementation. They are scoped by the prefixes like the rest of
+	// this: the sentence here used to say they were not, and the store
+	// had already stopped agreeing with it.
 	Queues   QueueCounts   `json:"queues"`
 	Review   StatsReview   `json:"review"`
 	Outcomes StatsOutcomes `json:"outcomes"`
@@ -205,6 +221,14 @@ type StatsMisses struct {
 	// deployment does not keep what strangers typed (§3.4), and any
 	// deployment can turn it off.
 	Recording bool `json:"recording"`
+	// Withheld says the caller reads part of the bundle and these are
+	// the whole instance's, so they are not shown. A miss has no id
+	// (design doc 0069), so there is nothing to narrow it by — and
+	// showing it unnarrowed would tell one team what every other team
+	// searched for. Like Recording, it makes Count and Queries
+	// meaningless rather than zero; unlike Recording, it is about who
+	// asked rather than what the deployment keeps (design doc 0123).
+	Withheld bool `json:"withheld,omitempty"`
 	// Count is every miss in the window, including the ones whose query
 	// did not make the Queries list.
 	Count int64 `json:"count"`

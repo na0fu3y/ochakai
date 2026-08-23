@@ -33,7 +33,7 @@ last entry.
   holds a credential it did not have to be given. A non-safe request
   (anything but GET, HEAD and OPTIONS) that a browser says came from
   another site is now a 403 before the proxy signs and forwards it
-  (design doc 0123). **Nothing that is not a browser changes**: the
+  (design doc 0126). **Nothing that is not a browser changes**: the
   check reads `Sec-Fetch-Site`, falling back to comparing `Origin` with
   `Host`, and a request carrying neither header is allowed — so the CLI,
   an agent over MCP, curl and a generated client send exactly what they
@@ -59,7 +59,7 @@ last entry.
   `rejected`: a decided answer where the caller cannot know which of the
   two values decided it, on the operation that records a ruling. Both
   are now a 400 naming the field, the shape an unrecognized query
-  parameter already had (design doc 0122). The four operations that read
+  parameter already had (design doc 0125). The four operations that read
   a body — `POST /api/v1/move`, `POST /api/v1/review/{id}`, `POST
   /api/v1/usage/{id}`, `PUT /api/v1/access` — are outside the frozen OKF
   core (design doc 0107), so this is BREAKING here and carries a record.
@@ -67,6 +67,55 @@ last entry.
   produce neither shape. Bodies are read through `encoding/json/v2`,
   whose defaults are these two refusals; responses keep v1, because v2's
   marshaling defaults are bytes the frozen surface actually ships.
+
+### Added
+
+- **A directory can have its own administrator.** An access rule gains
+  `may_admin`: the rules *under that prefix* are that principal's to
+  edit (design doc 0124). Until now handing a team its own directory
+  meant handing it `OCHAKAI_ADMINS`, and therefore the power to delete
+  every other team's boundary — and an automation that places one grant
+  per organization had to hold that permanently. A prefix administrator
+  reads only the rules they may edit, **and the rules they never saw
+  survive their write**, so the ordinary `ochakai access --json > f;
+  edit; ochakai access -f f` flow is safe to hand them. The `ETag` they
+  get covers what they read, so a rule they cannot see moving does not
+  fail their write; a rule they send outside their prefixes is a 403
+  rather than a silent drop. **`may_admin` at the root is refused** —
+  who may edit the whole policy is what `OCHAKAI_ADMINS` answers, and
+  putting that answer inside the policy is the revolving door 0109 §3
+  named. It implies `may_write`. Migration 0045 adds the column,
+  additive and defaulting to false, so every existing policy means
+  exactly what it meant.
+
+  One thing it does not reach, stated rather than closed: a rule
+  *shallower* than the delegated directory still governs it and stays
+  invisible to that directory's administrator, so the effective access
+  to a subtree can be wider than the rules its own administrator can
+  see.
+
+### Added
+
+- **`GET /api/v1/stats` answers a caller who holds part of the bundle,
+  and the answer says what it counted.** Design doc 0109 §3 pooled these
+  numbers on the administrator because a subset would give the loop's
+  numbers a second meaning — but `prefix` could already produce that
+  subset, so what made it a second meaning was the answer never saying
+  which one it carried. It says now: a `scope` field carries the
+  prefixes counted, absent when they were the whole bundle, and an empty
+  list means the caller can see none of it (so the zeros are zeros for
+  that reason, not because nothing happened). An administrator asking
+  about one subtree gets the same declaration — the field is about the
+  numbers, not the caller. `ochakai stats` prints it as a `scope` line
+  and the queue hints name the same subtree (design doc 0123).
+- **The unanswered searches are withheld from a scoped caller rather
+  than narrowed**, and say so: a miss carries no concept id, so there is
+  nothing to narrow it by, and showing it unnarrowed would tell one team
+  what every other team searched for. `misses.withheld` on the wire,
+  `misses withheld` in the CLI — a different word from the existing
+  `misses -`, because the remedy is to ask an administrator rather than
+  to change `OCHAKAI_RECORD_MISSES`. `export`, `move`, `reembed` and the
+  access policy stay with the administrators.
 
 ### Fixed
 
@@ -112,6 +161,24 @@ last entry.
 
 ### Fixed
 
+- **A caller who is not an administrator can no longer write the first
+  access rule.** On a deployment with no grants every caller passes the
+  whole-bundle check — that is design doc 0109 §2's promise that no rules
+  means no boundary — so `PUT /api/v1/access` used to accept a first rule
+  from anyone, commit it, log `access policy replaced`, and *then* answer
+  **403**, because re-reading the policy on the way out ran the same check
+  against the boundary that had just been created. The status code is the
+  one that says nothing was written, so nothing that saw it could tell a
+  refused write from a landed one, and an automated caller retrying
+  replaced the policy again each time. The refusal now happens before the
+  write, naming the lockout: a policy is edited by the principals
+  `OCHAKAI_ADMINS` names, and placing the first rule is what hands the
+  policy to them (design doc 0122, amending 0109 §3). **Nothing that
+  worked stops working** — every call this refuses already ended in a 403,
+  since the check on the way out could never pass. Clearing the policy is
+  unchanged, as is the separate 400 a deployment that names no
+  administrators gets. The web UI's access editor now says why a save was
+  refused instead of passing the message through.
 - **`ochakai import` no longer reads through a symlink out of the bundle,
   and `ochakai export` no longer writes through one out of the directory
   it was given.** A bundle is ordinary content — cloned, unpacked, handed

@@ -79,7 +79,11 @@ stdin. Only an administrator (OCHAKAI_ADMINS) may do either.
 
 Each rule grants one principal — human:<name>, process:<name>, or *
 for every authenticated caller — the right to read under one directory,
-and to write there when may_write is true. Prefixes match on segment
+to write there when may_write is true, and to edit the rules under it
+when may_admin is. A may_admin caller reads and replaces only the rules
+at or under the directories it administers; the rest are invisible and
+survive its write. may_admin at the root is refused — who may edit the
+whole policy is what OCHAKAI_ADMINS answers. Prefixes match on segment
 boundaries, so sales covers sales/orders and does not cover
 sales-legacy/orders; the empty prefix is the whole bundle. There are no
 deny rules: what no rule grants is not readable, and a caller sees a
@@ -91,8 +95,11 @@ writes everything, which is what ochakai does by default. Writing the
 first rule turns the boundary on for everybody at once, so read the
 policy back before you close the terminal.
 
-The operations that take the bundle as a whole — stats, export, move,
-reembed, and this command — stay with the administrators.
+The operations that take the bundle as a whole — export, move, reembed,
+and this command — stay with the administrators. Not stats: a caller
+with grants reads their own numbers, and the answer says which subtree
+it counted. The unanswered searches beside them are withheld from a
+scoped caller, having no id to scope by.
 
 The policy is one document, replaced whole, so two editors who both
 read it can each drop the other's rules. With --if-match the
@@ -729,6 +736,12 @@ Show the improvement loop as the instance sees it: what the knowledge
 base is made of now, how much each queue is holding, what review did
 lately, what callers reported, and what they searched for and did not
 find. `usage` measures one concept; this measures the base.
+
+A scope line says what the numbers cover whenever that is not the whole
+bundle — because a prefix was given, or because an access policy grants
+you part of it. Then `misses` reads `withheld` rather than a count: an
+unanswered search carries no id, so it cannot be scoped, and the
+instance's own list is an administrator's to read.
 
 One line per number, so it composes: cron it and diff the output, or
 grep one line out of it for a prompt or a dashboard. The gap lines are
