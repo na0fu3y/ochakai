@@ -488,7 +488,7 @@ state per area, so when a design doc lands:
 
 `INDEX-ROW-RECORDS` is the third number, and the only one that moves in
 one direction. It bounds how many records one row of the index's opening
-table may cite, and `TestIndexRowsCiteFewRecords` holds it equal to the
+table may cite, and `TestCeilings` holds it equal to the
 widest row — so folding a row is what lowers it and nothing lowers it
 quietly. The table is the one line a reader reaches an area's current
 state from (0048 §2.4); on 2026-08-23 four rows cited eight to ten
@@ -509,7 +509,7 @@ thing explained is the shape the numbers have been showing for several
 releases.
 
 So a record from 0065 on stays under that line, and
-`TestDesignRecordsStayUnderTheirCeiling` reads both numbers back out of
+`TestCeilings` (`cmd/ochakai/ceilings_test.go`) reads both numbers back out of
 this file.
 The ceiling is the same bargain [docs/surface.md](docs/surface.md)
 strikes for the surface: it is one number in one file and anybody can
@@ -579,7 +579,7 @@ This is the rule
 already applies to *summaries* of a superseded record in
 [README.en.md](docs/design/README.en.md) — a pointer, and no more
 maintenance than that — extended to the record it summarizes.
-`TestSupersededRecordsAreTombstones` holds a Superseded record to
+`TestCeilings` holds a Superseded record to
 `TOMBSTONE-LINES` and requires the commit link; going over it means the
 record is still carrying prose nobody rereads.
 
@@ -950,7 +950,7 @@ ceiling has to be a multiple of it — the same pair of rules
 `DOC-LINES` and `DOC-LINES-SLACK` already run under, so a fold that
 lowers the total still has to lower the ceiling once it crosses a
 boundary. Both are
-read back by `TestDesignRecordCorpusStaysUnderItsCeiling`, and both are
+read back by `TestCeilings`, and both are
 checked the same way `RECORD-LINES` already was — one number in one file,
 raised or lowered in the PR that earns it.
 
@@ -969,9 +969,9 @@ amendment** has to be recorded at both ends — the new record naming what
 it retires or revises, and the older one saying so — a new record has to
 fit under its own
 ceiling, a Superseded one has to be a tombstone
-(`TestSupersededRecordsAreTombstones`), and the corpus as a whole has to
+(`TOMBSTONE-LINES`), and the corpus as a whole has to
 fit under `RECORD-CORPUS-LINES`, with no more slack than
-`RECORD-CORPUS-LINES-SLACK` allows (`TestDesignRecordCorpusStaysUnderItsCeiling`).
+`RECORD-CORPUS-LINES-SLACK` allows (`RECORD-CORPUS-LINES`).
 What no test can read is the judgment: whether the opening table's row still
 points at the doc somebody should actually read. That is where the attention goes.
 
