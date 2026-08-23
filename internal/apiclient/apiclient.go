@@ -838,20 +838,32 @@ func (c *Client) PutBundleFile(ctx context.Context, path string, data []byte) (*
 // changing shape.
 type AccessBody struct {
 	Rules []domain.AccessRule `json:"rules"`
+	// Version is what a conditional replacement echoes in If-Match. It
+	// travels in the document so that the policy a client read back is
+	// the whole of what it needs to write the policy conditionally;
+	// the server ignores it on the way in (design doc 0120).
+	Version string `json:"version,omitempty"`
 }
 
-// Policy reads the whole access policy. An administrator's read: 403
-// for anyone else, because the rules name who may see what.
-func (c *Client) Policy(ctx context.Context) ([]domain.AccessRule, error) {
+// Policy reads the whole access policy and its version. An
+// administrator's read: 403 for anyone else, because the rules name who
+// may see what.
+func (c *Client) Policy(ctx context.Context) ([]domain.AccessRule, string, error) {
 	var b AccessBody
 	if err := c.doJSON(ctx, http.MethodGet, "/api/v1/access", nil, nil, &b); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return b.Rules, nil
+	return b.Rules, b.Version, nil
 }
 
-// SetPolicy replaces the whole access policy and returns it as stored.
-func (c *Client) SetPolicy(ctx context.Context, rules []domain.AccessRule) ([]domain.AccessRule, error) {
+// SetPolicy replaces the whole access policy and returns it as stored,
+// with its new version.
+//
+// A non-empty ifMatch is sent as the If-Match precondition — the version
+// a prior read returned — and the replacement lands only while the
+// policy still has it; a stale one is a 412 APIError and nothing is
+// written. "" means last write wins, as it does for a concept.
+func (c *Client) SetPolicy(ctx context.Context, rules []domain.AccessRule, ifMatch string) ([]domain.AccessRule, string, error) {
 	if rules == nil {
 		// An explicit empty policy — the way a deployment turns the
 		// boundary off again — must travel as [] and not as null: the
@@ -859,9 +871,22 @@ func (c *Client) SetPolicy(ctx context.Context, rules []domain.AccessRule) ([]do
 		// nothing rather than one that says "no rules".
 		rules = []domain.AccessRule{}
 	}
-	var out AccessBody
-	if err := c.doJSON(ctx, http.MethodPut, "/api/v1/access", nil, AccessBody{Rules: rules}, &out); err != nil {
-		return nil, err
+	hdr := http.Header{"Accept": []string{"application/json"}}
+	if ifMatch != "" {
+		hdr.Set("If-Match", etagValue(ifMatch))
 	}
-	return out.Rules, nil
+	buf, err := json.Marshal(AccessBody{Rules: rules})
+	if err != nil {
+		return nil, "", err
+	}
+	resp, err := c.doRaw(ctx, http.MethodPut, "/api/v1/access", nil, "application/json", hdr, bytes.NewReader(buf))
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	var out AccessBody
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, "", err
+	}
+	return out.Rules, out.Version, nil
 }

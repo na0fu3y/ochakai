@@ -6,6 +6,8 @@
 package domain
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
@@ -118,4 +120,48 @@ func ValidateAccessRules(rules []AccessRule) ([]AccessRule, error) {
 		return out[i].Principal < out[j].Principal
 	})
 	return out, nil
+}
+
+// AccessPolicyVersion is the version of a whole policy: the hash of its
+// grants, in a canonical order, hex-encoded. A caller echoes it in
+// If-Match to replace the policy only if it still says what they read
+// (design docs 0030, 0109).
+//
+// What is hashed is the grants and nothing else. granted_at and
+// granted_by move every time the policy is written, including a write
+// that changes no grant, and a version that moved then would invalidate
+// a precondition somebody is holding against a policy that still means
+// exactly what they read — the shape etagOf already refused for
+// concepts, where verifying or attaching a file leaves a held
+// precondition valid because only content moves the hash.
+//
+// The order is imposed here rather than taken from the read. The rules
+// arrive sorted from both sides — ValidateAccessRules sorts in Go, the
+// store's query in SQL — and those two orders are not the same
+// function: a database collation decides the second, so two deployments
+// could hash one policy two ways and neither would be wrong. A version
+// is a promise about a set, so the set is put in one order first.
+//
+// An empty policy has a version like any other, and that is the point:
+// the first grant on a deployment that has none is exactly the write
+// two automated callers can race, and a precondition needs something to
+// name for the state they both read.
+func AccessPolicyVersion(rules []AccessRule) string {
+	sorted := make([]AccessRule, len(rules))
+	copy(sorted, rules)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Prefix != sorted[j].Prefix {
+			return sorted[i].Prefix < sorted[j].Prefix
+		}
+		return sorted[i].Principal < sorted[j].Principal
+	})
+	h := sha256.New()
+	for _, r := range sorted {
+		write := "r"
+		if r.MayWrite {
+			write = "rw"
+		}
+		fmt.Fprintf(h, "%s\x00%s\x00%s\n", r.Prefix, r.Principal, write)
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

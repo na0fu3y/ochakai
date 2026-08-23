@@ -78,11 +78,11 @@ func newAccessFixture(t *testing.T) *accessFixture {
 		{Prefix: f.prefix + "/growth", Principal: domain.PrincipalOf(f.reader), MayWrite: true},
 		{Prefix: f.prefix + "/glossary", Principal: domain.AnyPrincipal},
 	}
-	if _, err := f.svc.SetPolicy(f.adminCtx, rules, f.admin); err != nil {
+	if _, _, err := f.svc.SetPolicy(f.adminCtx, rules, f.admin, nil); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		if _, err := f.svc.SetPolicy(f.adminCtx, nil, f.admin); err != nil {
+		if _, _, err := f.svc.SetPolicy(f.adminCtx, nil, f.admin, nil); err != nil {
 			t.Logf("clearing the policy: %v", err)
 		}
 	})
@@ -245,10 +245,10 @@ func TestScopeNarrowsEveryListingIntegration(t *testing.T) {
 // bundle as a whole are refused rather than narrowed (0109 §3).
 func TestPolicyBelongsToAdministratorsIntegration(t *testing.T) {
 	f := newAccessFixture(t)
-	if _, err := f.svc.Policy(f.readCt); !errors.Is(err, ErrForbidden) {
+	if _, _, err := f.svc.Policy(f.readCt); !errors.Is(err, ErrForbidden) {
 		t.Errorf("a scoped caller reading the policy returned %v, want ErrForbidden", err)
 	}
-	if _, err := f.svc.SetPolicy(f.readCt, nil, f.reader); !errors.Is(err, ErrForbidden) {
+	if _, _, err := f.svc.SetPolicy(f.readCt, nil, f.reader, nil); !errors.Is(err, ErrForbidden) {
 		t.Errorf("a scoped caller writing the policy returned %v, want ErrForbidden", err)
 	}
 	if _, err := f.svc.Stats(f.readCt, 0, nil); !errors.Is(err, ErrForbidden) {
@@ -296,8 +296,8 @@ func TestNoPolicyIsTheDeploymentThatCameBeforeIntegration(t *testing.T) {
 		t.Fatalf("stats on a deployment with no policy: %v", err)
 	}
 	// And a first rule cannot be written where nobody could undo it.
-	_, err = svc.SetPolicy(stranger, []domain.AccessRule{{Prefix: id, Principal: "human:x"}},
-		domain.Actor{Kind: domain.ActorHuman, Name: "stranger@example.com"})
+	_, _, err = svc.SetPolicy(stranger, []domain.AccessRule{{Prefix: id, Principal: "human:x"}},
+		domain.Actor{Kind: domain.ActorHuman, Name: "stranger@example.com"}, nil)
 	if err == nil {
 		t.Error("a deployment naming no administrator accepted a first rule; nobody could have undone it")
 	}
@@ -383,5 +383,96 @@ func TestEveryWriteIsScopedIntegration(t *testing.T) {
 	}
 	if checked < 8 {
 		t.Errorf("only %d write methods were reached; the reflection is finding fewer than it should", checked)
+	}
+}
+
+// The precondition the policy gained (design doc 0120): it is one
+// document replaced whole, so two callers that each read it and add a
+// rule would otherwise leave only the second one's rule standing.
+func TestPolicyPreconditionRefusesTheLostUpdate(t *testing.T) {
+	f := newAccessFixture(t)
+	rules, version, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if version == "" {
+		t.Fatal("a policy read carried no version; there is nothing for If-Match to name")
+	}
+
+	// Two administrators read the same policy. The first adds a rule.
+	first := append(append([]domain.AccessRule{}, rules...),
+		domain.AccessRule{Prefix: f.prefix + "/sales", Principal: "human:sato@example.co.jp", MayWrite: true})
+	_, moved, err := f.svc.SetPolicy(f.adminCtx, first, f.admin, &version)
+	if err != nil {
+		t.Fatalf("the first conditional write should have landed: %v", err)
+	}
+	if moved == version {
+		t.Error("the version did not move after a write that added a rule")
+	}
+
+	// The second still holds the version from before, and its write
+	// would drop the rule the first one added.
+	second := append(append([]domain.AccessRule{}, rules...),
+		domain.AccessRule{Prefix: f.prefix + "/support", Principal: "human:suzuki@example.co.jp"})
+	if _, _, err := f.svc.SetPolicy(f.adminCtx, second, f.admin, &version); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("a stale precondition should be a conflict, got %v", err)
+	}
+	after, _, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after) != len(first) {
+		t.Fatalf("the refused write changed the policy: %d rules, want %d", len(after), len(first))
+	}
+
+	// Reread, redo, retry: the ordinary way out.
+	if _, _, err := f.svc.SetPolicy(f.adminCtx, second, f.admin, &moved); err != nil {
+		t.Fatalf("retrying with the version just read: %v", err)
+	}
+}
+
+// The version names the grants and nothing else, so a rewrite that
+// changes no rule leaves a precondition somebody is holding valid —
+// what etagOf already promises for a concept, where verifying it does
+// not move the hash. granted_at moves on every write and must not count.
+func TestPolicyVersionTracksGrantsAndNotTheirTimestamps(t *testing.T) {
+	f := newAccessFixture(t)
+	rules, version, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, again, err := f.svc.SetPolicy(f.adminCtx, rules, f.admin, &version); err != nil {
+		t.Fatalf("rewriting the same grants: %v", err)
+	} else if again != version {
+		t.Errorf("a write that changed no grant moved the version: %s -> %s", version, again)
+	}
+	// And the caller who held it can still use it.
+	if _, _, err := f.svc.SetPolicy(f.adminCtx, rules, f.admin, &version); err != nil {
+		t.Errorf("the held precondition stopped being valid: %v", err)
+	}
+}
+
+// The empty policy has a version like any other, which is what makes the
+// first grant on a deployment with no rules a write two automated
+// callers can be made to serialize on.
+func TestEmptyPolicyHasAVersionThatGuardsTheFirstGrant(t *testing.T) {
+	f := newAccessFixture(t)
+	if _, _, err := f.svc.SetPolicy(f.adminCtx, nil, f.admin, nil); err != nil {
+		t.Fatal(err)
+	}
+	_, empty, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if empty == "" {
+		t.Fatal("an empty policy carried no version; the first grant has nothing to condition on")
+	}
+	one := []domain.AccessRule{{Prefix: f.prefix + "/growth", Principal: domain.PrincipalOf(f.reader)}}
+	if _, _, err := f.svc.SetPolicy(f.adminCtx, one, f.admin, &empty); err != nil {
+		t.Fatalf("the first conditional grant: %v", err)
+	}
+	other := []domain.AccessRule{{Prefix: f.prefix + "/glossary", Principal: domain.AnyPrincipal}}
+	if _, _, err := f.svc.SetPolicy(f.adminCtx, other, f.admin, &empty); !errors.Is(err, store.ErrConflict) {
+		t.Fatalf("a second signup racing on the empty policy should conflict, got %v", err)
 	}
 }

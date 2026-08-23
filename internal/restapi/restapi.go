@@ -899,28 +899,48 @@ func Handler(svc *service.Service) http.Handler {
 			writeError(w, err)
 			return
 		}
-		rules, err := svc.Policy(r.Context())
+		rules, version, err := svc.Policy(r.Context())
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, accessBody{Rules: rules})
+		w.Header().Set("ETag", `"`+version+`"`)
+		writeJSON(w, http.StatusOK, accessBody{Rules: nonNilRules(rules), Version: version})
 	})
 	mux.HandleFunc("PUT /api/v1/access", func(w http.ResponseWriter, r *http.Request) {
 		if err := rejectUnknownParams(r.URL.Query()); err != nil {
 			writeError(w, err)
 			return
 		}
-		var in accessBody
-		if !readJSON(w, r, &in) {
-			return
-		}
-		rules, err := svc.SetPolicy(r.Context(), in.Rules, httpauth.Actor(r.Context()))
+		// The policy is read, edited and put back whole, so the lost
+		// update two editors can cause is the one If-Match already
+		// answers for a concept (design docs 0030, 0120). Absent means
+		// last write wins, as it does everywhere else.
+		ifMatch, err := parseIfMatch(r)
 		if err != nil {
 			writeError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, accessBody{Rules: rules})
+		if v := strings.TrimSpace(r.Header.Get("If-None-Match")); v != "" {
+			// Named rather than obeyed backwards (design doc 0064 §2):
+			// the policy is one document that always exists, so the
+			// create-only precondition has nothing here to mean.
+			writeError(w, service.Invalidf(
+				"If-None-Match is not a precondition on the access policy: the policy is one document that always "+
+					"exists, so there is no create to guard; send If-Match to replace only what you read"))
+			return
+		}
+		var in accessBody
+		if !readJSON(w, r, &in) {
+			return
+		}
+		rules, version, err := svc.SetPolicy(r.Context(), in.Rules, httpauth.Actor(r.Context()), ifMatch)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		w.Header().Set("ETag", `"`+version+`"`)
+		writeJSON(w, http.StatusOK, accessBody{Rules: nonNilRules(rules), Version: version})
 	})
 
 	// A file has one address, and it is the path it lives at:
@@ -1999,4 +2019,24 @@ func serveDefensively(w http.ResponseWriter, mediaType, name string) {
 // keeps every /api/v1 body an object).
 type accessBody struct {
 	Rules []domain.AccessRule `json:"rules"`
+	// Version is the policy's ETag without the quotes, in the body for
+	// the same reason a concept's content hash is in its summary: the
+	// document a client reads back carries what a conditional write of
+	// it needs, so `ochakai access --json` stays a document `-f` takes
+	// back. Read-only — the precondition is the If-Match header, and a
+	// version in a request body would be a second spelling of it.
+	Version string `json:"version,omitempty"`
+}
+
+// nonNilRules keeps an empty policy an empty array rather than null.
+// `rules` is required and an array in the contract, and a deployment
+// with no boundary — the one every deployment starts as — answered with
+// null until a test read one over the wire: no integration test had, so
+// the contract check had nothing to check. A client generated from the
+// spec would have refused the most ordinary response there is.
+func nonNilRules(rules []domain.AccessRule) []domain.AccessRule {
+	if rules == nil {
+		return []domain.AccessRule{}
+	}
+	return rules
 }

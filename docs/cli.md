@@ -94,9 +94,16 @@ policy back before you close the terminal.
 The operations that take the bundle as a whole — stats, export, move,
 reembed, and this command — stay with the administrators.
 
+The policy is one document, replaced whole, so two editors who both
+read it can each drop the other's rules. With --if-match the
+replacement lands only if the policy still has the version you read,
+and fails instead.
+
 Flags:
   -f -
     	replace the policy with the JSON document in this file (- or unset with a pipe: stdin). Without it, the policy is printed
+  -if-match version
+    	replace the policy only if it still has this version (`ochakai access --json` prints it as .version; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of dropping the rules somebody else added
   -json
     	print the policy as JSON — the same document -f takes back
   -url ochakai use
@@ -106,6 +113,7 @@ Examples:
   ochakai access
   ochakai access --json > policy.json
   ochakai access -f policy.json
+  ochakai access -f policy.json --if-match "$(jq -r .version policy.json)"
   echo '{"rules":[]}' | ochakai access -f -   # remove every boundary
 ```
 

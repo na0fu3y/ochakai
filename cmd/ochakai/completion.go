@@ -158,6 +158,7 @@ _ochakai() {
       ;;
     access)
       _arguments '-f[replace the policy with this JSON document]:file:_files' \
+        '--if-match[replace only if the policy still has this version]:version:' \
         '--json[print JSON]' \
         '--url[server URL]:url:'
       ;;
@@ -260,7 +261,7 @@ _ochakai() {
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
     stats)         opts="--days --prefix --exit-code --json --url" ;;
-    access)        opts="-f --json --url" ;;
+    access)        opts="-f --if-match --json --url" ;;
     revisions)     opts="--limit --json --url" ;;
     log)           opts="--limit --url" ;;
     report)
@@ -367,6 +368,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from put' -s f -r -F -d 'input fi
 complete -c ochakai -n '__fish_seen_subcommand_from put' -l only-if-new -d 'write only if the id is free'
 complete -c ochakai -n '__fish_seen_subcommand_from put' -l if-match -x -d 'write only if the concept still has this version'
 complete -c ochakai -n '__fish_seen_subcommand_from delete' -l if-match -x -d 'delete only if the concept still has this version'
+complete -c ochakai -n '__fish_seen_subcommand_from access' -l if-match -x -d 'replace only if the policy still has this version'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'
 complete -c ochakai -n '__fish_seen_subcommand_from completion' -a 'zsh bash fish'

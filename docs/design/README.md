@@ -28,8 +28,8 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 領域 | いま読むドキュメント |
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
-| Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ) |
-| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった) |
+| Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
+| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった) |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
@@ -121,6 +121,29 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   日に別の番号が 0003 を改訂する(§4)。却下: 外部 API キーの埋め込み、
   条件より先に二つ目のストレージエンジンを足すこと、「マルチクラウド
   対応」という言葉、そして条件を書かずに黙っていること。
+- [0119 任された運用の単位は、デプロイかディレクトリである](0119-an-operated-fleet-is-deployments-or-directories.md)
+  — **Accepted**。決定を一つも動かさず、**複数の組織の運用を一人が
+  引き受ける形**を先に書く: 隔離が要る組織は一つの Cloud Run サービスと
+  一つのデータベース、一つの failure domain を受け入れる組織は同じ
+  デプロイの中のディレクトリ(0109 の付与)で、**二つは同じ道の上にある**
+  — ディレクトリの下を export したものは普通の OKF バンドルなので、
+  変換なしにデプロイへ卒業できる。運用者は IAM の principal の集合で
+  あって鍵の持ち主ではない。形を開けているのは既存の四つ — 境界は住所で
+  引く、secret-zero、バンドルが丸ごと出て戻る、誰にも問い合わせない —
+  で、**この四つを壊す変更がこの形を閉じる変更である**(§2)。断るのは
+  テナント列(住所の横の二つ目のスコープ — 0109 §7・0075 §7 が既に
+  断っており、隔離はディレクトリと同じ一箇所の強制で変わらず、テナント
+  ごとの設定はデプロイが無料で持つ)、運用者向けの telemetry と管理
+  プレーン、艦隊の道具と登録の面をこのリポジトリに置くこと、「マネージド
+  版」を約束すること(§3)。今日の代金は運用者が払う — identity は
+  Google のもの(Cloud Run 上で OIDC を公開 invoke にする姿勢は綴られて
+  いない)、互換性の窓、共有インスタンスの経済、そしてディレクトリの形で
+  0109 §3 が管理者に寄せたもの(§4)。製品が動いてよいのは順序付きの
+  宿題 — 公開 invoke で自分を検証する姿勢、0109 §3 が自分で予告した分割
+  (スコープ内の `stats`・export・miss、`PUT /api/v1/access` の
+  `If-Match`、自分の prefix の下にだけ規則を置ける principal)、
+  レート制限 — で、どれも別の番号になる(§5)。faq の「ホスティング版は
+  無い」は今日も真。面は動かない。
 - [0003 Google Cloud 前提化](0003-gcp-only.md) — **Accepted**。
   Cloud Run + Cloud SQL IAM を前提にし、トークン・パスワードを持たない
   (secret-zero)。
@@ -594,6 +617,29 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   スコープ外の読みは **404**。**塞げないものが一つあり、そう書いてある**:
   可視な concept の本文が隠した id を名指していれば読める(0075 §3 が
   サーバによる文書の書き換えを禁じている)。
+- [0120 ポリシーは、読んだままの姿でだけ置き換わる](0120-the-policy-is-replaced-only-as-it-was-read.md)
+  — **Accepted**。0109 §2 の「文書一枚を丸ごと置き換える」に**前提条件**を
+  足す。二人が同じポリシーを読んで一行ずつ足すと、後に保存したほうの文書に
+  前者の行が無い — 0109 §2 はこの形を予期し、**concept では If-Match が
+  既に解いていることまで書いていた**。足す理由は
+  [0119](0119-an-operated-fleet-is-deployments-or-directories.md): 付与を
+  置くのが人ではなく自動化になると、この競合が通常の経路になり、しかも
+  落ちた組織が見るのは 404 なので原因の側から何も見えない。`If-Match` は
+  concept と同じ意味(不在なら後勝ち、不一致は 412 で何も書かない、`*` は
+  400)で、`If-None-Match` は 400 — 常に存在する文書に作成専用の前提条件は
+  意味を持たない。**版は付与だけを数え、`granted_at` を数えない**(付与の
+  変わらない書き込みが誰かの前提条件を無効にしないため)、**順序は Go で
+  課す**(SQL の照合順は同じ関数ではない)、**空のポリシーにも版がある**
+  (最初の一行こそ二つの自動登録が競う書き込み)。比較は置き換えと同じ
+  トランザクションの中で、空の状態を守るため advisory lock の下で行う。
+  版は `ETag` と本文 `version` の両方に載り(concept の
+  `summary.content_hash` と同じ)、要求本文の `version` は `readOnly` と
+  宣言して読まない。**面は一つも増えない** — HEADER も FLAG も名前で
+  数えており、`If-Match` は既にそこにいる。§6 で一つ直した: 付与を持たない
+  デプロイの `GET /api/v1/access` が `{"rules": null}` を返しており、契約は
+  必須の配列と言っていた。**空のポリシーを wire で読むテストが無かった**
+  ので契約チェックに見るものが無かった。却下: 行ごとの操作、本文の版を
+  前提条件にすること、`If-Match` の必須化、ポリシーの履歴、競合時の併合。
 - [0108 context pack は退役する](0108-the-context-pack-retires.md)
   — **Accepted**。**BREAKING(REST 非コア・MCP・CLI)**。
   REST の `/context`・MCP `get_context`・CLI の context コマンドを

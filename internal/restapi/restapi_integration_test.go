@@ -21,6 +21,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/okf"
@@ -3642,5 +3643,119 @@ func TestIntegrationASearchSaysWhenItDegraded(t *testing.T) {
 	// A listing embeds nothing, so the same outage says nothing about it.
 	if body := answer(t, broken, "sort=verified_at&type="+url.QueryEscape(typ)); body["degraded"] != nil {
 		t.Errorf("a listing reported degraded=%v; it ranks nothing", body["degraded"])
+	}
+}
+
+// The access policy over the wire, with its precondition (design doc
+// 0120). The database is this test's own: a policy is the whole
+// deployment's, and a rule written into the shared one would scope every
+// other test running beside it.
+func TestAccessPolicyCarriesItsVersionAndHonoursIfMatch(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.New(ctx, testdb.Private(t, "restacl"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &service.Service{
+		Store:  s,
+		Log:    slog.New(slog.NewTextHandler(os.Stderr, nil)),
+		Config: &config.Config{Admins: []string{domain.AnyPrincipal}},
+	}
+	srv := checkedServer(t, Handler(svc))
+
+	readPolicy := func() (etag, version string) {
+		t.Helper()
+		resp, err := http.Get(srv.URL + "/api/v1/access")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("GET /api/v1/access: %s", resp.Status)
+		}
+		var body struct {
+			Version string `json:"version"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			t.Fatal(err)
+		}
+		return resp.Header.Get("ETag"), body.Version
+	}
+	put := func(doc, ifMatch string) *http.Response {
+		t.Helper()
+		req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/access", strings.NewReader(doc))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if ifMatch != "" {
+			req.Header.Set("If-Match", ifMatch)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	t.Cleanup(func() {
+		resp := put(`{"rules":[]}`, "")
+		resp.Body.Close()
+	})
+
+	etag, version := readPolicy()
+	// The header and the body say the same thing, which is what lets a
+	// client that only read the document write it back conditionally.
+	if etag != `"`+version+`"` {
+		t.Errorf("ETag %q and body version %q disagree", etag, version)
+	}
+
+	first := `{"rules":[{"prefix":"restacl/growth","principal":"human:tanaka@example.co.jp","may_write":true}]}`
+	resp := put(first, etag)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("a conditional write on the version just read: %s", resp.Status)
+	}
+	if got := resp.Header.Get("ETag"); got == "" || got == etag {
+		t.Errorf("the write answered with ETag %q; want a new version", got)
+	}
+
+	// A second editor still holding the first version writes a policy
+	// that would drop the rule above. It is refused, not merged.
+	second := `{"rules":[{"prefix":"restacl/sales","principal":"human:sato@example.co.jp","may_write":true}]}`
+	resp = put(second, etag)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusPreconditionFailed {
+		t.Fatalf("a stale If-Match: %s, want 412", resp.Status)
+	}
+
+	// The create-only precondition has nothing to mean on a document
+	// that always exists, and is named rather than ignored.
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/access", strings.NewReader(second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("If-None-Match", "*")
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("If-None-Match on the policy: %s, want 400", resp.Status)
+	}
+
+	// The document a read returns is one a write takes back: the version
+	// field travels in and is ignored, so `access --json | access -f`
+	// keeps working.
+	_, current := readPolicy()
+	resp = put(`{"rules":[],"version":"`+current+`"}`, "")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("a document carrying the version it was read at: %s", resp.Status)
 	}
 }

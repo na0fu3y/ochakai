@@ -6,6 +6,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -24,7 +25,19 @@ import (
 type AccessPolicy struct {
 	Rules  []domain.AccessRule
 	Active bool
+	// Version is the hash of the grants (domain.AccessPolicyVersion),
+	// the token a caller echoes in If-Match to replace the policy only
+	// if it still says what they read.
+	Version string
 }
+
+// accessPolicyLockID keys the advisory lock policy writes take, for the
+// span of the transaction that reads the current version and replaces
+// the rules. Row locks cannot serialize this: the state two callers
+// most often race for is the *empty* policy — the first grant on a
+// deployment that has none — and there are no rows there to lock. The
+// value is arbitrary and only has to be one thing in one place.
+const accessPolicyLockID int64 = 0xacce55
 
 // AccessPolicy reads the whole policy. It is small by construction
 // (domain.MaxAccessRules) and read once per request that needs it.
@@ -49,6 +62,7 @@ func (s *Store) AccessPolicy(ctx context.Context) (*AccessPolicy, error) {
 		return nil, fmt.Errorf("read access policy: %w", err)
 	}
 	p.Active = len(p.Rules) > 0
+	p.Version = domain.AccessPolicyVersion(p.Rules)
 	return p, nil
 }
 
@@ -62,16 +76,36 @@ func (s *Store) AccessPolicy(ctx context.Context) (*AccessPolicy, error) {
 // concurrent-edit problem they appear to avoid is the one If-Match
 // already solves for concepts (0030).
 //
+// A non-nil ifMatch is a precondition: the write lands only while the
+// stored policy still hashes to it, and fails with ErrConflict when it
+// does not — the same sentinel and the same 412 a concept's stale
+// If-Match already answers with (design doc 0030). It is read inside
+// this transaction, under the lock, because a version compared before
+// the transaction opened would be a precondition with a window under
+// it, and the window is the whole thing being closed.
+//
 // granted_at and granted_by are the server's, not the caller's: they
 // are an observation of who changed the policy, and a caller that could
 // write them could write somebody else's name into the record of a
 // grant they made themselves.
-func (s *Store) ReplaceAccessPolicy(ctx context.Context, rules []domain.AccessRule, by domain.Actor) error {
+func (s *Store) ReplaceAccessPolicy(ctx context.Context, rules []domain.AccessRule, by domain.Actor, ifMatch *string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin access policy write: %w", err)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, accessPolicyLockID); err != nil {
+		return fmt.Errorf("lock access policy: %w", err)
+	}
+	if ifMatch != nil {
+		current, err := accessRulesTx(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if got := domain.AccessPolicyVersion(current); got != strings.Trim(*ifMatch, `"`) {
+			return fmt.Errorf("%w: access policy is at version %s", ErrConflict, got)
+		}
+	}
 	if _, err := tx.Exec(ctx, `DELETE FROM access_rule`); err != nil {
 		return fmt.Errorf("clear access policy: %w", err)
 	}
@@ -90,4 +124,27 @@ func (s *Store) ReplaceAccessPolicy(ctx context.Context, rules []domain.AccessRu
 		return fmt.Errorf("commit access policy: %w", err)
 	}
 	return nil
+}
+
+// accessRulesTx reads the rules inside a transaction, for the version a
+// precondition is compared against. It reads what AccessPolicy reads;
+// the order does not matter here, because the version imposes its own.
+func accessRulesTx(ctx context.Context, tx pgx.Tx) ([]domain.AccessRule, error) {
+	rows, err := tx.Query(ctx, `SELECT prefix, principal, may_write FROM access_rule`)
+	if err != nil {
+		return nil, fmt.Errorf("read access policy: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.AccessRule
+	for rows.Next() {
+		var r domain.AccessRule
+		if err := rows.Scan(&r.Prefix, &r.Principal, &r.MayWrite); err != nil {
+			return nil, fmt.Errorf("scan access rule: %w", err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read access policy: %w", err)
+	}
+	return out, nil
 }
