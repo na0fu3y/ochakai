@@ -70,6 +70,28 @@ last entry.
 
 ### Added
 
+- **An archive of one directory can be taken by anyone who may read it,
+  and says that is what it is.** `ochakai export --prefix teams/growth`,
+  or `Accept: application/gzip` on that bundle path — the address that
+  has always read as a subtree. The whole base stays with the
+  administrators (design doc 0127).
+
+  The refusal this lifts was aimed at a danger of a different shape, and
+  measuring said so: `ochakai import` never deletes, so restoring an
+  incomplete export does not lose the rest — and **the hazard it did
+  name was already reachable**, because a subtree archive arrived with a
+  root `index.md` and the filename `ochakai-okf.tar.gz`, indistinguishable
+  from a whole-base backup. So the archive now names itself twice: the
+  root `index.md` carries `bundle_scope` in its frontmatter and a
+  sentence saying what is missing, and a subtree downloads as
+  `ochakai-okf-<subtree>.tar.gz`. **Whole-base archives and every deeper
+  `index.md` are unchanged.**
+
+  For an organization living in a directory of a shared deployment, this
+  is the exit that C1 promises, without the operator having to run it.
+
+### Added
+
 - **A directory can have its own administrator.** An access rule gains
   `may_admin`: the rules *under that prefix* are that principal's to
   edit (design doc 0124). Until now handing a team its own directory

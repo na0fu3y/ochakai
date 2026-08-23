@@ -1527,9 +1527,10 @@ func cmdMove(ctx context.Context, args []string) error {
 func cmdExport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"export",
-		"Usage: ochakai export [flags] <dir | ->\n\nDownload the whole knowledge base as an OKF bundle (markdown + YAML\nfrontmatter) into dir, or stream the tar.gz to stdout with \"-\".\nYour knowledge is yours.",
-		"  ochakai export ./knowledge\n  ochakai export - > ochakai-okf.tar.gz\n  ochakai export --no-files - > concepts.tar.gz   # bytes are in GCS; copy them from there\n")
+		"Usage: ochakai export [flags] <dir | ->\n\nDownload the whole knowledge base as an OKF bundle (markdown + YAML\nfrontmatter) into dir, or stream the tar.gz to stdout with \"-\".\nYour knowledge is yours.\n\nWith --prefix it is one directory of the base instead, which anyone\nwho may read that directory can take. A subtree bundle says so in its\nroot index.md and in the name it streams under, because a part of a\nbase and the whole of one are otherwise the same shape — and the day\nthat matters is the day somebody restores it.",
+		"  ochakai export ./knowledge\n  ochakai export - > ochakai-okf.tar.gz\n  ochakai export --prefix teams/growth - > growth.tar.gz   # one directory, not a backup of the base\n  ochakai export --no-files - > concepts.tar.gz   # bytes are in GCS; copy them from there\n")
 	noFiles := fs.Bool("no-files", false, "export the markdown only, skipping file bytes")
+	prefix := fs.String("prefix", "", "export one `directory` of the bundle rather than the whole base: the archive carries that subtree, says so in its root index.md, and is not a backup of the base. Anyone who may read the directory may take it; the whole base stays with the administrators")
 	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -1538,11 +1539,19 @@ func cmdExport(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	rc, err := c.Export(ctx, !*noFiles)
+	rc, err := c.Export(ctx, !*noFiles, *prefix)
 	if err != nil {
 		return err
 	}
 	defer rc.Close()
+	// Said on stderr, so it reaches somebody piping the archive
+	// somewhere without landing in the archive. The stream has no
+	// filename to carry the fact the way a download does.
+	if *prefix != "" {
+		fmt.Fprintf(os.Stderr,
+			"note: this is the %s subtree, not a backup of the base — everything outside it is missing by design\n",
+			*prefix)
+	}
 	if pos[0] == "-" {
 		_, err := io.Copy(os.Stdout, rc)
 		return err

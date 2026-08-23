@@ -55,6 +55,26 @@ const exportBatch = 100
 // after the act of downloading. `prefix` has already been normalized.
 //
 // Your knowledge is yours.
+// archiveFilename names an archive after the subtree it carries, with
+// the path's separators folded to hyphens so the name is one word on
+// every filesystem. The whole bundle is "ochakai-okf.tar.gz", unchanged.
+func archiveFilename(prefix string) string {
+	if prefix == "" {
+		return "ochakai-okf.tar.gz"
+	}
+	safe := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
+			return r
+		case r >= 'A' && r <= 'Z':
+			return r + ('a' - 'A')
+		default:
+			return '-'
+		}
+	}, prefix)
+	return "ochakai-okf-" + strings.Trim(safe, "-") + ".tar.gz"
+}
+
 func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Service, prefix string) {
 	// Every read below comes from one snapshot. Streaming means the id
 	// list, the file metadata and the concepts are read at
@@ -69,11 +89,17 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 		writeError(w, err)
 		return
 	}
-	// The archive is the bundle as a whole, so it is an administrator's
-	// operation wherever a policy exists (design doc 0109 §3): an export
-	// that quietly omitted what the caller cannot see would still be
-	// called a backup, and restoring it would lose the rest.
-	if err := svc.RequireAdmin(r.Context(), "export"); err != nil {
+	// The whole bundle stays the administrator's, and a subtree is
+	// available to whoever may read it (design doc 0127). What made the
+	// archive an administrator's operation was that a part of a base and
+	// the whole of one arrived looking identical — same root index.md,
+	// same filename — so a partial one could be kept as a backup and
+	// found wanting on the day it was restored. The archive says which
+	// it is now, in the two places its reader meets it, and the reason
+	// to refuse the part went with it. Nothing new is disclosed: an
+	// archive of a subtree carries what its caller could already fetch
+	// one concept at a time.
+	if err := svc.MayArchive(r.Context(), prefix); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -102,7 +128,7 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 	// sit beside them (design doc 0046 §3.7). With ?files=false
 	// there are no file bytes to carry, and an index naming files the
 	// archive does not contain would describe a bundle nobody received.
-	indexes := okf.Indexes(rows, atts) // also sorts rows by id
+	indexes := okf.Indexes(rows, atts, prefix) // also sorts rows by id
 	ids := make([]string, len(rows))
 	for i := range rows {
 		ids[i] = rows[i].ID
@@ -114,7 +140,11 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 	// because a silently short archive is the worst possible outcome
 	// for the backup this endpoint exists to serve.
 	w.Header().Set("Content-Type", "application/gzip")
-	w.Header().Set("Content-Disposition", `attachment; filename="ochakai-okf.tar.gz"`)
+	// The name says what is inside, because the person who meets this
+	// archive again is reading a filename rather than unpacking it
+	// (design doc 0127). A whole base keeps the name it has always had.
+	w.Header().Set("Content-Disposition",
+		`attachment; filename="`+archiveFilename(prefix)+`"`)
 	tgz := okf.NewTarGzWriter(w, time.Now())
 	written := make(map[string]bool, len(ids)+len(indexes))
 	fail := func(what string, err error) {

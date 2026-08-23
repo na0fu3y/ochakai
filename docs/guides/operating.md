@@ -54,7 +54,16 @@ GCS の blob を回収しない(設計ドキュメント 0031)ので、バケッ
 ochakai export ./knowledge          # ディレクトリへ
 ochakai export - > okf.tar.gz       # あるいはストリームへ
 ochakai export --no-files -   # concept のみ; バイト列はすでに GCS にある
+ochakai export --prefix teams/growth -   # 一つのディレクトリだけ(バックアップではない)
 ```
+
+**`--prefix` はバックアップではない。** 一つのディレクトリを持ち出すため
+のもので、そのディレクトリを読める人なら誰でも取れる(設計ドキュメント
+[0127](../design/0127-an-archive-says-which-part-it-is.md))。取れたものは
+自分が部分であることを二箇所で名乗る — 根の `index.md` の
+`bundle_scope` と、`ochakai-okf-teams-growth.tar.gz` というファイル名で
+ある。**ベース全体のバックアップは `--prefix` を付けない形のほうで、
+そちらは管理者だけが取れる。**
 
 バンドルは OKF v0.2 のディレクトリである: concept ごとに YAML
 frontmatter 付きの markdown ファイルが一つ、ファイルはその concept の
@@ -706,9 +715,13 @@ ochakai access -f policy.json --if-match "$(jq -r .version policy.json)"
 
 **知っておくべきことが三つある。**
 
-1. **バンドル全体を取る操作は管理者のものになる** — `ochakai export`・
-   `ochakai move`・`ochakai reembed`。欠けた export もバックアップと
-   呼ばれてしまうからで、絞るのではなく断っている。
+1. **バンドル全体を取る操作は管理者のものになる** — `ochakai export`
+   (`--prefix` の付かない形)・`ochakai move`・`ochakai reembed`。
+   **`--prefix` を付けた export は別で、そのディレクトリを読める人なら
+   取れる**(設計ドキュメント
+   [0127](../design/0127-an-archive-says-which-part-it-is.md)) — アーカイブ
+   が自分の範囲を名乗るので、部分をベース全体のバックアップと取り違え
+   ようがない。
    **`ochakai stats` は別で、範囲を持つ利用者も自分の数を読める**
    (設計ドキュメント
    [0123](../design/0123-the-numbers-say-what-they-counted.md))。答えの
