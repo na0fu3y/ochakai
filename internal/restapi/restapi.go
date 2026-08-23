@@ -34,6 +34,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
@@ -58,21 +59,83 @@ const exportBatch = 100
 // archiveFilename names an archive after the subtree it carries, with
 // the path's separators folded to hyphens so the name is one word on
 // every filesystem. The whole bundle is "ochakai-okf.tar.gz", unchanged.
+//
+// This is the ASCII half of the name, and it is only half because an id
+// is any valid UTF-8 (domain.validSegment) — which for this product's
+// first audience means the subtree is usually spelled in Japanese
+// (C8). Folding those characters to hyphens the way the unsafe ASCII
+// ones are folded is what design doc 0127 exists to prevent: "営業"
+// left nothing behind and came out as "ochakai-okf-.tar.gz", one
+// hyphen from the whole-base name, and "teams/成長" came out as
+// "ochakai-okf-teams.tar.gz" — an archive of one directory claiming to
+// be the archive of every directory beside it. So a character that is
+// not ASCII is percent-encoded rather than dropped: it stays uglier
+// than the Japanese, and it stays true. archiveDisposition puts the
+// unescaped name beside this one for the clients that can read it.
 func archiveFilename(prefix string) string {
 	if prefix == "" {
 		return "ochakai-okf.tar.gz"
 	}
-	safe := strings.Map(func(r rune) rune {
+	var safe strings.Builder
+	for _, r := range prefix {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-':
-			return r
+			safe.WriteRune(r)
 		case r >= 'A' && r <= 'Z':
-			return r + ('a' - 'A')
+			safe.WriteRune(r + ('a' - 'A'))
+		case r < utf8.RuneSelf:
+			safe.WriteByte('-')
 		default:
-			return '-'
+			pctEncode(&safe, string(r))
 		}
-	}, prefix)
-	return "ochakai-okf-" + strings.Trim(safe, "-") + ".tar.gz"
+	}
+	name := strings.Trim(safe.String(), "-")
+	if name == "" {
+		// Every character folded away, which ASCII alone can still do:
+		// a directory named "_" leaves nothing. The name has to keep
+		// saying "part of a base" even when it can no longer say which
+		// part, because the whole point is that it is not the backup.
+		name = "subtree"
+	}
+	return "ochakai-okf-" + name + ".tar.gz"
+}
+
+// archiveDisposition is the whole Content-Disposition header: the ASCII
+// name every client understands, and — where it would say more — the
+// exact one, as RFC 6266's filename* (which browsers have preferred over
+// filename since IE9).
+//
+// Emitted only where the fold lost something, so the whole base and a
+// subtree the ASCII name already spells exactly send the byte-identical
+// header they sent before. No header name is added: filename* is a
+// parameter of a Content-Disposition that is already counted
+// (docs/surface.md, HEADER).
+func archiveDisposition(prefix string) string {
+	disp := `attachment; filename="` + archiveFilename(prefix) + `"`
+	if prefix == "" {
+		return disp
+	}
+	exact := "ochakai-okf-" + strings.ReplaceAll(prefix, "/", "-") + ".tar.gz"
+	if exact == archiveFilename(prefix) {
+		return disp
+	}
+	var enc strings.Builder
+	pctEncode(&enc, exact)
+	return disp + "; filename*=UTF-8''" + enc.String()
+}
+
+// pctEncode writes s percent-encoded to everything outside RFC 3986's
+// unreserved set, which is a subset of RFC 8187's attr-char and so is
+// safe both inside filename* and inside a quoted filename.
+func pctEncode(b *strings.Builder, s string) {
+	const unreserved = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~"
+	for _, c := range []byte(s) {
+		if strings.IndexByte(unreserved, c) >= 0 {
+			b.WriteByte(c)
+			continue
+		}
+		fmt.Fprintf(b, "%%%02X", c)
+	}
 }
 
 func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Service, prefix string) {
@@ -143,8 +206,7 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 	// The name says what is inside, because the person who meets this
 	// archive again is reading a filename rather than unpacking it
 	// (design doc 0127). A whole base keeps the name it has always had.
-	w.Header().Set("Content-Disposition",
-		`attachment; filename="`+archiveFilename(prefix)+`"`)
+	w.Header().Set("Content-Disposition", archiveDisposition(prefix))
 	tgz := okf.NewTarGzWriter(w, time.Now())
 	written := make(map[string]bool, len(ids)+len(indexes))
 	fail := func(what string, err error) {

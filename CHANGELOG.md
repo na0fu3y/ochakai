@@ -21,6 +21,23 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A subtree archive names itself in Japanese too.** The filename half
+  of design doc 0127 folded every non-ASCII character to a hyphen, so
+  the two shapes it exists to prevent came back for the directories
+  this product's first audience actually has: `営業` arrived as
+  `ochakai-okf-.tar.gz`, one hyphen from the whole-base backup's name,
+  and `teams/成長` arrived as `ochakai-okf-teams.tar.gz` — **an archive
+  of one directory under the name of every directory beside it.** Those
+  characters are percent-encoded now, and the unescaped name travels
+  beside them in `filename*` (RFC 6266), which is the one browsers
+  prefer. **The whole base and a subtree the ASCII name already spelled
+  exactly send the byte-identical header they sent in 0.27.0**, and the
+  root `index.md`'s `bundle_scope` — the other half of 0127, which was
+  correct throughout — is unchanged. No endpoint, parameter or header
+  name is added.
+
 ## [0.27.0] - 2026-08-23
 
 ### Added
