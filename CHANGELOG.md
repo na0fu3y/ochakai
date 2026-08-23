@@ -53,6 +53,31 @@ last entry.
   flag or tool is added — `export` of the whole base, `reembed` and the
   access policy itself are what stay with the administrators.
 
+### Changed
+
+- **The web UI's access policy is edited as rows, not as JSON in a
+  textarea.** Deciding who may read `personnel/` is an operator's
+  judgement, and it was costing them a hand-spelled `human:` prefix, a
+  pair of booleans whose implication they had to remember, and a JSON
+  syntax error as the first thing they met when they got one character
+  wrong. The editor is the same table the policy is read as: a directory
+  (completed from the tree, empty for the whole bundle), who it is for
+  (the actor kind as a choice, the name beside it), and what they may do
+  there as one of 読取のみ / 読取・書込 / 読取・書込・付与 — the
+  containment spelled out instead of inferred from two flags. Rows are
+  added and removed in place; the row a refusal is about is named *and*
+  marked.
+  **Nothing about the wire moved** (design doc 0109 §5): the save is
+  still one `PUT /api/v1/access` carrying the whole document with the
+  `If-Match` it was read at, so a policy is still replaced as a set and
+  a concurrent edit is still refused rather than clobbered. The document
+  itself is one disclosure away under 「JSON として扱う」 — written from
+  the rows whenever it is opened, which is what `ochakai access --json`
+  prints and `-f` takes, so the git review path is unchanged and a
+  policy prepared there is pasted back with 「行に取り込む」. The
+  read-only rule is unchanged too: on a frozen deployment the whole
+  editor is absent, as it was.
+
 ## [0.27.1] - 2026-08-23
 
 ### Fixed

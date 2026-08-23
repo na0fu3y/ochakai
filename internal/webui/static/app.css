@@ -338,6 +338,20 @@ table.rules th, table.rules td {
 }
 table.rules th { color: var(--muted); font-weight: 500; font-size: .84rem; }
 table.rules .flag { text-align: center; width: 3.2rem; padding-right: 0; }
+/* The same table with its cells as controls, because a boundary is
+   edited where it is read (design doc 0109 §5): the row is still one
+   grant, and the document it is saved as stays one disclosure away. The
+   controls are sized to what goes in them — a path and an address — so
+   the four columns still line up as a table rather than as a form. */
+table.rules.edit { width: auto; }
+table.rules.edit td { vertical-align: middle; }
+table.rules.edit input[type=text], table.rules.edit select {
+  font-size: .88rem; padding: .25rem .5rem; margin: 0; width: 10rem;
+}
+table.rules.edit td.who { white-space: nowrap; }
+table.rules.edit td.who select { width: 10rem; }
+table.rules.edit td.who input[type=text] { width: 12rem; margin-left: .35rem; }
+table.rules.edit tr.invalid > td { background: var(--rejected-bg); }
 /* A warning no server field turns on or off: the page cannot know which
    way it is being served (design doc 0072 §1), so it names both. */
 .caution {
