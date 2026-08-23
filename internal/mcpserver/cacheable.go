@@ -8,7 +8,13 @@ import (
 )
 
 // listTTL is how long a client may keep the answer to a listing before
-// asking again (design doc 0128).
+// asking again.
+//
+// It takes no number of its own: it is a rule inside the decision
+// design doc 0118 made — that transport is stateless at protocol
+// 2026-07-28 — and design doc 0128 §2.1 puts a rule inside a decision in
+// the changelog rather than in a record of its own. The changelog entry
+// is where the five minutes is argued.
 //
 // The lists this covers are decided once, in newServer, from the
 // deployment's posture: six tools or four, one resource template, and no

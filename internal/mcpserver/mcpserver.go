@@ -251,7 +251,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 	// it decides which registration a call reaches.
 	s.AddReceivingMiddleware(answerForRetiredNames(retired))
 
-	// How long a listing holds (design doc 0128). After the handler, so
+	// How long a listing holds. After the handler, so
 	// it reads the result the registrations below produce.
 	s.AddReceivingMiddleware(answerHowLongAListingHolds(listTTL))
 
