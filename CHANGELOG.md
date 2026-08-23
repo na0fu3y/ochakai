@@ -26,7 +26,7 @@ last entry.
 - **The MCP listings say how long they hold.** `tools/list`,
   `resources/list` and `resources/templates/list` now answer with a TTL
   hint of five minutes; `resources/read` keeps answering zero (design doc
-  0128). This is a correction rather than an addition: protocol
+  0118 §7). This is a correction rather than an addition: protocol
   2026-07-28 added the field, the SDK has been filling it in on every
   response with zero, and the spec reads zero as *consider this
   immediately stale* — so ochakai was telling every client its tool list

@@ -8,7 +8,7 @@ import (
 )
 
 // listTTL is how long a client may keep the answer to a listing before
-// asking again (design doc 0128).
+// asking again (design doc 0118 §7).
 //
 // The lists this covers are decided once, in newServer, from the
 // deployment's posture: six tools or four, one resource template, and no
