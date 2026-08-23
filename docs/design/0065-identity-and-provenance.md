@@ -10,7 +10,9 @@ Status: Accepted(2026-08-02)。**identity と provenance の現行ドキュメ�
 [0064](0064-rest-stops-at-api-v1.md) §3 が決めたものをそのまま載せている。
 デプロイの姿勢(read-only / public / dev)は同じ統合の片割れである
 [0066](0066-four-postures-one-word.md) が持つ。
-**§1 は [0109](0109-a-directory-has-readers-and-writers.md) が改訂した** —
+**§2 の「優先して読む」がどの経路の規則かを言うのは
+[0121](0121-each-path-reads-its-own-header.md)。§1 は
+[0109](0109-a-directory-has-readers-and-writers.md) が改訂した** —
 同節が自分で置いた条件(「『読めるが書けない人』が要るようになったら」)が
 満たされ、prefix ごとの閲覧・編集の付与を持つ。**付与が一つも無いデプロイ
 では §1 がそのまま現行である**。
@@ -66,7 +68,9 @@ ochakai がヘッダから読むのは **provenance(誰として記録するか)
 Cloud Run の IAM を通過したリクエストには Google 検証済みの ID トークンが
 届く。`X-Serverless-Authorization`(両方あるとき Cloud Run が検証するのは
 こちら)を優先して読み、無ければ `Authorization` を読む。署名の再検証は
-しない — IAM を通過したことが検証である。
+しない — IAM を通過したことが検証である。**この優先はこの経路の規則で
+あって、両経路の規則ではない** — 自分でトークンを検証するデプロイ
+(0086)は `Authorization` だけを読む([0121](0121-each-path-reads-its-own-header.md))。
 
 actor の綴りは `human:` と `process:` の二つで、`*.gserviceaccount.com` は
 `process:`、それ以外は `human:` になる。人の資格情報で動くエージェントは

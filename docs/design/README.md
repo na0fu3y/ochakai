@@ -29,7 +29,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
-| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった) |
+| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
@@ -107,6 +107,30 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   組み合わせは起動時に断る。ENV 11 → 13。契約は遡及宣言を一つ得る —
   両経路が元から送っていた 401 を全操作に宣言し、info の散文を二経路の
   現在形に書き直す。
+- [0121 経路ごとに、読むヘッダが違う](0121-each-path-reads-its-own-header.md)
+  — **Accepted**。0086 に**自分で検証するデプロイが資格情報をどのヘッダで
+  受け取るか**を足し、0065 §2 の「`X-Serverless-Authorization` を優先して
+  読む」が Cloud Run 経路だけの規則であることを言う。**壊れていたのは、
+  OIDC のデプロイを Cloud Run IAM の後ろに置いた構成**で、Google が転送した
+  署名なしトークンを自分の発行者の鍵で検証しようとして**全リクエストが
+  401** になっていた — 呼び出し元の本物のトークンは同じリクエストの
+  `Authorization` に入ったまま読まれない。しかもそれは Google の
+  二ヘッダ分割が**意図どおり**働いた形である(プラットフォームが検査する
+  ヘッダとアプリケーションが検査するヘッダは別で、ochakai 自身の
+  `serve-ui` がその形で書かれている)。決定は、検証器を持つデプロイは
+  `Authorization` だけを読むこと — Cloud Run 経路の優先には理由が現に
+  効いている(二本のうち Google が検証したのは片方だけなので、もう一方を
+  読めば認証された呼び出し元が他人として記録される)が、**OIDC 経路には
+  その理由が無い**: どちらも前段で検証されておらず、検証するのは
+  ochakai 自身なので、防ぐべき詐称が存在しない。優先が実際にしていたのは
+  資格情報を覆い隠すことだけだった。`X-Serverless-Authorization` しか
+  無いリクエストは、暗号の失敗ではなくヘッダの位置として断る(0117 の形)。
+  **検証の中身も記録される名前も委譲も secret-zero も動かず、面は一つも
+  増えない。** 直った構成 — OIDC × Cloud Run IAM の二重の関門 — は
+  それ自体で使え、**公開 invoke の姿勢はここでは綴っていない**
+  (それは [0119](0119-an-operated-fleet-is-deployments-or-directories.md)
+  §5 の一番目で、deploy ガイド・SECURITY.md・0066 §7 のレート制限を動かす
+  別の決定である)。
 - [0115 二つ目の足場は、検索を待つ](0115-the-second-footing-waits-for-search.md)
   — **Accepted**。0003 の「それ以外の実行環境をサポートしない」を一行も
   緩めないまま、**それを撤回してよい条件**を与える。0086 の後に Google
