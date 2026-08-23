@@ -36,18 +36,33 @@ scripts/check
 ```
 
 That is `gofmt -l .`, `go vet ./...`, `go test -race -count=1 ./...`, a
-`CGO_ENABLED=0 go build -trimpath ./...`, golangci-lint, and
-govulncheck, in that order. A step at a time when you are iterating:
+`CGO_ENABLED=0 go build -trimpath ./...`, golangci-lint, zizmor over
+`.github`, and govulncheck, in that order. A step at a time when you are
+iterating:
 
 ```sh
-scripts/check core   # the four fast ones — this is what CI's test job runs
+scripts/check core     # the four fast ones — this is what CI's test job runs
 scripts/check lint
+scripts/check actions
 scripts/check vuln
 ```
 
 CI calls the same script for `core` and reads the pinned golangci-lint
-version out of [ci.yaml](.github/workflows/ci.yaml), so there is no
-second copy of any of this to keep in sync.
+and zizmor versions out of [ci.yaml](.github/workflows/ci.yaml), so there
+is no second copy of any of this to keep in sync.
+
+`actions` audits [.github](.github) — the workflows and `dependabot.yml`,
+the part of this repository that decides what runs with which token and
+that no other check reads. Both this and CI hand zizmor the repository
+root and let it collect, so neither can end up looking at a smaller set
+than the other. It reports nothing today, which is the condition below
+for a check existing at all: the properties it looks for (actions pinned
+by commit SHA, `persist-credentials: false`, the narrowest `permissions`,
+no untrusted value reaching a `run:`, a cooldown before a version update
+lands) are ones this repository keeps, so from here it buys not cleanup
+but that the next file added there cannot quietly drop one. It needs
+`uvx` (or a `zizmor` on `PATH`) and skips with a note when neither is
+there, the way the web UI step skips without node.
 
 The linters are configured in [.golangci.yml](.golangci.yml) and chosen so
 a clean tree reports nothing — a finding means new code, not a linter's

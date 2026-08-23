@@ -1,16 +1,36 @@
 # Keeps Go modules, SHA-pinned workflow actions, and the Dockerfile base
 # image current. Security updates are enabled in the repository settings.
+#
+# A version update waits a week after the release it would move to.
+# Dependabot has waited three days by default since 2026-07, and the point
+# of writing seven here is what the three-day window is short for: the
+# attacks this guards against — a maintainer account taken over, a release
+# published from it, the package pulled by everything on a weekly schedule
+# — are found and yanked in days, and a pull request that arrives after
+# that never gets opened. It costs a week of currency on updates nobody is
+# waiting for.
+#
+# **It does not delay a security update.** Cooldown applies to version
+# updates only; an advisory-driven update opens immediately, which is the
+# half this repository actually depends on (govulncheck also runs on a
+# clock, in ci.yaml, for the same answer from the other side).
 version: 2
 updates:
   - package-ecosystem: gomod
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7

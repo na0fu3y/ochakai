@@ -25,9 +25,36 @@ jobs:
     # A scheduled run is govulncheck's alone; this job answers only to a
     # commit.
     if: github.event_name != 'schedule'
+    # Two majors, because the store is the part of ochakai a PostgreSQL
+    # release can change underneath: migrations 0036, 0043 and 0044 stand
+    # on what `to_tsvector` makes of Japanese, and
+    # TestWhatPostgresCanIndexAboveTheBMP exists because that answer
+    # moves. 17 is what Cloud SQL runs and what deploy/ names, so it is
+    # the major that must be right; 18 is here so that the day an
+    # operator can choose it, the answer is already known rather than
+    # found by them.
+    #
+    # What that test actually reads is not only PostgreSQL. Above the BMP
+    # the default parser asks the C library whether a character is a
+    # letter, so the answer belongs to the image's glibc as much as to
+    # the server: on glibc 2.39 the extension-I characters Unicode 17
+    # added are letters and the test fails, on bookworm's 2.36 they are
+    # not and it passes. Both plain tags below resolve to bookworm today
+    # — pg17 is pg17-bookworm and pg18 is pg18-bookworm — which is what
+    # makes this matrix vary one thing. If upstream ever repoints one of
+    # them at trixie, that test is the one that will say so, and its
+    # message already explains what to do.
+    #
+    # fail-fast is off for the same reason the matrix is here: a break on
+    # one major is a fact about that major, not a reason to stop testing
+    # the other.
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [pg17, pg18]
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        image: pgvector/pgvector:${{ matrix.postgres }}
         env:
           POSTGRES_USER: t
           POSTGRES_PASSWORD: t
@@ -55,12 +82,12 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: test-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          key: test-${{ matrix.postgres }}-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
           # The run_id makes the key unique per run, so a restore is
           # always a restore-keys prefix hit on the newest entry below it.
           restore-keys: |
-            test-go-${{ hashFiles('go.sum') }}-
-            test-go-
+            test-${{ matrix.postgres }}-go-${{ hashFiles('go.sum') }}-
+            test-${{ matrix.postgres }}-go-
       # gofmt, go vet, go fix -diff, go test -race, and the CGO_ENABLED=0
       # build. Run through the script contributors run so the two cannot
       # drift.
@@ -80,7 +107,7 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: test-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
+          key: test-${{ matrix.postgres }}-go-${{ hashFiles('go.sum') }}-${{ github.run_id }}
   lint:
     runs-on: ubuntu-latest
     # A scheduled run is govulncheck's alone; this job answers only to a
@@ -211,6 +238,59 @@ jobs:
         env:
           OCHAKAI_TEST_SMOKE_REQUIRED: "1"
 
+  # The workflows themselves, and `dependabot.yml` beside them — zizmor
+  # collects what GitHub reads, and letting it choose is what keeps this
+  # and `scripts/check actions` looking at one set. Every other check in
+  # this repository reads Go, YAML that describes the API, or the
+  # repository's settings; these files are the one thing that decides what
+  # runs with which token, and nothing else read them.
+  #
+  # It reports nothing today, which is the condition design doc 0035
+  # §3.1 puts on a check before it may exist: the properties zizmor
+  # audits are ones this repository already keeps by hand — actions
+  # pinned by commit SHA, `persist-credentials: false` on every checkout,
+  # the narrowest `permissions`, and no untrusted value reaching a `run:`
+  # through an expression. It reported one thing on the way in, and the
+  # fix is in `dependabot.yml`: a version update now waits out a cooldown.
+  # What this buys from here on is that the next file added cannot quietly
+  # drop one of them.
+  #
+  # `persona` stays at its default. At `pedantic` there are eighteen more
+  # findings, and the ones that carry weight say the `services:` image is
+  # not pinned by digest — deliberate: the Dockerfile pins its bases by
+  # digest *because* dependabot reads the tag-and-digest pair and opens
+  # the pull request that moves them, and nothing reads a service image
+  # that way, so a digest here would be a pin that goes stale unread.
+  #
+  # `online-audits: false` so this answers from the tree alone: the same
+  # run offline is what `scripts/check actions` does locally, and a check
+  # whose verdict depends on a third party's availability is one whose
+  # red does not mean what it says.
+  #
+  # Annotations rather than SARIF: uploading to code scanning needs
+  # `security-events: write`, and the note above `permissions` at the top
+  # of this file is a promise that no job here asks for more than read.
+  # CodeQL and Scorecard upload from their own files, where that
+  # permission is the point.
+  actions:
+    runs-on: ubuntu-latest
+    # A scheduled run is govulncheck's alone; this job answers only to a
+    # commit.
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false # see the note above `permissions`
+      # Pinned, for the reason golangci-lint is and govulncheck is not: a
+      # new release failing CI here would mean a new audit, not a new
+      # problem. `scripts/check actions` reads the version below out of
+      # this file, so this is the one place it is written.
+      - uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          version: 1.29.0
+          online-audits: false
+          advanced-security: false
+          annotations: true
   govulncheck:
     runs-on: ubuntu-latest
     steps:

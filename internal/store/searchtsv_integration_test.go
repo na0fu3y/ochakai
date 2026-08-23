@@ -378,7 +378,12 @@ func TestJapaneseSearchUsesTheIndex(t *testing.T) {
 	// against 1, because the test database is shared and holds what
 	// earlier runs of this same test wrote — the claim is that the index
 	// finds the lexeme, not that this run is alone in it.
-	m := regexp.MustCompile(`Bitmap Index Scan on object_search_tsv \(actual rows=(\d+) loops`).FindStringSubmatch(plan)
+	// The fraction is optional because the two majors spell the number
+	// differently: PostgreSQL 17 prints `actual rows=1`, and 18 prints
+	// `actual rows=1.00` — the count is a per-loop average there, so it
+	// gained decimals. Reading only `(\d+)` finds nothing on 18 and the
+	// test fails saying there is no index scan, on a plan that shows one.
+	m := regexp.MustCompile(`Bitmap Index Scan on object_search_tsv \(actual rows=([\d.]+) loops`).FindStringSubmatch(plan)
 	if m == nil {
 		t.Fatalf("no bitmap index scan on object_search_tsv to read row counts from:\n%s", plan)
 	}
@@ -386,7 +391,11 @@ func TestJapaneseSearchUsesTheIndex(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM object`).Scan(&total); err != nil {
 		t.Fatal(err)
 	}
-	got, _ := strconv.Atoi(m[1])
+	rows, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		t.Fatalf("unreadable row count %q in:\n%s", m[1], plan)
+	}
+	got := int(rows)
 	if total < 200 {
 		t.Fatalf("only %d rows in object: too few for the lookup's selectivity to mean anything", total)
 	}

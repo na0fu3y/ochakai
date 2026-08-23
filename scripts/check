@@ -1,19 +1,21 @@
 #!/bin/sh
 # check: run the checks CI runs, in the order CI runs them.
 #
-#   scripts/check          everything (core, ui, lint, vuln)
+#   scripts/check          everything (core, ui, lint, actions, vuln)
 #   scripts/check core     gofmt, go vet, go fix -diff, go test -race,
 #                          CGO_ENABLED=0 build
 #   scripts/check ui       the web UI's own tests (node --test)
 #   scripts/check lint     golangci-lint
+#   scripts/check actions  zizmor, over this repository
 #   scripts/check vuln     govulncheck
 #   scripts/check --db …   run a throwaway PostgreSQL for the store tests
 #
 # CI's test job runs `scripts/check core`, so those five stay identical by
-# construction. The lint and vuln jobs run their tools directly — lint via
-# the golangci-lint action, which installs a released binary instead of
-# building one from source — so this script takes the linter version from
-# ci.yaml rather than pinning a second copy of it.
+# construction. The lint, actions and vuln jobs run their tools directly —
+# lint via the golangci-lint action, which installs a released binary
+# instead of building one from source, and actions via zizmor's own — so
+# this script takes both pinned versions from ci.yaml rather than keeping
+# a second copy of either.
 #
 # The store integration test is skipped unless a PostgreSQL is reachable.
 # `--db` starts one on port 55433 and removes it on exit — in Docker for
@@ -28,12 +30,13 @@ cd "$(git rev-parse --show-toplevel)"
 want_db=no
 skipped_store=no
 skipped_ui=no
+skipped_actions=no
 db_note=""
 steps=""
 for arg in "$@"; do
 	case $arg in
 	--db) want_db=yes ;;
-	core | ui | lint | vuln) steps="$steps $arg" ;;
+	core | ui | lint | actions | vuln) steps="$steps $arg" ;;
 	-h | --help)
 		awk 'NR > 1 && !/^#/ {exit} NR > 1 {sub(/^# ?/, ""); print}' "$0"
 		exit 0
@@ -44,7 +47,7 @@ for arg in "$@"; do
 		;;
 	esac
 done
-[ -n "$steps" ] || steps="core ui lint vuln"
+[ -n "$steps" ] || steps="core ui lint actions vuln"
 
 step() { printf '\n\033[1m==> %s\033[0m\n' "$*" >&2; }
 
@@ -175,6 +178,13 @@ linter_version() {
 	     f && $1 == "version:" {print $2; exit}' .github/workflows/ci.yaml
 }
 
+# The zizmor version the actions job pins in CI. Same reason as above: a
+# pin that lives in two files is a pin that drifts.
+zizmor_version() {
+	awk '/zizmor-action/ {f = 1}
+	     f && $1 == "version:" {print $2; exit}' .github/workflows/ci.yaml
+}
+
 # The toolchain to build the tools below with: the version go.mod
 # targets, or newer if a tool asks for it. `go run tool@version` picks
 # its toolchain from that tool's own go.mod, so on a machine whose Go is
@@ -261,6 +271,42 @@ run_lint() {
 		go run "github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$v" run ./...
 }
 
+# The workflows, audited by the tool CI's `actions` job runs. Offline, so
+# this and CI answer the same thing from the same bytes — and over the
+# same bytes: both hand it the repository root and let it collect, which
+# is more than the workflows — `dependabot.yml` is in the set, and a first
+# version of this step that named `.github/workflows` passed locally while
+# CI failed on that file. Whatever the tool decides to read, both read
+# it.
+#
+# zizmor is neither a Go tool nor a Node one, so unlike every other step
+# here there is no runtime already required for something else to run it
+# with. `uvx` is how it is distributed and how CI's action installs it;
+# when neither it nor a zizmor on PATH is present this skips and says so,
+# the way the web UI step does when there is no node.
+run_actions() {
+	v=$(zizmor_version)
+	case $v in
+	[0-9]*) ;;
+	*)
+		echo "check: could not read the zizmor version from .github/workflows/ci.yaml" >&2
+		exit 1
+		;;
+	esac
+	if command -v zizmor >/dev/null 2>&1; then
+		step "zizmor $(zizmor --version | awk '{print $2}') (on PATH, not the pinned $v)"
+		zizmor --offline .
+		return
+	fi
+	if command -v uvx >/dev/null 2>&1; then
+		step "zizmor $v"
+		uvx "zizmor@$v" --offline .
+		return
+	fi
+	step "workflow audit skipped (no zizmor and no uvx; CI runs it)"
+	skipped_actions=yes
+}
+
 run_vuln() {
 	step "govulncheck"
 	# Unpinned, like CI: a new govulncheck release failing means a new
@@ -276,6 +322,7 @@ for s in $steps; do
 	core) run_core ;;
 	ui) run_ui ;;
 	lint) run_lint ;;
+	actions) run_actions ;;
 	vuln) run_vuln ;;
 	esac
 done
@@ -292,5 +339,8 @@ elif [ -n "$db_note" ]; then
 fi
 if [ "$skipped_ui" = yes ]; then
 	note="$note${note:+;} — web UI tests skipped (install node; CI runs them)"
+fi
+if [ "$skipped_actions" = yes ]; then
+	note="$note${note:+;} — workflow audit skipped (install uv; CI runs it)"
 fi
 step "ok$note"

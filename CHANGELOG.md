@@ -23,6 +23,21 @@ last entry.
 
 ### Changed
 
+- **The MCP listings say how long they hold.** `tools/list`,
+  `resources/list` and `resources/templates/list` now answer with a TTL
+  hint of five minutes; `resources/read` keeps answering zero (design doc
+  0128). This is a correction rather than an addition: protocol
+  2026-07-28 added the field, the SDK has been filling it in on every
+  response with zero, and the spec reads zero as *consider this
+  immediately stale* — so ochakai was telling every client its tool list
+  was already out of date, which nobody had decided. The three lists are
+  registered once at startup and never change while the process runs, so
+  what the number really bounds is how long a client may go on believing
+  a process that has since been replaced; five minutes keeps a deploy
+  visible inside its rollout and sits well inside the one release a
+  renamed tool name keeps answering for. A concept is knowledge and
+  changes when somebody writes it, which is why the read is not cached.
+  Nothing is added to an agent's context and no counted surface moves.
 - **The web UI starts where the knowledge does.** A caller granted one
   directory (design doc 0109) opened the page on a root holding one
   directory holding one directory, and two clicks stood between them and
