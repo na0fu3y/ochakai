@@ -93,7 +93,8 @@ Date: YYYY-MM-DD
 Use 0067 or 0071 as models for the header style.
 
 **Keep it under the ceiling.** CONTRIBUTING.md declares a `RECORD-LINES:`
-number and `TestDesignRecordsStayUnderTheirCeiling` reads it back; the
+number and `TestCeilings` (`cmd/ochakai/ceilings_test.go`, one table of
+every ceiling the repository keeps) reads it back; the
 median record is about 140 lines. Going over almost always means the
 decision is two decisions — split it and take two numbers — or that the
 record is restating something an earlier one already settled, which is
@@ -105,7 +106,7 @@ CONTRIBUTING.md also caps the corpus as a whole: `RECORD-CORPUS-LINES`
 for how many lines its records total, counting every record, Superseded
 ones included, since they still ship in the tree and a reader following a
 `Status:` trail still opens them.
-`TestDesignRecordCorpusStaysUnderItsCeiling` reads it back.
+The same test reads it back.
 
 **Usually you will not touch it.** The ceiling sits on a grid the width
 of `RECORD-CORPUS-LINES-SLACK`, so a record that fits inside the current
@@ -143,7 +144,7 @@ stack a diff on it: write the record that states the area's whole
 current picture, and mark the parent and every amendment on it
 **Superseded**. An unreleased parent is simply edited (0048 §2.3). The
 index's opening table enforces the shape from its side —
-`TestIndexRowsCiteFewRecords` fails a row that cites more records than
+`TestCeilings` fails a row that cites more records than
 CONTRIBUTING's `INDEX-ROW-RECORDS`, and that number only goes down; if
 your record would be the one over, the fold is the PR to write.
 

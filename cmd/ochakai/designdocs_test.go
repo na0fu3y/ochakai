@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -370,198 +369,22 @@ func capturedNumbers(re *regexp.Regexp, s string) []string {
 // line in a diff whose subject is the agreement, not a constant in a test.
 const contributing = "../../CONTRIBUTING.md"
 
-var recordCeilingRe = regexp.MustCompile(`(?m)^\s*RECORD-LINES: (\d+)$`)
-
-// firstCappedRecordRe reads where the rule starts, rather than pinning a
-// second copy of the number here: a record before it is immutable — a
-// ceiling cannot reach back, and a record that could be edited to fit was
-// never a decision somebody could depend on — while a record from here on
-// has not reached a release yet, so CONTRIBUTING.md's own rule that an
-// unreleased record is revised by replacing it means nobody can be
-// depending on its length either. Reading the boundary back, the same way
-// RECORD-LINES itself is read, is what keeps the two from disagreeing the
-// way they did when 0063 landed and this file still said 0062.
-var firstCappedRecordRe = regexp.MustCompile(`(?m)^\s*RECORD-CAP-FROM: (\d{4})$`)
-
-func TestDesignRecordsStayUnderTheirCeiling(t *testing.T) {
-	content, err := os.ReadFile(contributing)
-	if err != nil {
-		t.Fatalf("read %s: %v", contributing, err)
-	}
-	m := recordCeilingRe.FindStringSubmatch(string(content))
-	if m == nil {
-		t.Fatalf("%s declares no RECORD-LINES ceiling: this check now guards nothing", contributing)
-	}
-	limit, err := strconv.Atoi(m[1])
-	if err != nil {
-		t.Fatalf("%s: RECORD-LINES %q: %v", contributing, m[1], err)
-	}
-	firstCapped := firstCappedRecordRe.FindStringSubmatch(string(content))
-	if firstCapped == nil {
-		t.Fatalf("%s declares no RECORD-CAP-FROM: this check now guards nothing", contributing)
-	}
-	capped := 0
-	for _, r := range designRecords(t) {
-		if r.number < firstCapped[1] {
-			continue
-		}
-		capped++
-		lines := strings.Count(r.body, "\n")
-		if lines <= limit {
-			continue
-		}
-		t.Errorf(`%s is %d lines, over the %d in %s.
-
-A record is prose somebody reads, and going over usually means the decision
-is two decisions — split it and take two numbers. If it is restating what an
-earlier record already settled, cite that record instead. If it really is
-that large, raise the ceiling in this PR and say why: the number is there so
-the raise cannot happen quietly, not to be worked around by writing denser
-Japanese.`, r.file, lines, limit, contributing)
-	}
-	if capped == 0 {
-		t.Fatalf("no record numbered %s or later: this check now guards nothing", firstCapped[1])
-	}
-}
-
-// recordCorpusCapRe reads a ceiling on the corpus as a whole rather than on
-// one record: "RECORD-CORPUS-LINES: 10500" or
-// "RECORD-CORPUS-LINES-SLACK: 500", declared beside RECORD-LINES in
-// CONTRIBUTING.md rather than as an eleventh cap in docs/surface.md's 上限
-// section — a record is read by somebody changing ochakai, not somebody
-// using it, so its ceiling lives with the other ceiling for that same
-// reader.
-var recordCorpusCapRe = regexp.MustCompile(`(?m)^\s*(RECORD-CORPUS-LINES|RECORD-CORPUS-LINES-SLACK): (\d+)$`)
-
-// TestDesignRecordCorpusStaysUnderItsCeiling reads docs/design as a whole:
-// how many lines its records total. Superseded records count — they still
-// ship in the tree, and a reader following a Status: header still opens
-// them. Counting only what is current would let a supersession buy headroom
-// for the next addition, and the file stays on disk either way, so that
-// would be the next escape hatch rather than a saving.
-//
-// RECORD-CORPUS-LINES is DOC-LINES's argument applied to this corpus: a
-// record that never crosses RECORD-LINES can still add to what a reader
-// gets through, and enough of them doing it at once moves nothing else.
-//
-// It is also DOC-LINES's *width*, on the same reasoning docs/surface.md
-// gives for the manual: a ceiling that every record-adding PR has to
-// rewrite is a line every concurrent PR conflicts on, and an alarm that
-// sounds every time tells nobody anything. So the ceiling sits on a grid
-// the size of the slack — checked below — and moves when the corpus
-// crosses a boundary rather than when it grows at all.
-//
-// A companion ceiling on the *number* of records was retired with that
-// change: a record has lines, so nothing could raise the count without
-// raising the total, and its exact-match rule was the half that guaranteed
-// the conflict. CONTRIBUTING.md carries the argument in full.
-func TestDesignRecordCorpusStaysUnderItsCeiling(t *testing.T) {
-	content, err := os.ReadFile(contributing)
-	if err != nil {
-		t.Fatalf("read %s: %v", contributing, err)
-	}
-	caps := map[string]int{}
-	for _, m := range recordCorpusCapRe.FindAllStringSubmatch(string(content), -1) {
-		n, err := strconv.Atoi(m[2])
-		if err != nil {
-			t.Fatalf("%s: %s %q: %v", contributing, m[1], m[2], err)
-		}
-		caps[m[1]] = n
-	}
-	for _, name := range []string{"RECORD-CORPUS-LINES", "RECORD-CORPUS-LINES-SLACK"} {
-		if _, ok := caps[name]; !ok {
-			t.Fatalf("%s declares no %s ceiling: this check now guards nothing", contributing, name)
-		}
-	}
-
-	records := designRecords(t)
-	totalLines := 0
-	for _, r := range records {
-		totalLines += strings.Count(r.body, "\n")
-	}
-
-	got, limit, slack := totalLines, caps["RECORD-CORPUS-LINES"], caps["RECORD-CORPUS-LINES-SLACK"]
-	if slack <= 0 || limit%slack != 0 {
-		t.Errorf(`RECORD-CORPUS-LINES is %d, which is not a multiple of the %d
-RECORD-CORPUS-LINES-SLACK in %s.
-
-The ceiling sits on a grid the width of the slack so that it is a derived
-number rather than one to negotiate: the corpus rounded up to the next
-boundary. Pinning it to the exact total instead leaves no room, and the
-next record lands back on this line — which is the conflict the grid
-exists to stop.`, limit, slack, contributing)
-	}
-	switch headroom := limit - got; {
-	case got > limit:
-		t.Errorf(`docs/design totals %d lines across %d records, over the RECORD-CORPUS-LINES
-ceiling of %d in %s.
-
-A record can stay under RECORD-LINES on its own and still add to what a
-reader gets through if enough records do it at once, which is what this
-ceiling is for. The corpus has crossed a %d-line boundary: raise the
-ceiling to %d in the same PR, having said why — that paragraph is the
-whole point of the number.`,
-			got, len(records), limit, contributing, slack, ((got/slack)+1)*slack)
-	case headroom > slack:
-		t.Errorf(`docs/design totals %d lines across %d records, %d under the
-RECORD-CORPUS-LINES ceiling of %d — more than the %d RECORD-CORPUS-LINES-SLACK
-allows.
-
-A ceiling on an amount that is left standing after the amount drops is
-headroom nobody has to justify before spending it, which is the same gap
-docs/surface.md describes for DOC-LINES. The corpus has fallen back below
-a boundary: lower the ceiling to %d in the same PR that lowered the total.`,
-			got, len(records), headroom, limit, slack, ((got/slack)+1)*slack)
-	}
-}
-
-// tombstoneLineCeilingRe reads "TOMBSTONE-LINES: 12" from CONTRIBUTING.md,
-// declared next to RECORD-LINES for the same reason: raising it should be
-// a line in a diff whose subject is the agreement, not a constant here.
-var tombstoneLineCeilingRe = regexp.MustCompile(`(?m)^\s*TOMBSTONE-LINES: (\d+)$`)
-
 // commitLinkRe matches the link a tombstone owes the reader: the commit
 // that held the record in full, as this repository's own GitHub blob URL
 // (github.com/<owner>/<repo>/blob/<sha>/<path>).
 var commitLinkRe = regexp.MustCompile(`https://github\.com/[\w.-]+/[\w.-]+/blob/[0-9a-f]{7,40}/`)
 
-// TestSupersededRecordsAreTombstones holds every Superseded record to what
-// CONTRIBUTING.md's "What a superseded record keeps" says its body may be:
-// title, header, one sentence of what it decided, and a link to the
-// commit that held it in full. Ten Superseded records once carried 2,107
-// lines between them — prose nobody rereads once a Status: header has
-// already sent the reader to the record that replaced it.
-func TestSupersededRecordsAreTombstones(t *testing.T) {
-	content, err := os.ReadFile(contributing)
-	if err != nil {
-		t.Fatalf("read %s: %v", contributing, err)
-	}
-	m := tombstoneLineCeilingRe.FindStringSubmatch(string(content))
-	if m == nil {
-		t.Fatalf("%s declares no TOMBSTONE-LINES ceiling: this check now guards nothing", contributing)
-	}
-	limit, err := strconv.Atoi(m[1])
-	if err != nil {
-		t.Fatalf("%s: TOMBSTONE-LINES %q: %v", contributing, m[1], err)
-	}
-
+// TestSupersededRecordsLinkTheCommitThatHeldThem: a tombstone owes the
+// reader the commit that held the record in full, so that the text is one
+// git show away rather than gone. Its length is held by TOMBSTONE-LINES in
+// ceilings_test.go.
+func TestSupersededRecordsLinkTheCommitThatHeldThem(t *testing.T) {
 	checked := 0
 	for _, r := range designRecords(t) {
 		if !supersededByRe.MatchString(r.status) {
 			continue
 		}
 		checked++
-		if lines := strings.Count(r.body, "\n"); lines > limit {
-			t.Errorf(`docs/design/%s is %d lines, over the %d a tombstone keeps
-(TOMBSTONE-LINES in %s).
-
-A record whose Status: says Superseded shrinks to a tombstone: the title,
-the header, one sentence of what it decided, and a link to the commit
-that held it in full. Nobody can be depending on a decision that has
-already been replaced, and the full text stays one git show away — it
-does not need to stay in this file too.`,
-				r.file, lines, limit, contributing)
-		}
 		if !commitLinkRe.MatchString(r.body) {
 			t.Errorf("docs/design/%s is Superseded but links no commit holding it in full — "+
 				"a tombstone's whole point is that the text is one git show away, not gone", r.file)
@@ -771,13 +594,9 @@ func citableFile(path string) bool {
 	return false
 }
 
-// indexRowCapRe reads the most records one row of the index's opening
-// table may cite: "INDEX-ROW-RECORDS: 10", declared beside RECORD-LINES in
-// CONTRIBUTING.md (design doc 0128 §2.3).
-var indexRowCapRe = regexp.MustCompile(`(?m)^\s*INDEX-ROW-RECORDS: (\d+)$`)
-
-// indexTableRowRe is one row of the opening table: the area, then the cell
-// naming what to read. The header and the separator have no area text.
+// indexTableRowRe is one row of the index's opening table: the area, then
+// the cell naming what to read. The header and the separator have no area
+// text.
 var indexTableRowRe = regexp.MustCompile(`^\|\s*([^|]+?)\s*\|(.*)\|\s*$`)
 
 // recordLinkRe is a link to a numbered record: "[0109](0109-….md)". The
@@ -785,36 +604,16 @@ var indexTableRowRe = regexp.MustCompile(`^\|\s*([^|]+?)\s*\|(.*)\|\s*$`)
 // counts the record it actually opens.
 var recordLinkRe = regexp.MustCompile(`\]\((\d{4})-[^)]*\.md\)`)
 
-// TestIndexRowsCiteFewRecords holds design doc 0128 §2.3: no row of the
-// index's opening table names more records than CONTRIBUTING.md's
-// INDEX-ROW-RECORDS, and the declared number is the widest row's count —
-// so folding a row is what lowers it, and nothing lowers it silently.
-//
-// The table exists so that a reader reaches an area's current state
-// without following its amendment chain (0048 §2.4). A row citing nine
-// records has moved the chain into the table. The ceiling only goes
-// down: 0128 §2.4 names the order the widest rows are folded in, and 3
-// — a record, its amendment, and one more — is where it stops.
-func TestIndexRowsCiteFewRecords(t *testing.T) {
-	content, err := os.ReadFile(contributing)
-	if err != nil {
-		t.Fatalf("read %s: %v", contributing, err)
-	}
-	m := indexRowCapRe.FindStringSubmatch(string(content))
-	if m == nil {
-		t.Fatalf("%s declares no INDEX-ROW-RECORDS line; design doc 0128 §2.3 puts one there", contributing)
-	}
-	limit, err := strconv.Atoi(m[1])
-	if err != nil {
-		t.Fatalf("%s: INDEX-ROW-RECORDS %q: %v", contributing, m[1], err)
-	}
-
+// widestIndexRow reads the opening table of the design index — the first
+// table in the file, ending at the next heading — and returns the row that
+// cites the most distinct records, with its count. INDEX-ROW-RECORDS in
+// ceilings_test.go holds that count (design doc 0128 §2.3).
+func widestIndexRow(t *testing.T) (string, int) {
+	t.Helper()
 	index, err := os.ReadFile(designIndex)
 	if err != nil {
 		t.Fatalf("read %s: %v", designIndex, err)
 	}
-	// The opening table is the first table in the file; its rows end at
-	// the next heading.
 	widest, widestRow := 0, ""
 	inTable := false
 	for line := range strings.SplitSeq(string(index), "\n") {
@@ -830,13 +629,6 @@ func TestIndexRowsCiteFewRecords(t *testing.T) {
 		for _, link := range recordLinkRe.FindAllStringSubmatch(row[2], -1) {
 			seen[link[1]] = true
 		}
-		if len(seen) > limit {
-			t.Errorf("the index's opening table row %q cites %d records, over the INDEX-ROW-RECORDS %d in %s.\n"+
-				"A row is the one line a reader reaches an area's current state from (0048 §2.4); the\n"+
-				"chain of amendments it now lists is what it was meant to spare them. Do not add the\n"+
-				"record to the row: write the one that restates the area and supersedes the rest\n"+
-				"(design doc 0128 §2.2).", row[1], len(seen), limit, contributing)
-		}
 		if len(seen) > widest {
 			widest, widestRow = len(seen), row[1]
 		}
@@ -844,10 +636,5 @@ func TestIndexRowsCiteFewRecords(t *testing.T) {
 	if !inTable {
 		t.Fatalf("%s has no opening table to read", designIndex)
 	}
-	if widest < limit {
-		t.Errorf("INDEX-ROW-RECORDS is %d in %s, but the widest row of the index's opening table\n"+
-			"(%q) cites %d. The ceiling only moves down (design doc 0128 §2.3): set it to %d in\n"+
-			"the PR that folded the row, so the next fold is the one that lowers it again.",
-			limit, contributing, widestRow, widest, widest)
-	}
+	return widestRow, widest
 }
