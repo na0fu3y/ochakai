@@ -10,7 +10,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  parsePolicyDocument, policyDocument, validPrincipal,
+  joinPrincipal, parsePolicyDocument, policyDocument, splitPrincipal,
+  validPrincipal, validateRules,
 } from '../static/js/policy.js';
 
 const RULES = [
@@ -118,4 +119,42 @@ test('a policy that delegates nothing reads as it did before may_admin', () => {
   const withAdmin = policyDocument([
     { prefix: 'sales', principal: 'human:lead@example.co.jp', may_write: true, may_admin: true }]);
   assert.equal(withAdmin.includes('"may_admin": true'), true);
+});
+
+// The row editor holds a principal as two controls and the wire carries
+// it as one string, so the split is only safe if it puts back what it
+// took apart — a grant that changed spelling on the way through the form
+// would be a boundary nobody drew.
+test('a principal survives being split into the two controls and back', () => {
+  for (const p of ['*', 'human:na0@example.co.jp', 'process:app@x.iam.gserviceaccount.com']) {
+    const { kind, name } = splitPrincipal(p);
+    assert.equal(joinPrincipal(kind, name), p, p);
+  }
+});
+
+// Nothing the server stored can look like this. It arrives as a name
+// under the first kind rather than being dropped, so the row shows what
+// is there — and the save still refuses it.
+test('a principal the ledger cannot spell keeps its text and is still refused', () => {
+  const { kind, name } = splitPrincipal('tanaka@example.co.jp');
+  assert.equal(name, 'tanaka@example.co.jp');
+  assert.equal(kind, 'human');
+  assert.throws(() => validateRules([{ prefix: 'a', principal: 'tanaka@example.co.jp' }]), /principal/);
+});
+
+// The rows and the document go through one check, so neither shape can
+// send what the other would have refused.
+test('the rows the form builds are checked exactly as a pasted document is', () => {
+  const rows = [{ prefix: ' /sales/ ', principal: joinPrincipal('human', ' tanaka@example.co.jp '), may_write: true }];
+  assert.deepEqual(validateRules(rows), parsePolicyDocument(policyDocument(validateRules(rows))));
+  assert.deepEqual(validateRules(rows), [
+    { prefix: 'sales', principal: 'human:tanaka@example.co.jp', may_write: true }]);
+});
+
+// The form can point at the row it is about; a document can only say it.
+// The position rides on the error so that both surfaces get their own
+// half of the same sentence.
+test('a refusal carries the row it is about', () => {
+  const bad = [{ prefix: 'a', principal: '*' }, { prefix: 'b', principal: 'nobody' }];
+  assert.throws(() => validateRules(bad), e => e.row === 2 && /2 番目/.test(e.message));
 });

@@ -366,12 +366,25 @@ try {
       return !!a && !a.hidden && getComputedStyle(a).display !== 'none'; })()`), shown);
   await go('#/access');
   await check('the access policy renders', await waitFor(`${textOf('#view')}.includes('境界はまだありません')`), shown);
-  // The editor is the document the CLI's -f takes, seeded from what the
-  // server just sent — closed in a disclosure, which is why this asks
-  // the textarea's value rather than what is on screen.
+  // The document the CLI's -f takes is still there, seeded from what the
+  // server just sent — behind two disclosures now, which is why this
+  // asks the textarea's value rather than what is on screen.
   await check('the policy is offered as the document `ochakai access -f` takes',
     await waitFor(`(() => { const t = document.querySelector('#access-doc');
       return !!t && t.value.includes('"rules"'); })()`), shown);
+  // A grant is added as a row of controls, and the document is written
+  // from the rows — so what an operator would copy into git is what the
+  // save would send, never a snapshot of how the rows started.
+  await evalJS(`(() => { document.querySelector('#access-edit').open = true;
+    document.querySelector('#access-add').click();
+    const tr = document.querySelector('#access-rows tbody tr');
+    tr.querySelector('[data-f="prefix"]').value = 'metrics';
+    tr.querySelector('[data-f="name"]').value = 'tanaka@example.co.jp';
+    document.querySelector('#access-json').open = true; })()`);
+  await check('a grant typed as a row is the document the CLI takes',
+    await waitFor(`(() => { const t = document.querySelector('#access-doc');
+      return !!t && t.value.includes('"metrics"')
+        && t.value.includes('human:tanaka@example.co.jp'); })()`), shown);
 
   await go('#/new');
   await check('the editor renders', await waitFor(`!!document.querySelector('#view textarea')`), shown);
