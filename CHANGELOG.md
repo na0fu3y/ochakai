@@ -44,6 +44,26 @@ last entry.
   to change `OCHAKAI_RECORD_MISSES`. `export`, `move`, `reembed` and the
   access policy stay with the administrators.
 
+### Changed
+
+- **What ochakai connects to is PostgreSQL, not Cloud SQL specifically,
+  and a deployment now says which database credential it holds.** Cloud
+  SQL IAM is one way to buy secret-zero rather than the definition of a
+  supported database: AlloyDB, a PostgreSQL you run yourself on Compute
+  Engine, and a PostgreSQL off Google Cloud are all supported, with the
+  credential in `OCHAKAI_DATABASE_URL` being the operator's to hold and
+  rotate. The binary already connected that way — the short-lived
+  metadata token is inserted only when `OCHAKAI_DB_IAM_AUTH` asks for it
+  — so what changes is the declaration, which had said the opposite: the
+  FAQ answered "not in production" and the configuration page called the
+  variable *Cloud SQL's* connection string. Startup now names the
+  credential it holds, beside the two losses it already named (files
+  disabled, lexical-only search). Off Google Cloud the other two do not
+  move: embeddings are Vertex AI or nothing, so search is lexical-only —
+  measured at recall@10 1.00 and MRR 0.91 over the 29-concept golden set
+  — and files need `OCHAKAI_GCS_BUCKET`. No new environment variable, no
+  wire change (design docs 0124, amending 0003 §1 and 0115 §4).
+
 ### Fixed
 
 - **A deployment that verifies its own tokens (`OCHAKAI_OIDC_ISSUER`)

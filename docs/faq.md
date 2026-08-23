@@ -11,19 +11,30 @@ README が前提にしているのに、一箇所では書いていないこと�
 
 ### Google Cloud 無しで動かせるか
 
-本番では動かせない。Cloud Run の IAM チェックがアクセスモデルそのもので
-あり、Cloud SQL IAM がデータベースの資格情報である — この二つが揃って
-いることが、ochakai が自分の secret を一つも持たない理由である。
+動かせる。ただし**推奨は Google Cloud のまま**で、外で何を持たないかは
+はっきりしている。誰が呼んでいるかは OIDC 発行者を名指したデプロイが
+自分で検証し(設計ドキュメント
+[0086](design/0086-a-second-way-to-say-who-is-calling.md))、データベースは
+自分の PostgreSQL でよい — その資格情報は運用者が持ち、デプロイは起動時に
+そう言う(設計ドキュメント
+[0124](design/0124-the-database-credential-is-the-operators-to-hold.md))。
+
+持たないものは二つある。**埋め込みが無い**ので検索は字句のみで、
+**`OCHAKAI_GCS_BUCKET` が無い**のでファイルは保存できない(markdown の
+concept だけになる)。字句のみがどこまで届くかは推測ではなく測ってあり、
+29 concept・88 問で recall@10 = 1.00、MRR = 0.91 である
+([ポジショニング](positioning.md)がその数字の限界も書いている)。
 `deploy/compose.yaml` は同じバイナリを、認証を切った素の PostgreSQL に
-対してローカルで動かす — 開発用のハーネスであって、本番の小さい端では
-ない。可搬なのはナレッジであってランタイムではない。詳しくは
-[動作要件](configuration.md#requirements)。
+対してローカルで動かす — これは開発用のハーネスであって、外での本番構成
+ではない(外で認証するのは OIDC である)。可搬なのはナレッジであって
+ランタイムではない。詳しくは[動作要件](configuration.md#requirements)。
 
 ### 自分のデータはプロジェクトの外に出るか
 
 出ない。ochakai はどこへも何も報告しない — テレメトリが無いので、
-オプトアウトするものも無い。接続する先はあなた自身のプロジェクトの
-Google Cloud API だけである: 常に Cloud SQL、`OCHAKAI_GCS_BUCKET` を
+オプトアウトするものも無い。接続する先はあなた自身のデータベースと、
+あなた自身のプロジェクトの Google Cloud API だけである:
+`OCHAKAI_GCS_BUCKET` を
 設定していれば GCS、そして意味的検索が有効なら Vertex AI — Google Cloud
 の上で動く以上、これが既定である(設計ドキュメント
 [0080](design/0080-search-and-how-a-deployment-embeds.md))。

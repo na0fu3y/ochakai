@@ -271,6 +271,17 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 		return nil, nil, err
 	}
 	st.UseLogger(log)
+	// Which credential this deployment holds, said the way the two
+	// losses below are said. Cloud SQL IAM buys secret-zero with no
+	// configuration, and a deployment that does not use it holds a
+	// credential of its own — a choice rather than an accident, and one
+	// the operator should not have to infer from the connection string
+	// (design doc 0124 §3).
+	if cfg.DBIAMAuth {
+		log.Info("database credentials from Cloud SQL IAM (short-lived tokens); this deployment holds no database secret")
+	} else {
+		log.Info("database credentials are in OCHAKAI_DATABASE_URL and are yours to hold and rotate; Cloud SQL IAM (OCHAKAI_DB_IAM_AUTH=true) is how a deployment holds none")
+	}
 	// The second way to answer "who is calling" (design doc 0086). Built
 	// here so a misconfigured issuer stops the deployment starting
 	// rather than failing the first request that needs it.

@@ -24,7 +24,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 | id | 条件 |
 |---|---|
 | C1 | 資産は利用者のもの — 丸ごと出て、丸ごと戻り、求められれば消える([0009](design/0009-provenance-portability.md)・[0031](design/0031-purge.md)・[0075](design/0075-the-bundle-is-the-address-space.md)) |
-| C2 | secret を一つも置かないこと — その性質を Cloud Run IAM と Cloud SQL IAM が無設定で買う([0065](design/0065-identity-and-provenance.md)・[0003](design/0003-gcp-only.md))。**性質と買い方は同じではない**: OIDC 発行者を名指したデプロイは Google Cloud の外でも secret を増やさずに誰が呼んでいるかを答え([0086](design/0086-a-second-way-to-say-who-is-calling.md))、そこではデータベースの資格情報が運用者の仕事に戻る。**残りを撤回してよい条件は [0115](design/0115-the-second-footing-waits-for-search.md)** |
+| C2 | secret を一つも置かないこと — その性質を Cloud Run IAM と Cloud SQL IAM が無設定で買う([0065](design/0065-identity-and-provenance.md)・[0003](design/0003-gcp-only.md))。**性質と買い方は同じではない**: OIDC 発行者を名指したデプロイは Google Cloud の外でも secret を増やさずに誰が呼んでいるかを答え([0086](design/0086-a-second-way-to-say-who-is-calling.md))、そこではデータベースの資格情報が運用者の仕事に戻る。**その資格情報を運用者に返してよいことを決めたのは [0124](design/0124-the-database-credential-is-the-operators-to-hold.md)** — 接続先は PostgreSQL であって Cloud SQL ではなく、Cloud SQL IAM を使わないデプロイは自分の資格情報を持ち、起動時にそう言う。**埋め込みを外でも既定にする条件は [0115](design/0115-the-second-footing-waits-for-search.md)** |
 | C3 | 形式は Open Knowledge Format v0.2 — 保存もワイヤも往復も OKF で、その横に第二の形式を発明しない([0075](design/0075-the-bundle-is-the-address-space.md)) |
 | C4 | No FDE — デプロイは自分でできて、必要な操作には自分で打てるコマンドがある([0067](design/0067-four-faces-and-what-they-decline.md)) |
 | C5 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0067](design/0067-four-faces-and-what-they-decline.md) §3) |

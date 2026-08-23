@@ -320,7 +320,7 @@ ochakai loses, and says who should pick something else.
 | SQL execution | it holds no warehouse credentials. Your agent executes |
 | connector ingestion | knowledge is curated, not harvested. Trust density over volume — and a harvester would need warehouse credentials the server does not hold, so a catalog projection runs as an ordinary client under your own service account ([example](examples/bigquery-catalog) (Japanese)) |
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
-| secrets | Cloud Run IAM decides who reaches it and Cloud SQL authenticates the service account — nothing to issue or rotate |
+| secrets | Cloud Run IAM decides who reaches it and Cloud SQL IAM authenticates the service account — nothing to issue or rotate. Where neither is in play — your own PostgreSQL, or a deployment off Google Cloud — the database credential is the operator's to hold, which the deployment says at startup ([0124](docs/design/0124-the-database-credential-is-the-operators-to-hold.md), Japanese); ochakai still issues and rotates nothing itself |
 | roles, a user database, per-concept permissions | reachability is the access model, and the one boundary ochakai does hold is grants of read and write **under a directory**, off unless you write one ([0109](docs/design/0109-a-directory-has-readers-and-writers.md), Japanese) — see [requirements and configuration](docs/configuration.md#authentication-has-no-configuration) (Japanese) |
 | telemetry | nothing is reported anywhere. The only hosts ochakai contacts are Google Cloud APIs in your own project |
 
@@ -332,7 +332,12 @@ ochakai loses, and says who should pick something else.
   ([0086](docs/design/0086-a-second-way-to-say-who-is-calling.md)) is a
   second, supported authentication path — ochakai verifies the bearer
   token itself against the issuer's published keys, which introduces no
-  secret either, so it costs secret-zero nothing. Embeddings stay Vertex
+  secret either, so it costs secret-zero nothing. What it connects to is
+  PostgreSQL rather than Cloud SQL specifically
+  ([0124](docs/design/0124-the-database-credential-is-the-operators-to-hold.md)):
+  AlloyDB, one you run yourself, or one off Google Cloud. A deployment
+  that does not use Cloud SQL IAM holds that credential itself, and says
+  which one it holds at startup. Embeddings stay Vertex
   AI or nothing there, so search off Google Cloud is lexical-only — which
   is measured rather than assumed: the golden set in CI runs that
   configuration too, and scores recall@10 1.00 and MRR 0.91 on its

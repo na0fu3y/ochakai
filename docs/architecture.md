@@ -32,7 +32,7 @@ flowchart LR
     R --> SVC
   end
 
-  PG[("Cloud SQL for PostgreSQL<br/>+ pgvector")]
+  PG[("PostgreSQL + pgvector<br/>推奨は Cloud SQL")]
   GCS[("Cloud Storage<br/>ファイルのバイト列")]
   VX["Vertex AI Embeddings<br/>Google Cloud 上では既定"]
 

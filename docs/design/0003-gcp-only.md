@@ -13,7 +13,11 @@ OIDC 発行者を名指したデプロイは自分でトークンを検証する
 そのままである(検証に使うのは発行者の公開鍵)。**§1 の「それ以外の実行
 環境をサポートしない」に撤回の条件を与えたのは
 [0115](0115-the-second-footing-waits-for-search.md)** — 決定は動かず、
-埋め込みが Google Cloud の外でも既定になった日に初めて改訂を問える
+埋め込みが Google Cloud の外でも既定になった日に初めて改訂を問える。
+**§1 のうちデータベースについては
+[0124](0124-the-database-credential-is-the-operators-to-hold.md) が撤回した**
+— 接続先は PostgreSQL であって Cloud SQL ではなく、Cloud SQL IAM は
+secret-zero の買い方の一つである(埋め込みとファイルは動かない)
 Date: 2026-07-16
 
 ## 1. 決定

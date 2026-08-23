@@ -196,7 +196,8 @@ FDE からエージェントに変わり、人には判断の要る中核の検�
 Action の実行基盤が要る、オペレーショナルな write-back が要る、
 kinetic の三つ目の要素 — 誰が実行してよいかの Role — や concept 単位の
 権限が要る([0065](design/0065-identity-and-provenance.md) §1)、
-Google Cloud の外で動かす([0003](design/0003-gcp-only.md)) — どれか
+Google Cloud の外で**埋め込み付きで**動かす([0003](design/0003-gcp-only.md)・
+[0115](design/0115-the-second-footing-waits-for-search.md)) — どれか
 一つでも真なら、FDE 型を買う理由はまだそこにある。買い方だけを外した
 OSS が同じ約束を名乗る場合は、この節の答えが効かないので次の節が扱う。
 
@@ -347,14 +348,17 @@ vault が持たないのは、ファイル形式でないすべてである:
 - **インフラ。** vault を立てるのはただである。ochakai は Google Cloud
   プロジェクトと Postgres を要る — 月 $10 ほどだが、ゼロではないし、
   5 分でもない。
-- **Google Cloud 推奨、外は認証だけ。** C2 の secret-zero という性質は
-  Cloud Run IAM と Cloud SQL IAM で無設定に買われている
-  ([0003](design/0003-gcp-only.md))。外で動かす道は認証には開いた —
+- **Google Cloud 推奨、外は認証とデータベースだけ。** C2 の secret-zero と
+  いう性質は Cloud Run IAM と Cloud SQL IAM で無設定に買われている
+  ([0003](design/0003-gcp-only.md))。外で動かす道は認証に開き —
   OIDC 発行者を名指せば ochakai が公開鍵で自分で検証し、secret は
   増えない([0086](design/0086-a-second-way-to-say-who-is-calling.md))
-  — が、埋め込みは Vertex AI か無いかで検索は lexical のみになり、
-  データベースの資格情報は運用者の仕事に戻る。失格要件が一つ消えた
-  だけで、Google Cloud の外が快適になったわけではない。
+  — データベースにも開いた: 接続先は PostgreSQL であって Cloud SQL では
+  なく、Cloud SQL IAM を使わないデプロイは自分の資格情報を持って回る
+  ([0124](design/0124-the-database-credential-is-the-operators-to-hold.md))。
+  **開かなかったのは埋め込みで**、外では Vertex AI か無いかなので検索は
+  lexical のみになる。失格要件が二つ消えただけで、Google Cloud の外が
+  快適になったわけではない。
   **ただし「lexical のみ」がどれだけ落ちるかは、推測ではなく測ってある。**
   CI の golden set は同じ 88 問を lexical のみでも走らせており、無関係な
   二つのドメインにまたがる 29 concept のベースで recall@10 = 1.00、

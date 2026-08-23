@@ -28,7 +28,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 | 領域 | いま読むドキュメント |
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
-| Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
+| Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること)。**データベースについてはそれを待たずに撤回した — [0124](0124-the-database-credential-is-the-operators-to-hold.md)**(接続先は PostgreSQL であって Cloud SQL ではない。Cloud SQL IAM を使わないデプロイは自分の資格情報を持ち、起動時にそう言う。埋め込みとファイルは動かない)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
 | 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**`stats` が範囲を持つ呼び出し元にも答えることは [0123](0123-the-numbers-say-what-they-counted.md)**(0109 §3 を改訂 — 答えが自分の範囲を宣言する)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
@@ -145,6 +145,26 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   日に別の番号が 0003 を改訂する(§4)。却下: 外部 API キーの埋め込み、
   条件より先に二つ目のストレージエンジンを足すこと、「マルチクラウド
   対応」という言葉、そして条件を書かずに黙っていること。
+- [0124 データベースの資格情報は、運用者が持てる](0124-the-database-credential-is-the-operators-to-hold.md)
+  — **Accepted**。0003 §1 のうち**データベースについて**「それ以外の実行
+  環境をサポートしない」を撤回する: 接続先は PostgreSQL であって Cloud SQL
+  ではなく、Cloud SQL IAM は secret-zero の**買い方の一つ**である。実装は
+  既にそうなっており(IAM を頼まれたときだけ短命トークンを挟む)、決めるのは
+  宣言のほうだった — FAQ は「本番では動かせない」と書いていた。0115 が
+  見ていなかった形が一つある: **AlloyDB や GCE 上の自前の PostgreSQL は
+  Cloud SQL IAM の外で Google Cloud の中**であり、埋め込みもファイルも
+  残るので C8 の反論が当たらない。Google Cloud の外については 0115 §4 の
+  順序を改訂する — 根拠は前提の変化で、**0115 の二日後に外の検索が測られた**
+  (29 concept・88 問で recall@10 = 1.00、MRR = 0.91)。無いのは埋め込みで
+  あって検索ではない。**§3 の条件 a/b/c は一字も動かず**、外でも埋め込みが
+  既定になるかを測る条件として残る。デプロイは資格情報を自分が持っている
+  ことを**起動時に言う**(0087 と同じ形。ヘッダにも API にも出さない —
+  消えるものは無いから)。表面は動かない(ENV は 15 のまま)。却下:
+  二つの番号に割ること、`OCHAKAI_DATABASE_URL_FILE` のような secret の
+  受け取り口、二つ目のストレージエンジン、外部 API キーの埋め込み、外の
+  デプロイに「退化している」と名乗らせること、「マルチクラウド対応」と
+  言うこと、`deploy/terraform` に二つ目のモジュールを足すこと、そして
+  黙って動くままにしておくこと。
 - [0119 任された運用の単位は、デプロイかディレクトリである](0119-an-operated-fleet-is-deployments-or-directories.md)
   — **Accepted**。決定を一つも動かさず、**複数の組織の運用を一人が
   引き受ける形**を先に書く: 隔離が要る組織は一つの Cloud Run サービスと

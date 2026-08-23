@@ -4,15 +4,29 @@
 
 ## 要件
 
-**本番で動かすとは Google Cloud で動かすことである。** デプロイに誰が
-届くかは Cloud Run の IAM チェックが決め、Cloud SQL はサービスアカウント
-を認証する — これが ochakai が自前の秘密を一つも持たない理由であり、
-他のクラウドやオンプレミスで動かす手段をサポートしない理由でもある
-(設計ドキュメント [0065](design/0065-identity-and-provenance.md) §1、
-[0003](design/0003-gcp-only.md))。持ち運べるのはナレッジであって、
-ランタイムではない — OKF バンドルとして往復するので、離れることは何から
-離れるかに依存しない。`deploy/compose.yaml` は同じバイナリを認証オフで
-ローカルに動かす — 本番の縮小版ではなく、開発用のハーネスである。
+**推奨は Google Cloud である。** デプロイに誰が届くかは Cloud Run の IAM
+チェックが決め、Cloud SQL IAM がサービスアカウントを認証する — この二つが
+揃っていることが、ochakai が自前の秘密を一つも持たない理由である(設計
+ドキュメント [0065](design/0065-identity-and-provenance.md) §1、
+[0003](design/0003-gcp-only.md))。**それは性質であって、唯一の買い方では
+ない。** 誰が呼んでいるかは OIDC 発行者を名指しても答えられ(設計
+ドキュメント [0086](design/0086-a-second-way-to-say-who-is-calling.md))、
+**接続先は PostgreSQL であって Cloud SQL に限らない**(設計ドキュメント
+[0124](design/0124-the-database-credential-is-the-operators-to-hold.md)) —
+AlloyDB でも、GCE の上に自分で立てた PostgreSQL でも、Google Cloud の外の
+PostgreSQL でもよい。`OCHAKAI_DB_IAM_AUTH` を立てないデプロイは
+`OCHAKAI_DATABASE_URL` に**自分の資格情報**を持ち、起動時にそう言う —
+秘密を一つも持たないという性質は、そのデプロイでは運用者が買う。
+
+**Google Cloud の外では、さらに二つを持たない。** 埋め込みが無いので検索は
+字句のみになり(それがどこまで届くかは[ポジショニング](positioning.md)が
+数字で言う)、`OCHAKAI_GCS_BUCKET` が無いのでファイルの書き込みは 501 に
+なる。三つとも
+起動時のログが名指すので、**運用者は自分のデプロイが何を持っていないかを
+ログ一枚で読める**。持ち運べるのはナレッジであって、ランタイムではない —
+OKF バンドルとして往復するので、離れることは何から離れるかに依存しない。
+`deploy/compose.yaml` は同じバイナリを認証オフでローカルに動かす — 本番の
+縮小版ではなく、開発用のハーネスである。
 
 **既定では認可は無い。** 到達できるかどうかがアクセスモデルのすべてで
 ある — 下の[認証に設定はない](#authentication-has-no-configuration)を
@@ -55,8 +69,8 @@ CI と deploy ガイドはどちらも Postgres 17 で動かしている。
 
 | 環境変数 | 説明 |
 |---|---|
-| `OCHAKAI_DATABASE_URL` | Cloud SQL の接続文字列(必須) |
-| `OCHAKAI_DB_IAM_AUTH` | `true` で Cloud SQL IAM データベース認証を有効にする: 接続パスワードは短命の IAM トークンになるので、接続文字列は秘密を運ばない |
+| `OCHAKAI_DATABASE_URL` | PostgreSQL の接続文字列(必須)。Cloud SQL に限らない — AlloyDB でも、GCE の上の PostgreSQL でも、Google Cloud の外の PostgreSQL でもよい(設計ドキュメント [0124](design/0124-the-database-credential-is-the-operators-to-hold.md))。`OCHAKAI_DB_IAM_AUTH` を立てないなら、**ここに運用者の資格情報が入る** — 起動時のログがそう言う |
+| `OCHAKAI_DB_IAM_AUTH` | `true` で Cloud SQL IAM データベース認証を有効にする: 接続パスワードは短命の IAM トークンになるので、接続文字列は秘密を運ばない。既定: 未設定 — そのとき資格情報は接続文字列の中にあり、それを持って回すのは運用者である |
 | `OCHAKAI_GCS_BUCKET` | ファイルの実体を置くバケット(認証は ADC — キーは無い)。既定: 未設定 — このインスタンスは markdown の concept だけを保存し、ファイルの書き込みはエラーを返す |
 | `OCHAKAI_EMBEDDINGS` | このデプロイが**どう埋め込むか**を一語で言う(設計ドキュメント [0080](design/0080-search-and-how-a-deployment-embeds.md))。未設定 / `on`: Google Cloud 上で動いていれば、ochakai はメタデータサーバーから自分の**プロジェクトとリージョン**を読み、製品既定のモデル(`gemini-embedding-001`)で埋め込みを有効にする — 設定することは何も無く、**埋め込みは動いているリージョンで行われる**ので、asia-northeast1 に立てたデプロイの本文と検索クエリは asia-northeast1 の Vertex AI に送られる(設計ドキュメント [0080](design/0080-search-and-how-a-deployment-embeds.md) §1.2)。リージョンが読めなかったときは埋め込みを有効にしない — 誰も選んでいないリージョンにテキストを送るより、字句検索で動くほうを選ぶ。そのリージョンにモデルが無ければ起動時の問い合わせがそう答え、同じく字句検索に落ちる。実際に Vertex AI を呼べるかどうかは設定ではなく IAM(`roles/aiplatform.user`)が決め、起動時に一度だけ問い合わせる(設計ドキュメント [0080](design/0080-search-and-how-a-deployment-embeds.md))。Google Cloud の外にはメタデータサーバーが無く、何も有効にならない。`off`: 放っておけばハイブリッドになるデプロイを字句検索だけで動かす — Vertex AI は一度も呼ばれない。**Vertex AI のモデル resource name**(`projects/<project>/locations/<location>/publishers/google/models/<model>`): そのモデル・リージョン・プロジェクトで埋め込む。画像・PDF のファイル検索には model を `gemini-embedding-2`、location を `global`(または `us`/`eu`)にする。名指したデプロイはセマンティック検索を**要求した**ことになり、Vertex AI か pgvector が無ければ起動を拒否する(検出しただけのデプロイが字句検索へフォールバックするのと対照的である)。ベクトルの次元は設定ではなくモデルごとの定数で(現在はどちらのモデルも 768)、ochakai が知らないモデルは起動エラーにする — 幅を推測すれば、保存済みのベクトルと比べられないものを書くことになる。ベクトルは concept が書かれたときに書かれるので、埋め込みが届く前に読み込んだベースや、model を変えた後のベースは、`ochakai reembed` を走らせるまで埋め込まれないままになる。三つのどれでもない綴りは、推測せず起動エラーにする。既定: 検出できた場所では on |
 | `OCHAKAI_ADMINS` | このデプロイを管理する principal をカンマ区切りで並べる — `human:<name>` / `process:<name>`、または全認証済み呼び出し元を指す `*`(台帳の actor と同じ綴り、設計ドキュメント [0065](design/0065-identity-and-provenance.md) §2)。管理者は全部を読み書きでき、アクセスポリシー(`ochakai access`)を編集でき、バンドル全体を取る操作 — export の tar・`move`・`reembed` — を実行できる(`stats` は寄せていない: 範囲を持つ利用者も自分の数を読め、答えが何を数えたかを言う、設計ドキュメント [0123](design/0123-the-numbers-say-what-they-counted.md))。**これがデータではなく設定なのは、ポリシーを編集できる者をポリシーの中で決められないからである**(編集できる者は自分に何でも付与できる)。secret は増えない: 増えるのは名前の一覧である。**空(既定)なら認可は存在しない** — ただしアクセスポリシーの行が既にあるのに空だと、誰もそれを編集できないので**起動を断る**(設計ドキュメント [0109](design/0109-a-directory-has-readers-and-writers.md) §3)。綴りが principal として読めない値も起動エラーである。既定: 空 |
@@ -114,11 +128,14 @@ Cloud Run では起動しないリビジョンにトラフィックは移らな�
 [0123](design/0123-the-numbers-say-what-they-counted.md))。**塞げないものが一つある**: 読める concept の
 本文が隠した id を名指していれば、その id は本文の中で読める(0109 §4.1)。
 
-**Google Cloud の外では、認証だけが第二の経路を持つ**(設計ドキュメント
-[0086](design/0086-a-second-way-to-say-who-is-calling.md))。
+**Google Cloud の外では、認証とデータベースが第二の経路を持つ**(設計
+ドキュメント [0086](design/0086-a-second-way-to-say-who-is-calling.md)、
+[0124](design/0124-the-database-credential-is-the-operators-to-hold.md))。
 `OCHAKAI_OIDC_ISSUER` と `OCHAKAI_OIDC_AUDIENCE` を設定したデプロイは
 トークンを自分で検証するので、`dev`(誰も認証しない)と `read-only`
-(誰も認証せず書き込みも断る)の二択ではなくなる。
+(誰も認証せず書き込みも断る)の二択ではなくなり、データベースは自分で
+立てた PostgreSQL でよい。**埋め込みとファイルには第二の経路が無い** —
+検索は字句のみになり、ファイルは保存できない。
 
 **この経路は `Authorization` だけを読む**(設計ドキュメント
 [0121](design/0121-each-path-reads-its-own-header.md))。Cloud Run 経路が
