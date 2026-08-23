@@ -743,3 +743,57 @@ func TestAcceptIsReadAsASetOfNames(t *testing.T) {
 		})
 	}
 }
+
+// An archive's filename is one of the two places design doc 0127 has it
+// say which part of a base it is, and it is the one that lands before
+// anybody opens anything. An id is any valid UTF-8, so for this
+// product's first audience the subtree is usually spelled in Japanese —
+// and folding those characters away took the filename's half of 0127
+// back out in exactly that case.
+func TestAnArchiveNamesTheSubtreeItCarriesInAnySpelling(t *testing.T) {
+	// The two shapes that made this a defect rather than an ugly name:
+	// a name that says nothing, and a name that says something wider.
+	whole := archiveFilename("")
+	for _, prefix := range []string{"営業", "営業/売上", "日本語", "_", "-"} {
+		got := archiveFilename(prefix)
+		if got == whole || got == "ochakai-okf-.tar.gz" {
+			t.Errorf("archiveFilename(%q) = %q, which a whole-base backup is kept under", prefix, got)
+		}
+	}
+	for _, c := range []struct{ prefix, wider string }{
+		{"teams/成長", "teams"},
+		{"チーム/growth", "growth"},
+	} {
+		if got := archiveFilename(c.prefix); got == archiveFilename(c.wider) {
+			t.Errorf("archiveFilename(%q) = %q, the name of %q — an archive of one directory "+
+				"claiming to be the archive of every directory beside it",
+				c.prefix, got, c.wider)
+		}
+	}
+
+	// The exact name travels for the clients that read RFC 6266, and
+	// the ASCII half stays unambiguous for the ones that do not.
+	disp := archiveDisposition("teams/成長")
+	if !strings.Contains(disp, `filename*=UTF-8''ochakai-okf-teams-%E6%88%90%E9%95%B7.tar.gz`) {
+		t.Errorf("Content-Disposition carries no exact name: %q", disp)
+	}
+	if !strings.Contains(disp, `filename="ochakai-okf-teams-%E6%88%90%E9%95%B7.tar.gz"`) {
+		t.Errorf("the ASCII half is not the subtree it carries: %q", disp)
+	}
+
+	// What shipped for the whole base and for a subtree the ASCII name
+	// already spelled exactly is what keeps shipping, byte for byte:
+	// this fixes the case that was broken and moves nothing else. A
+	// prefix the fold only changed the case of gains the exact spelling
+	// beside it, which is the same rule and not a second one.
+	for _, c := range []struct{ prefix, want string }{
+		{"", `attachment; filename="ochakai-okf.tar.gz"`},
+		{"teams/growth", `attachment; filename="ochakai-okf-teams-growth.tar.gz"`},
+		{"teams/growth-eu", `attachment; filename="ochakai-okf-teams-growth-eu.tar.gz"`},
+		{"Teams", `attachment; filename="ochakai-okf-teams.tar.gz"; filename*=UTF-8''ochakai-okf-Teams.tar.gz`},
+	} {
+		if got := archiveDisposition(c.prefix); got != c.want {
+			t.Errorf("archiveDisposition(%q) = %q, want %q", c.prefix, got, c.want)
+		}
+	}
+}

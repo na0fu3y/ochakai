@@ -3877,4 +3877,29 @@ func TestRESTIntegrationASubtreeArchiveSaysItIsOne(t *testing.T) {
 	if !carried {
 		t.Errorf("the subtree archive is missing its own concept: %v", paths)
 	}
+
+	// A subtree spelled the way this product's first audience spells one.
+	// An id is any valid UTF-8, and folding those characters out of the
+	// filename took 0127's own half of the promise back out with them:
+	// the name said nothing, or worse, said the name of the directory
+	// above.
+	jp := root + "/営業/売上"
+	putDoc(t, srv.URL, jp+"/実績", []byte("---\ntype: Metric\ntitle: 実績\n---\n\nbody\n"), false).Body.Close()
+	removeEntries(t, srv, jp+"/実績")
+	disp, index, paths = read(t, "/"+jp)
+	if strings.Contains(disp, `filename="ochakai-okf-.tar.gz"`) || !strings.Contains(disp, "%E5%96%B6%E6%A5%AD") {
+		t.Errorf("a Japanese subtree arrived as %q, want a name that is its own", disp)
+	}
+	if !strings.Contains(disp, `filename*=UTF-8''`) {
+		t.Errorf("a Japanese subtree carries no exact name: %q", disp)
+	}
+	if got := archiveFilename(root + "/営業"); strings.Contains(disp, `filename="`+got+`"`) {
+		t.Errorf("the archive of %q arrived under the name of %q: %q", jp, root+"/営業", disp)
+	}
+	if !strings.Contains(index, `bundle_scope: "`+jp+`"`) {
+		t.Errorf("the root index carries no bundle_scope:\n%s", index)
+	}
+	if !slices.Contains(paths, jp+"/実績.md") {
+		t.Errorf("the subtree archive is missing its own concept: %v", paths)
+	}
 }

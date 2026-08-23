@@ -589,6 +589,9 @@ paths:
         carries `bundle_scope` in its frontmatter and a sentence naming
         what is missing, and the `Content-Disposition` filename is
         `ochakai-okf-<subtree>.tar.gz` rather than `ochakai-okf.tar.gz`.
+        A subtree spelled outside ASCII is percent-encoded there and
+        carried unescaped in `filename*` (RFC 6266), so the name never
+        folds away to `ochakai-okf-.tar.gz` or to a wider subtree's.
         Deeper `index.md` files are unchanged — what a subtree archive
         lacks is above them, not below. A whole-base archive is exactly
         what it was.
