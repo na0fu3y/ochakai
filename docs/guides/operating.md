@@ -625,6 +625,12 @@ gcloud run services update ochakai --region "$REGION" \
   --update-env-vars OCHAKAI_ADMINS=human:ops@example.co.jp
 ```
 
+**順序を間違えると、断られる。** 最初の一行を置こうとする呼び出し元が
+`OCHAKAI_ADMINS` に居なければ 403 で、**何も書かれない**(設計ドキュメント
+[0122](../design/0122-the-first-rule-is-an-administrators-to-write.md))。
+最初の一行が入った瞬間からポリシーは管理者のものになるので、その一行を
+置けるのも管理者だけである。
+
 ポリシーは JSON 文書一枚で、表示と置き換えだけがある。**git に入れて
 レビューする**のが想定した使い方である。
 

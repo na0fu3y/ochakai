@@ -303,6 +303,77 @@ func TestNoPolicyIsTheDeploymentThatCameBeforeIntegration(t *testing.T) {
 	}
 }
 
+// TestFirstRuleBelongsToAnAdministratorIntegration is the other half of
+// that floor (design doc 0122, amending 0109 §3): a deployment that does
+// name administrators, a policy that is still empty, and a caller who is
+// not one of them.
+//
+// Every caller passes the administrator check while there are no rules —
+// 0109 §2 promises exactly that — so this write used to land, and only
+// the read on the way back out noticed that the policy it had just
+// created did not belong to whoever wrote it. The rows were committed,
+// the log said "access policy replaced", and the caller was handed a 403
+// with no version and no body: an answer that says nothing was written.
+// A caller retrying it would replace the policy again, each time.
+func TestFirstRuleBelongsToAnAdministratorIntegration(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.New(ctx, testdb.Private(t, "aclfirst"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{
+		Store:  s,
+		Log:    slog.New(slog.DiscardHandler),
+		Config: &config.Config{Admins: []string{"human:ops@example.co.jp"}},
+	}
+	admin := domain.Actor{Kind: domain.ActorHuman, Name: "ops@example.co.jp"}
+	adminCtx := httpauth.WithActor(ctx, admin)
+	outsider := domain.Actor{Kind: domain.ActorHuman, Name: "tanaka@example.co.jp"}
+	outsiderCtx := httpauth.WithActor(ctx, outsider)
+
+	// The outsider may do everything else here: there are no rules, so
+	// there is no boundary (0109 §2). Only the policy is not theirs.
+	if _, err := svc.Stats(outsiderCtx, 0, nil); err != nil {
+		t.Fatalf("stats on a deployment with no policy: %v", err)
+	}
+	rules := []domain.AccessRule{{Prefix: "aclfirst/growth", Principal: domain.PrincipalOf(outsider), MayWrite: true}}
+	if _, _, err := svc.SetPolicy(outsiderCtx, rules, outsider, nil); !errors.Is(err, ErrForbidden) {
+		t.Errorf("a caller outside OCHAKAI_ADMINS writing the first rule returned %v, want ErrForbidden", err)
+	}
+	// The refusal has to be a refusal: read as the administrator, who is
+	// allowed to see the policy either way, and find it still empty.
+	if got, _, err := svc.Policy(adminCtx); err != nil {
+		t.Fatalf("reading the policy as the administrator: %v", err)
+	} else if len(got) != 0 {
+		t.Errorf("the refused write left %d rule(s) behind; a 403 says nothing was written", len(got))
+	}
+	// The administrator writes the same document, and gets it back —
+	// with the version, which is what a conditional replacement needs
+	// (0120) and what the refusal above could not have returned.
+	stored, version, err := svc.SetPolicy(adminCtx, rules, admin, nil)
+	if err != nil {
+		t.Fatalf("the administrator writing the first rule: %v", err)
+	}
+	if len(stored) != 1 || version == "" {
+		t.Errorf("the write answered with %d rule(s) and version %q", len(stored), version)
+	}
+	t.Cleanup(func() {
+		if _, _, err := svc.SetPolicy(adminCtx, nil, admin, nil); err != nil {
+			t.Logf("clearing the policy: %v", err)
+		}
+	})
+	// And now that a policy exists, the outsider is refused by the check
+	// at the top of the operation instead — the same answer, from the
+	// side 0109 always covered.
+	if _, _, err := svc.SetPolicy(outsiderCtx, nil, outsider, nil); !errors.Is(err, ErrForbidden) {
+		t.Errorf("a scoped caller clearing the policy returned %v, want ErrForbidden", err)
+	}
+}
+
 // TestEveryWriteIsScopedIntegration is design doc 0109 §6's exhaustiveness
 // check, and the shape TestReadOnlyRefusesEveryWrite already uses: the
 // list of write methods is derived by reflection rather than written out,

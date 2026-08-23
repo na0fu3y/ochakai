@@ -65,6 +65,24 @@ last entry.
 
 ### Fixed
 
+- **A caller who is not an administrator can no longer write the first
+  access rule.** On a deployment with no grants every caller passes the
+  whole-bundle check — that is design doc 0109 §2's promise that no rules
+  means no boundary — so `PUT /api/v1/access` used to accept a first rule
+  from anyone, commit it, log `access policy replaced`, and *then* answer
+  **403**, because re-reading the policy on the way out ran the same check
+  against the boundary that had just been created. The status code is the
+  one that says nothing was written, so nothing that saw it could tell a
+  refused write from a landed one, and an automated caller retrying
+  replaced the policy again each time. The refusal now happens before the
+  write, naming the lockout: a policy is edited by the principals
+  `OCHAKAI_ADMINS` names, and placing the first rule is what hands the
+  policy to them (design doc 0122, amending 0109 §3). **Nothing that
+  worked stops working** — every call this refuses already ended in a 403,
+  since the check on the way out could never pass. Clearing the policy is
+  unchanged, as is the separate 400 a deployment that names no
+  administrators gets. The web UI's access editor now says why a save was
+  refused instead of passing the message through.
 - **`ochakai import` no longer reads through a symlink out of the bundle,
   and `ochakai export` no longer writes through one out of the directory
   it was given.** A bundle is ordinary content — cloned, unpacked, handed

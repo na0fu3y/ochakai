@@ -29,7 +29,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
-| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
+| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
@@ -664,6 +664,26 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   必須の配列と言っていた。**空のポリシーを wire で読むテストが無かった**
   ので契約チェックに見るものが無かった。却下: 行ごとの操作、本文の版を
   前提条件にすること、`If-Match` の必須化、ポリシーの履歴、競合時の併合。
+- [0122 最初の一行を置けるのは、管理者だけである](0122-the-first-rule-is-an-administrators-to-write.md)
+  — **Accepted**。0109 §3 の管理者の床を、設定の側からではなく**呼び出し元の
+  側から**読み直す。付与が一つも無いデプロイでは全員が入口の管理者検査を
+  通る(0109 §2)ので、`OCHAKAI_ADMINS` の外の呼び出し元が最初の一行を
+  書くと、**行はコミットされ、ログは「置き換えた」と言い、呼び出し元には
+  403 が返っていた** — 出口でもう一度ポリシーを読み、いま自分が作った
+  境界に照らして拒まれるからである。403 は「何も書かなかった」と言う符号
+  なので、自動化はそれを再送し、そのたびにポリシーを置き換える(0119)。
+  決定は**書く前に断る**こと: 最初の一行を置いた瞬間からポリシーは
+  `OCHAKAI_ADMINS` のものになるので、その一行を置けるのも
+  `OCHAKAI_ADMINS` である。**互換性の話ではない** — ここで断る呼び出しは
+  これまでも例外なく 403 で終わっており、変わったのは行が残らなくなった
+  ことだけである。より一般的な規則をもう一つ残す: **書き終えた操作の
+  戻り道に、拒否できる検査を置かない**(出口の再読み込みは管理者検査を
+  通らなくなった)。付与を空にする置き換えも、管理者を名指さないデプロイ
+  の 400 も動かない。Web UI のタブは付与が無いあいだ全員に出たままで、
+  **保存の失敗が理由を名指す**ことで半分だけ 0109 §6 に従う — 従い切ると
+  「あなたは管理者か」を応答に書くことになり、認可の答えが二箇所になる。
+  却下: 出口の検査だけ外すこと、締め出しを受け入れて 200 を返すこと、
+  400 で断ること、最初の一行を書いた本人を自動的に管理者にすること。
 - [0108 context pack は退役する](0108-the-context-pack-retires.md)
   — **Accepted**。**BREAKING(REST 非コア・MCP・CLI)**。
   REST の `/context`・MCP `get_context`・CLI の context コマンドを
