@@ -624,3 +624,127 @@ func TestStatsOutsideEveryGrantCountNothingAndSaySoIntegration(t *testing.T) {
 		t.Errorf("the empty answer dropped a vocabulary: %+v", st.Concepts)
 	}
 }
+
+// Design doc 0124: a prefix administrator edits the rules under the
+// subtrees a full administrator granted them, and nothing else. The
+// whole point is that placing a boundary for one team is not an
+// operation that can also remove every other team's.
+func TestPrefixAdminEditsOnlyItsOwnSubtreeIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	lead := domain.Actor{Kind: domain.ActorHuman, Name: "lead@example.co.jp"}
+	leadCtx := httpauth.WithActor(context.Background(), lead)
+	growth := f.prefix + "/growth"
+
+	// A full administrator hands one subtree to its lead.
+	rules, version, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules = append(rules, domain.AccessRule{
+		Prefix: growth, Principal: domain.PrincipalOf(lead), MayAdmin: true,
+	})
+	if _, _, err := f.svc.SetPolicy(f.adminCtx, rules, f.admin, &version); err != nil {
+		t.Fatal(err)
+	}
+
+	// The lead reads the rules they may edit, and no others.
+	mine, myVersion, err := f.svc.Policy(leadCtx)
+	if err != nil {
+		t.Fatalf("a prefix administrator reading the policy: %v", err)
+	}
+	for _, r := range mine {
+		if !domain.Under(r.Prefix, growth) {
+			t.Errorf("a prefix administrator was shown %q, outside %q", r.Prefix, growth)
+		}
+	}
+	if myVersion == version {
+		t.Error("the version a prefix administrator holds covers the whole policy; a change elsewhere would fail their write")
+	}
+
+	// They may place a rule under their own subtree.
+	mine = append(mine, domain.AccessRule{
+		Prefix: growth + "/metrics", Principal: "human:sato@example.co.jp", MayWrite: true,
+	})
+	if _, _, err := f.svc.SetPolicy(leadCtx, mine, lead, &myVersion); err != nil {
+		t.Fatalf("a prefix administrator placing a rule in their own subtree: %v", err)
+	}
+
+	// And the rules they never saw survived it — the danger the whole
+	// document replacement would otherwise carry.
+	whole, _, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var glossary bool
+	for _, r := range whole {
+		if r.Prefix == f.prefix+"/glossary" {
+			glossary = true
+		}
+	}
+	if !glossary {
+		t.Error("a prefix administrator's write removed a rule outside their subtree")
+	}
+}
+
+// The escalation this refuses: a rule outside the caller's own
+// subtrees, which is how a subtree would grow into the bundle. Refused,
+// not dropped — a rule silently discarded is a boundary the caller
+// believes they placed.
+func TestPrefixAdminCannotReachOutsideItsSubtreeIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	lead := domain.Actor{Kind: domain.ActorHuman, Name: "lead@example.co.jp"}
+	leadCtx := httpauth.WithActor(context.Background(), lead)
+	growth := f.prefix + "/growth"
+
+	rules, version, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules = append(rules, domain.AccessRule{
+		Prefix: growth, Principal: domain.PrincipalOf(lead), MayAdmin: true,
+	})
+	if _, _, err := f.svc.SetPolicy(f.adminCtx, rules, f.admin, &version); err != nil {
+		t.Fatal(err)
+	}
+	mine, myVersion, err := f.svc.Policy(leadCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		rule domain.AccessRule
+	}{
+		{"the root", domain.AccessRule{Principal: domain.PrincipalOf(lead), MayWrite: true}},
+		{"another team", domain.AccessRule{
+			Prefix: f.prefix + "/personnel", Principal: domain.PrincipalOf(lead), MayWrite: true}},
+		{"the level above their own", domain.AccessRule{
+			Prefix: f.prefix, Principal: domain.PrincipalOf(lead), MayAdmin: true}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, _, err := f.svc.SetPolicy(leadCtx, append(append([]domain.AccessRule{}, mine...), tc.rule),
+				lead, &myVersion); !errors.Is(err, ErrForbidden) {
+				t.Fatalf("reaching %s returned %v, want ErrForbidden", tc.name, err)
+			}
+		})
+	}
+}
+
+// The floor 0109 §3 put under the policy, unmoved: "who may edit the
+// whole policy" cannot be an answer the policy carries, so may_admin at
+// the root is refused where it is written rather than where it is used.
+func TestRootPrefixAdminIsRefusedIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	rules, version, err := f.svc.Policy(f.adminCtx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules = append(rules, domain.AccessRule{Principal: "human:x@example.co.jp", MayAdmin: true})
+	_, _, err = f.svc.SetPolicy(f.adminCtx, rules, f.admin, &version)
+	if _, ok := errors.AsType[*InvalidInputError](err); !ok {
+		t.Fatalf("may_admin at the root returned %v, want an invalid-input refusal", err)
+	}
+	if !strings.Contains(err.Error(), "OCHAKAI_ADMINS") {
+		t.Errorf("the refusal does not name where that answer lives: %v", err)
+	}
+}

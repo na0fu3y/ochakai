@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
@@ -34,6 +35,11 @@ type Scope struct {
 	// and nothing is filtered: the feature is off until a first grant
 	// turns it on.
 	Unscoped bool
+	// AdminPrefixes are the subtrees whose rules this caller may edit,
+	// from the may_admin grants that name them (design doc 0124). Empty
+	// for everyone else, including a full administrator — Admin above is
+	// the wider fact and is checked first.
+	AdminPrefixes []string
 	// Admin is a principal named by OCHAKAI_ADMINS. Administrators may
 	// read and write everything and are the only callers who may run the
 	// operations that take the bundle as a whole (§3).
@@ -98,6 +104,9 @@ func (s *Service) scope(ctx context.Context) (*Scope, error) {
 		if r.MayWrite {
 			sc.Write = append(sc.Write, r.Prefix)
 		}
+		if r.MayAdmin {
+			sc.AdminPrefixes = append(sc.AdminPrefixes, r.Prefix)
+		}
 	}
 	return sc, nil
 }
@@ -154,25 +163,20 @@ func (s *Service) mayWrite(ctx context.Context, id string) error {
 // caller cannot see would break the one invariant the bundle has —
 // what goes in comes out (0075 §1). Whoever needs the whole bundle can
 // be given the whole bundle.
+// On a deployment with no rules every scope is Everything, so passing
+// here does not mean the caller is an administrator. The two callers
+// that need that narrower fact — writing the policy (0122) and editing
+// one subtree of it (0124) — read the scope themselves rather than
+// through this.
 func (s *Service) RequireAdmin(ctx context.Context, op string) error {
-	_, err := s.adminScope(ctx, op)
-	return err
-}
-
-// adminScope is RequireAdmin's answer together with the scope it decided
-// from, for the one caller that has to know *which* of the two ways it
-// passed. On a deployment with no rules every scope is Everything, so
-// passing here does not mean the caller is an administrator — and
-// writing the policy needs that narrower fact (0122).
-func (s *Service) adminScope(ctx context.Context, op string) (*Scope, error) {
 	sc, err := s.scope(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if sc.Everything() {
-		return sc, nil
+		return nil
 	}
-	return nil, fmt.Errorf("%w: %s takes the whole bundle, which is an administrator's operation", ErrForbidden, op)
+	return fmt.Errorf("%w: %s takes the whole bundle, which is an administrator's operation", ErrForbidden, op)
 }
 
 // narrow forces the caller's read scope onto a filter, intersecting it
@@ -252,14 +256,51 @@ func scopeRows[T any](sc *Scope, rows []T, id func(T) string) []T {
 // side of. The version is what a caller echoes in If-Match to replace
 // the policy it just read (design doc 0030).
 func (s *Service) Policy(ctx context.Context) ([]domain.AccessRule, string, error) {
-	if err := s.RequireAdmin(ctx, "reading the access policy"); err != nil {
+	sc, err := s.scope(ctx)
+	if err != nil {
 		return nil, "", err
+	}
+	if !sc.Everything() && len(sc.AdminPrefixes) == 0 {
+		if err := s.RequireAdmin(ctx, "reading the access policy"); err != nil {
+			return nil, "", err
+		}
 	}
 	p, err := s.Store.AccessPolicy(ctx)
 	if err != nil {
 		return nil, "", err
 	}
-	return p.Rules, p.Version, nil
+	if sc.Everything() {
+		return p.Rules, p.Version, nil
+	}
+	// A prefix administrator reads the rules they may edit and no
+	// others: the rest name people and directories they cannot see, which
+	// is the same answer 0109 §4 gives a scoped read. The version covers
+	// what was read, so it is the precondition for replacing it (0124).
+	mine, _ := partitionRules(p.Rules, sc.AdminPrefixes)
+	return mine, domain.AccessPolicyVersion(mine), nil
+}
+
+// partitionRules is the service's copy of the split the store makes
+// inside its transaction: a rule belongs to a prefix administrator when
+// its own prefix sits at or under one of theirs. The shallower rule that
+// governs their subtree is deliberately not theirs — editing the rule
+// that contains you is how a subtree grows into the bundle.
+func partitionRules(rules []domain.AccessRule, prefixes []string) (inside, outside []domain.AccessRule) {
+	for _, r := range rules {
+		mine := false
+		for _, p := range prefixes {
+			if domain.Under(r.Prefix, p) {
+				mine = true
+				break
+			}
+		}
+		if mine {
+			inside = append(inside, r)
+		} else {
+			outside = append(outside, r)
+		}
+	}
+	return inside, outside
 }
 
 // SetPolicy replaces the whole access policy.
@@ -286,9 +327,18 @@ func (s *Service) SetPolicy(ctx context.Context, rules []domain.AccessRule, acto
 	if err := s.readOnly(); err != nil {
 		return nil, "", err
 	}
-	sc, err := s.adminScope(ctx, "editing the access policy")
+	sc, err := s.scope(ctx)
 	if err != nil {
 		return nil, "", err
+	}
+	// Two ways to be allowed here, and the narrower one arrived second.
+	// A prefix administrator edits the rules under the subtrees a full
+	// administrator granted them (design doc 0124); everyone else needs
+	// the whole bundle, which is what adminScope's refusal says.
+	if !sc.Everything() && len(sc.AdminPrefixes) == 0 {
+		if err := s.RequireAdmin(ctx, "editing the access policy"); err != nil {
+			return nil, "", err
+		}
 	}
 	checked, err := domain.ValidateAccessRules(rules)
 	if err != nil {
@@ -317,15 +367,31 @@ func (s *Service) SetPolicy(ctx context.Context, rules []domain.AccessRule, acto
 	// it. Deciding on the way out is how this arrived: the rows landed,
 	// the log said the policy was replaced, and the caller was told 403
 	// — an answer that says nothing was written.
-	if len(checked) > 0 && !sc.Admin {
+	if len(checked) > 0 && !sc.Admin && len(sc.AdminPrefixes) == 0 {
 		return nil, "", fmt.Errorf("%w: a policy is edited by the principals OCHAKAI_ADMINS names, and %s is "+
 			"not one of them; writing the first rule here would lock this caller out of undoing it "+
 			"(design doc 0109 §3)", ErrForbidden, domain.PrincipalOf(httpauth.Actor(ctx)))
 	}
-	if err := s.Store.ReplaceAccessPolicy(ctx, checked, actor, ifMatch); err != nil {
+	// A prefix administrator's document describes their own subtrees and
+	// can say nothing about the rest, so every rule in it has to sit
+	// under one of them. Refused rather than dropped: a rule silently
+	// discarded is a boundary the caller believes they placed
+	// (design doc 0124).
+	var within []string
+	if !sc.Everything() {
+		within = sc.AdminPrefixes
+		if _, outside := partitionRules(checked, within); len(outside) > 0 {
+			return nil, "", fmt.Errorf(
+				"%w: %q is outside the directories this caller administers (%s); a rule there is placed by an "+
+					"administrator of it, or by one OCHAKAI_ADMINS names (design doc 0124)",
+				ErrForbidden, displayPrefix(outside[0].Prefix), strings.Join(within, ", "))
+		}
+	}
+	if err := s.Store.ReplaceAccessPolicy(ctx, checked, actor, ifMatch, within); err != nil {
 		return nil, "", err
 	}
-	s.Log.Info("access policy replaced", "rules", len(checked), "actor", actor.String())
+	s.Log.Info("access policy replaced", "rules", len(checked), "actor", actor.String(),
+		"within", strings.Join(within, ","))
 	// Read back rather than call Policy: the write has landed, and a
 	// second admin check on the way out could only turn a write that
 	// happened into a refusal that says it did not (0122). What the
@@ -335,5 +401,19 @@ func (s *Service) SetPolicy(ctx context.Context, rules []domain.AccessRule, acto
 	if err != nil {
 		return nil, "", err
 	}
-	return p.Rules, p.Version, nil
+	if within == nil {
+		return p.Rules, p.Version, nil
+	}
+	mine, _ := partitionRules(p.Rules, within)
+	return mine, domain.AccessPolicyVersion(mine), nil
+}
+
+// displayPrefix names the root the way the rest of this surface does,
+// so a refusal about it does not read as a refusal about an empty
+// string.
+func displayPrefix(p string) string {
+	if p == "" {
+		return "/"
+	}
+	return p
 }

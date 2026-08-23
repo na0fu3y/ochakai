@@ -649,7 +649,8 @@ ochakai access -f policy.json         # 置き換え、置いた結果が印字�
 ```
 
 読み方は一行ずつで足りる — 「この principal はこのディレクトリ以下を
-読める、`may_write` なら書ける」。拒否規則は無く、**どの規則も付与しな
+読める、`may_write` なら書ける、`may_admin` ならそこ以下の規則そのものを
+編集できる」。拒否規則は無く、**どの規則も付与しな
 かったものは読めない**。照合はセグメント境界なので `sales` は
 `sales/orders` に当たり `sales-legacy/orders` には当たらない。
 principal は台帳と同じ綴り(`human:` / `process:`、`*` は全認証済み
@@ -682,6 +683,26 @@ ochakai access -f policy.json --if-match "$(jq -r .version policy.json)"
 これは任意ではない。REST では同じものが `If-Match` ヘッダで、版は `ETag`
 と本文の `version` の両方に載る。**空のポリシーにも版がある** — 最初の
 一行こそ二つの登録処理が競う書き込みである。
+
+**ディレクトリごと預けるなら、`may_admin` を使う**(設計ドキュメント
+[0124](../design/0124-a-directory-can-have-its-own-administrator.md))。
+チームや、組織ごとに一行足す自動化に渡すのはこれで、渡した相手は
+**その prefix 以下の規則しか読めず、書けない**。他のディレクトリの規則は
+その相手の保存を跨いで残るので、`ochakai access --json > f` → 編集 →
+`-f f` の手順をそのまま渡してよい。
+
+```json
+{"rules": [
+  {"prefix": "teams/growth", "principal": "human:lead@example.co.jp", "may_admin": true}
+]}
+```
+
+**バンドル全体への `may_admin` は置けない。** ポリシー全体を誰が編集
+できるかという答えは、そのポリシーの中には置けない — それは
+`OCHAKAI_ADMINS` の仕事である。そして**渡した相手より浅い規則は、その
+相手には見えないし消せない**: `prefix: ""` に `*` の読み取りを与えて
+あれば `teams/growth` にも効き、`teams/growth` の管理者はそれを知らない。
+預ける前に、上から効いている行がないか読み返すこと。
 
 **知っておくべきことが三つある。**
 

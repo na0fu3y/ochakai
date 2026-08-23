@@ -79,7 +79,11 @@ stdin. Only an administrator (OCHAKAI_ADMINS) may do either.
 
 Each rule grants one principal — human:<name>, process:<name>, or *
 for every authenticated caller — the right to read under one directory,
-and to write there when may_write is true. Prefixes match on segment
+to write there when may_write is true, and to edit the rules under it
+when may_admin is. A may_admin caller reads and replaces only the rules
+at or under the directories it administers; the rest are invisible and
+survive its write. may_admin at the root is refused — who may edit the
+whole policy is what OCHAKAI_ADMINS answers. Prefixes match on segment
 boundaries, so sales covers sales/orders and does not cover
 sales-legacy/orders; the empty prefix is the whole bundle. There are no
 deny rules: what no rule grants is not readable, and a caller sees a

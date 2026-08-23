@@ -2426,6 +2426,34 @@ components:
             caller that could change a concept it cannot read would be
             writing blind, and the If-Match read it needs to do that
             safely would be the thing refused.
+        may_admin:
+          type: boolean
+          description: >
+            Grants editing the **rules under this prefix** — the grants
+            for one subtree, delegated to whoever runs it, so that
+            placing a boundary for one team is not an operation that can
+            also remove every other team's (design doc 0124). Implies
+            `may_write`, which implies reading.
+
+
+            A caller holding it reads and replaces only the rules at or
+            under the prefixes it names, matched on segment boundaries;
+            everything else is invisible to them and survives their write
+            untouched, and the `ETag` they are given covers what they can
+            see. A rule they send outside those prefixes is a **403**
+            rather than a rule quietly dropped.
+
+
+            **Refused at the root.** "Who may edit the whole policy" is
+            the one answer that cannot live inside the policy, because
+            whoever holds it can grant themselves anything — name that
+            principal in `OCHAKAI_ADMINS` instead (design doc 0109 §3).
+
+
+            What it does not reach: a shallower rule that governs the
+            same subtree belongs to whoever administers *that* prefix, so
+            the effective access to a directory can be wider than the
+            rules its own administrator can see.
         granted_at:
           type: string
           format: date-time

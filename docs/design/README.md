@@ -29,7 +29,7 @@ PR の説明で足り、まだリリースに乗っていない決定の改訂�
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
-| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**`stats` が範囲を持つ呼び出し元にも答えることは [0123](0123-the-numbers-say-what-they-counted.md)**(0109 §3 を改訂 — 答えが自分の範囲を宣言する)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
+| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**ディレクトリごとの管理者は [0124](0124-a-directory-can-have-its-own-administrator.md)**(0109 §3 を改訂 — `may_admin` は prefix に縛られ、根には置けない)。**`stats` が範囲を持つ呼び出し元にも答えることは [0123](0123-the-numbers-say-what-they-counted.md)**(0109 §3 を改訂 — 答えが自分の範囲を宣言する)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
@@ -641,6 +641,28 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   スコープ外の読みは **404**。**塞げないものが一つあり、そう書いてある**:
   可視な concept の本文が隠した id を名指していれば読める(0075 §3 が
   サーバによる文書の書き換えを禁じている)。
+- [0124 ディレクトリは、自分の管理者を持てる](0124-a-directory-can-have-its-own-administrator.md)
+  — **Accepted**。0109 §3 の床を**一つの subtree について**改訂する。
+  払っていた代金は「ディレクトリを一つ預けるのにバンドル全部を預ける」
+  ことで、チームに境界を任せれば他の全チームの境界を消す権限も渡り、
+  組織ごとに一行足す自動化([0119](0119-an-operated-fleet-is-deployments-or-directories.md))は
+  恒久的に完全な管理者でいる必要があった。決定は付与の三つ目の力
+  `may_admin` — **この prefix 以下の規則そのものを編集してよい**、
+  `may_write` を含み、**根には置けない**(`prefix: ""` の may_admin は
+  「ポリシー全体を誰が編集できるか」をポリシーに置くことで、それが
+  0109 §3 の回転扉そのもの)。**床は一字も動かない**: prefix 管理者を
+  作れるのも取り上げられるのも完全な管理者だけで、外へ出る道が無い。
+  **丸ごと置き換える文書との組み合わせが要点**で、prefix 管理者は自分の
+  subtree の規則だけを読み、**外の規則は書き込みを跨いで保たれる** —
+  見えなかったものについて、その文書は何も言っていない。分割も前提条件も
+  同じトランザクション・同じ advisory lock の下(0120 を開け直さない)、
+  **版は読んだものを覆う**(見えない変化で 412 にならない)、外の prefix を
+  含む文書は**黙って落とさず 403**。自分より浅い規則は自分のものではない —
+  自分を含む規則を編集できれば subtree はバンドルへ育つ。§4 に塞げない
+  ものを書いた: 浅い規則による実効的なアクセスは、自分に見える規則より
+  広いことがある。移行 0045 は追加的で既定 false、**数える面はどれも
+  動かない**。却下: prefix 管理者に export・move・reembed を開くこと、
+  浅い規則を見せること、付与の履歴、`OCHAKAI_ADMINS` に prefix を書くこと。
 - [0123 数は、何を数えたかを言う](0123-the-numbers-say-what-they-counted.md)
   — **Accepted**。0109 §3 の「バンドル全体を取る操作は管理者のものになる」
   から **`stats` だけを外す**。0109 §3 の理由(部分集合はループを測る数に

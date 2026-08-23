@@ -23,6 +23,32 @@ last entry.
 
 ### Added
 
+- **A directory can have its own administrator.** An access rule gains
+  `may_admin`: the rules *under that prefix* are that principal's to
+  edit (design doc 0124). Until now handing a team its own directory
+  meant handing it `OCHAKAI_ADMINS`, and therefore the power to delete
+  every other team's boundary — and an automation that places one grant
+  per organization had to hold that permanently. A prefix administrator
+  reads only the rules they may edit, **and the rules they never saw
+  survive their write**, so the ordinary `ochakai access --json > f;
+  edit; ochakai access -f f` flow is safe to hand them. The `ETag` they
+  get covers what they read, so a rule they cannot see moving does not
+  fail their write; a rule they send outside their prefixes is a 403
+  rather than a silent drop. **`may_admin` at the root is refused** —
+  who may edit the whole policy is what `OCHAKAI_ADMINS` answers, and
+  putting that answer inside the policy is the revolving door 0109 §3
+  named. It implies `may_write`. Migration 0045 adds the column,
+  additive and defaulting to false, so every existing policy means
+  exactly what it meant.
+
+  One thing it does not reach, stated rather than closed: a rule
+  *shallower* than the delegated directory still governs it and stays
+  invisible to that directory's administrator, so the effective access
+  to a subtree can be wider than the rules its own administrator can
+  see.
+
+### Added
+
 - **`GET /api/v1/stats` answers a caller who holds part of the bundle,
   and the answer says what it counted.** Design doc 0109 §3 pooled these
   numbers on the administrator because a subset would give the loop's
