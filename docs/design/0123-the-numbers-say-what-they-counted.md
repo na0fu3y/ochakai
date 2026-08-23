@@ -5,6 +5,11 @@ Status: Accepted(2026-08-23)。[0109](0109-a-directory-has-readers-and-writers.m
 絞るのではなく断る、という §3 の判断はそのままで、そこが自分で置いた
 「後から割ることはできる」に従う。export・`move`・`reembed`・ポリシー自身は
 管理者のままである。
+**§4 のその一覧は、同じ形の記録が二本続いて古くなった** — subtree の
+export を読める者に開いたのは [0127](0127-an-archive-says-which-part-it-is.md)、
+`move` を書き換えの収まる範囲で開いたのは
+[0129](0129-a-move-runs-when-its-rewrite-fits.md) で、§4 が両者に付けた
+「まだ効いている理由」はそれぞれそこで読み直されている。
 [0119](0119-an-operated-fleet-is-deployments-or-directories.md) §5 の宿題の
 二番目、その二つ目
 Date: 2026-08-23

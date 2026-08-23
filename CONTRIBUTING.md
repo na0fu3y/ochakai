@@ -909,7 +909,22 @@ somebody to read code nobody had a reason to run; this one says a standard
 that arrives late does the same thing to code somebody had every reason to
 trust, because it had a record behind it.
 
-    RECORD-CORPUS-LINES: 11000
+11,000 → 11,500 is 0127 and 0129, and they are the same shape twice:
+**a refusal re-read years after the fear that put it there, and found to
+be aimed at a danger that had moved.** 0109 §3 pooled five whole-bundle
+operations on the administrator and said in the same paragraph that
+splitting them later was allowed; three have now been split, each by a
+record about a hundred lines long. So this crossing names a pressure the
+earlier ones did not: **a corpus grows when a record honours a promise an
+earlier record made about its own successors.** The 10,500 crossing said
+a half-kept rule shows when a newer standard answer arrives beside it;
+this one says the other thing that makes a rule legible again is somebody
+finally needing the case it was written broadly enough to cover. The
+records are not cheaper than the split — 0109 §3's own sentence is why
+the split takes a record at all — and the ones still pooled there are the
+ones nobody has needed yet.
+
+    RECORD-CORPUS-LINES: 11500
     RECORD-CORPUS-LINES-SLACK: 500
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded

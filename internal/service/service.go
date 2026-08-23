@@ -707,29 +707,65 @@ func (s *Service) Purge(ctx context.Context, id string, actor domain.Actor) erro
 // references so nothing breaks (design doc 0021). Moving to the current
 // id is a no-op read.
 //
-// An administrator's operation where a policy exists (design doc 0109
-// §3). Not because renaming is grander than editing, but because of the
-// inbound rewrite: a move writes an update revision into every live
-// concept whose body names the old id, and those sit anywhere in the
-// bundle. A scoped writer moving their own concept would be writing
-// outside their scope, and narrowing the rewrite instead would leave the
-// links it skipped pointing at nothing — which is the one thing move
-// exists to prevent.
+// Where a policy exists, a move runs when its whole rewrite fits inside
+// what the caller may write (design doc 0129). Three things have to hold
+// and all three are the same right: the concept, the destination, and
+// every live concept that references the concept — because a move writes
+// an update revision into each of those, and one that landed outside the
+// caller's scope would be a revision signed by a principal who cannot
+// read what it changed (0065 §2).
+//
+// Refused whole, never narrowed. Skipping the referrers the caller may
+// not write would leave those links pointing at an id that is gone,
+// which is the one thing move exists to prevent — so the answer to a
+// rewrite that reaches outside is no, and an administrator's move is the
+// way it gets done.
 func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor) (*domain.Knowledge, error) {
 	if err := s.readOnly(); err != nil {
-		return nil, err
-	}
-	if err := s.RequireAdmin(ctx, "move"); err != nil {
 		return nil, err
 	}
 	id, newID = domain.Normalize(id), domain.Normalize(newID)
 	if !domain.ValidID(newID) {
 		return nil, Invalidf(`invalid destination id %q (path segments separated by "/", e.g. sales/orders; segments must not start with "." and the last must not be "index" or "log")`, newID)
 	}
+	sc, err := s.scope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := mayWriteIn(sc, id); err != nil {
+		return nil, err
+	}
+	// The destination is refused by name rather than hidden, unlike the
+	// source: nothing is stored there yet, so saying "outside what you
+	// may write" answers no question about what the bundle holds — and a
+	// 404 for a place the caller is trying to create would send them
+	// looking for a concept that was never the point.
+	if !sc.MayWrite(newID) {
+		return nil, fmt.Errorf("%w: the destination %s is outside the directories this caller may write",
+			ErrForbidden, newID)
+	}
 	if newID == id {
 		return s.Store.Get(ctx, id)
 	}
-	return s.Store.Move(ctx, id, newID, actor)
+	// nil is unbounded, so a scoped caller is given a list that is empty
+	// rather than absent when they hold no write grant at all. That case
+	// cannot get here — mayWriteIn refused it — and the store must not
+	// depend on that for its answer to be the safe one.
+	var within []string
+	if !sc.Everything() {
+		within = append([]string{}, sc.Write...)
+	}
+	moved, err := s.Store.Move(ctx, id, newID, actor, within)
+	if errors.Is(err, store.ErrOutsideScope) {
+		// What leaked is one bit, and it is about the caller's own
+		// concept: something, somewhere, links at it. No address, no
+		// count, no content — see 0129 §4 for why that is the one
+		// disclosure this feature is worth.
+		return nil, fmt.Errorf("%w: %s is referenced from outside the directories this caller may write, and a "+
+			"move rewrites every reference to it rather than skipping any: an administrator can move it",
+			ErrForbidden, id)
+	}
+	return moved, err
 }
 
 // normalizeKeys rewrites a write payload's byte-compared keys — the id

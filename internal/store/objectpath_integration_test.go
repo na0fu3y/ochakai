@@ -102,7 +102,7 @@ func TestIntegrationUnderscoreIsNotAWildcard(t *testing.T) {
 	})
 
 	t.Run("move", func(t *testing.T) {
-		if _, err := s.Move(ctx, mine, root+"/moved", actor); err != nil {
+		if _, err := s.Move(ctx, mine, root+"/moved", actor, nil); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := s.GetFileMeta(ctx, theirs+"/chart.png"); err != nil {
@@ -181,7 +181,7 @@ func TestIntegrationFileHistoryFollowsAMove(t *testing.T) {
 	if _, _, err := s.PutFile(ctx, root+"/before/chart.png", "image/png", []byte("bytes"), actor); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Move(ctx, root+"/before", root+"/after", actor); err != nil {
+	if _, err := s.Move(ctx, root+"/before", root+"/after", actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := s.ListRevisionsUnder(ctx, root+"/after", 100)

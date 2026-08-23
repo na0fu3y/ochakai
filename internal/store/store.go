@@ -52,6 +52,13 @@ var ErrCuratedTombstone = errors.New("knowledge id holds a curated tombstone")
 // no single call can erase history that was in use a moment ago.
 var ErrNotDeleted = errors.New("knowledge is live; soft-delete it before purging")
 
+// ErrOutsideScope is returned by Move when the rename would rewrite a
+// concept the caller may not write (design doc 0129). It names no row:
+// what leaves this package is the fact that the blast radius left the
+// scope, and an address would answer the question a scope exists to
+// refuse (0109 §4).
+var ErrOutsideScope = errors.New("the rewrite this operation performs reaches outside the caller's scope")
+
 // ErrNoRejection is returned by WithdrawRejection for a live entry that
 // carries no rejection to withdraw — a state conflict, the same shape as
 // ErrNotDeleted, not a missing resource (design doc 0064: this used to

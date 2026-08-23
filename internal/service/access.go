@@ -142,6 +142,12 @@ func (s *Service) mayWrite(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
+	return mayWriteIn(sc, id)
+}
+
+// mayWriteIn is mayWrite against a scope already in hand, for the caller
+// that needs more from the scope than one id's answer (Move, 0129).
+func mayWriteIn(sc *Scope, id string) error {
 	switch {
 	case sc.MayWrite(id):
 		return nil
@@ -152,22 +158,27 @@ func (s *Service) mayWrite(ctx context.Context, id string) error {
 	}
 }
 
-// RequireAdmin gates the operations that take the bundle as a whole:
-// the statistics, the tar of a subtree, re-embedding, move, and the
+// RequireAdmin gates what is left of the operations that take the
+// bundle as a whole: the archive of the root, re-embedding, and the
 // policy itself (§3).
 //
-// These are refused rather than narrowed. Narrowing them was the other
-// option and it costs more than it buys: a stats page that counted only
-// part of the base would be a second meaning for numbers the loop is
-// measured by (0069), and an export that quietly omitted what the
-// caller cannot see would break the one invariant the bundle has —
-// what goes in comes out (0075 §1). Whoever needs the whole bundle can
-// be given the whole bundle.
+// These are refused rather than narrowed, because narrowing them costs
+// more than it buys: an export that quietly omitted what the caller
+// cannot see would break the one invariant the bundle has — what goes
+// in comes out (0075 §1). Whoever needs the whole bundle can be given
+// the whole bundle.
+//
+// The list has shrunk three times, each by a record that found a way to
+// return a part without it being mistaken for the whole: the statistics
+// declare what they counted (0123), a subtree's archive names itself
+// (0127), and a move runs when its rewrite fits inside the caller's
+// scope (0129). What remains is what nobody has found that answer for.
 // On a deployment with no rules every scope is Everything, so passing
 // here does not mean the caller is an administrator. The two callers
 // that need that narrower fact — writing the policy (0122) and editing
 // one subtree of it (0124) — read the scope themselves rather than
-// through this.
+// through this, as does the one that needs a wider fact than an id,
+// move (0129).
 func (s *Service) RequireAdmin(ctx context.Context, op string) error {
 	sc, err := s.scope(ctx)
 	if err != nil {

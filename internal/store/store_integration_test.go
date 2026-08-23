@@ -751,18 +751,18 @@ func TestIntegrationMove(t *testing.T) {
 	}
 
 	// Occupied destinations refuse, live or soft-deleted.
-	if _, err := s.Move(ctx, src, taken, actor); !errors.Is(err, ErrAlreadyExists) {
+	if _, err := s.Move(ctx, src, taken, actor, nil); !errors.Is(err, ErrAlreadyExists) {
 		t.Fatalf("move onto a live entry: got %v, want ErrAlreadyExists", err)
 	}
 	if err := s.SoftDelete(ctx, taken, actor, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Move(ctx, src, taken, actor); !errors.Is(err, ErrAlreadyExists) {
+	if _, err := s.Move(ctx, src, taken, actor, nil); !errors.Is(err, ErrAlreadyExists) {
 		t.Fatalf("move onto a soft-deleted entry: got %v, want ErrAlreadyExists", err)
 	}
 
 	mover := domain.Actor{Kind: "human", Name: "mover"}
-	moved, err := s.Move(ctx, src, dst, mover)
+	moved, err := s.Move(ctx, src, dst, mover, nil)
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
@@ -1253,7 +1253,7 @@ func TestIntegrationSearchTextFollowsAttachmentsAndMoves(t *testing.T) {
 		t.Errorf("attaching a file left search_text stale: %q", searchText(id))
 	}
 
-	if _, err := s.Move(ctx, id, moved, actor); err != nil {
+	if _, err := s.Move(ctx, id, moved, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	after := searchText(moved)
@@ -1308,7 +1308,7 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 	create(dst)
 
 	// A live occupant is a plain conflict.
-	if _, err := s.Move(ctx, src, dst, actor); !errors.Is(err, ErrAlreadyExists) {
+	if _, err := s.Move(ctx, src, dst, actor, nil); !errors.Is(err, ErrAlreadyExists) {
 		t.Fatalf("move onto a live entry: got %v, want ErrAlreadyExists", err)
 	}
 
@@ -1317,7 +1317,7 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 	}
 	// Still taken — but the error must say so, or the caller goes looking
 	// for an entry they cannot see.
-	_, err = s.Move(ctx, src, dst, actor)
+	_, err = s.Move(ctx, src, dst, actor, nil)
 	if !errors.Is(err, ErrAlreadyExists) {
 		t.Fatalf("move onto a tombstone: got %v, want ErrAlreadyExists", err)
 	}
@@ -1363,7 +1363,7 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 	}
 
 	// The id is free again.
-	moved, err := s.Move(ctx, src, dst, actor)
+	moved, err := s.Move(ctx, src, dst, actor, nil)
 	if err != nil {
 		t.Fatalf("move after purge: %v", err)
 	}
@@ -2073,7 +2073,7 @@ func TestIntegrationMoveKeepsOutboundRelativeLinks(t *testing.T) {
 		}
 	})
 
-	if _, err := s.Move(ctx, mover, dest, actor); err != nil {
+	if _, err := s.Move(ctx, mover, dest, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	moved, err := s.Get(ctx, dest)
@@ -2147,7 +2147,7 @@ func TestIntegrationMoveSelfRewriteIsOneRevision(t *testing.T) {
 		}
 	}
 
-	returned, err := s.Move(ctx, mover, dest, actor)
+	returned, err := s.Move(ctx, mover, dest, actor, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2432,7 +2432,7 @@ func TestIntegrationMoveDoesNotClobberAConcurrentEdit(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := s.Move(ctx, target, moved, actor)
+		_, err := s.Move(ctx, target, moved, actor, nil)
 		done <- err
 	}()
 
@@ -2633,7 +2633,7 @@ func TestIntegrationMoveAndPurgeCarryTheLedgers(t *testing.T) {
 	if _, err := s.Reject(ctx, from, actor, "on second thoughts"); err != nil {
 		t.Fatal(err)
 	}
-	moved, err := s.Move(ctx, from, to, actor)
+	moved, err := s.Move(ctx, from, to, actor, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3013,7 +3013,7 @@ func TestIntegrationObjectIsKeyedByBundlePath(t *testing.T) {
 		t.Errorf("created at path %q, want %q", got, want)
 	}
 
-	if _, err := s.Move(ctx, id, moved, actor); err != nil {
+	if _, err := s.Move(ctx, id, moved, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got, want := pathOf(moved), domain.ConceptPath(moved); got != want {

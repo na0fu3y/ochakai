@@ -1256,15 +1256,23 @@ paths:
       description: >
         The id is the address (design doc 0075 §2), so a move carries
         everything keyed by it along in one transaction — revisions,
-        usage, files, embeddings — and rewrites inbound references
-        (link targets in both of SPEC §6's forms, and the producer
-        key `model` where a document carries one)
-        so nothing breaks (design doc 0075 §5). The destination must be a
-        fresh id: a live or soft-deleted concept there already owns that
-        address and its history — free an id held by a deleted concept with
-        DELETE ...?purge=true. Lives at its own top-level path for the
-        same reason /usage and /review do — a suffix after the
-        hierarchical id could be confused with an ID segment.
+        usage, files, embeddings — and rewrites inbound references (link
+        targets in both of SPEC §6's forms, and the producer key `model`
+        where a document carries one) so nothing breaks (design doc 0075
+        §5). The destination must be a fresh id: a live or soft-deleted
+        concept there already owns that address and its history — free
+        an id held by a deleted concept with DELETE ...?purge=true.
+        Lives at its own top-level path for the same reason /usage and
+        /review do — a suffix after the hierarchical id could be
+        confused with an ID segment.
+
+
+        **Where an access policy exists, a move runs when its whole
+        rewrite fits inside what the caller may write** — the concept,
+        the destination, and everything that links at the concept. When
+        one of them is outside, the move is refused whole rather than
+        performed without the rewrites it may not make (design doc
+        0129).
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
         - $ref: "#/components/parameters/Producer"
@@ -1286,10 +1294,6 @@ paths:
             examples:
               rename:
                 summary: Move a metric one level deeper
-                description: >
-                  Everything keyed by the id follows — revisions, usage,
-                  files, embeddings — and every concept linking to the
-                  old id is rewritten to the new one.
                 value:
                   from: metrics/revenue
                   to: metrics/finance/revenue
