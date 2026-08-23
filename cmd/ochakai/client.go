@@ -2127,10 +2127,11 @@ func extractTarGz(dir string, r io.Reader) (int, error) {
 func cmdAccess(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"access",
-		"Usage: ochakai access [flags]\n\nShow the access policy, or replace it with the document from -f or\nstdin. Only an administrator (OCHAKAI_ADMINS) may do either.\n\nEach rule grants one principal — human:<name>, process:<name>, or *\nfor every authenticated caller — the right to read under one directory,\nand to write there when may_write is true. Prefixes match on segment\nboundaries, so sales covers sales/orders and does not cover\nsales-legacy/orders; the empty prefix is the whole bundle. There are no\ndeny rules: what no rule grants is not readable, and a caller sees a\n404 rather than a refusal, because whether something is there is the\nboundary itself.\n\nA deployment with no rules has no boundary — every caller reads and\nwrites everything, which is what ochakai does by default. Writing the\nfirst rule turns the boundary on for everybody at once, so read the\npolicy back before you close the terminal.\n\nThe operations that take the bundle as a whole — stats, export, move,\nreembed, and this command — stay with the administrators.",
-		"  ochakai access\n  ochakai access --json > policy.json\n  ochakai access -f policy.json\n  echo '{\"rules\":[]}' | ochakai access -f -   # remove every boundary\n")
+		"Usage: ochakai access [flags]\n\nShow the access policy, or replace it with the document from -f or\nstdin. Only an administrator (OCHAKAI_ADMINS) may do either.\n\nEach rule grants one principal — human:<name>, process:<name>, or *\nfor every authenticated caller — the right to read under one directory,\nand to write there when may_write is true. Prefixes match on segment\nboundaries, so sales covers sales/orders and does not cover\nsales-legacy/orders; the empty prefix is the whole bundle. There are no\ndeny rules: what no rule grants is not readable, and a caller sees a\n404 rather than a refusal, because whether something is there is the\nboundary itself.\n\nA deployment with no rules has no boundary — every caller reads and\nwrites everything, which is what ochakai does by default. Writing the\nfirst rule turns the boundary on for everybody at once, so read the\npolicy back before you close the terminal.\n\nThe operations that take the bundle as a whole — stats, export, move,\nreembed, and this command — stay with the administrators.\n\nThe policy is one document, replaced whole, so two editors who both\nread it can each drop the other's rules. With --if-match the\nreplacement lands only if the policy still has the version you read,\nand fails instead.",
+		"  ochakai access\n  ochakai access --json > policy.json\n  ochakai access -f policy.json\n  ochakai access -f policy.json --if-match \"$(jq -r .version policy.json)\"\n  echo '{\"rules\":[]}' | ochakai access -f -   # remove every boundary\n")
 	file := fs.String("f", "", "replace the policy with the JSON document in this file (`-` or unset with a pipe: stdin). Without it, the policy is printed")
 	asJSON := fs.Bool("json", false, "print the policy as JSON — the same document -f takes back")
+	ifMatch := fs.String("if-match", "", "replace the policy only if it still has this `version` (`ochakai access --json` prints it as .version; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of dropping the rules somebody else added")
 	if _, err := parseArgs(fs, args); err != nil {
 		return err
 	}
@@ -2142,8 +2143,12 @@ func cmdAccess(ctx context.Context, args []string) error {
 	// command that replaced the policy because stdin happened not to be
 	// a terminal would be one an operator could run by pipeline accident.
 	var rules []domain.AccessRule
+	var version string
 	if *file == "" {
-		if rules, err = c.Policy(ctx); err != nil {
+		if *ifMatch != "" {
+			return errors.New("--if-match is a precondition on replacing the policy: pass -f with the document to write")
+		}
+		if rules, version, err = c.Policy(ctx); err != nil {
 			return err
 		}
 	} else {
@@ -2155,15 +2160,21 @@ func cmdAccess(ctx context.Context, args []string) error {
 		if err := json.Unmarshal(data, &body); err != nil {
 			return fmt.Errorf("the policy document is not the JSON `ochakai access --json` prints: %w", err)
 		}
-		if rules, err = c.SetPolicy(ctx, body.Rules); err != nil {
+		if rules, version, err = c.SetPolicy(ctx, body.Rules, *ifMatch); err != nil {
+			var apiErr *apiclient.APIError
+			if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusPreconditionFailed {
+				return fmt.Errorf("conflict: the access policy changed since the version in --if-match — " +
+					"`ochakai access --json` again, redo the edit, and retry with the new .version")
+			}
 			return err
 		}
 	}
 	if *asJSON {
-		return printJSON(apiclient.AccessBody{Rules: rules})
+		return printJSON(apiclient.AccessBody{Rules: rules, Version: version})
 	}
 	if len(rules) == 0 {
 		fmt.Println("no rules: every caller that reaches this deployment reads and writes everything")
+		fmt.Printf("version\t%s\n", version)
 		return nil
 	}
 	for _, r := range rules {
@@ -2177,5 +2188,8 @@ func cmdAccess(ctx context.Context, args []string) error {
 		}
 		fmt.Printf("%s\t%s\t%s\n", prefix, r.Principal, access)
 	}
+	// The version last, on its own line: it is what --if-match takes,
+	// and a reader scanning the rules should not have to step over it.
+	fmt.Printf("version\t%s\n", version)
 	return nil
 }

@@ -236,18 +236,20 @@ func scopeRows[T any](sc *Scope, rows []T, id func(T) string) []T {
 	return out
 }
 
-// Policy returns the whole access policy. An administrator's read: the
-// rules name people and the directories they may see, which is a map of
-// the boundaries a scoped caller is on one side of.
-func (s *Service) Policy(ctx context.Context) ([]domain.AccessRule, error) {
+// Policy returns the whole access policy and its version. An
+// administrator's read: the rules name people and the directories they
+// may see, which is a map of the boundaries a scoped caller is on one
+// side of. The version is what a caller echoes in If-Match to replace
+// the policy it just read (design doc 0030).
+func (s *Service) Policy(ctx context.Context) ([]domain.AccessRule, string, error) {
 	if err := s.RequireAdmin(ctx, "reading the access policy"); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	p, err := s.Store.AccessPolicy(ctx)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return p.Rules, nil
+	return p.Rules, p.Version, nil
 }
 
 // SetPolicy replaces the whole access policy.
@@ -257,16 +259,24 @@ func (s *Service) Policy(ctx context.Context) ([]domain.AccessRule, error) {
 // deployment whose boundaries do not move either — and a read-only
 // instance whose access rules could still be edited would be one where
 // the frozen half is the half that matters least.
-func (s *Service) SetPolicy(ctx context.Context, rules []domain.AccessRule, actor domain.Actor) ([]domain.AccessRule, error) {
+// A non-nil ifMatch replaces the policy only while it still has that
+// version, and fails with a conflict when it does not. The policy is
+// one document that is read, edited and put back whole, so two callers
+// placing a grant each would otherwise silently drop one of them —
+// which is the write a deployment that provisions boundaries
+// automatically makes most often (design doc 0120).
+func (s *Service) SetPolicy(ctx context.Context, rules []domain.AccessRule, actor domain.Actor,
+	ifMatch *string,
+) ([]domain.AccessRule, string, error) {
 	if err := s.readOnly(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if err := s.RequireAdmin(ctx, "editing the access policy"); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	checked, err := domain.ValidateAccessRules(rules)
 	if err != nil {
-		return nil, Invalidf("%v", err)
+		return nil, "", Invalidf("%v", err)
 	}
 	// The floor under a policy: administrators come from the deployment's
 	// configuration, so a policy can never be written that nobody can
@@ -276,11 +286,11 @@ func (s *Service) SetPolicy(ctx context.Context, rules []domain.AccessRule, acto
 	// become true, and refusing it is cheaper than telling an operator
 	// their next deploy will not come up.
 	if len(checked) > 0 && (s.Config == nil || len(s.Config.Admins) == 0) {
-		return nil, Invalidf("this deployment names no administrators, so a policy written now could not be " +
+		return nil, "", Invalidf("this deployment names no administrators, so a policy written now could not be " +
 			"edited or undone by anyone: set OCHAKAI_ADMINS first (design doc 0109 §3)")
 	}
-	if err := s.Store.ReplaceAccessPolicy(ctx, checked, actor); err != nil {
-		return nil, err
+	if err := s.Store.ReplaceAccessPolicy(ctx, checked, actor, ifMatch); err != nil {
+		return nil, "", err
 	}
 	s.Log.Info("access policy replaced", "rules", len(checked), "actor", actor.String())
 	return s.Policy(ctx)

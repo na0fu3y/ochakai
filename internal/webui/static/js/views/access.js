@@ -30,16 +30,18 @@ export async function markAccessTab() {
 
 export async function viewAccess() {
   view.innerHTML = `<div class="section-title">アクセス</div><div class="empty">…</div>`;
-  let rules;
+  let rules, version;
   try {
-    rules = (await api('/api/v1/access')).rules || [];
+    const got = await api('/api/v1/access');
+    rules = got.rules || [];
+    version = got.version;
   } catch (e) {
     view.innerHTML = `<div class="section-title">アクセス</div>` + (e.code === 'forbidden'
       ? `<div class="empty">アクセスポリシーを読めるのは、<code>OCHAKAI_ADMINS</code> が名指す管理者だけです。</div>`
       : `<div class="error-banner" role="alert">アクセスポリシーを読み込めませんでした: ${esc(e.message)}</div>`);
     return;
   }
-  renderAccess(rules);
+  renderAccess(rules, false, version);
 }
 
 function ruleRow(r) {
@@ -62,7 +64,10 @@ function ruleRow(r) {
 // open keeps the editor open across the re-render a save causes, so the
 // operator reads back the document they just sent — which is the whole
 // of the advice `ochakai access` gives at the terminal.
-export function renderAccess(rules, open = false) {
+// version is what the editor sends back as If-Match: the page saves the
+// document it read, and refuses rather than dropping the rules somebody
+// else added in between (design doc 0120).
+export function renderAccess(rules, open = false, version = '') {
   const table = rules.length ? `
     <div class="scroll-x">
       <table class="rules">
@@ -108,10 +113,10 @@ export function renderAccess(rules, open = false) {
     $('#access-doc').value = policyDocument(rules);
     $('#access-error').innerHTML = '';
   });
-  $('#access-save')?.addEventListener('click', () => saveAccess(rules));
+  $('#access-save')?.addEventListener('click', () => saveAccess(rules, version));
 }
 
-async function saveAccess(rules) {
+async function saveAccess(rules, version) {
   const errBox = $('#access-error');
   errBox.innerHTML = '';
   let next;
@@ -130,10 +135,16 @@ async function saveAccess(rules) {
   if (rules.length && !next.length && !confirm(
     '付与を全部消します。境界そのものが無くなり、ここに届く人はまた全部を読み書きできます。続けますか？')) return;
   try {
-    const saved = await api('/api/v1/access', { method: 'PUT', body: { rules: next } });
+    const saved = await api('/api/v1/access',
+      { method: 'PUT', body: { rules: next }, ifMatch: version ? `"${version}"` : undefined });
     toast('アクセスポリシーを保存しました。');
-    renderAccess(saved.rules || [], true);
+    renderAccess(saved.rules || [], true, saved.version);
   } catch (e) {
-    errBox.innerHTML = `<div class="error-banner" role="alert">保存できませんでした: ${esc(e.message)}</div>`;
+    // The precondition failed: somebody replaced the policy while this
+    // page held it. Saying so is the whole point — the alternative was
+    // this save quietly removing their rules.
+    errBox.innerHTML = e.code === 'precondition_failed'
+      ? `<div class="error-banner" role="alert">このページを開いたあとに、別の誰かがポリシーを保存しました。上書きせずに止めています。書いたものは残っているので、ページを読み込み直して編集をやり直してください。</div>`
+      : `<div class="error-banner" role="alert">保存できませんでした: ${esc(e.message)}</div>`;
   }
 }

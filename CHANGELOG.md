@@ -21,6 +21,31 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The access policy can be replaced conditionally.** `PUT
+  /api/v1/access` takes an `If-Match` precondition and both operations
+  answer with an `ETag`; a stale one is a 412 and nothing is written
+  (design doc 0120). The policy is one document read, edited and put
+  back whole, so two administrators who each add a rule left only the
+  second one's rule — no error, and the only signal was the person who
+  got dropped saying they could no longer read something. It matters
+  most where grants are placed by automation rather than by hand, which
+  is the shape design doc 0119 describes. Absent means last write wins,
+  as before, so nothing that works today stops working. The version is
+  in the body as `version` too — the way a concept's
+  `summary.content_hash` sits beside its ETag — so the document
+  `ochakai access --json` prints carries what a conditional write of it
+  needs, and `ochakai access -f` takes it straight back. `If-None-Match`
+  on this address is a 400: the policy always exists, so there is no
+  create to guard.
+- **`ochakai access --if-match <version>`**, and the printed policy ends
+  with a `version` line. No new spelling: it is the flag `put` and
+  `delete` already carry.
+- **The web UI's access editor sends the version it read.** A save that
+  would overwrite somebody else's edit now stops and says so, leaving
+  what you typed in the box — what the concept editor already did.
+
 ### Fixed
 
 - **`ochakai import` no longer reads through a symlink out of the bundle,
@@ -38,6 +63,12 @@ last entry.
   directory instead of the walk's shape implying it; the name check
   stays, because the two answer different questions. An ordinary bundle
   imports exactly as before.
+- **`GET /api/v1/access` answered `{"rules": null}` on a deployment with
+  no grants**, where `api/openapi.yaml` declares `rules` a required
+  array. Every deployment starts in that state; no integration test had
+  read an empty policy over the wire, so the contract check had nothing
+  to check, and a client generated from the spec would have refused the
+  most ordinary response there is. It is `[]` now (design doc 0120 §6).
 
 ### Changed
 

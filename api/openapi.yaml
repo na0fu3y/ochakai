@@ -1748,6 +1748,7 @@ paths:
           description: The policy as stored.
           headers:
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+            ETag: { $ref: "#/components/headers/PolicyVersion" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AccessPolicy" }
@@ -1775,6 +1776,7 @@ paths:
                         may_write: true
                         granted_at: "2026-08-14T09:12:00Z"
                         granted_by: human:ops@example.co.jp
+                    version: 6c2b0f1e9a3d5c7b8e4f0a1d2c3b4a59687766554433221100ffeeddccbbaa99
         "403": { $ref: "#/components/responses/Error" }
     put:
       operationId: putAccessPolicy
@@ -1792,7 +1794,18 @@ paths:
 
 
         `granted_at` and `granted_by` are the server's own record of who
-        changed the policy and are ignored on the way in.
+        changed the policy and are ignored on the way in, and so is
+        `version` — it is what a read hands a conditional write, and the
+        precondition itself travels in `If-Match`.
+
+
+        Because the document is replaced whole, two callers that each read
+        it and add one rule would leave only the second one's rule. Send
+        `If-Match` with the version the read returned and the second write
+        fails with a 412 instead (design doc 0120). Absent means last
+        write wins, as everywhere else. `If-None-Match` is a 400 here: the
+        policy is one document that always exists, so there is no create
+        to guard.
 
 
         Sending `{"rules": []}` removes every boundary and returns the
@@ -1800,6 +1813,8 @@ paths:
         writes everything. A deployment that names no administrator
         refuses to accept a first rule at all: a policy nobody could undo
         is one nobody should be able to write.
+      parameters:
+        - $ref: "#/components/parameters/IfMatchPolicy"
       requestBody:
         required: true
         content:
@@ -1808,11 +1823,28 @@ paths:
       responses:
         "200":
           description: The policy as stored.
+          headers:
+            ETag: { $ref: "#/components/headers/PolicyVersion" }
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AccessPolicy" }
         "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Error" }
+        "412":
+          description: >
+            The `If-Match` precondition failed: the policy changed since
+            it was read, and nothing was written. Read it again, redo the
+            edit on what is there now, and retry with the new version —
+            the alternative this refuses is a save that silently removes
+            the rules somebody else added (design doc 0120).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  code: { type: string, enum: [precondition_failed] }
+                required: [error, code]
   /api/v1/stats:
     get:
       operationId: getStats
@@ -2047,6 +2079,15 @@ components:
         (Japanese) for both, plus everything else an application calling
         this API directly needs.
   headers:
+    PolicyVersion:
+      description: >
+        The access policy's version — the hash of its grants, quoted, and
+        the same value as the body's `version` (design doc 0120). A client
+        echoes it in `If-Match` to replace the policy only while it still
+        says what was read. It covers the grants and nothing else, so a
+        write that changes no rule leaves a held precondition valid.
+        Treat it as opaque.
+      schema: { type: string }
     ETag:
       description: >
         The concept's version — the hash of the document as stored,
@@ -2122,6 +2163,19 @@ components:
         an HTML file) must have nowhere to run (design doc 0075 §1).
       schema: { type: string, enum: [sandbox] }
   parameters:
+    IfMatchPolicy:
+      name: If-Match
+      in: header
+      required: false
+      description: >
+        Optimistic-concurrency precondition on the access policy (design
+        docs 0030, 0120): the version a prior read or write returned in
+        the `ETag` header, quotes optional, and the same value as the
+        body's `version`. The replacement happens only while the policy
+        still has it; a policy changed since it was read is a 412 and
+        nothing is written. Absent means no precondition — last write
+        wins. `*` is a 400, for the reason the concept precondition gives.
+      schema: { type: string }
     IfMatch:
       name: If-Match
       in: header
@@ -2318,6 +2372,26 @@ components:
         rules:
           type: array
           items: { $ref: "#/components/schemas/AccessRule" }
+        version:
+          type: string
+          readOnly: true
+          description: >
+            The policy's version — the same value the `ETag` response
+            header carries, without the quotes. It is in the document so
+            that what a client reads back carries everything a
+            conditional replacement of it needs, the way a concept's
+            `summary.content_hash` does; the precondition itself is the
+            `If-Match` header, and this field is ignored in a request
+            body rather than becoming a second spelling of it.
+
+
+            It hashes the grants and nothing else, so a rewrite that
+            changes no rule leaves a held precondition valid, and
+            `granted_at` moving does not invalidate one. An empty policy
+            has a version like any other — the first grant on a
+            deployment with none is exactly the write two automated
+            callers race for. Treat it as opaque.
+          example: 6c2b0f1e9a3d5c7b8e4f0a1d2c3b4a59687766554433221100ffeeddccbbaa99
       required: [rules]
     AccessRule:
       type: object

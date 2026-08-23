@@ -658,6 +658,25 @@ principal は台帳と同じ綴り(`human:` / `process:`、`*` は全認証済�
 echo '{"rules": []}' | ochakai access -f -
 ```
 
+**二人で編集するなら、読んだ版を添えること。** 文書は丸ごと置き換わる
+ので、二人が同じポリシーを読んで一行ずつ足すと、後に保存したほうにしか
+その行が残らない。エラーは出ない — 気づく契機は、消された側の人が
+「読めない」と言ってくることだけである。`--if-match` を付けると、
+読んだときの版をポリシーがまだ持っている場合にだけ置き換わり、
+そうでなければ**何も書かずに失敗する**(設計ドキュメント
+[0120](../design/0120-the-policy-is-replaced-only-as-it-was-read.md))。
+
+```sh
+ochakai access --json > policy.json
+$EDITOR policy.json
+ochakai access -f policy.json --if-match "$(jq -r .version policy.json)"
+```
+
+付与を自動で置くもの(組織を受け入れるたびに一行足す類のもの)を書くなら、
+これは任意ではない。REST では同じものが `If-Match` ヘッダで、版は `ETag`
+と本文の `version` の両方に載る。**空のポリシーにも版がある** — 最初の
+一行こそ二つの登録処理が競う書き込みである。
+
 **知っておくべきことが三つある。**
 
 1. **バンドル全体を取る操作は管理者のものになる** — `ochakai stats`・
