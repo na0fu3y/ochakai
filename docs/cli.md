@@ -91,8 +91,11 @@ writes everything, which is what ochakai does by default. Writing the
 first rule turns the boundary on for everybody at once, so read the
 policy back before you close the terminal.
 
-The operations that take the bundle as a whole — stats, export, move,
-reembed, and this command — stay with the administrators.
+The operations that take the bundle as a whole — export, move, reembed,
+and this command — stay with the administrators. Not stats: a caller
+with grants reads their own numbers, and the answer says which subtree
+it counted. The unanswered searches beside them are withheld from a
+scoped caller, having no id to scope by.
 
 The policy is one document, replaced whole, so two editors who both
 read it can each drop the other's rules. With --if-match the
@@ -729,6 +732,12 @@ Show the improvement loop as the instance sees it: what the knowledge
 base is made of now, how much each queue is holding, what review did
 lately, what callers reported, and what they searched for and did not
 find. `usage` measures one concept; this measures the base.
+
+A scope line says what the numbers cover whenever that is not the whole
+bundle — because a prefix was given, or because an access policy grants
+you part of it. Then `misses` reads `withheld` rather than a count: an
+unanswered search carries no id, so it cannot be scoped, and the
+instance's own list is an administrator's to read.
 
 One line per number, so it composes: cron it and diff the output, or
 grep one line out of it for a prompt or a dashboard. The gap lines are

@@ -526,6 +526,36 @@ func TestStatsPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 		}
 	}
 
+	// A server that declares the scope it counted wins over the flag:
+	// a caller with grants gets their own numbers whether or not they
+	// asked for a prefix, and the hint has to name what was counted
+	// (design doc 0123).
+	t.Run("the declared scope names the hint", func(t *testing.T) {
+		declared := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"at":"2026-08-23T00:00:00Z","window_days":30,`+
+				`"scope":["teams/sales"],`+
+				`"concepts":{"total":1,"status":{},"trust":{}},`+
+				`"queues":{"drafts":1,"failed":0,"stale_after":0},`+
+				`"review":{"verifications":0},"outcomes":{"worked":0,"failed":0},`+
+				`"misses":{"recording":true,"withheld":true,"count":0,"queries":[]},`+
+				`"embedding":{"enabled":false},"dropped":{"events":0,"misses":0}}`)
+		}))
+		defer declared.Close()
+		out := captureStdout(t, func() {
+			_ = cmdStats(context.Background(), []string{"--url", declared.URL})
+		})
+		for _, want := range []string{
+			"scope\tteams/sales\n",
+			"drafts\t1\tochakai list usage --status draft --prefix teams/sales\n",
+			"misses\twithheld\n",
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("output misses %q:\n%s", want, out)
+			}
+		}
+	})
+
 	// All three empty is the case the exit status exists to make
 	// visible: it prints the zeros and exits 0, so a quiet queue and an
 	// empty one stop looking alike.

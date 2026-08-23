@@ -685,11 +685,19 @@ ochakai access -f policy.json --if-match "$(jq -r .version policy.json)"
 
 **知っておくべきことが三つある。**
 
-1. **バンドル全体を取る操作は管理者のものになる** — `ochakai stats`・
-   `ochakai export`・`ochakai move`・`ochakai reembed`。部分集合の
-   stats は数に二つ目の意味を与え、欠けた export もバックアップと呼ばれ
-   てしまうからで、絞るのではなく断っている。cron の `stats --exit-code`
-   を回しているなら、その呼び出し元を管理者にする。
+1. **バンドル全体を取る操作は管理者のものになる** — `ochakai export`・
+   `ochakai move`・`ochakai reembed`。欠けた export もバックアップと
+   呼ばれてしまうからで、絞るのではなく断っている。
+   **`ochakai stats` は別で、範囲を持つ利用者も自分の数を読める**
+   (設計ドキュメント
+   [0123](../design/0123-the-numbers-say-what-they-counted.md))。答えの
+   `scope` 行が何を数えたかを言い、全体を数えたときだけ出ない。ただし
+   **該当なしの検索(miss)は差し止められる** — 何も返さなかった検索には
+   id が無いので絞れず、絞らずに見せれば他のチームが何を探したかを教えて
+   しまう。`misses withheld` と出るのはそれで、ゼロではない。
+   cron の `stats --exit-code` を回しているなら、その呼び出し元の
+   キューだけを見ることになる — インスタンス全体を見張りたいなら、
+   その呼び出し元を管理者にする。
 2. **スコープ外は 404 で、403 ではない。** 「そこに何かあるか」への
    答えが境界そのものである。書けるが読めない、は起こらない。
 3. **本文の散文は塞げない。** 読める concept の本文が隠した id を名指し
