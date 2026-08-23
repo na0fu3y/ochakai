@@ -155,14 +155,24 @@ func (s *Service) mayWrite(ctx context.Context, id string) error {
 // what goes in comes out (0075 §1). Whoever needs the whole bundle can
 // be given the whole bundle.
 func (s *Service) RequireAdmin(ctx context.Context, op string) error {
+	_, err := s.adminScope(ctx, op)
+	return err
+}
+
+// adminScope is RequireAdmin's answer together with the scope it decided
+// from, for the one caller that has to know *which* of the two ways it
+// passed. On a deployment with no rules every scope is Everything, so
+// passing here does not mean the caller is an administrator — and
+// writing the policy needs that narrower fact (0122).
+func (s *Service) adminScope(ctx context.Context, op string) (*Scope, error) {
 	sc, err := s.scope(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if sc.Everything() {
-		return nil
+		return sc, nil
 	}
-	return fmt.Errorf("%w: %s takes the whole bundle, which is an administrator's operation", ErrForbidden, op)
+	return nil, fmt.Errorf("%w: %s takes the whole bundle, which is an administrator's operation", ErrForbidden, op)
 }
 
 // narrow forces the caller's read scope onto a filter, intersecting it
@@ -265,13 +275,19 @@ func (s *Service) Policy(ctx context.Context) ([]domain.AccessRule, string, erro
 // placing a grant each would otherwise silently drop one of them —
 // which is the write a deployment that provisions boundaries
 // automatically makes most often (design doc 0120).
+//
+// Writing rules is an administrator's own operation, not merely one an
+// administrator's check happens to pass: the first rule hands the
+// policy to OCHAKAI_ADMINS, so a caller outside that list is refused
+// before anything is written rather than after (design doc 0122).
 func (s *Service) SetPolicy(ctx context.Context, rules []domain.AccessRule, actor domain.Actor,
 	ifMatch *string,
 ) ([]domain.AccessRule, string, error) {
 	if err := s.readOnly(); err != nil {
 		return nil, "", err
 	}
-	if err := s.RequireAdmin(ctx, "editing the access policy"); err != nil {
+	sc, err := s.adminScope(ctx, "editing the access policy")
+	if err != nil {
 		return nil, "", err
 	}
 	checked, err := domain.ValidateAccessRules(rules)
@@ -289,9 +305,35 @@ func (s *Service) SetPolicy(ctx context.Context, rules []domain.AccessRule, acto
 		return nil, "", Invalidf("this deployment names no administrators, so a policy written now could not be " +
 			"edited or undone by anyone: set OCHAKAI_ADMINS first (design doc 0109 §3)")
 	}
+	// The same floor, read from the caller's side. On a deployment with
+	// no rules every caller's scope is Everything — that is 0109 §2's
+	// promise that no grants means no boundary — so the check above
+	// cannot yet tell an administrator from anybody else. The first rule
+	// ends that: from the moment it lands the policy belongs to
+	// OCHAKAI_ADMINS, and a caller outside that list has just written a
+	// door they are on the wrong side of (design doc 0122).
+	//
+	// Refused here, before the write, and not by the read that follows
+	// it. Deciding on the way out is how this arrived: the rows landed,
+	// the log said the policy was replaced, and the caller was told 403
+	// — an answer that says nothing was written.
+	if len(checked) > 0 && !sc.Admin {
+		return nil, "", fmt.Errorf("%w: a policy is edited by the principals OCHAKAI_ADMINS names, and %s is "+
+			"not one of them; writing the first rule here would lock this caller out of undoing it "+
+			"(design doc 0109 §3)", ErrForbidden, domain.PrincipalOf(httpauth.Actor(ctx)))
+	}
 	if err := s.Store.ReplaceAccessPolicy(ctx, checked, actor, ifMatch); err != nil {
 		return nil, "", err
 	}
 	s.Log.Info("access policy replaced", "rules", len(checked), "actor", actor.String())
-	return s.Policy(ctx)
+	// Read back rather than call Policy: the write has landed, and a
+	// second admin check on the way out could only turn a write that
+	// happened into a refusal that says it did not (0122). What the
+	// caller gets is what is stored — the version included, since
+	// granted_at and granted_by are the store's to fill (0120 §3).
+	p, err := s.Store.AccessPolicy(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	return p.Rules, p.Version, nil
 }

@@ -3660,10 +3660,17 @@ func TestAccessPolicyCarriesItsVersionAndHonoursIfMatch(t *testing.T) {
 	if err := s.Migrate(ctx, 0); err != nil {
 		t.Fatal(err)
 	}
+	// Nothing authenticates in front of this handler, so every request
+	// arrives as httpauth.Actor's default — and that principal is the one
+	// OCHAKAI_ADMINS has to name, because writing a policy is an
+	// administrator's own operation rather than one the empty policy lets
+	// anybody through (design doc 0122). Naming it rather than `*` is the
+	// difference the outsider below tests.
+	const caller = "process:unknown"
 	svc := &service.Service{
 		Store:  s,
 		Log:    slog.New(slog.NewTextHandler(os.Stderr, nil)),
-		Config: &config.Config{Admins: []string{domain.AnyPrincipal}},
+		Config: &config.Config{Admins: []string{caller}},
 	}
 	srv := checkedServer(t, Handler(svc))
 
@@ -3713,8 +3720,36 @@ func TestAccessPolicyCarriesItsVersionAndHonoursIfMatch(t *testing.T) {
 		t.Errorf("ETag %q and body version %q disagree", etag, version)
 	}
 
+	// The same store behind a deployment that names somebody else. An
+	// empty policy lets every caller through the whole-bundle check
+	// (0109 §2), so this write used to land and then answer 403 on the
+	// read back — a status that says nothing was written, over rows that
+	// were. Now it is refused before the write (0122).
+	outside := checkedServer(t, Handler(&service.Service{
+		Store:  s,
+		Log:    slog.New(slog.NewTextHandler(os.Stderr, nil)),
+		Config: &config.Config{Admins: []string{"human:ops@example.co.jp"}},
+	}))
+	locking := `{"rules":[{"prefix":"restacl","principal":"human:sato@example.co.jp","may_write":false}]}`
+	req, err := http.NewRequest(http.MethodPut, outside.URL+"/api/v1/access", strings.NewReader(locking))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("a caller outside OCHAKAI_ADMINS writing the first rule: %s, want 403", resp.Status)
+	}
+	if _, after := readPolicy(); after != version {
+		t.Errorf("the policy moved to version %q behind a 403; the refusal has to be a refusal", after)
+	}
+
 	first := `{"rules":[{"prefix":"restacl/growth","principal":"human:tanaka@example.co.jp","may_write":true}]}`
-	resp := put(first, etag)
+	resp = put(first, etag)
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("a conditional write on the version just read: %s", resp.Status)
@@ -3734,7 +3769,7 @@ func TestAccessPolicyCarriesItsVersionAndHonoursIfMatch(t *testing.T) {
 
 	// The create-only precondition has nothing to mean on a document
 	// that always exists, and is named rather than ignored.
-	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/access", strings.NewReader(second))
+	req, err = http.NewRequest(http.MethodPut, srv.URL+"/api/v1/access", strings.NewReader(second))
 	if err != nil {
 		t.Fatal(err)
 	}

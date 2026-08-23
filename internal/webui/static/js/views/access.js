@@ -143,8 +143,21 @@ async function saveAccess(rules, version) {
     // The precondition failed: somebody replaced the policy while this
     // page held it. Saying so is the whole point — the alternative was
     // this save quietly removing their rules.
-    errBox.innerHTML = e.code === 'precondition_failed'
-      ? `<div class="error-banner" role="alert">このページを開いたあとに、別の誰かがポリシーを保存しました。上書きせずに止めています。書いたものは残っているので、ページを読み込み直して編集をやり直してください。</div>`
-      : `<div class="error-banner" role="alert">保存できませんでした: ${esc(e.message)}</div>`;
+    //
+    // The forbidden branch shows only on a deployment with no grants:
+    // reading the policy is open while there are no rules, so this page
+    // is here for everybody, and only the save learns that placing the
+    // first rule is an administrator's operation (design doc 0122).
+    // Nothing was written, and saying so is the difference from what
+    // this used to do.
+    let message;
+    if (e.code === 'precondition_failed') {
+      message = 'このページを開いたあとに、別の誰かがポリシーを保存しました。上書きせずに止めています。書いたものは残っているので、ページを読み込み直して編集をやり直してください。';
+    } else if (e.code === 'forbidden') {
+      message = 'アクセスポリシーを編集できるのは <code>OCHAKAI_ADMINS</code> が名指す管理者だけです。付与が一つも無いあいだは誰でもこのページを読めますが、最初の一行を置けるのは管理者だけで、何も書き込んでいません。';
+    } else {
+      message = `保存できませんでした: ${esc(e.message)}`;
+    }
+    errBox.innerHTML = `<div class="error-banner" role="alert">${message}</div>`;
   }
 }
