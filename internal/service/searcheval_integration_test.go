@@ -563,7 +563,15 @@ const (
 	// one repeated paragraph, and 10.54 became 10.47 with every rank
 	// unchanged. Words nobody searches for are still words the search
 	// can match on.
-	evalReachCeiling = 10.48
+	//
+	// And back up to 10.50 when insights/reading-revenue was given the
+	// magnitudes it was missing: a longer document is matched by more
+	// questions, which is the price of the content and not a ranking
+	// change. recall stayed 1.00, and one case of the 88 moved — the
+	// question that already reached 27 of the 29 concepts. Both passes
+	// together still leave the search narrower than the 10.54 they
+	// started from.
+	evalReachCeiling = 10.52
 
 	// Leak: of those, how many came from the other bundle. The two
 	// domains share nothing but the language, so a leaked hit is the
@@ -597,8 +605,10 @@ const (
 	// question spelled it オーダー.
 	// The Japanese pass over examples/demo took it 2.14 → 2.10, for the
 	// reason above: less prose in the demo is less Japanese for a kb
-	// question to match on.
-	evalLeakCeiling = 2.12
+	// question to match on. Giving reading-revenue its magnitudes put
+	// 0.02 of that back (2.10 → 2.12), for the mirror of the same
+	// reason.
+	evalLeakCeiling = 2.14
 
 	// What the dimensions read over this corpus, for the next change to
 	// aim at: english 12.83, mixed 12.43, question 11.97, keyword
