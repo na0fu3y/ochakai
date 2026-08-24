@@ -371,3 +371,42 @@ func TestStatsCarriesThePostureItIsServing(t *testing.T) {
 		})
 	}
 }
+
+// A deployment with no bucket holds markdown concepts only (design doc
+// 0075 §1), so every face that offers a file on one is offering a
+// refusal. The answer carries two things and the decision is which
+// caller gets which (design doc 0131): the capability is everybody's,
+// because everybody is who the affordance would have lied to, while the
+// variable that would end it travels only to a caller who holds the
+// whole bundle — a sentence naming an environment variable helps nobody
+// who cannot set it, and on a shared deployment it is noise for the rest.
+func TestStatsSaysFilesAreOffAndNamesTheVariableToAnAdministrator(t *testing.T) {
+	f := newAccessFixture(t)
+	for _, c := range []struct {
+		name    string
+		ctx     context.Context
+		wantVar string
+	}{
+		{"administrator", f.adminCtx, "OCHAKAI_GCS_BUCKET"},
+		{"scoped caller", f.readCt, ""},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := f.svc.Stats(c.ctx, 1, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The object itself is the answer "this server was asked":
+			// absent means a server too old to have been, which is not
+			// the same as a deployment that cannot take files.
+			if got.Files == nil {
+				t.Fatal("stats said nothing about files")
+			}
+			if got.Files.Enabled {
+				t.Error("no blob store is configured, and stats says files are enabled")
+			}
+			if got.Files.Variable != c.wantVar {
+				t.Errorf("variable = %q, want %q", got.Files.Variable, c.wantVar)
+			}
+		})
+	}
+}

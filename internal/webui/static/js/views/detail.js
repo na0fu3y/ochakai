@@ -228,6 +228,13 @@ export async function viewDetail(id) {
           <td>${href ? `<a class="mono" href="${href}">${esc(target)}</a>` : `<span class="mono">${esc(target)}</span>`}</td></tr>`;
       }).join('') + '</table>';
     },
+    // A deployment with no bucket holds markdown concepts only (design
+    // doc 0075 §1), so everything that would add a file can only be
+    // refused, and the page stops offering it (design doc 0131). Which
+    // deployment this is arrives from the server and lands on <body> as
+    // a class, so the swap is CSS rather than a branch here: the tab
+    // renders the same markup whenever it is opened, and nothing in it
+    // has to have waited for /api/v1/stats to come back.
     files: () => {
       const cards = atts.map(a => {
         const isImage = (a.media_type || '').startsWith('image/');
@@ -247,14 +254,15 @@ export async function viewDetail(id) {
         </div>`;
       }).join('');
       return `
-        ${cards || '<div class="empty">ファイルはありません。</div>'}
-        <div class="toolbar write-only" style="margin-top:1rem">
+        ${cards || '<div class="empty files-only">ファイルはありません。</div>'}
+        <div class="empty files-off">このデプロイはファイルを保存しません。ナレッジは markdown だけです。</div>
+        <div class="toolbar write-only files-only" style="margin-top:1rem">
           <input type="file" id="att-file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,.txt,.csv,.json" multiple hidden>
           <button class="btn small" id="att-choose">ファイルを選択…</button>
           <span class="provenance" id="att-chosen" style="margin:0"></span>
           <button class="btn small primary" id="att-upload">ファイルを追加</button>
         </div>
-        <p class="provenance write-only">形式は問わず、1 ファイル 5 MiB までです。本文から参照しておくと
+        <p class="provenance write-only files-only">形式は問わず、1 ファイル 5 MiB までです。本文から参照しておくと
         (<code>![alt](${esc(lastSeg)}/name.png)</code> または <code>[name](${esc(lastSeg)}/name.txt)</code>)、検索で見つかるようになり、OKF export にも残ります。</p>`;
     },
     linked: () => '<div class="empty">…</div>',
