@@ -1490,13 +1490,14 @@ func capture(t *testing.T, fn func()) (stdout, stderr string) {
 func TestNoteTallyPrintsARepeatedNoteOnce(t *testing.T) {
 	var tally noteTally
 	for _, id := range []string{"c", "a", "b", "e", "d", "g", "f"} {
-		tally.add("ochakai://metrics/"+id, []string{"a claim was kept"})
+		tally.add("metrics/"+id, []string{"a claim was kept"})
 	}
-	tally.add("ochakai://metrics/a", []string{"stale_after was dropped"})
+	tally.add("metrics/a", []string{"stale_after was dropped"})
 	if tally.n != 8 {
 		t.Errorf("tally.n = %d, want 8: --strict counts notes, not groups", tally.n)
 	}
-	_, stderr := capture(t, tally.report)
+	rep := &importReport{}
+	_, stderr := capture(t, func() { tally.report(rep) })
 	lines := strings.Split(strings.TrimSpace(stderr), "\n")
 	if len(lines) != 3 {
 		t.Errorf("want three lines — two groups, one of them with its concepts:\n%s", stderr)
@@ -1510,6 +1511,169 @@ func TestNoteTallyPrintsARepeatedNoteOnce(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "and 2 more") {
 		t.Errorf("a group longer than five must say how many it did not list:\n%s", stderr)
+	}
+	// --json carries the same grouping, with the concepts the line elides:
+	// a document is read by something that can hold the whole list.
+	if len(rep.Notes) != 2 || rep.notes != 8 {
+		t.Fatalf("the report took %d groups and %d notes, want 2 and 8", len(rep.Notes), rep.notes)
+	}
+	for _, n := range rep.Notes {
+		if n.Note != "a claim was kept" {
+			continue
+		}
+		if len(n.Concepts) != 7 {
+			t.Errorf("a group must keep every concept it was true of, got %d", len(n.Concepts))
+		}
+		// Ids, the spelling the concepts array uses: one address has one
+		// spelling inside one document, and the scheme is for the line.
+		if n.Concepts[0] != "metrics/a" {
+			t.Errorf("a group names concepts by id, got %q", n.Concepts[0])
+		}
+	}
+}
+
+// An import is the one command an agent runs before it is allowed to
+// change anything, and --dry-run --strict is documented as the CI gate —
+// but the verdict left only as prose on stdout and a 0/1 exit, so a
+// caller that wanted to know *what* was refused had to parse sentences.
+// --json answers the same run as one document, and this pins the two
+// against each other: every line the run would have printed has a record
+// in it, and the counts are the summary line's own.
+func TestImportJSONSaysTheSameRunAsTheLines(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "metrics"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(path, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, filepath.FromSlash(path)), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("metrics/new.md", "---\ntype: metric\ntitle: New\n---\n\nbody\n")
+	write("metrics/same.md", "---\ntype: metric\ntitle: Same\n---\n\nbody\n")
+	// A document the server refuses as a concept: its path is a skip and
+	// it must not appear among the concepts.
+	write("metrics/bad.md", "---\ntype: metric\ntitle: Bad\n---\n\nbody\n")
+	// A file belonging to no concept.
+	write("notes.txt", "loose\n")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		path := r.PathValue("path")
+		if path == "metrics/bad.md" {
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"error": map[string]string{"code": "invalid", "message": "no runtime"},
+			})
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		if !strings.HasSuffix(path, ".md") {
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(domain.File{Path: path})
+			return
+		}
+		d, _, err := okf.Parse(body)
+		if err != nil {
+			t.Errorf("bad PUT payload: %v", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		k := d.Knowledge
+		k.ID = strings.TrimSuffix(path, ".md")
+		if k.ID == "metrics/same" {
+			w.Header().Set("Ochakai-Unchanged", "true")
+		} else {
+			w.WriteHeader(http.StatusCreated)
+		}
+		_ = json.NewEncoder(w).Encode(k)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	stdout, stderr := capture(t, func() {
+		if err := cmdImport(context.Background(), []string{dir, "--json", "--url", srv.URL}); err != nil {
+			t.Errorf("cmdImport: %v", err)
+		}
+	})
+
+	// One document, not a line per object and not a stream of them: the
+	// loops keep several requests in flight, so a stream would arrive in
+	// a different order every run.
+	var rep importReport
+	dec := json.NewDecoder(strings.NewReader(stdout))
+	if err := dec.Decode(&rep); err != nil {
+		t.Fatalf("stdout is not one JSON document: %v\n%s", err, stdout)
+	}
+	if dec.More() {
+		t.Errorf("stdout carries more than one document:\n%s", stdout)
+	}
+
+	want := importSummary{Concepts: 2, Created: 1, Unchanged: 1, Loose: 1, Skipped: 1}
+	if rep.Summary != want {
+		t.Errorf("summary = %+v, want %+v", rep.Summary, want)
+	}
+	plans := map[string]string{}
+	for _, c := range rep.Concepts {
+		plans[c.ID] = c.Plan
+	}
+	// The words are `plan.*` — the three the lines have always printed
+	// (design doc 0097), not a fourth vocabulary invented for the JSON.
+	if plans["metrics/new"] != domain.PlanCreated || plans["metrics/same"] != domain.PlanUnchanged {
+		t.Errorf("plans = %v, want created and unchanged", plans)
+	}
+	if _, refused := plans["metrics/bad"]; refused {
+		t.Error("a document the server refused is not a concept the import wrote")
+	}
+	if len(rep.Skipped) != 1 || !strings.Contains(rep.Skipped[0], "metrics/bad.md") {
+		t.Errorf("the refusal must name the path: %q", rep.Skipped)
+	}
+	if len(rep.Files) != 1 || rep.Files[0].Path != "notes.txt" || rep.Files[0].Concept != "" {
+		t.Errorf("files = %+v, want notes.txt claimed by nobody", rep.Files)
+	}
+	if rep.DryRun {
+		t.Error("dry_run must say whether anything was written")
+	}
+	// Everything a person watching the import needs is still on stderr;
+	// what --json changes is what stdout is.
+	if !strings.Contains(stderr, "skip: metrics/bad.md") {
+		t.Errorf("stderr lost the refusal:\n%s", stderr)
+	}
+	// And the lines are gone from stdout, or the document would not parse.
+	if strings.Contains(stdout, "imported 2 concepts") {
+		t.Errorf("--json must not also print the summary line:\n%s", stdout)
+	}
+}
+
+// --strict can fail before the first write, on what the parse alone can
+// see. That path returned the error without printing anything a caller
+// could read, which left a CI gate with an exit code and no reason in
+// the form it asked for.
+func TestImportStrictJSONAnswersEvenWhenNothingIsWritten(t *testing.T) {
+	dir := t.TempDir()
+	// A markdown file with no type is not a concept: the parse skips it
+	// before any server is reached.
+	if err := os.WriteFile(filepath.Join(dir, "readme.md"), []byte("no frontmatter\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stdout, _ := capture(t, func() {
+		err := cmdImport(context.Background(), []string{dir, "--strict", "--json", "--url", "http://127.0.0.1:1"})
+		if err == nil {
+			t.Error("--strict must fail on a bundle that was not read as written")
+		}
+	})
+	var rep importReport
+	if err := json.Unmarshal([]byte(stdout), &rep); err != nil {
+		t.Fatalf("a failing gate still owes a document: %v\n%s", err, stdout)
+	}
+	if rep.Summary.Notes+rep.Summary.Skipped == 0 {
+		t.Errorf("the document must carry the reason the gate failed: %+v", rep.Summary)
+	}
+	// Nothing was written, and nothing claims to have been.
+	if len(rep.Concepts) != 0 || len(rep.Files) != 0 {
+		t.Errorf("nothing was written, but the report names %d concepts and %d files",
+			len(rep.Concepts), len(rep.Files))
 	}
 }
 

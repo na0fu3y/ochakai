@@ -315,6 +315,8 @@ the import would produce.
 Flags:
   -dry-run
     	report what the import would do, and write nothing: every object is sent with the server's dry-run parameter, so the counts, the notes and the refusals are the ones the import itself would meet
+  -json
+    	print the whole run as one JSON document instead of a line per object: every concept with the plan the write did or would do, every file with the concept that claims it, the notes grouped, the refusals, and the counts the summary line carries. stderr still says every note and skip as it happens
   -strict
     	refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. With --dry-run the same verdict is reached with nothing written, which is what makes it a CI gate
   -url ochakai use

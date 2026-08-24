@@ -23,6 +23,42 @@ last entry.
 
 ### Added
 
+- **`ochakai import --json` answers the whole run as one document.** The
+  import's verdict was prose on stdout and a 0 or a 1: a line per object,
+  a summary line, and notes and refusals on stderr. `--dry-run --strict`
+  is documented as the gate a sync runs before it writes anything, and
+  what a gate is for is being read by something that is not a person — so
+  the one command whose answer a caller has to branch on was the one
+  command that could only be branched on by matching sentences. With
+  `--json` stdout carries a single object instead: every concept with the
+  plan the write did or would do, every file with the concept that claims
+  it, the notes grouped by their text with what each was true of, the
+  refusals, and the counts the summary line prints. The lines are not
+  printed; **stderr still says every note and skip as it happens**, so
+  watching an import is unchanged.
+
+  It is one document rather than a stream of them — which is what
+  `ochakai reembed --json` emits — because the import keeps eight requests
+  in flight and their lines land in completion order. The arrays are
+  sorted, so the same bundle against the same base answers with the same
+  bytes twice, which is what makes two runs diffable.
+
+  **Nothing new to learn.** A concept's verdict is `plan.*` — `created`,
+  `updated`, `unchanged` — the three words the lines have printed since
+  design doc 0097; a file says which concept claims it rather than
+  carrying a verb of its own, so *attributed* is "has a concept" and
+  *loose* is "has none"; and notes and skips stay the sentences they
+  already were, because a message that can be rewritten is not a value a
+  client branches on. No REST operation, parameter, header, tool,
+  command, environment variable or word moved:
+  [docs/surface.md](docs/surface.md) counts flags by name, and `json` was
+  already one of them.
+
+  **A gate that fails still answers.** `--strict` can refuse before the
+  first write, on what the parse alone can see; that path used to return
+  the error having printed nothing to stdout. With `--json` the document
+  comes out first, on that path too, and then the command fails.
+
 - **A deployment that cannot hold files says so, and the page stops
   offering one.** Without `OCHAKAI_GCS_BUCKET` an instance stores
   markdown concepts only — every read, write and listing of a file

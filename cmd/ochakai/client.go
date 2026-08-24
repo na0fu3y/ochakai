@@ -1237,28 +1237,38 @@ type noteTally struct {
 	n      int
 }
 
-func (t *noteTally) add(uri string, notes []string) {
+// add takes the concept's id, not its URI: the record joins these to
+// what the concepts array says, and one address must have one spelling
+// inside one document. The scheme is display, so report puts it back on.
+func (t *noteTally) add(id string, notes []string) {
 	if t.byText == nil {
 		t.byText = map[string][]string{}
 	}
 	for _, n := range notes {
-		t.byText[n] = append(t.byText[n], uri)
+		t.byText[n] = append(t.byText[n], id)
 		t.n++
 	}
 }
 
-// report prints the groups, sorted. Not in arrival order: the writes run
-// concurrently, so two runs of the same bundle would order them
-// differently, and an import's output is something people diff.
-func (t *noteTally) report() {
+// report prints the groups, sorted, and hands the same grouping to the
+// report. Not in arrival order: the writes run concurrently, so two runs
+// of the same bundle would order them differently, and an import's
+// output is something people diff.
+func (t *noteTally) report(r *importReport) {
+	r.notes += t.n
 	texts := make([]string, 0, len(t.byText))
 	for text := range t.byText {
 		texts = append(texts, text)
 	}
 	sort.Strings(texts)
 	for _, text := range texts {
-		uris := t.byText[text]
-		sort.Strings(uris)
+		ids := t.byText[text]
+		sort.Strings(ids)
+		r.Notes = append(r.Notes, importedNote{Note: text, Concepts: ids})
+		uris := make([]string, len(ids))
+		for i, id := range ids {
+			uris[i] = "ochakai://" + id
+		}
 		if len(uris) == 1 {
 			fmt.Fprintf(os.Stderr, "note: %s: %s\n", uris[0], text)
 			continue
@@ -1576,6 +1586,163 @@ func cmdExport(ctx context.Context, args []string) error {
 	return nil
 }
 
+// importReport is what an import did, in the shape a caller can branch
+// on. Without --json it is the lines the loops below print as they go;
+// with it, one JSON document on stdout at the end and no lines at all.
+//
+// One document rather than a line per object — which is what `ochakai
+// reembed --json` streams — because the loops keep importWorkers
+// requests in flight, so their lines land in completion order. The
+// arrays are sorted for the reason noteTally sorts its groups: an
+// import's output is something people and CI diff, and two runs of the
+// same bundle against the same base should answer with the same bytes.
+//
+// It invents no vocabulary. A concept's verdict is `plan.*` (design doc
+// 0097), the three words the lines have printed all along, and a file
+// names the concept that claims it instead of carrying a verb of its
+// own — attributed is "has a concept", loose is "has none", which is
+// the distinction the summary already counts. Notes and skips stay the
+// sentences stderr prints: a message that can be rewritten is not a
+// value a client branches on, and giving them codes would make them a
+// contract (docs/surface.md, VOCAB).
+type importReport struct {
+	asJSON bool
+	// notes counts individual notes, which is what the summary says;
+	// Notes groups them by text, which is what a reader wants.
+	notes int
+
+	DryRun   bool              `json:"dry_run"`
+	Concepts []importedConcept `json:"concepts"`
+	Files    []importedFile    `json:"files"`
+	Notes    []importedNote    `json:"notes"`
+	Skipped  []string          `json:"skipped"`
+	Summary  importSummary     `json:"summary"`
+}
+
+type importedConcept struct {
+	ID string `json:"id"`
+	// Plan is what the write did, or would do: created, updated or
+	// unchanged (design doc 0097).
+	Plan string `json:"plan"`
+}
+
+type importedFile struct {
+	Path string `json:"path"`
+	// Concept is the id whose body claims this file. Absent is the whole
+	// of what loose means, a file whose concept was refused included:
+	// nobody claims that one either, which is where the summary counts it.
+	Concept string `json:"concept,omitempty"`
+}
+
+type importedNote struct {
+	Note string `json:"note"`
+	// Concepts is what the note was true of, absent on a note the parse
+	// raised about the bundle rather than about a concept in it.
+	Concepts []string `json:"concepts,omitempty"`
+}
+
+// importSummary is the summary line's own numbers, derived from the
+// arrays above so that the line and the document cannot disagree.
+type importSummary struct {
+	Concepts   int `json:"concepts"`
+	Created    int `json:"created"`
+	Updated    int `json:"updated"`
+	Unchanged  int `json:"unchanged"`
+	Attributed int `json:"attributed"`
+	Loose      int `json:"loose"`
+	Skipped    int `json:"skipped"`
+	Notes      int `json:"notes"`
+}
+
+// line prints one object's verdict, unless the whole run is leaving as a
+// document.
+func (r *importReport) line(format string, args ...any) {
+	if r.asJSON {
+		return
+	}
+	fmt.Printf(format, args...)
+}
+
+func (r *importReport) concept(id, plan string) {
+	r.Concepts = append(r.Concepts, importedConcept{ID: id, Plan: plan})
+}
+
+func (r *importReport) file(path, concept string) {
+	r.Files = append(r.Files, importedFile{Path: path, Concept: concept})
+}
+
+// skip records one refusal and says so on stderr. --json changes what
+// stdout is, not whether somebody watching an import sees what it
+// declined as it happens.
+func (r *importReport) skip(what string) {
+	r.Skipped = append(r.Skipped, what)
+	fmt.Fprintln(os.Stderr, "skip:", what)
+}
+
+// note takes a note the parse raised, which is about the bundle rather
+// than about one concept. The ones a write raises arrive grouped, through
+// noteTally.
+func (r *importReport) note(text string) {
+	r.Notes = append(r.Notes, importedNote{Note: text})
+	r.notes++
+	fmt.Fprintln(os.Stderr, "note:", text)
+}
+
+// dirty is what --strict fails on: a bundle that was not read exactly as
+// it was written.
+func (r *importReport) dirty() bool { return r.notes > 0 || len(r.Skipped) > 0 }
+
+func (r *importReport) summary() importSummary {
+	s := importSummary{Concepts: len(r.Concepts), Skipped: len(r.Skipped), Notes: r.notes}
+	for _, c := range r.Concepts {
+		switch c.Plan {
+		case domain.PlanCreated:
+			s.Created++
+		case domain.PlanUnchanged:
+			s.Unchanged++
+		default:
+			s.Updated++
+		}
+	}
+	for _, f := range r.Files {
+		if f.Concept == "" {
+			s.Loose++
+			continue
+		}
+		s.Attributed++
+	}
+	return s
+}
+
+// emit prints the document, when a document is what was asked for. Every
+// path that ends the command calls it, --strict's early return included:
+// a gate that fails owes its reason in the form the caller asked for it.
+func (r *importReport) emit() error {
+	if !r.asJSON {
+		return nil
+	}
+	sort.Slice(r.Concepts, func(i, j int) bool { return r.Concepts[i].ID < r.Concepts[j].ID })
+	sort.Slice(r.Files, func(i, j int) bool { return r.Files[i].Path < r.Files[j].Path })
+	sort.Slice(r.Notes, func(i, j int) bool { return r.Notes[i].Note < r.Notes[j].Note })
+	sort.Strings(r.Skipped)
+	r.Summary = r.summary()
+	// An empty array rather than null: a caller ranging over the answer
+	// should not have to tell one from the other first.
+	if r.Concepts == nil {
+		r.Concepts = []importedConcept{}
+	}
+	if r.Files == nil {
+		r.Files = []importedFile{}
+	}
+	if r.Notes == nil {
+		r.Notes = []importedNote{}
+	}
+	if r.Skipped == nil {
+		r.Skipped = []string{}
+	}
+	return printJSON(r)
+}
+
 // importWorkers is how many requests an import (or its dry run) keeps in
 // flight. The unit of work is one small HTTP round trip, so the win is
 // latency hiding, not bandwidth — eight is enough to hide a Cloud Run
@@ -1605,6 +1772,7 @@ func cmdImport(ctx context.Context, args []string) error {
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on the import's own verdict\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "report what the import would do, and write nothing: every object is sent with the server's dry-run parameter, so the counts, the notes and the refusals are the ones the import itself would meet")
 	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. With --dry-run the same verdict is reached with nothing written, which is what makes it a CI gate")
+	asJSON := fs.Bool("json", false, "print the whole run as one JSON document instead of a line per object: every concept with the plan the write did or would do, every file with the concept that claims it, the notes grouped, the refusals, and the counts the summary line carries. stderr still says every note and skip as it happens")
 	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -1614,30 +1782,33 @@ func cmdImport(ctx context.Context, args []string) error {
 		return err
 	}
 	entries, atts, loose, skipped, notes := okf.FromBundle(files)
+	rep := &importReport{asJSON: *asJSON, DryRun: *dryRun}
 	for _, s := range skipped {
-		fmt.Fprintln(os.Stderr, "skip:", s)
+		rep.skip(s)
 	}
 	// Notes are not skips: the concept is imported, with one field read
 	// differently than it was written. Reporting them keeps a foreign
 	// bundle's reinterpreted status or dropped stale_after visible without
 	// pretending the document was rejected (OKF SPEC §11).
-	noted := len(notes)
 	for _, n := range notes {
-		fmt.Fprintln(os.Stderr, "note:", n)
+		rep.note(n)
 	}
 	// Everything the parser reinterpreted is known before the first write,
 	// so --strict refuses here and the knowledge base is left untouched.
 	// The alternative — writing 65 concepts and failing on the 66th — is
 	// the half-applied sync this flag exists to prevent.
-	if *strict && (noted > 0 || len(skipped) > 0) {
-		return strictErr(noted, len(skipped), "nothing was written")
+	if *strict && rep.dirty() {
+		if err := rep.emit(); err != nil {
+			return err
+		}
+		return strictErr(rep.notes, len(rep.Skipped), "nothing was written")
 	}
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err
 	}
 	if *dryRun {
-		return dryRunImport(ctx, c, entries, atts, loose, skipped, noted, *strict)
+		return dryRunImport(ctx, c, entries, atts, loose, rep, *strict)
 	}
 	// A 400 is the server's judgment on one document (e.g. an Attested
 	// Computation with no runtime, which the write path refuses) — a
@@ -1658,17 +1829,15 @@ func cmdImport(ctx context.Context, args []string) error {
 	// flagship use case in minutes. Lines land in completion order, so
 	// two runs of the same bundle may print them differently — the
 	// summary line is the stable part.
-	var created, updated, unchanged int
 	var tally noteTally
 	refused := map[string]bool{}
-	// One mutex guards the counters, the skip list and the output; the
-	// network calls happen outside it.
+	// One mutex guards the report and the output; the network calls happen
+	// outside it.
 	var mu sync.Mutex
 	skipEntry := func(k *domain.Knowledge, err error) {
 		refused[k.ID] = true
-		skipped = append(skipped, k.ID+".md: refused as a concept and not stored: "+err.Error()+
+		rep.skip(k.ID + ".md: refused as a concept and not stored: " + err.Error() +
 			" — the document is still in the bundle you imported from")
-		fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
 	}
 	// An import rules on nothing. A document that carries a verified key
 	// says so as a claim, kept beside the concept under `received`
@@ -1717,18 +1886,12 @@ func cmdImport(ctx context.Context, args []string) error {
 		notes = okf.NoteStoredClaim(notes, d.Claimed, stored.Document)
 		mu.Lock()
 		defer mu.Unlock()
-		tally.add(k.URI(), notes)
-		switch {
-		case wasCreated:
-			created++
-			fmt.Printf("created %s\n", k.URI())
-		case !changed:
-			unchanged++
-			fmt.Printf("unchanged %s\n", k.URI())
-		default:
-			updated++
-			fmt.Printf("updated %s\n", k.URI())
-		}
+		tally.add(k.ID, notes)
+		// The line and the record say the same word, because the three
+		// words the line has always printed are `plan.*` itself.
+		plan := domain.PlanOf(wasCreated, changed)
+		rep.concept(k.ID, plan)
+		rep.line("%s %s\n", plan, k.URI())
 		return nil
 	})
 	if err != nil {
@@ -1737,9 +1900,7 @@ func cmdImport(ctx context.Context, args []string) error {
 	// After the loop rather than inside it: a note that is true of the
 	// whole bundle is one sentence about the bundle, and it cannot be
 	// grouped until every write has answered.
-	tally.report()
-	noted += tally.n
-	attached, orphaned := 0, 0
+	tally.report(rep)
 	err = eachConcurrently(ctx, len(atts), func(ctx context.Context, i int) error {
 		a := atts[i]
 		// At the path the bundle carried it at, which is the whole of
@@ -1759,12 +1920,15 @@ func cmdImport(ctx context.Context, args []string) error {
 		mu.Lock()
 		defer mu.Unlock()
 		if refused[a.ID] {
-			orphaned++
-			fmt.Printf("wrote %s (its concept %s was not imported)\n", a.Path, a.ID)
+			// Recorded with no concept, which is what loose means: the
+			// document that pointed here is not in the base, so right now
+			// nobody claims the file.
+			rep.file(a.Path, "")
+			rep.line("wrote %s (its concept %s was not imported)\n", a.Path, a.ID)
 			return nil
 		}
-		attached++
-		fmt.Printf("attached %s (%s)\n", a.Path, a.ID)
+		rep.file(a.Path, a.ID)
+		rep.line("attached %s (%s)\n", a.Path, a.ID)
 		return nil
 	})
 	if err != nil {
@@ -1776,7 +1940,6 @@ func cmdImport(ctx context.Context, args []string) error {
 	// directory, a diagram nothing links yet, a markdown file with no
 	// type. Whether a concept ever claims one is a question that concept's
 	// body answers (§3.3), so nothing is attributed here.
-	var written int
 	err = eachConcurrently(ctx, len(loose), func(ctx context.Context, i int) error {
 		f := loose[i]
 		if _, err := c.PutBundleFile(ctx, f.Path, f.Data); err != nil {
@@ -1785,30 +1948,33 @@ func cmdImport(ctx context.Context, args []string) error {
 			}
 			mu.Lock()
 			defer mu.Unlock()
-			skipped = append(skipped, f.Path+": rejected by the server: "+err.Error())
-			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
+			rep.skip(f.Path + ": rejected by the server: " + err.Error())
 			return nil
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		written++
-		fmt.Printf("wrote %s\n", f.Path)
+		rep.file(f.Path, "")
+		rep.line("wrote %s\n", f.Path)
 		return nil
 	})
 	if err != nil {
 		return err
 	}
 	// A file whose concept was refused belongs to nobody, so it counts
-	// where the bundle's other unclaimed objects do.
-	written += orphaned
-	fmt.Printf("imported %d concepts (%d created, %d updated, %d unchanged, %d attributed, %d loose, %d skipped, %d notes)\n",
-		created+updated+unchanged, created, updated, unchanged, attached, written, len(skipped), noted)
+	// where the bundle's other unclaimed objects do — which is what
+	// recording it without a concept already said.
+	s := rep.summary()
+	rep.line("imported %d concepts (%d created, %d updated, %d unchanged, %d attributed, %d loose, %d skipped, %d notes)\n",
+		s.Concepts, s.Created, s.Updated, s.Unchanged, s.Attributed, s.Loose, s.Skipped, s.Notes)
+	if err := rep.emit(); err != nil {
+		return err
+	}
 	// The parse-time gate above cannot see what the server read differently
 	// or refused, so --strict asks again with the writes already done. The
-	// summary is printed first: the exit code says the sync is not clean,
-	// and the line above it says how far it got.
-	if *strict && (noted > 0 || len(skipped) > 0) {
-		return strictErr(noted, len(skipped), "the concepts above are already written")
+	// answer is printed first: the exit code says the sync is not clean,
+	// and what came before it says how far it got.
+	if *strict && rep.dirty() {
+		return strictErr(rep.notes, len(rep.Skipped), "the concepts above are already written")
 	}
 	return nil
 }
@@ -1826,17 +1992,15 @@ func cmdImport(ctx context.Context, args []string) error {
 // bundle alone, so a CI gate on the dry run passed bundles the import
 // then failed on.
 func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
-	atts []okf.AttributedFile, loose []okf.BundleFile, skipped []string, noted int, strict bool,
+	atts []okf.AttributedFile, loose []okf.BundleFile, rep *importReport, strict bool,
 ) error {
 	// Concurrent for the same reason the real import is: the dry run is
 	// the same N round trips, and a CI gate pays for them on every push.
-	var created, updated, unchanged int
 	var tally noteTally
 	refused := map[string]bool{}
 	var mu sync.Mutex
 	skip := func(what, why string) {
-		skipped = append(skipped, what+": "+why)
-		fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
+		rep.skip(what + ": " + why)
 	}
 	err := eachConcurrently(ctx, len(entries), func(ctx context.Context, i int) error {
 		d := &entries[i]
@@ -1867,25 +2031,22 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 		notes = okf.NoteStoredClaim(notes, d.Claimed, planned.Document)
 		mu.Lock()
 		defer mu.Unlock()
-		tally.add(k.URI(), notes)
+		tally.add(k.ID, notes)
+		rep.concept(k.ID, plan)
 		switch plan {
 		case apiclient.PlanCreated:
-			created++
-			fmt.Printf("would create %s\n", k.URI())
+			rep.line("would create %s\n", k.URI())
 		case apiclient.PlanUnchanged:
-			unchanged++
-			fmt.Printf("would leave unchanged %s\n", k.URI())
+			rep.line("would leave unchanged %s\n", k.URI())
 		default:
-			updated++
-			fmt.Printf("would update %s\n", k.URI())
+			rep.line("would update %s\n", k.URI())
 		}
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	tally.report()
-	noted += tally.n
+	tally.report(rep)
 	// A file's plan is a yes or a no: the counts the summary keeps for
 	// files are of the objects the bundle carries, not of the rows they
 	// would move, so ok=false means the server refused this one.
@@ -1901,7 +2062,6 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 		}
 		return true, nil
 	}
-	attached, orphaned := 0, 0
 	err = eachConcurrently(ctx, len(atts), func(ctx context.Context, i int) error {
 		a := atts[i]
 		ok, err := planFile(ctx, a.Path, a.Data)
@@ -1913,18 +2073,17 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 		mu.Lock()
 		defer mu.Unlock()
 		if refused[a.ID] {
-			orphaned++
-			fmt.Printf("would write %s (its concept %s would not be imported)\n", a.Path, a.ID)
+			rep.file(a.Path, "")
+			rep.line("would write %s (its concept %s would not be imported)\n", a.Path, a.ID)
 			return nil
 		}
-		attached++
-		fmt.Printf("would attach %s (%s)\n", a.Path, a.ID)
+		rep.file(a.Path, a.ID)
+		rep.line("would attach %s (%s)\n", a.Path, a.ID)
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	var wrote int
 	err = eachConcurrently(ctx, len(loose), func(ctx context.Context, i int) error {
 		f := loose[i]
 		ok, err := planFile(ctx, f.Path, f.Data)
@@ -1933,20 +2092,23 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 		}
 		mu.Lock()
 		defer mu.Unlock()
-		wrote++
-		fmt.Printf("would write %s\n", f.Path)
+		rep.file(f.Path, "")
+		rep.line("would write %s\n", f.Path)
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	wrote += orphaned
-	fmt.Printf("dry run: %d concepts (%d created, %d updated, %d unchanged, %d attributed, %d loose, %d skipped, %d notes)\n",
-		created+updated+unchanged, created, updated, unchanged, attached, wrote, len(skipped), noted)
+	s := rep.summary()
+	rep.line("dry run: %d concepts (%d created, %d updated, %d unchanged, %d attributed, %d loose, %d skipped, %d notes)\n",
+		s.Concepts, s.Created, s.Updated, s.Unchanged, s.Attributed, s.Loose, s.Skipped, s.Notes)
+	if err := rep.emit(); err != nil {
+		return err
+	}
 	// The whole point of the dry run under --strict: the same verdict the
 	// import would reach, reached with nothing written.
-	if strict && (noted > 0 || len(skipped) > 0) {
-		return strictErr(noted, len(skipped), "nothing was written")
+	if strict && rep.dirty() {
+		return strictErr(rep.notes, len(rep.Skipped), "nothing was written")
 	}
 	return nil
 }

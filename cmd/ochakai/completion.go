@@ -201,7 +201,8 @@ _ochakai() {
       _arguments '--project[warehouse project for the resource address]:project:' '--prefix[id prefix]:prefix:' '1:file:_files'
       ;;
     import)
-      _arguments '--dry-run[parse and list, write nothing]' '--strict[fail on any note or skip]' '--url[server URL]:url:' '1:bundle:_files'
+      _arguments '--dry-run[parse and list, write nothing]' '--strict[fail on any note or skip]' \
+        '--json[print the whole run as one JSON document]' '--url[server URL]:url:' '1:bundle:_files'
       ;;
     use)
       local -a servers
@@ -279,7 +280,7 @@ _ochakai() {
     reembed)       opts="--limit --once --json --url" ;;
     export)        opts="--url --no-files --prefix" ;;
     seed)          opts="--project --prefix" ;;
-    import)        opts="--dry-run --strict --url" ;;
+    import)        opts="--dry-run --strict --json --url" ;;
     whoami)        opts="--json --url" ;;
     ui)            opts="--port --url" ;;
     mcp-stdio)     opts="--url" ;;
@@ -340,6 +341,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put v
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'
+complete -c ochakai -n '__fish_seen_subcommand_from import' -l json -d 'print the whole run as one JSON document'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
 complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify reject reembed usage stats access report revisions whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l days -x -d 'flow window in days, 1-180'
