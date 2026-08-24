@@ -99,11 +99,12 @@ The operations that take the bundle as a whole — export of the whole
 base, reembed, and this command — stay with the administrators. Three
 others do not. `stats`: a caller with grants reads their own numbers,
 and the answer says which subtree it counted, though the unanswered
-searches beside them are withheld, having no id to scope by. `export
---prefix`: anyone who may read a directory may take its archive, which
-says which directory it is. And `move`, when everything its rewrite
-touches — the concept, the destination, and everything that links at
-the concept — is yours to write.
+searches beside them are withheld, having no id to scope by — a grant
+at the root is the whole bundle, so that answer declares no subtree and
+keeps its misses. `export --prefix`: anyone who may read a directory
+may take its archive, which says which directory it is. And `move`,
+when everything its rewrite touches — the concept, the destination, and
+everything that links at the concept — is yours to write.
 
 The policy is one document, replaced whole, so two editors who both
 read it can each drop the other's rules. With --if-match the
