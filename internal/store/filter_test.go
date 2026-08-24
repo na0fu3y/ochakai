@@ -375,3 +375,43 @@ func TestEfSearchCoversTheLimit(t *testing.T) {
 		}
 	}
 }
+
+// The root is a prefix like any other and it covers everything (design
+// doc 0109 §2), so as a condition it is no condition — the same rendering
+// a filter with no scopes at all produces.
+//
+// It cannot be left to the SQL. The empty string builds `id = ” OR
+// left(id, 1) = '/'`, and no id is empty or begins with a separator, so
+// the one prefix meaning "the whole bundle" would match nothing while
+// domain.Under answers true for it. A grant at the root reaches this
+// through the caller's read scope, which is how the two matchers came to
+// disagree: a viewer granted the whole bundle read every concept by id
+// and found none of them by search.
+func TestBuildWhereReadsTheRootAsEverything(t *testing.T) {
+	for _, prefixes := range [][]string{{""}, {"", "metrics"}, {"metrics", ""}} {
+		where, args := Filter{Prefixes: prefixes}.buildWhere("k.")
+
+		if strings.Contains(where, "unnest") {
+			t.Errorf("prefixes %#v rendered a scope condition: %q", prefixes, where)
+		}
+		if len(args) != 0 {
+			t.Errorf("prefixes %#v produced args %#v", prefixes, args)
+		}
+	}
+}
+
+// The two matchers answer the same question, so they answer it the same
+// way. This pins the agreement on the root, which is the case that broke:
+// every id domain.Under puts inside the scope must survive the condition
+// the same scope renders.
+func TestPrefixScopeAgreesWithUnderOnTheRoot(t *testing.T) {
+	ids := []string{"metrics/revenue", "glossary/arr", "teams/growth/churn", "metrics"}
+	for _, id := range ids {
+		if !domain.Under(id, "") {
+			t.Fatalf("domain.Under(%q, \"\") is false; this test's premise is gone", id)
+		}
+	}
+	if cond, _ := prefixScope("id", []string{""}, 1); cond != "" {
+		t.Errorf("the root rendered a condition that domain.Under does not impose: %q", cond)
+	}
+}

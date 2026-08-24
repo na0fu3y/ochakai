@@ -178,7 +178,16 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 	if err != nil {
 		return nil, err
 	}
-	scoped := !sc.Everything()
+	// A caller whose reading reaches every address is not scoped, even
+	// when a policy put them there: the numbers they get are the whole
+	// bundle's, and the answer says so by carrying no scope at all
+	// (design doc 0123 §2 — the field is about the numbers, not about the
+	// caller). The misses travel with them for the same reason. §3
+	// withholds those from a scoped caller so that one team is not told
+	// what every other team searched for; a caller granted the root has
+	// no other team, and on a deployment with no policy every caller
+	// already reads them.
+	scoped := !sc.ReadsWholeBundle()
 	visible := true
 	if scoped {
 		f, visible, err = s.narrow(ctx, f)

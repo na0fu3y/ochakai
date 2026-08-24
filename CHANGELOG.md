@@ -49,6 +49,40 @@ last entry.
   absence as "off" would hide a working upload on every older
   deployment.
 
+### Fixed
+
+- **A grant at the root reaches every read now, not only the ones
+  addressed by id.** `{"prefix": "", "principal": "*"}` is how a policy
+  says *everyone reads the whole bundle* (design doc 0109 §2), and with a
+  few `may_write` rows beside it, it is how a deployment says *a few
+  people edit it*. It half worked. The read scope travelled into the
+  filter as `[""]`, which the store rendered as `id = '' OR left(id, 1) =
+  '/'` — a condition no id satisfies, since none is empty and none begins
+  with a separator — so a caller granted the whole bundle could fetch any
+  concept by name and find none of them by **search**, by **browse**, or
+  in the **numbers**. A listing was the one read that worked, which is
+  what made the gap easy to miss.
+
+  Nothing had to be spelled unusually to meet it: the empty prefix is
+  what `ochakai access` and 0109 both describe as the whole bundle. **A
+  policy that names directories was never affected**, and the shape it
+  forced — a row per top-level directory, where a directory added later
+  stays invisible until somebody adds a row — is no longer the only one
+  that works.
+
+- **`ochakai stats` under a grant at the root counts the whole bundle and
+  says so.** It counted nothing before, for the reason above. The answer
+  now carries no `scope`, which is how *the whole bundle* is spelled
+  (design doc 0123 §2 — the field is about the numbers, not about the
+  caller), and the unanswered searches travel with it. §3 withholds those
+  from a scoped caller so that one team is not told what every other team
+  searched for; a caller granted the root has no other team, and on a
+  deployment with no policy at all every caller already reads them.
+
+  **Reading everything is still not administering everything.** The
+  archive of the base, `move`, `reembed` and the policy itself stay with
+  `OCHAKAI_ADMINS` (0109 §3), and a write still needs `may_write`.
+
 ## [0.27.2] - 2026-08-24
 
 ### Added

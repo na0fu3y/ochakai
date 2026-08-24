@@ -7,6 +7,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -209,6 +210,17 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 // empty prefix list is no condition at all.
 func prefixScope(column string, prefixes []string, argN int) (string, []any) {
 	if len(prefixes) == 0 {
+		return "", nil
+	}
+	// The root is a prefix like any other and it covers the whole bundle
+	// (design doc 0109 §2), which as a condition is no condition at all.
+	// It has to be said here because the SQL below cannot say it: the
+	// empty string builds `id = '' OR left(id, 1) = '/'`, and no id is
+	// empty or begins with a separator, so the one prefix that means
+	// everything would match nothing. That is exactly the disagreement
+	// this function exists to prevent — domain.Under answers true for it,
+	// and a grant at the root reached here through the read scope.
+	if slices.Contains(prefixes, "") {
 		return "", nil
 	}
 	return fmt.Sprintf(
