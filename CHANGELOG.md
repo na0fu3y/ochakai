@@ -84,6 +84,9 @@ last entry.
   **Reading everything is still not administering everything.** The
   archive of the base, `move`, `reembed` and the policy itself stay with
   `OCHAKAI_ADMINS` (0109 §3), and a write still needs `may_write`.
+  `ochakai access -h` says both halves now, and the operating guide's
+  *ディレクトリごとの閲覧者と編集者* carries the shape the fix makes
+  writable: everyone reads, a few principals write, one row each.
 
 ## [0.27.2] - 2026-08-24
 
