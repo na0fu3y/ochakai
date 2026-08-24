@@ -353,7 +353,7 @@ table.rules.edit td.who select { width: 10rem; }
 table.rules.edit td.who input[type=text] { width: 12rem; margin-left: .35rem; }
 table.rules.edit tr.invalid > td { background: var(--rejected-bg); }
 /* A warning no server field turns on or off: the page cannot know which
-   way it is being served (design doc 0072 §1), so it names both. */
+   way it is being served (design doc 0130 §1), so it names both. */
 .caution {
   background: var(--rejected-bg); border: 1px solid var(--rejected-bd); color: var(--rejected-fg);
   border-radius: 8px; padding: .6rem .9rem; margin: .8rem 0; font-size: .92rem; max-width: 48rem;
@@ -514,6 +514,43 @@ table.rules.edit tr.invalid > td { background: var(--rejected-bg); }
 .row-card .row-head .btn { margin-left: auto; }
 .row-trio { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: .6rem; }
 @media (max-width: 620px) { .row-trio { grid-template-columns: 1fr; } }
+
+/* The editor's two panes (design doc 0130). One document under both:
+   the fields on the left are drawn from the server's read of the text on
+   the right, and every field edit lands in that text. They are side by
+   side rather than in tabs so the writer can watch the second happen —
+   what a form is teaching here is the format. Narrow, they stack, and
+   the fields come first: that is the pane somebody came for. */
+.form.wide { max-width: none; }
+.editor-panes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.2rem; align-items: start; }
+@media (max-width: 900px) { .editor-panes { grid-template-columns: 1fr; } }
+.editor-panes .pane { min-width: 0; }
+.editor-panes .pane-head {
+  font-size: .8rem; font-weight: 600; color: var(--muted);
+  text-transform: none; margin-bottom: .5rem;
+  padding-bottom: .3rem; border-bottom: 1px solid var(--border);
+}
+/* The fields are the taller pane on anything real, so it scrolls inside
+   itself rather than dragging the textarea off the screen. */
+@media (min-width: 901px) { #fm-fields { max-height: 68vh; overflow-y: auto; padding-right: .4rem; } }
+#fm-fields .fieldset { margin-bottom: .9rem; }
+/* The frontmatter's groups hold one to six columns, not three, and a
+   fixed trio left an attester's single path a third of the width with
+   two thirds of nothing beside it. */
+#fm-fields .row-trio { grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); }
+#fm-other { color: var(--muted); font-size: .78rem; }
+
+/* A repeated string — one tag, one receipt field — is an input with the
+   button that takes it out, so a list reads as rows rather than as a
+   comma-separated box somebody has to know the rule for. */
+.fm-list { display: flex; flex-direction: column; gap: .35rem; margin-bottom: .35rem; }
+.fm-item { display: flex; gap: .35rem; align-items: center; }
+.fm-item input { flex: 1; min-width: 0; }
+.fm-item .fm-del, .row-card .fm-del { flex-shrink: 0; }
+/* A checkbox sits under its column's label like every other control, so
+   nothing has to line it up by hand — but it must not stretch to the
+   full width the shared input rule gives everything else. */
+input[type=checkbox].check { width: auto; height: 1.15rem; margin: .5rem 0 0; }
 
 .section-title { font-size: 1.25rem; font-weight: 700; margin: .2rem 0 1rem; }
 /* The home page's shortcuts. Each entry is a flex item so a line breaks

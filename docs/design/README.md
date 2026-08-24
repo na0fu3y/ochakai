@@ -43,7 +43,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md) |
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4([0093](0093-the-budget-governs-the-whole-response.md) が予算の側を改訂)。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。**MCP の転送が stateless になり、プロトコルが 2026-07-28 になることは [0118](0118-a-call-carries-everything-it-needs.md)**(0067 §3 を改訂 — 面もツールも動かない)。一覧がいつまで持つかを自分で答えること(構築時に決まる三つの一覧だけ。concept の読みは 0 のまま)は同記録 §7。MCP のツール 7 本とその境界は [0076](0076-two-tools-leave-mcp.md) と、**7 本目を割った [0096](0096-a-listing-is-not-a-search-here-either.md)**。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂)。**CLI の行の第一列が「読み手が並べてくれと言った鍵」だけになることは [0110](0110-the-first-column-is-the-key-you-asked-for.md)**(0068 §3 の CLI への適用。`search` と逆引きからスコア列が落ちる)。**その行に太字と dim が付くのは [0111](0111-weight-for-the-eye-and-only-for-an-eye.md)**(端末のときだけ。パイプが受け取るバイト列は変わらない) |
-| Web UI | [0072](0072-the-web-ui-serves-and-edits-documents.md) が現行(配信と編集)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**ページが ES モジュール一式になり、テストが実行されるものになることは [0092](0092-the-page-is-modules-so-it-can-be-tested.md)**(0072 §1 を改訂)。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**クロスサイトの書き込みを二つの配信経路の両方が断ることは [0126](0126-a-browser-says-where-it-came-from.md)**(0072 §1.1・§1.2 を改訂 — `serve` には置かない) |
+| Web UI | [0130](0130-the-web-ui-and-the-fields-of-a-document.md) が現行(配信・ページの形・編集を一冊で。0072 / 0092 / 0126 を畳んだ)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)** |
 | 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)**。**却下の理由がどこまで運ばれるかは [0104](0104-a-ruling-travels-with-its-reason.md)**(CLI の出力と export へ) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂) |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
@@ -507,28 +507,21 @@ JSON キーと MCP ツール名だけである。`change` の語彙に残って�
 
 ## ブラウズと Web UI
 
-- [0072 Web UI — 二つの配信経路と、文書としての編集](0072-the-web-ui-serves-and-edits-documents.md)
-  — **Accepted**。**Web UI の現行ドキュメント**(0006 / 0044 を一冊に
-  まとめたもの)。ページは認証を知らず、同じ一枚を `ochakai ui` と
+- [0130 Web UI — 二つの配信経路と、文書とその欄](0130-the-web-ui-and-the-fields-of-a-document.md)
+  — **Accepted**。**Web UI の現行ドキュメント**(0072 / 0092 / 0126 を一冊に
+  畳んだもの)。ページは認証を知らず、同じ一式を `ochakai ui` と
   `ochakai serve-ui` の二経路で配る — 危険な組み合わせはコマンドを分けること
-  で書けなくなる。編集は正準 OKF 文書のテキスト編集一本で、行エディタを
-  失うことは値引きではなく支払いである。
-- [0092 ページはモジュールになる — テストできるように](0092-the-page-is-modules-so-it-can-be-tested.md)
-  — **Accepted**。0072 §1 を改訂する。「自己完結の一枚」はビルドステップを
-  持たないことの言い換えだった — **そこは変わらない**(ビルドなし・
-  フレームワークなし・CDN なし・ページは認証を知らない、の四つはそのまま)。
-  変わったのは 2,438 行が**一つの名前空間**に載っていたことで、境界が無い
-  ところにはテストが書けない。分割して最初に分かったのは、**四つの関数が
-  宣言されたきり一度も呼ばれていなかった**ことである。切り方は面ではなく
-  依存の向きで決めた — 五つのモジュールは document に触らないので Node が
-  import でき、それが実行されるテストの前提になる。**バンドラも
-  フレームワークも npm 依存も入れない**: テストランナは Node に付いてくる
-  ものを使い、ブラウザ側も CDP を標準 `WebSocket` で叩く一ファイルにした。
-  一枚が二十個になったので静的資産は**一式で一つの ETag** と `no-cache` を
-  持つ(`max-age` は先に進んだ API に古いモジュールを出す)。テストは
-  「HTML 文字列の grep が 13 本」から三層になり、Go に残るのは Go と JS に
-  またがる不変とページ全体についての主張だけ。CSP・a11y・日本語切り替えは
-  **可能になっただけで、決めていない**。
+  で書けなくなり、クロスサイトの書き込みは両方の経路が断る(`serve` には
+  置かない)。配信するのはビルドなし・フレームワークなし・CDN なし・npm
+  依存なしの ES モジュール一式で、純粋なモジュールは `node --test` が値で
+  確かめる。**保存されるのは文書のままで、その frontmatter に欄が戻る** —
+  0072 §3.1 が「需要が戻ったら、読み取りの既定形を二重にするのではなく
+  サーバ側に『文書 → 構造』の面を足す」と書いた条項を実行し、
+  `POST /api/v1/frontmatter` 一本にした。ブラウザは YAML を読みも書きも
+  せず、書き戻しは**名指したキーのブロックの差し替え**なので、キーの順・
+  コメント・クォート・欄の無い producer のキーは一バイトも動かない。
+  `generated` / `verified` は欄にならない(押しても何も起きないボタンを
+  置かないため)。
 - [0094 ページはポリシーの下で動く](0094-the-page-runs-under-a-policy.md)
   — **Accepted**。0092 §5 が「可能にするだけで決めていない」と書いた CSP と
   a11y の基礎を決める。インライン `<script>` が一つも無くなったので
@@ -548,23 +541,9 @@ JSON キーと MCP ツール名だけである。`change` の語彙に残って�
   ルートは fragment に居るのでパスは `/` である。a11y は網羅ではなく
   「無いと使えない」四つ: toast が live region、移動後にフォーカスが主領域へ、
   現在のタブに `aria-current`、エラーバナーが `role="alert"`。
-- [0126 ブラウザは、どこから来たかを言う](0126-a-browser-says-where-it-came-from.md)
-  — **Accepted**。安全でないメソッドのクロスサイト要求は、`ochakai ui` と
-  `ochakai serve-ui` の**両方で** 403 になる。0072 §1.2 は「二つのモードは
-  ブラウザガードの要否がすべて反転している」と書いていたが、反転して
-  いるのはバインド先と identity の出所であって、**ブラウザから来た
-  書き込みを信じてよいかではない** — そして条件が揃っているのは検査を
-  持たない側だった。IAP を前置したデプロイではブラウザが資格情報を持ち、
-  `readJSON` は `Content-Type` を見ないので `text/plain` のフォームが
-  preflight 無しで四つの POST に届く。**買っているのは、この検査が
-  何をしないかである**: `Sec-Fetch-Site` も `Origin` も無い要求は通るので、
-  CLI・エージェント・curl は一行も変わらず、表面はどの次元も動かない。
-  読み(GET)は断らない — 断れば `/health` とページが道連れになる。
-  `ochakai serve` には置かない(§5): ブラウザが資格情報を持って届く構成が
-  今日は一つも無く、発火しない検査を足さないという 0035 §3.1 の規則が
-  そのまま効く。DNS リバインディング防御は残る — 攻撃ページの `Origin` と
-  `Host` は互いに一致するので、**クロスオリジンの検査が原理的に見えない
-  唯一の攻撃がそれ**である。
+- [0072 Web UI — 二つの配信経路と、文書としての編集](0072-the-web-ui-serves-and-edits-documents.md) — **Superseded by 0130**。
+- [0092 ページはモジュールになる — テストできるように](0092-the-page-is-modules-so-it-can-be-tested.md) — **Superseded by 0130**。
+- [0126 ブラウザは、どこから来たかを言う](0126-a-browser-says-where-it-came-from.md) — **Superseded by 0130**。
 - [0006 Web UI の二つの配信経路](0006-web-ui-serving.md) — **Superseded by 0072**。
 - [0014 フォルダブラウズ](0014-folder-browse.md) — **Superseded by 0046**。
   prefix によるツリー閲覧。

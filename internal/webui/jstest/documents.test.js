@@ -8,7 +8,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  templateDocument, withFrontmatterKey, withStatus, withType,
+  templateDocument, withFrontmatterKey, withStatus,
 } from '../static/js/documents.js';
 
 const FM = `---
@@ -80,25 +80,4 @@ test('a seed shows the shape of the type it opens', () => {
   const insight = templateDocument('Insight', '');
   assert.doesNotMatch(insight, /^resource:/m);
   assert.doesNotMatch(insight, /^runtime:/m);
-});
-
-test('changing the type carries the keys the new type is refused without', () => {
-  const out = withType(FM, 'Attested Computation');
-  assert.match(out, /^type: Attested Computation$/m);
-  assert.match(out, /^runtime: bigquery$/m);
-  // Seeds are not carried into a half-written document: pasting an
-  // example parameter in would be putting words in its writer's mouth.
-  assert.doesNotMatch(out, /^parameters:$/m);
-  assert.doesNotMatch(withType(FM, 'Reference'), /^resource:/m);
-});
-
-test('changing the type leaves a key the writer already named alone', () => {
-  const doc = '---\ntype: Metric\nruntime: duckdb\n---\n\nbody\n';
-  assert.match(withType(doc, 'Attested Computation'), /^runtime: duckdb$/m);
-});
-
-test('changing the type leaves the previous type\'s keys where they stand', () => {
-  // Removing a line its writer wrote is not this page's to do.
-  const doc = '---\ntype: Attested Computation\nruntime: bigquery\n---\n\nbody\n';
-  assert.match(withType(doc, 'Metric'), /^runtime: bigquery$/m);
 });

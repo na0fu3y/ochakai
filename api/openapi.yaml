@@ -1249,6 +1249,149 @@ paths:
                 required: [error, code]
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
+  /api/v1/frontmatter:
+    post:
+      operationId: editFrontmatter
+      summary: Read a document's frontmatter as structure, and write keys back into it
+      description: >
+        The structured face of an OKF document (design doc 0130 §3,
+        which carries the reasoning). It takes a document and hands one
+        back, reading its frontmatter as JSON on the way — and it stores
+        nothing: no id, no ETag, no precondition. The concept is still
+        the document, and this is a function over one. What it is for is
+        a form, and both halves of one — parsing the YAML a producer
+        wrote, and rendering YAML a person will read in a diff — are the
+        format's business, so both are here rather than in a client.
+
+        **A read** is a body with only `document`. The answer carries
+        the same document back, `keys` in the order the document itself
+        carries them (JSON objects have none), and `values`, the
+        frontmatter mapping decoded to the shapes JSON has. Values are
+        what YAML said: no envelope, no defaults filled in, no type
+        coerced, a producer's extension key beside the ones the spec
+        defines (SPEC §4.1), and a date in the spelling its writer used.
+
+        **A write** adds `set` and `unset`. Each named key is replaced
+        in place — its whole block, found by parsing rather than by
+        scanning for `key:` at the start of a line — or removed, or
+        appended when the document does not carry it. **Every other byte
+        stays where it was**: key order, comments, blank lines, the
+        quoting of every value the caller did not name, and the body.
+        The answer's `values` are read back out of the document that is
+        going back, not out of the values that went in, so a caller
+        drawing a form and a caller storing the text cannot disagree
+        about what a value became on the way through YAML.
+
+        **The keys this instance owns are refused** — `generated`,
+        `verified`, `created_by`, `rejected_*` and the pre-v0.2
+        spellings — in `set` and in `unset` alike, with a 400 rather
+        than a write nothing would read (design doc 0009). They are
+        absent from a stored document, so a read never shows them.
+
+        Nothing is stored, so a read-only deployment answers it. Text
+        that is not an OKF document — no frontmatter, or a frontmatter
+        block that is not a mapping — is a 400: there is nothing to
+        project, and a caller filling a form has to be told that rather
+        than shown an empty one.
+      parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
+      requestBody:
+        required: true
+        description: A key outside document/set/unset is a 400 naming it (design doc 0064).
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [document]
+              properties:
+                document:
+                  type: string
+                  description: The OKF document — YAML frontmatter, then markdown body.
+                set:
+                  type: object
+                  additionalProperties: true
+                  description: >
+                    Top-level frontmatter keys to give these values. A
+                    value is any JSON; it is rendered as the YAML a
+                    person would have written.
+                unset:
+                  type: array
+                  items: { type: string }
+                  description: >
+                    Top-level frontmatter keys to remove. A key the
+                    document does not carry is not an error — the result
+                    is a document without it either way.
+            examples:
+              read:
+                summary: Read a document's frontmatter as structure
+                value:
+                  document: |
+                    ---
+                    type: Metric
+                    title: Revenue
+                    ---
+
+                    Revenue is the sum of net_amount over completed orders.
+              write:
+                summary: Give the concept two sources and drop its expiry
+                value:
+                  document: |
+                    ---
+                    type: Metric
+                    title: Revenue
+                    stale_after: "2026-12-31"
+                    ---
+
+                    Revenue is the sum of net_amount over completed orders.
+                  set:
+                    sources:
+                      - resource: bigquery://shop/analytics/orders
+                        title: Orders
+                  unset: [stale_after]
+      responses:
+        "200":
+          description: The document, and its frontmatter as structure.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [document, keys, values]
+                properties:
+                  document:
+                    type: string
+                    description: >
+                      The document as it now stands — the same bytes on a
+                      read, and the edited ones on a write. Store it with
+                      PUT /api/v1/bundle/{path}; nothing was stored here.
+                  keys:
+                    type: array
+                    items: { type: string }
+                    description: The frontmatter's top-level keys, in the order the document carries them.
+                  values:
+                    type: object
+                    additionalProperties: true
+                    description: The frontmatter mapping, decoded to the shapes JSON has.
+              example:
+                document: |
+                  ---
+                  type: Metric
+                  title: Revenue
+                  ---
+
+                  Revenue is the sum of net_amount over completed orders.
+                keys: [type, title]
+                values:
+                  type: Metric
+                  title: Revenue
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "405": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/move:
     post:
       operationId: moveConcept

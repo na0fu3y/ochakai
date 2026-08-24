@@ -278,16 +278,52 @@ func TestTheAccessTabWaitsForTheServerToAnswer(t *testing.T) {
 //
 // What the gate has to ask is whether the document is still the one the
 // dropdown seeded — that is the question the flag was standing in for.
-func TestTheTypeDropdownAsksTheDocumentNotTheDirtyFlag(t *testing.T) {
+// The control moved into the frontmatter form (design doc 0130) and the
+// question did not.
+func TestTheTypeFieldAsksTheDocumentNotTheDirtyFlag(t *testing.T) {
 	page := asset(t, "js/views/editor.js")
-	body := section(t, page, "typeSel.addEventListener('change'", "\n    });")
-	if strings.Contains(body, "dirty") {
-		t.Errorf("the type change is gated on the form's dirty flag again, which the select's own `input` raises before this runs:\n%s", body)
+	body := section(t, page, "if (field.key === 'type'", "\n      return;")
+	if strings.Contains(body, "dirty &&") || strings.Contains(body, "&& dirty") {
+		t.Errorf("the type change is gated on the form's dirty flag again, which the control's own `input` raises before this runs:\n%s", body)
 	}
-	for _, want := range []string{"doc === seeded", "withType(doc, typeSel.value)"} {
-		if !strings.Contains(body, want) {
-			t.Errorf("the type change no longer does %q:\n%s", want, body)
+	if !strings.Contains(body, "docEl.value === seeded") {
+		t.Errorf("the type change no longer asks whether the document is the one it seeded:\n%s", body)
+	}
+	// And a type the writer has already written under still carries the
+	// key its type is refused without, rather than reseeding over them.
+	if !strings.Contains(page, "TYPE_REQUIRED[el.value]") {
+		t.Errorf("a type change no longer carries the keys the new type is refused without:\n%s", page)
+	}
+}
+
+// The two panes are one document (design doc 0130): the fields are drawn
+// from the server's read of the textarea, and a field edit goes back
+// through the same face and lands in that text. What must never appear
+// here is the page reading or writing YAML itself — that is the parser
+// design doc 0130 §3.1 refused, whose failure mode is a form that drops a
+// producer's key without saying so.
+func TestTheEditorsFieldsGoThroughTheServersFace(t *testing.T) {
+	page := asset(t, "js/views/editor.js")
+	for _, want := range []string{
+		"api('/api/v1/frontmatter'",  // both directions go through it
+		"body.set",                   // a field edit is a set
+		"body.unset",                 // and a cleared field removes the key
+		"docEl.value = out.document", // what comes back is what is saved
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("the editor no longer does %q", want)
 		}
+	}
+	// The save is still the document in the textarea, unchanged by any of
+	// this: the form is a way of writing it, not a second thing to store.
+	if !strings.Contains(page, "method: 'PUT', doc: document_") {
+		t.Errorf("the editor no longer saves the document the textarea holds:\n%s", page)
+	}
+	// The keys the form has no editor for are named rather than hidden.
+	// That is what makes "the form is the document" true for a writer
+	// holding a producer's own key (OKF SPEC §4.1).
+	if !strings.Contains(page, "otherKeys(keys)") {
+		t.Errorf("the editor no longer says which keys it is keeping untouched:\n%s", page)
 	}
 }
 

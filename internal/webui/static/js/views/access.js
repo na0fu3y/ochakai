@@ -29,7 +29,7 @@ import { knownDirs } from '../tree.js';
 // learning this caller is not one. Same shape as the read-only banner —
 // what the page offers comes from the server's own answer and never from
 // anything configured in the browser, which is what keeps one page
-// servable two ways (design doc 0072 §1).
+// servable two ways (design doc 0130 §1).
 export async function markAccessTab() {
   try {
     await api('/api/v1/access');
