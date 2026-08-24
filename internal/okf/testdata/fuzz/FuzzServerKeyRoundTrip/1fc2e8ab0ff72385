@@ -1,0 +1,2 @@
+go test fuzz v1
+string("---\n\rtype:\r 0\n---")
