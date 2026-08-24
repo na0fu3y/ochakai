@@ -156,8 +156,8 @@ type はパスから推測されることは無いので(design doc 0075 §2)、
 ## ファイル
 
 **ファイルの `put` で 501。** そのインスタンスには `OCHAKAI_GCS_BUCKET` が無く、
-markdown の concept しか保存できない。これはリクエスト単位ではなく
-デプロイ全体の設定である。
+markdown の concept しか保存できない。デプロイ全体の設定であり、**打つ前に分かる**
+— `ochakai stats` の `files off` の一行と、面を描かない Web UI がそう言う([0131](../design/0131-a-deployment-says-what-it-cannot-do.md))。
 
 **ファイルが拒否される。** 理由は三つしか無い: 空であること、1 ファイル
 あたり 5 MiB の上限を超えること、そして ochakai が住所にできない名前

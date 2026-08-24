@@ -62,6 +62,19 @@ type Stats struct {
 	// exactly why this is worth carrying: the deployments that need to be
 	// told are the ones that did it anyway. Absent everywhere else.
 	InsecureDev bool `json:"insecure_dev,omitempty"`
+	// Files is whether this deployment can hold file bytes at all, and
+	// — for a caller who could change that — the variable that turns it
+	// on. A deployment without GCS stores markdown concepts only (design
+	// doc 0075 §1), and every face that offers a file on one of those can
+	// only refuse: the page offered an upload button that was always a
+	// 501 (design doc 0131).
+	//
+	// A pointer, and the one field here that is: absent has to be read
+	// as "this server does not answer for it" rather than as "off",
+	// because unlike the two postures above, off is the answer a client
+	// acts on. A `sandbox` that is absent is an ordinary deployment; a
+	// `files` that is absent is a server too old to have been asked.
+	Files *StatsFiles `json:"files,omitempty"`
 
 	Concepts StatsConcepts `json:"concepts"`
 	// Queues is what design doc 0049's GET /api/v1/queues returns, under
@@ -129,6 +142,29 @@ type StatsEmbedding struct {
 	// Truncated is how many of those vectors saw only the front of their
 	// concept.
 	Truncated int64 `json:"truncated"`
+}
+
+// StatsFiles is whether a deployment can store files, and how it would
+// be given the ability (design doc 0131).
+//
+// The pair is deliberate. Enabled is a fact about the deployment and
+// every caller reads it, because every caller is the one being offered
+// the button that would refuse. Variable is the operator's half — the
+// name of the thing to set — and it travels only to a caller who holds
+// the whole bundle, which is the same test the rest of the
+// administrator's operations take (Service.RequireAdmin). A reader who
+// cannot act on a sentence is not helped by being handed it.
+type StatsFiles struct {
+	// Enabled is whether file bytes have somewhere to live. False is a
+	// deployment that stores markdown concepts only: reading, writing
+	// and listing a file all answer 501 there, so a face that offers one
+	// is offering a refusal.
+	Enabled bool `json:"enabled"`
+	// Variable is the environment variable that would enable it,
+	// OCHAKAI_GCS_BUCKET. Absent when files are already enabled, and
+	// absent for a caller who is not an administrator of this
+	// deployment.
+	Variable string `json:"variable,omitempty"`
 }
 
 // StatsConcepts is what the base is made of (state), plus how much of it

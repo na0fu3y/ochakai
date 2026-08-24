@@ -2096,6 +2096,7 @@ paths:
                   value:
                     at: "2026-07-28T02:07:44.291508Z"
                     window_days: 30
+                    files: { enabled: true }
                     concepts:
                       total: 128
                       status: { draft: 31, stable: 92, deprecated: 5 }
@@ -3151,6 +3152,39 @@ components:
             `dev` tells its own readers not to deploy it, which is why
             this is worth carrying: the deployments that need telling are
             the ones that did it anyway. Absent everywhere else.
+        files:
+          type: object
+          description: >
+            Whether this deployment can hold file bytes at all, and — for
+            a caller who could change that — the variable that would
+            (design doc 0131). A deployment with no bucket stores markdown
+            concepts only, and every read, write or listing of a file on
+            one of those answers 501, so a face that offers a file there
+            is offering a refusal: the bundled web UI reads this and stops
+            offering it.
+
+
+            The object is **absent on a server that predates it**, which
+            is not the same answer as `enabled: false` — one is a
+            deployment that cannot take files, the other is a server that
+            was never asked. A client that branches on this reads the
+            object's presence first.
+          properties:
+            enabled:
+              type: boolean
+              description: >
+                Whether file bytes have somewhere to live
+                (`OCHAKAI_GCS_BUCKET`, design doc 0075 §1).
+            variable:
+              type: string
+              description: >
+                The environment variable that would enable files,
+                `OCHAKAI_GCS_BUCKET`. **Absent unless files are off and
+                this caller holds the whole bundle** — the same test the
+                rest of the administrator's operations take. The sentence
+                is only useful to somebody who can act on it, and on a
+                shared deployment it is noise for everybody else.
+          required: [enabled]
         concepts:
           type: object
           description: What the base is made of. Deleted concepts are in none of it.
