@@ -676,6 +676,18 @@ func cmdStats(ctx context.Context, args []string) error {
 	if st.InsecureDev {
 		fmt.Print("insecure_dev\ttrue\tauthentication is off — every caller is human:anonymous, including whoever rules on a concept\n")
 	}
+	// What the deployment cannot do, and — for whoever may set it — the
+	// name of the thing that would change that (design doc 0131). Read
+	// through a nil check rather than off the zero value, because a
+	// server that predates the field says nothing here and "nothing" must
+	// not print as "off": the pointer is what tells the two apart.
+	if st.Files != nil && !st.Files.Enabled {
+		line := "files\toff\tthis deployment stores markdown concepts only"
+		if st.Files.Variable != "" {
+			line += " — set " + st.Files.Variable + " to a bucket to accept files"
+		}
+		fmt.Println(line)
+	}
 	// Tab-separated key/value, like `usage`: the vocabularies are printed
 	// in their own order (domain.Statuses, domain.Trusts) so a value
 	// added to either shows up here without this command being edited.

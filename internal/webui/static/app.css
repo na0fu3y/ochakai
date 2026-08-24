@@ -586,7 +586,7 @@ body.read-only .read-only-note {
    so they take the view's text column: 62rem less the 1.2rem <main>
    insets its text by, which puts a banner's edge where the first line
    of the page starts. */
-.dev-note, .sandbox-note {
+.dev-note, .sandbox-note, .setup-note {
   max-width: calc(min(62rem, 100%) - 2.4rem); margin: 1.4rem auto 0;
 }
 /* A sandbox is writable, so nothing is hidden — what it needs is to
@@ -609,3 +609,25 @@ body.sandbox .sandbox-note {
   border-radius: 8px; padding: .6rem .9rem;
   font-size: .92rem;
 }
+/* What the deployment cannot do because a variable is unset, shown to
+   whoever may set it (design doc 0131). Quieter than both of its
+   neighbours: nothing here is being lost or misrecorded — something is
+   simply not switched on — and the caller reading it is the one person
+   who can end it. Hidden until api.js fills it, since an administrator
+   is not something the page can tell on its own. */
+.setup-note {
+  background: var(--surface); border: 1px dashed var(--border);
+  border-radius: 8px; padding: .6rem .9rem;
+  font-size: .92rem; color: var(--muted);
+}
+.setup-note code { font-size: .92em; }
+.setup-note .who { display: block; margin-top: .3rem; font-size: .88em; }
+
+/* A deployment with no bucket stores markdown concepts only (design doc
+   0075 §1), so every affordance that would write or read a file can only
+   be refused. Hidden rather than disabled, for the reason the read-only
+   rule above gives — and the one sentence that replaces them says which
+   deployment this is, not that the concept has no files. */
+body.no-files .files-only { display: none !important; }
+.files-off { display: none; }
+body.no-files .files-off { display: block; }

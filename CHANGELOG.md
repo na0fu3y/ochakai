@@ -21,6 +21,34 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **A deployment that cannot hold files says so, and the page stops
+  offering one.** Without `OCHAKAI_GCS_BUCKET` an instance stores
+  markdown concepts only — every read, write and listing of a file
+  answers 501 — and the web UI went on drawing "ファイルを選択…" and
+  "ファイルを追加" on every concept. You found out by clicking, and what
+  came back was the name of an environment variable. `GET /api/v1/stats`
+  now answers `files.enabled`, the page reads it, and the upload
+  affordance is gone where it could only have been refused; the tab says
+  which deployment this is instead. `ochakai stats` prints one line for
+  the same reason it prints the posture lines: whoever never opens a page
+  still has to be told (design doc 0131).
+
+- **The variable that would turn it on goes to whoever can set it.** The
+  same answer carries `files.variable` — `OCHAKAI_GCS_BUCKET` — but only
+  for a caller who holds the whole bundle, which is the test the rest of
+  the administrator's operations take, and on a deployment that has
+  written no grants is everybody. The web UI turns it into one banner;
+  everybody else is simply not handed a sentence they cannot act on. The
+  page does not decide who is an administrator: the field is on the
+  answer or it is not.
+
+  Upgrading a client: **`files` absent is not `files.enabled: false`**.
+  A server that predates this says nothing here, and a client that reads
+  absence as "off" would hide a working upload on every older
+  deployment.
+
 ### Fixed
 
 - **A grant at the root reaches every read now, not only the ones

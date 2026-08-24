@@ -269,6 +269,60 @@ func TestTheAccessTabWaitsForTheServerToAnswer(t *testing.T) {
 	}
 }
 
+// A deployment with no bucket stores markdown concepts only (design doc
+// 0075 §1), so every way of adding a file on it can only be refused —
+// the same lie as a write affordance on a read-only deployment, and
+// hidden the same way (design doc 0131). Three parts have to line up or
+// the button ships visible to a deployment that will refuse it: the page
+// has to learn the answer, the class has to land on <body>, and the CSS
+// has to act on it.
+func TestTheUploadIsHiddenWhereFilesAreUnsupported(t *testing.T) {
+	detail := asset(t, "js/views/detail.js")
+	for _, aff := range []struct{ what, marker string }{
+		{"the file picker", `id="att-file"`},
+		{"the upload button", `id="att-upload"`},
+	} {
+		if !strings.Contains(section(t, detail, `<div class="toolbar write-only files-only"`, "</div>"), aff.marker) {
+			t.Errorf("%s is not inside a toolbar that hides where files are unsupported", aff.what)
+		}
+	}
+	// The one sentence that replaces them says which deployment this is.
+	// Without it the tab reads "no files here" on a base that can never
+	// have any, which is the confusion this record is about.
+	if !strings.Contains(detail, `class="empty files-off"`) {
+		t.Error("nothing says why the upload is gone, so the tab reads as an entry with no files")
+	}
+	css := asset(t, "app.css")
+	for _, rule := range []string{
+		"body.no-files .files-only { display: none !important; }",
+		".files-off { display: none; }",
+		"body.no-files .files-off { display: block; }",
+	} {
+		if !strings.Contains(css, rule) {
+			t.Errorf("the stylesheet does not carry %q, so the class on <body> does nothing", rule)
+		}
+	}
+	// Absent is not "off": a server that predates the field says nothing,
+	// and reading that as unsupported would hide a working upload on
+	// every deployment older than this.
+	body := section(t, asset(t, "js/api.js"), "function markCapabilities", "\n}")
+	if !strings.Contains(body, "files.enabled !== false") {
+		t.Errorf("the page does not tell an absent answer from a deployment that cannot take files:\n%s", body)
+	}
+	if !strings.Contains(body, "classList.add('no-files')") {
+		t.Errorf("nothing marks the page, so the CSS above never applies:\n%s", body)
+	}
+	// The variable that would turn files on is the server's to send or
+	// withhold. A page that decided this for itself would be deciding
+	// who is an administrator, which it cannot know (design doc 0130 §1).
+	if !strings.Contains(body, "if (!files.variable) return;") {
+		t.Errorf("the setup banner is not gated on the server having sent the variable:\n%s", body)
+	}
+	if tag := section(t, asset(t, "index.html"), `id="setup-note"`, ">"); !strings.Contains(tag, "hidden") {
+		t.Errorf("the setup banner ships visible: %s", tag)
+	}
+}
+
 // The editor's type dropdown shipped inert from v0.16.0 to v0.19.1: the
 // reseed was gated on the form's dirty flag, and a <select> fires `input`
 // before its `change`, so the flag the select itself raised was always up
@@ -384,7 +438,7 @@ func TestWriteAffordancesAreHiddenOnAReadOnlyDeployment(t *testing.T) {
 	// and the review card's. Each marker must occur once, so a second copy
 	// added somewhere ungated fails here rather than shipping visible.
 	for _, aff := range []struct{ what, marker, open, close string }{
-		{"adding a file", `id="att-upload"`, `<div class="toolbar write-only"`, "</div>"},
+		{"adding a file", `id="att-upload"`, `<div class="toolbar write-only files-only"`, "</div>"},
 		{"Edit", `href="#/edit/`, `<span class="actions write-only">`, "</span>"},
 		{"Verify", `id="act-verify"`, `<span class="actions write-only">`, "</span>"},
 		{"Reject…", `id="act-reject"`, `<span class="actions write-only">`, "</span>"},

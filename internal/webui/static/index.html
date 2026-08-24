@@ -69,6 +69,12 @@
     <div class="sandbox-note" role="status">
       <strong>ここはサンドボックスです。</strong>誰でも書き込めて、誰も識別されず、ナレッジベース全体が定期的に初期化されます。ここに書いたものは、すべて消えます。試すための場所ですので、ナレッジを下書きし、検証し、結果を報告してみてください。<strong>失って困るものは置かないでください。</strong>
     </div>
+    <!-- What this deployment cannot do because a variable is unset, for
+         the caller who could set it (design doc 0131). Written by
+         api.js from the server's own answer and empty otherwise: the
+         page does not know who is an administrator and never decides it
+         — the variable is on the answer or it is not. -->
+    <div class="setup-note" id="setup-note" role="status" hidden></div>
     <!-- tabindex="-1" so the router can move focus here after a
        navigation: the view is replaced in place, and without it a
        keyboard or screen-reader user stays where the last click left

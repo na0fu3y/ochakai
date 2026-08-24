@@ -202,7 +202,9 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 		// outside the scope is a 404 rather than a 403: an error would
 		// say the subtree is there. An empty prefix list cannot express
 		// this, because in a filter it means the whole bundle.
-		return emptyStats(now, days, s.Config), nil
+		empty := emptyStats(now, days, s.Config)
+		empty.Files = s.filesState(sc)
+		return empty, nil
 	}
 	st, err := s.Store.Stats(ctx, now.AddDate(0, 0, -days), f.Prefixes)
 	if err != nil {
@@ -225,6 +227,7 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 	// curate into it (design doc 0087).
 	st.Sandbox = s.Config != nil && s.Config.Sandbox
 	st.InsecureDev = s.Config != nil && s.Config.InsecureDev
+	st.Files = s.filesState(sc)
 	// The model is the service's, not the store's — the store holds
 	// vectors and never asks who made them — so the coverage is read
 	// here, beside the other two answers the service alone can give.
@@ -270,6 +273,31 @@ func emptyStats(now time.Time, days int, cfg *config.Config) *domain.Stats {
 	st.Misses.Withheld = true
 	st.Sandbox = cfg != nil && cfg.Sandbox
 	st.InsecureDev = cfg != nil && cfg.InsecureDev
+	return st
+}
+
+// filesState is what this deployment can do about files, and — for a
+// caller who could do something about it — the variable that would
+// change the answer (design doc 0131).
+//
+// Both halves are on the response for the same reason `sandbox` is: a
+// deployment that does not say what it is takes what you write, and what
+// it takes here is the time of somebody who was offered an upload and
+// got a 501 (design doc 0087 §3). The variable is the operator's half,
+// so it goes to the caller who holds the whole bundle — the same test
+// every other operation over the bundle as a whole takes (RequireAdmin),
+// which on a deployment that has written no grants is everybody, and
+// that is the deployment where everybody is in fact its administrator.
+func (s *Service) filesState(sc *Scope) *domain.StatsFiles {
+	if s.Store != nil && s.Store.HasBlobStore() {
+		return &domain.StatsFiles{Enabled: true}
+	}
+	st := &domain.StatsFiles{}
+	if sc != nil && sc.Everything() {
+		// Spelled here as it is spelled in the refusal a write gets
+		// (settleFile): one name, said by whichever face the reader met.
+		st.Variable = "OCHAKAI_GCS_BUCKET"
+	}
 	return st
 }
 
