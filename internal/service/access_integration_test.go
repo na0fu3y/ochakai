@@ -872,3 +872,181 @@ func TestArchiveOfASubtreeBelongsToWhoeverMayReadItIntegration(t *testing.T) {
 		})
 	}
 }
+
+// rootGrantFixture is the shape a large deployment asks for first:
+// everyone reads the whole bundle, a few principals write it. The root is
+// a prefix like any other (design doc 0109 §2), so it is spelled as one
+// grant at "" rather than as a row per directory.
+type rootGrantFixture struct {
+	svc                     *Service
+	prefix, id              string
+	viewer, editor, admin   domain.Actor
+	viewCtx, editCtx, admCt context.Context
+}
+
+func newRootGrantFixture(t *testing.T) *rootGrantFixture {
+	t.Helper()
+	ctx := context.Background()
+	s, err := store.New(ctx, testdb.Private(t, "acl-root"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	f := &rootGrantFixture{
+		admin:  domain.Actor{Kind: domain.ActorHuman, Name: "ops@example.co.jp"},
+		editor: domain.Actor{Kind: domain.ActorHuman, Name: "tanaka@example.co.jp"},
+		viewer: domain.Actor{Kind: domain.ActorHuman, Name: "suzuki@example.co.jp"},
+	}
+	f.svc = &Service{
+		Store:  s,
+		Log:    slog.New(slog.DiscardHandler),
+		Config: &config.Config{Admins: []string{"human:ops@example.co.jp"}},
+	}
+	f.prefix = testdb.Unique(t, "acl-root-")
+	f.id = f.prefix + "/metrics/revenue"
+	f.admCt = httpauth.WithActor(ctx, f.admin)
+	f.editCtx = httpauth.WithActor(ctx, f.editor)
+	f.viewCtx = httpauth.WithActor(ctx, f.viewer)
+
+	doc := "---\ntype: Metric\ntitle: revenue\n---\n\nthe revenue of the shop\n"
+	d, _, err := okf.Parse([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d.ID = f.id
+	if _, err := f.svc.Create(f.admCt, &d.Knowledge, f.admin); err != nil {
+		t.Fatal(err)
+	}
+	rules := []domain.AccessRule{
+		{Prefix: "", Principal: domain.AnyPrincipal},
+		{Prefix: "", Principal: domain.PrincipalOf(f.editor), MayWrite: true},
+	}
+	if _, _, err := f.svc.SetPolicy(f.admCt, rules, f.admin, nil); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if _, _, err := f.svc.SetPolicy(f.admCt, nil, f.admin, nil); err != nil {
+			t.Logf("clearing the policy: %v", err)
+		}
+	})
+	return f
+}
+
+// A grant at the root reaches every read, not only the ones addressed by
+// id. It did not: the scope travelled into the filter as [""], which the
+// store rendered as a condition no id can satisfy, so a viewer granted
+// the whole bundle could fetch any concept by name and find none of them
+// by search, by browse or in the numbers.
+func TestRootGrantIsTheWholeBundleIntegration(t *testing.T) {
+	f := newRootGrantFixture(t)
+
+	if _, err := f.svc.Get(f.viewCtx, f.id); err != nil {
+		t.Errorf("reading by id under a grant at the root: %v", err)
+	}
+	hits, err := f.svc.SearchOrList(f.viewCtx, "revenue", "", "", store.Filter{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits.Hits) == 0 {
+		t.Error("a search under a grant at the root came back empty")
+	}
+	listed, err := f.svc.SearchOrList(f.viewCtx, "", "usage", "", store.Filter{}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Hits) == 0 {
+		t.Error("a listing under a grant at the root came back empty")
+	}
+	lvl, err := f.svc.Browse(f.viewCtx, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lvl.Dirs) == 0 && len(lvl.Concepts) == 0 {
+		t.Error("browsing the root under a grant at the root came back empty")
+	}
+
+	// A prefix the caller asks for still narrows: the grant widens the
+	// scope, it does not ignore the filter.
+	none, err := f.svc.SearchOrList(f.viewCtx, "", "usage", "",
+		store.Filter{Prefixes: []string{f.prefix + "/nothing-here"}}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(none.Hits) != 0 {
+		t.Errorf("a prefix the caller asked for was ignored: %d hits", len(none.Hits))
+	}
+}
+
+// The numbers a root-granted caller reads are the whole bundle's, so the
+// answer declares no scope and the misses travel with it (design doc 0123
+// §2, §3). Withholding them protects one team from being told what every
+// other team searched for, and a caller granted the root has no other
+// team — on a deployment with no policy at all, every caller reads them.
+func TestRootGrantStatsAreTheWholeBundlesIntegration(t *testing.T) {
+	f := newRootGrantFixture(t)
+
+	whole, err := f.svc.Stats(f.admCt, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine, err := f.svc.Stats(f.viewCtx, 0, nil)
+	if err != nil {
+		t.Fatalf("stats under a grant at the root: %v", err)
+	}
+	if mine.Scope != nil {
+		t.Errorf("declared scope %v, want none — the count is the whole bundle's", mine.Scope)
+	}
+	if mine.Misses.Withheld {
+		t.Error("misses withheld from a caller who reads the whole bundle")
+	}
+	if mine.Concepts.Total != whole.Concepts.Total {
+		t.Errorf("counted %d concepts, an administrator counts %d",
+			mine.Concepts.Total, whole.Concepts.Total)
+	}
+	if mine.Concepts.Total == 0 {
+		t.Error("counted nothing under a grant that covers everything")
+	}
+
+	// Asking about one subtree still declares it, for the reason an
+	// administrator's own scoped call does.
+	part, err := f.svc.Stats(f.viewCtx, 0, []string{f.prefix})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(part.Scope) != 1 || part.Scope[0] != f.prefix {
+		t.Errorf("a scoped question declared %v", part.Scope)
+	}
+}
+
+// Reading everything is not administering everything. The grant says who
+// may read and write under a directory and nothing else, so the
+// operations 0109 §3 keeps whole — the policy, the archive of the base —
+// stay with OCHAKAI_ADMINS, and a write still needs may_write.
+func TestRootGrantIsNotAdministrationIntegration(t *testing.T) {
+	f := newRootGrantFixture(t)
+
+	if _, _, err := f.svc.Policy(f.viewCtx); !errors.Is(err, ErrForbidden) {
+		t.Errorf("reading the policy returned %v, want ErrForbidden", err)
+	}
+	if _, _, err := f.svc.SetPolicy(f.viewCtx, nil, f.viewer, nil); !errors.Is(err, ErrForbidden) {
+		t.Errorf("writing the policy returned %v, want ErrForbidden", err)
+	}
+	if err := f.svc.MayArchive(f.viewCtx, ""); !errors.Is(err, ErrForbidden) {
+		t.Errorf("archiving the whole bundle returned %v, want ErrForbidden", err)
+	}
+	if err := f.svc.RequireAdmin(f.viewCtx, "reembed"); !errors.Is(err, ErrForbidden) {
+		t.Errorf("re-embedding returned %v, want ErrForbidden", err)
+	}
+
+	// The reader may not write; the editor granted may_write at the same
+	// prefix may.
+	if _, err := f.svc.Verify(f.viewCtx, f.id, f.viewer); !errors.Is(err, ErrForbidden) {
+		t.Errorf("a read-only grant wrote: %v", err)
+	}
+	if _, err := f.svc.Verify(f.editCtx, f.id, f.editor); err != nil {
+		t.Errorf("a may_write grant at the root could not write: %v", err)
+	}
+}

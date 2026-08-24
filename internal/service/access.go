@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -52,6 +53,24 @@ type Scope struct {
 
 // Everything reports whether this scope has no boundary in it.
 func (sc *Scope) Everything() bool { return sc.Unscoped || sc.Admin }
+
+// ReadsWholeBundle reports whether the caller's reading reaches every
+// address: no policy at all, an administrator, or a grant at the root,
+// which is a prefix like any other and covers everything (0109 §2).
+//
+// It is deliberately not folded into Everything, which answers the wider
+// question of who may run the operations that take the bundle as a whole
+// (§3). A reader granted the root is not an administrator: widening
+// Everything here would hand them the export, the move, the re-embedding
+// and the policy itself, none of which this grant says anything about.
+//
+// Two callers ask it: the filter narrowing in narrow, and the statistics,
+// which decide by the same fact whether their answer declares a scope.
+// Browse does not — it hands the scope list to the store, where the root
+// is read as the whole bundle by the condition builder itself.
+func (sc *Scope) ReadsWholeBundle() bool {
+	return sc.Everything() || slices.Contains(sc.Read, "")
+}
 
 // MayRead reports whether id is inside the caller's read scope.
 func (sc *Scope) MayRead(id string) bool { return sc.Everything() || under(id, sc.Read) }
@@ -236,7 +255,14 @@ func (s *Service) narrow(ctx context.Context, f store.Filter) (store.Filter, boo
 	if err != nil {
 		return f, false, err
 	}
-	if sc.Everything() {
+	if sc.ReadsWholeBundle() {
+		// Nothing to narrow: whatever the caller asked for is already
+		// inside the scope. The prefixes are left as they arrived rather
+		// than replaced by the scope's own [""], because an empty list is
+		// how "the whole bundle" is spelled everywhere it is read back —
+		// the store reads it as no condition, and the statistics declare
+		// their scope by carrying one (design doc 0123 §7 refused [""] as
+		// a second spelling of the same thing).
 		return f, true, nil
 	}
 	if len(sc.Read) == 0 {
