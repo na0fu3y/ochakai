@@ -1077,6 +1077,62 @@ func Handler(svc *service.Service) http.Handler {
 		writeView(w, http.StatusOK, moved)
 	})
 
+	// POST /api/v1/frontmatter — the structured face of a document
+	// (design doc 0130). It reads a document's frontmatter as JSON and
+	// writes named keys back into it, and it touches no stored concept:
+	// the caller hands over text and gets text back, so there is no id,
+	// no ETag, no precondition and nothing to record. What it is for is
+	// a form — a curator editing `sources` without counting YAML
+	// indentation — and 0130 §3.2 is the clause that named exactly this
+	// as the way to have one: the face is on the server, so the browser
+	// never parses YAML and the projection stays a projection.
+	//
+	// A read-only deployment answers it. Nothing is stored, and a page
+	// that can show a concept's frontmatter in fields rather than in a
+	// textarea is showing what it could already read.
+	mux.HandleFunc("POST /api/v1/frontmatter", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+			writeError(w, err)
+			return
+		}
+		var in struct {
+			Document string `json:"document"`
+			// Raw, so the order the caller wrote an object's keys in is
+			// the order the document gets: JSON objects are ordered on
+			// the wire and a Go map is not, and a `sources` entry
+			// alphabetized on the way through is a diff nobody asked
+			// for (design doc 0130 §3.4).
+			Set   map[string]json.RawMessage `json:"set,omitzero"`
+			Unset []string                   `json:"unset,omitzero"`
+		}
+		if !readJSON(w, r, &in) {
+			return
+		}
+		doc := []byte(in.Document)
+		if len(in.Set) > 0 || len(in.Unset) > 0 {
+			out, err := okf.SetFrontmatterKeys(doc, in.Set, in.Unset)
+			if err != nil {
+				writeError(w, service.Invalidf("%s", err.Error()))
+				return
+			}
+			doc = out
+		}
+		// Answered from the document that is going back, not from the
+		// values that went in: a caller drawing a form from this and a
+		// caller storing the text below it must not be able to disagree
+		// about what a value became on the way through YAML.
+		structure, err := okf.StructureOf(doc)
+		if err != nil {
+			writeError(w, service.Invalidf("%s", err.Error()))
+			return
+		}
+		writeJSON(w, http.StatusOK, struct {
+			Document string         `json:"document"`
+			Keys     []string       `json:"keys"`
+			Values   map[string]any `json:"values"`
+		}{string(doc), structure.Keys, structure.Values})
+	})
+
 	// POST /api/v1/reembed?limit=N&cursor=... — fill in vectors for
 	// concepts and files that have none for the configured model.
 	// The response's cursor feeds the next call: a pass whose concepts all

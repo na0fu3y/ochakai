@@ -166,12 +166,11 @@ func TestBadRequestValidation(t *testing.T) {
 	}
 }
 
-// restOperations pairs each of REST's twelve operations with a concrete
-// address that reaches it through Handler's router and the
-// api/openapi.yaml operation (method + path template) it implements.
-// Shared by every test below that needs to address all twelve, so there
-// is one list of URLs to keep in sync with the router rather than one
-// per test.
+// restOperations pairs each REST operation with a concrete address
+// that reaches it through Handler's router and the api/openapi.yaml
+// operation (method + path template) it implements. Shared by every
+// test below that needs to address all of them, so there is one list of
+// URLs to keep in sync with the router rather than one per test.
 var restOperations = []struct{ name, method, url, spec string }{
 	{"search", http.MethodGet, "/api/v1/search", "GET /api/v1/search"},
 	{"bundle get", http.MethodGet, "/api/v1/bundle/metrics/revenue.md", "GET /api/v1/bundle/{path}"},
@@ -182,6 +181,7 @@ var restOperations = []struct{ name, method, url, spec string }{
 	{"usage post", http.MethodPost, "/api/v1/usage/metrics/revenue", "POST /api/v1/usage/{id}"},
 	{"stats", http.MethodGet, "/api/v1/stats", "GET /api/v1/stats"},
 	{"move", http.MethodPost, "/api/v1/move", "POST /api/v1/move"},
+	{"frontmatter", http.MethodPost, "/api/v1/frontmatter", "POST /api/v1/frontmatter"},
 	{"reembed", http.MethodPost, "/api/v1/reembed", "POST /api/v1/reembed"},
 	{"access get", http.MethodGet, "/api/v1/access", "GET /api/v1/access"},
 	{"access put", http.MethodPut, "/api/v1/access", "PUT /api/v1/access"},

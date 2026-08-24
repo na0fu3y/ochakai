@@ -40,19 +40,19 @@ export function templateDocument(type, title) {
 // key absent, and the server does not fill it in (design doc 0046 §3.9) —
 // so an edit that only replaced would report success and change nothing.
 //
-// Still a line edit rather than a parser (design doc 0044 §2.1 refuses
-// the parser; this refuses to need one), which is why it is only ever
+// Still a line edit rather than a parser, which is why it is only ever
 // asked for scalars — a repeating structure is what would need the
-// parser 0072 §3.1 turned down. The alternative, rebuilding a document
-// from the fields the page holds, is what erased data before: the page
-// holds the projection, and a document assembled from it would drop
-// everything the projection does not carry — the citations, the
-// contract, the body (design doc 0035 §4 is the same bug with fewer
-// fields).
+// parser 0130 §3.1 turned down, and that is the editor's business now: its
+// fields go through POST /api/v1/frontmatter, where the format is read
+// and written by the one process that owns it (design doc 0130). What is
+// left here is the ruling the detail page makes in passing — a status
+// changed from a menu, one line, no round trip to prepare it.
 //
-// One implementation because there are two callers now, and two copies
-// of an append path only one of which gets a fix is how the type
-// vocabulary drifted before.
+// The alternative, rebuilding a document from the fields the page holds,
+// is what erased data before: the page holds the projection, and a
+// document assembled from it would drop everything the projection does
+// not carry — the citations, the contract, the body (design doc 0035 §4
+// is the same bug with fewer fields).
 export function withFrontmatterKey(doc, key, value) {
   const line = key + ': ' + value;
   const re = new RegExp('^' + key + ':.*$', 'm');
@@ -67,28 +67,4 @@ export function withFrontmatterKey(doc, key, value) {
 
 export function withStatus(doc, status) {
   return withFrontmatterKey(doc, 'status', status);
-}
-
-// withType returns doc with its type line set, plus any key the new type
-// is refused without and the document does not already name. Setting the
-// type alone would hand back a document the server rejects — the one
-// place a type is held to a schema is an Attested Computation's runtime
-// (design doc 0036 §5) — and reporting success for that is worse than
-// doing nothing, which is what this dropdown used to do.
-//
-// A key the writer already named is theirs, not the template's to
-// overwrite. Keys the *previous* type wanted are left where they stand:
-// no per-type rule rejects them, and removing a line its writer wrote is
-// not this page's to do (design doc 0044 §2.1 is the same posture).
-export function withType(doc, type) {
-  let out = withFrontmatterKey(doc, 'type', type);
-  for (const req of (TYPE_REQUIRED[type] || '').split('\n')) {
-    const i = req.indexOf(':');
-    if (i < 0) continue;
-    const key = req.slice(0, i);
-    if (!new RegExp('^' + key + ':', 'm').test(out)) {
-      out = withFrontmatterKey(out, key, req.slice(i + 2));
-    }
-  }
-  return out;
 }

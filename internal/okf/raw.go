@@ -219,6 +219,13 @@ type lineRange struct{ from, to int }
 // that key is going away too, in which case the blank line between them
 // separates nothing and goes with them.
 //
+// A comment here is a `#` in the first column. An indented one is inside
+// the key's own value — `rejected_note: |` followed by a line of prose
+// that opens with `#` is a block scalar, not a key with a comment after
+// it — and reading it as a comment left that line behind when the key
+// was taken out, orphaned inside the frontmatter of a document somebody
+// then stored.
+//
 // Frontmatter the surgery cannot address yields nothing (mappingKeys):
 // a document whose shape cannot be read in lines is one to leave exactly
 // as it arrived, since guessing at it could only damage it.
@@ -234,14 +241,22 @@ func ownedKeyRanges(fm string, lines int, owned func(string) bool) []lineRange {
 			continue
 		}
 		r := lineRange{from: pairs[i].Line, to: lines}
-		nextOwned := false
-		if i+2 < len(pairs) {
+		nextOwned, last := false, i+2 >= len(pairs)
+		if !last {
 			r.to = pairs[i+2].Line - 1
 			nextOwned = owned(pairs[i+2].Value)
 		}
 		for !nextOwned && r.to > r.from {
-			line := strings.TrimSpace(all[r.to-1])
-			if line != "" && !strings.HasPrefix(line, "#") {
+			line := all[r.to-1]
+			// After the last key there is no next key for a blank line
+			// to introduce, and one there may well be the key's own —
+			// `note: |+` keeps its trailing blank line, and handing that
+			// line to nobody orphaned it inside the frontmatter. A
+			// column-0 comment is still nobody's and still goes.
+			if last && strings.TrimSpace(line) == "" {
+				break
+			}
+			if strings.TrimSpace(line) != "" && !strings.HasPrefix(line, "#") {
 				break
 			}
 			r.to--

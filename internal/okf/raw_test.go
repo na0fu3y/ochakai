@@ -424,3 +424,19 @@ func FuzzServerKeyRoundTrip(f *testing.F) {
 		}
 	})
 }
+
+// A `#` inside a block scalar is prose, not a comment introducing the
+// next key — and reading it as one left that line behind when the key
+// was taken out, orphaned inside the frontmatter of a document that was
+// then stored. `rejected_note` is free prose, so this is reachable
+// through the export form a curator hands back (design doc 0043 §3.5).
+func TestStripServerKeysKeepsABlockScalarWhole(t *testing.T) {
+	doc := []byte("---\ntype: Metric\nrejected_note: |\n  the query counts refunds twice\n  # and that is the whole of it\n---\n\nbody\n")
+	out := string(StripServerKeys(doc))
+	if strings.Contains(out, "#") || strings.Contains(out, "counts refunds") {
+		t.Errorf("the note's own lines survived the strip:\n%s", out)
+	}
+	if !strings.Contains(out, "type: Metric\n") || !strings.Contains(out, "\nbody\n") {
+		t.Errorf("got:\n%s", out)
+	}
+}

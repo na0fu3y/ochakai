@@ -388,6 +388,19 @@ try {
 
   await go('#/new');
   await check('the editor renders', await waitFor(`!!document.querySelector('#view textarea')`), shown);
+  // The fields are drawn from the server's read of the textarea beside
+  // them (design doc 0130), so their arrival is the round trip landing —
+  // a broken face leaves the pane empty and nothing else on the page
+  // says so.
+  await check('the frontmatter is offered as fields',
+    await waitFor(`!!document.querySelector('#fm-fields [data-fm-key="type"]')
+      && !!document.querySelector('#fm-fields [data-fm-rows="sources"]')`), shown);
+  // And a field edit reaches the document. This is the whole pairing in
+  // one assertion: type into a field, and the text beside it changes.
+  await evalJS(`(() => { const t = document.querySelector('#fm-fields [data-fm-key="title"]');
+    t.value = 'スモーク'; t.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await check('a field edit lands in the document',
+    await waitFor(`document.querySelector('#e-doc').value.includes('title: スモーク')`), shown);
 
   await go('#/dir/metrics');
   await check('a directory page renders', await waitFor(`${textOf('#view')}.includes('metrics')`), shown);

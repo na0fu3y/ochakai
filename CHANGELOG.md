@@ -23,6 +23,36 @@ last entry.
 
 ### Added
 
+- **The web UI edits frontmatter in fields again, and still saves a
+  document.** The editor is two panes now: the frontmatter on the left,
+  the document on the right, and one document under both. Every key OKF
+  asks a writer for has a field — `sources` and `usage_window`,
+  `parameters`, `executor` and `attester`, `runtime` and `computation`,
+  alongside the title, description, tags, status and `stale_after` that
+  were already there — so adding a citation or ticking a parameter's
+  `required` no longer means counting YAML indentation by hand. What is
+  saved is the text in the right pane, exactly as before (design doc
+  0130, which folds 0072, 0092 and 0126 into one record).
+
+  **Nothing you did not name moves.** A field edit replaces that key's
+  block and leaves every other byte where it was: key order, comments,
+  blank lines, the quoting of untouched values, the body, and every
+  producer key the form has no field for — which the page names on
+  screen rather than hiding, so you can see it is keeping them.
+  `generated` and `verified` get no field: provenance is what the
+  instance observed, not something to type.
+
+- **`POST /api/v1/frontmatter`** — the face the editor uses, and yours
+  to use. It takes an OKF document and hands one back: with only
+  `document` it reads the frontmatter as JSON (`keys` in the document's
+  own order, `values` as YAML said them, extension keys included), and
+  with `set` / `unset` it writes named keys back into the document and
+  returns it. **It stores nothing** — no id, no ETag, no precondition —
+  so a read-only deployment answers it. The keys the server owns are a
+  400 in both directions. Not on the CLI or MCP: it is a tool for
+  drawing a form, and an agent writes the document directly (design doc
+  0130 §6).
+
 - **A move runs when its rewrite fits inside what the caller may write.**
   `ochakai move`, `POST /api/v1/move`, and the web UI's move — the same
   three addresses, refused until now to anyone an access policy scoped
@@ -119,6 +149,17 @@ last entry.
   in the ordinary way is one of these shapes, so no stored document
   moves — the only documents this reaches are the ones it was
   corrupting.
+
+- **A rejection note whose prose opens with `#` no longer leaves a line
+  behind.** The same line surgery reads a `#` at the start of a line as a
+  comment introducing the key that follows, and hands it to that key
+  rather than to the one above. Indented, it is not a comment: a
+  `rejected_note: |` whose last line of prose opens with `#` is inside
+  the block scalar, and taking `rejected_note` off the export form left
+  that line orphaned in the frontmatter of a document the writer then
+  stored. A comment is now a `#` in the first column, and a blank line
+  after the *last* key stays with it — `note: |+` keeps its trailing
+  blank line, and there is no next key for it to introduce.
 
 - **Normalizing a stored document is idempotent, so sending back what a
   read handed you answers `unchanged`.** The two normalizations a write

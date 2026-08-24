@@ -53,7 +53,7 @@ flowchart LR
 一枚の自己完結したページで、`ochakai ui` によってループバックから、
 あるいは `ochakai serve-ui` によってチームのサービスとして配られる —
 同じコンテナイメージに、違う引数を渡すだけである(設計ドキュメント
-[0072](design/0072-the-web-ui-serves-and-edits-documents.md) §1)。
+[0130](design/0130-the-web-ui-and-the-fields-of-a-document.md) §1)。
 
 ## Identity と provenance、そして既定では認可は無い
 

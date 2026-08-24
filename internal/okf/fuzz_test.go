@@ -9,6 +9,8 @@ package okf
 // cannot.
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -166,4 +168,102 @@ func FuzzDocumentRoundTrip(f *testing.F) {
 			t.Errorf("an export with no verifications read back as verified:\n%s", doc)
 		}
 	})
+}
+
+// FuzzSetFrontmatterKey asserts what the structured face promises about
+// any document a form could be open on (design doc 0130 §3.4): the write
+// half of a form is the half that can destroy prose, and "the block was
+// replaced and nothing else moved" is a statement about every document,
+// which is what a fuzz target can check and an example cannot.
+func FuzzSetFrontmatterKey(f *testing.F) {
+	f.Add([]byte("---\ntype: Metric\ntitle: Revenue\n---\n\nbody\n"), "title", "Monthly")
+	f.Add([]byte("---\ntype: Metric\n# a comment\ntags:\n  - a\n  - b\nx: 1\n---\n"), "tags", "sales")
+	f.Add([]byte("---\ntype: Metric\ndescription: >\n  folded\n  over lines\n---\n"), "description", "one line")
+	f.Add([]byte("---\ntype: Metric\n---\n"), "stale_after", "2026-12-31")
+	f.Add([]byte("---\n---\nbody"), "type", "Insight")
+	f.Add([]byte("no frontmatter"), "type", "Metric")
+	f.Add([]byte("---\ntype: Metric\n---\n"), "", "x")
+	f.Add([]byte("---\ntype: Metric\n---\n"), "verified", "x") // server-owned
+	// The shapes that broke it, each kept as the seed it was found from.
+	// The last four are ones mappingKeys now declines outright; they stay
+	// because what this target asserts about them is that the refusal is
+	// a refusal, not a half-written document.
+	f.Add([]byte("---\ntype: Metric\n---\n"), "\xa8", "0") // a key that is not UTF-8
+	f.Add([]byte("---\n\t\n---\n"), "0", "0")              // a tab: YAML will not tokenize it
+	f.Add([]byte("---\n\n---\nbody"), "0", "0")            // blank lines: a mapping with no keys
+	f.Add([]byte("---\n0: |+\n    x\n\n---\n"), "0", "y")  // a kept trailing blank line
+	f.Add([]byte("---\nnote: |\n  # not a comment\n---\n"), "note", "x")
+	f.Add([]byte("---\n0:\n--- \n---\n"), "1", "0")           // a document marker inside
+	f.Add([]byte("---\n\r \n---"), "0", "0")                  // a line break only the parser counts
+	f.Add([]byte("---\n{type: Metric}\n---\n"), "title", "x") // a flow mapping
+	f.Add([]byte("---\n---\n\r\r"), "0", "0")                 // a body ending in bare CRs
+
+	f.Fuzz(func(t *testing.T, doc []byte, key, value string) {
+		out, err := SetFrontmatterKeys(doc, set(key, string(mustJSON(value))), nil)
+		if err != nil {
+			if out != nil {
+				t.Fatalf("returned both a document and an error: %v", err)
+			}
+			return
+		}
+		// What comes back is a document, and the key says what it was
+		// told to say. A form whose save produces frontmatter the parser
+		// can no longer read is the failure this target exists for.
+		s, err := StructureOf(out)
+		if err != nil {
+			t.Fatalf("the result no longer parses (%v):\n%s", err, out)
+		}
+		// Compared against the value after a JSON round trip, not before
+		// it: the wire here is JSON, so a string that is not UTF-8
+		// cannot travel it — json.Marshal substitutes U+FFFD, and what
+		// the document should hold is what arrived, not what was meant.
+		var arrived string
+		if err := json.Unmarshal(mustJSON(value), &arrived); err != nil {
+			t.Fatalf("re-reading the JSON that was sent: %v", err)
+		}
+		if s.Values[key] != arrived {
+			t.Errorf("%q = %#v, want %q\n%s", key, s.Values[key], arrived, out)
+		}
+		// The body is not the frontmatter's business — up to the
+		// normalization the store applies anyway, which is not a fixed
+		// point in one pass: a document ending in a bare CR grows a CRLF
+		// from the newline the first pass appends.
+		if got, want := Body(string(out)), Body(string(normalized(doc))); got != want {
+			t.Errorf("body changed: %q → %q", want, got)
+		}
+		// Setting it again is a no-op: a form that rewrote the document
+		// on every save would move the content hash without changing a
+		// word (design doc 0075 §3.2).
+		again, err := SetFrontmatterKeys(out, set(key, string(mustJSON(value))), nil)
+		if err != nil || string(again) != string(out) {
+			t.Errorf("not idempotent (%v):\n%s\n---\n%s", err, out, again)
+		}
+		// And removing it leaves a document without the key — or says it
+		// cannot, which is the other allowed answer.
+		gone, err := SetFrontmatterKeys(out, nil, []string{key})
+		if err != nil {
+			if gone != nil {
+				t.Fatalf("returned both a document and an error: %v", err)
+			}
+			return
+		}
+		s2, err := StructureOf(gone)
+		if err != nil {
+			t.Fatalf("the result of a removal no longer parses (%v):\n%s", err, gone)
+		}
+		if _, still := s2.Values[key]; still {
+			t.Errorf("%q survived its removal:\n%s", key, gone)
+		}
+	})
+}
+
+// normalized applies NormalizeText until it stops changing anything.
+func normalized(doc []byte) []byte {
+	for {
+		next := NormalizeText(doc)
+		if bytes.Equal(next, doc) {
+			return doc
+		}
+		doc = next
+	}
 }
