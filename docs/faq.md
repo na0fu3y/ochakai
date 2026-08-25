@@ -39,11 +39,12 @@ Google Cloud API だけである: 常に Cloud SQL、`OCHAKAI_GCS_BUCKET` を
 
 ### RAG やメモリ層、markdown vault と何が違うか
 
-六つの隣人すべてに一度に答え、ochakai が劣る場面を言い、他を選ぶべき
-なのは誰かを言うページが一枚ある:
-[ポジショニング](positioning.md) — semantic layer、カタログ、メモリ層、
-RAG、AI アナリスト製品に内蔵された検証済みクエリストア、そして MCP
-サーバー付きの markdown ノートの vault。
+比較対象を一つずつ取り上げ、ochakai が劣る場面を書き、他を選ぶべきなのは
+誰かを書くページが一枚ある: [ポジショニング](positioning.md)。Google Cloud
+の Knowledge Catalog(旧 Dataplex)、ウェアハウス native の semantic
+layer、カタログ、メモリ層、RAG、AI アナリスト製品に内蔵された検証済み
+クエリストア、オントロジー基盤、そして MCP サーバー付きの markdown
+vault が並ぶ。
 
 一行にすると: *メモリ層は起きたことを覚え、ochakai は正しいことを
 キュレーションする*。そして vault に対しては、ファイル形式**以外の
