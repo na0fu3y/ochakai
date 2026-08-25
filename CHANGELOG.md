@@ -49,6 +49,34 @@ last entry.
   absence as "off" would hide a working upload on every older
   deployment.
 
+- **The positioning page now answers Google's own catalog.** Dataplex
+  Universal Catalog became
+  [Knowledge Catalog](https://cloud.google.com/products/knowledge-catalog)
+  on 2026-04-10 and was repositioned as a context engine for agents:
+  automatic harvesting, lineage, quality and glossaries at GA, Gemini
+  generating descriptions and example queries on top, and retrieval
+  through semantic search, Context APIs and a remote MCP server at
+  `https://dataplex.googleapis.com/mcp`. The neighbours table had no row
+  for it, though it is the one neighbour no disqualifier removes —
+  ochakai stands on Google Cloud (C2), and the first-party catalog
+  stands on the same IAM with nothing to run. A row and a section say
+  where the overlap is real (verified queries and semantic guardrails,
+  in Preview, aim at what `Attested Computation` holds) and where the
+  axis differs: that one generates and promotes while the other
+  adjudicates and keeps its rejections (C7), and that the exit is a
+  whole OKF v0.2 bundle rather than a metadata export (C1, C3). The
+  section also separates the product from
+  [GoogleCloudPlatform/knowledge-catalog](https://github.com/GoogleCloudPlatform/knowledge-catalog),
+  the repository the OKF spec ochakai follows lives in — the competitor
+  and the standard share a name. It also says what the shapes decide:
+  a table's system entry takes at most one aspect per aspect type at the
+  entry level and attaching replaces it, so a second reading of the same
+  table — another team's, or a draft nobody has ruled on — needs another
+  aspect type or a parallel custom entry, while here `resource` is a
+  field rather than a key and any number of concepts address one table,
+  each with its own author, verification state and history. "Where ochakai loses" and "choosing"
+  each gain an entry. `DOC-LINES` crosses a boundary, 7,500 → 8,000.
+
 ### Fixed
 
 - **A grant at the root reaches every read now, not only the ones

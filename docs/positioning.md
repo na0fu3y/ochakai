@@ -62,6 +62,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 
 | 比較対象 | あちらが持つもの | あちらが持たないもの | 判定 |
 |---|---|---|---|
+| **[Google Cloud Knowledge Catalog](https://cloud.google.com/products/knowledge-catalog)(旧 Dataplex)** | 同じ Google Cloud の IAM、立てるものが無いこと、自動収集、lineage、品質、用語集、Gemini が生成する説明と example query、Context API と remote MCP | 人の裁定が中核であること、却下の記憶、OKF での丸ごとの出口、収集ではなくキュレーションであること、**一つのテーブルに二つ目の読み方を並べられること** | 同じ雲で正面から重なる — 下記参照 |
 | ウェアハウス native の semantic layer(dbt MCP、Cube、Lightdash、Snowflake Semantic Views、Databricks Metric Views)と、その標準([Apache Ossie](https://github.com/apache/ossie) — 旧 OSI) | メトリクス定義、ディメンション、コンパイルされた SQL | 解釈、用語集、書き戻し、ウェアハウスをまたぐもの、そして誰が確認したか | 両立 — 下記参照 |
 | 「コンテキスト層」になったカタログ(OpenMetadata、DataHub、Atlan) | 技術メタデータ、リネージ、オーナーシップ、大規模な収集 | キュレーションされた側が OSS であること — 解釈とレビューループは商用ティアに置かれがち | 両立、あるいは既に運用しているなら ochakai の代わりになる |
 | エージェントのメモリ層(mem0、Zep、Letta) | ユーザーごと・エージェントごとの記憶、自動抽出・自動注入 | チームの所有、人のレビュー、*no* の記録 | 両立 |
@@ -71,6 +72,72 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 | OSS の「Palantir 代替」([semantica](https://github.com/semantica-agi/semantica)) | 数十ソースの取り込みと自動抽出、ポリグロットなグラフ・ベクトルストア、OWL/SHACL、PROV-O、エージェントの決定の因果記録、セルフホスト | 人の裁定が中核であること(decision の記録は verify ではない)、secret-zero、単一形式の往復、キュレーションが買う小ささ | 約束の語彙は重なる、軸が違う — 下記参照 |
 | グラフ DB ネイティブのオントロジー基盤([NebulaGraph](https://nebula-graph.io/posts/ontology-and-graph-databases-enterprise-ai-from-theory-to-production-reality)、Neo4j + GraphRAG) | 型システムと書き込み時のスキーマ強制、型間のリレーション制約、数十億ノードへのスケール、多段トラバーサルとグラフアルゴリズム | 検証のループが中核であること(あちらでは成熟モデルの最終段)、markdown での出口、キュレーションされた規模が買う単純さ | 規模が前提から違う — 下記参照 |
 | **MCP サーバー付きの markdown vault(Obsidian、Logseq、ノートの git リポジトリ)** | markdown + frontmatter、リンク、ローカルな所有、エージェントが読めること | 生きた状態としての検証、ループ、複数書き手の identity、一台のマシンを越える到達 | 両立 — 下記参照 |
+
+### Google Cloud Knowledge Catalog(旧 Dataplex)
+
+*同じ雲の上で正面から重なる。多くのチームには、これで足りる。*
+
+このページで最も重要な隣人である。理由は機能ではなく足場で、他のどの
+隣人とも違って**同じ Google Cloud の IAM の上に立つ**。ochakai の
+secret-zero(C2)は Cloud Run IAM と Cloud SQL IAM で無設定に買われて
+いるが、あちらは立てるものが何も無い — プロジェクトで API を有効にすれば
+済み、Cloud Run も Postgres も月 $10 も要らない。Claude Code から使える
+こと(C5)も、`https://dataplex.googleapis.com/mcp` のリモート MCP
+サーバー(OAuth 2.0 + IAM、read-only と read-write のスコープ)が同じ
+ように満たす。**失格要件で落とせない隣人はここだけである。**
+
+持っているものは多い。2026-04-10 に Dataplex Universal Catalog から改名し
+([overview](https://docs.cloud.google.com/dataplex/docs/introduction))、
+BigQuery ほかからの自動収集・lineage・データ品質・ビジネス用語集を GA で
+持つ。その上で Gemini が説明と関係と **example query** を生成し、semantic
+search と Context API と MCP でエージェントへ配る([AI agents 向けの
+解説](https://docs.cloud.google.com/dataplex/docs/ai-overview))。そして
+発表([2026-04-23](https://cloud.google.com/blog/products/data-analytics/introducing-the-google-cloud-knowledge-catalog))は
+**verified queries and semantic guardrails**(Preview)を挙げている —
+幻覚した join を検証済みのクエリで置き換えるという、ochakai の
+`Attested Computation` と同じ問題である。ここは「両立」で逃げられない
+(この節の事実は 2026-08-25 に原典を開いて確かめた)。
+
+違いは軸である: **あちらは生成して昇格させ、こちらは人が裁定する。**
+起点は機械で、data steward の仕事はあちらの use case の言葉で「AI が
+生成したメタデータをレビューし、キュレーションし、昇格させる」ことで
+ある。ochakai の起点は人か、人の裁定を待つ draft を書くエージェントで
+あり、**却下は理由ごと残るので同じ提案が返ってこない**(C7、
+[ループ](loop.md))。「誰がいつ確かめたか」は status ではなく別立ての
+台帳であって([0065](design/0065-identity-and-provenance.md))、監査ログは
+その代わりにならない。出口も向きが違う: メタデータは Cloud Storage へ
+export して BigQuery から読めるが、形式はカタログのものであって、丸ごと
+出て丸ごと戻る OKF v0.2 バンドルではない(C1・C3、
+[0075](design/0075-the-bundle-is-the-address-space.md))。収集で
+はなくキュレーションであることの意味は、下の「コンテキスト層としての
+カタログ」と「OSS の『Palantir 代替』」の二節が言うとおりである。
+
+**そしてもう一つ、形そのものが決めている違いがある: あちらの単位は
+テーブルのスロットで、こちらの単位は文書である。** BigQuery のテーブルには
+system entry が一つ自動で建ち、自動で入る required aspect は編集できない
+— 足せるのは optional aspect だけで、しかも
+[**エントリレベルでは aspect type ごとに最大一つ**](https://docs.cloud.google.com/dataplex/docs/enrich-entries-metadata)
+であり(列ごとには複数持てる)、付け直しはその aspect の中身を置き換える。
+つまり同じテーブルについて**二つ目の読み方を並べて置けない**。部門ごとに
+違う解釈も、まだ裁定されていない draft も、置くには aspect type をもう
+一つ作るか自分の entry group に並行の custom entry を建てるかで、どちらも
+書くことではなくモデリングである。ochakai の単位は id を持つ文書で、
+`resource` は鍵ではなく欄だから、同じテーブルを指す concept は何本でも
+並ぶ — それぞれが自分の著者・検証状態・履歴を持ち、draft は verified の
+隣に住み、却下されたものは却下として残る。**キュレーションが単位を文書に
+する理由がここにある**: 一つの資産についての知識は、一つの値ではない。
+
+**名前は紛らわしいが、指すものが二つある。** OKF v0.2 の参照バンドルは
+[GoogleCloudPlatform/knowledge-catalog](https://github.com/GoogleCloudPlatform/knowledge-catalog)
+にあり、ochakai の型語彙はそこに合わせてある
+([0036](design/0036-okf-schema-first.md))。製品としての Knowledge
+Catalog はこの節の隣人であり、同じ名前のリポジトリにある OKF はこちらが
+準拠している標準である — 競合と規格が同じ名前を持っている。
+
+**見直す条件を書いておく**: verified queries が Preview を出て、かつ
+「この一本を誰がいつ確かめたか」を単位ごとに持ち、丸ごと持ち出せる形が
+付いたとき。そうなればナレッジの置き場が Google Cloud の中で足りるので、
+BigQuery 一本のチームに対して ochakai が言えることはほとんど残らない。
 
 ### ウェアハウス native の semantic layer
 
@@ -114,6 +181,8 @@ ochakai が持つコネクタではない([0081](design/0081-what-ochakai-is-and
 なるので、OKF との対応を書く価値がある。
 
 ### コンテキスト層としてのカタログ
+
+Google 純正のそれは上の節が単独で扱う。ここはそれ以外である。
 
 意図の上では最も近く、正直なリスクでもある: MCP サーバー付きのカタログ
 を既に運用している組織は、それで十分だと考えるのが妥当である。ochakai
@@ -344,6 +413,11 @@ vault が持たないのは、ファイル形式でないすべてである:
   場所としてもはるかに優れている。同梱の Web UI は方針としてキュレー
   ションの面であって、執筆環境でも BI ツールでもない
   ([0067 §1](design/0067-four-faces-and-what-they-decline.md))。
+- **Google Cloud なら純正がある。** 上の Knowledge Catalog は同じ IAM の
+  上で立てるものが無く、収集は自動で、MCP も持っている。ochakai の
+  プロジェクトと Postgres と月 $10 とセットアップは、人の裁定・却下の
+  記憶・OKF の出口に対して払う分であって、その三つが要らないなら払う
+  理由も無い。
 - **インフラ。** vault を立てるのはただである。ochakai は Google Cloud
   プロジェクトと Postgres を要る — 月 $10 ほどだが、ゼロではないし、
   5 分でもない。
@@ -384,6 +458,9 @@ vault が持たないのは、ファイル形式でないすべてである:
 
 ## 選ぶ
 
+- Google Cloud で BigQuery を使っていて、足りないのが技術メタデータ・
+  lineage・自動生成の説明と example query なら → Knowledge Catalog。
+  純正で、立てるものが無い。
 - MCP サーバー付きのカタログを既に運用していて、エージェントが取り
   こぼしている問いがリネージとオーナーシップなら → カタログで足りる。
 - ウェアハウスが一つで、足りないのがメトリクス定義なら → そのウェア
