@@ -47,13 +47,16 @@ export const TAB_LABELS = {
 // signals as the writer recorded them and scores nothing: §5.1 leaves
 // weighing them to whoever is reading.
 
-// What the page already knows about whether a concept is there, kept
-// for the session: a body that links to a neighbour is usually one of
-// several that do, and the answer does not change while a reader walks
-// between them. Nothing negative is remembered about a failure that was
-// not a 404 — links.js never reports those, so they are simply asked
-// again on the next render.
-const known = new Map();
+// The concepts this session has already found: a body that links to a
+// neighbour is usually one of several that do, and a concept that is
+// there does not stop being there while a reader walks between them.
+//
+// Only the positive answer is kept. A missing one is asked again on
+// every render, because it is the answer that can change under the
+// reader — the page they are looking at offers to write the concept the
+// link is missing, and coming back to find the link still red would
+// have the page contradicting what it just did.
+const found = new Set();
 
 // The links a body draws are routes, so the ids come back out of them
 // the same way the router reads them.
@@ -432,12 +435,13 @@ export async function viewDetail(id, heading = '') {
     },
   };
   // Links to concepts that are not there, drawn as what they are. The
-  // verdicts live in `known`, so this runs after every tab render — the
-  // tab bodies are redrawn from their templates each time they open,
+  // verdict is this render's, and the marking runs after every tab
+  // render — a tab body is redrawn from its template each time it opens,
   // which throws the classes away with the markup.
+  const missing = new Set();
   function markDead() {
     for (const a of body.querySelectorAll('a[href^="#/k/"]')) {
-      if (known.get(idFromHash(a.getAttribute('href'))) === false) {
+      if (missing.has(idFromHash(a.getAttribute('href')))) {
         a.classList.add('dead');
         a.title = 'リンク先のナレッジがありません';
       }
@@ -489,7 +493,8 @@ export async function viewDetail(id, heading = '') {
     copyText(location.href, '見出しへのリンクをコピーしました。');
   });
 
-  // Ask about the neighbours this body names, once per session each.
+  // Ask about the neighbours this body names — the ones this session has
+  // not already found.
   (async () => {
     const targets = new Set();
     for (const l of entry.links || []) {
@@ -500,10 +505,10 @@ export async function viewDetail(id, heading = '') {
     // A heading's own ¶ is a link to this concept, which is the one
     // concept on the page already known to be there.
     targets.delete(entry.id);
-    const ask = [...targets].filter(t => t && !known.has(t)).slice(0, MAX_PROBES);
-    if (!ask.length) { markDead(); return; }
+    const ask = [...targets].filter(t => t && !found.has(t)).slice(0, MAX_PROBES);
+    if (!ask.length) return;
     const dead = await checkTargets(ask, t => api(conceptURL(t)), 4);
-    for (const t of ask) known.set(t, !dead.has(t));
+    for (const t of ask) (dead.has(t) ? missing : found).add(t);
     // The reader may have walked on while the probes were out; the view
     // holding this body is the one that asked.
     if (body.isConnected) markDead();
