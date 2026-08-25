@@ -91,6 +91,51 @@ pre code { background: none; padding: 0; }
 }
 .topbar .spacer { flex: 1; }
 
+/* ---- quick open (Ctrl+K) ---- */
+.palette-btn {
+  font: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: .45rem;
+  background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--muted); padding: .3rem .7rem; white-space: nowrap;
+}
+.palette-btn:hover { border-color: var(--accent); color: var(--text); }
+.palette-btn kbd {
+  font-family: inherit; font-size: .74rem; border: 1px solid var(--border);
+  border-radius: 4px; padding: 0 .3rem; background: var(--surface); color: var(--muted);
+}
+/* On a phone the shortcut is not real; the button shrinks to its icon. */
+@media (max-width: 800px) { .palette-btn kbd { display: none; } }
+#palette {
+  width: min(36rem, 92vw); border: 1px solid var(--border); border-radius: 12px;
+  padding: 0; background: var(--surface); color: var(--text); box-shadow: var(--shadow-hover);
+  /* Near the top, like every service's palette: the eye is already
+     there, and results growing downward never push the input away. */
+  margin: 10vh auto auto;
+}
+#palette::backdrop { background: rgba(0, 0, 0, .35); }
+#palette-q {
+  border: none; border-bottom: 1px solid var(--border); border-radius: 12px 12px 0 0;
+  font-size: 1.02rem; padding: .8rem 1rem;
+}
+#palette-q:focus { outline: none; }
+#palette-list { max-height: 22rem; overflow-y: auto; padding: .3rem; }
+#palette-list .empty { padding: 1.2rem 0; }
+.palette-row {
+  display: flex; align-items: center; gap: .55rem; cursor: pointer;
+  padding: .45rem .7rem; border-radius: 8px;
+}
+.palette-row.active { background: var(--accent-weak); }
+.palette-row .palette-title {
+  font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.palette-row .palette-id {
+  color: var(--muted); font-size: .8rem; flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.palette-hint {
+  border-top: 1px solid var(--border); color: var(--muted);
+  font-size: .78rem; padding: .4rem .9rem;
+}
+
 /* ---- layout: persistent tree sidebar + content pane ---- */
 .shell { display: grid; grid-template-columns: 17rem minmax(0, 1fr); }
 /* The topbar toggle collapses the sidebar for reading room; the choice
@@ -315,6 +360,18 @@ input[type=date]:not(:focus):invalid, input[type=date]:not(:focus):placeholder-s
 }
 .tabs button:hover { color: var(--text); }
 .tabs button.active { color: var(--accent-strong); border-bottom-color: var(--accent); }
+/* A revision's diff (diff.js): a line each, colored the way the page
+   already colors states — additions in verified's green, deletions in
+   rejected's red — and the elisions quiet, because they are the part
+   that did not change. */
+pre.diff { padding: .4rem 0; }
+.diff .ln { display: block; padding: 0 .9rem; white-space: pre-wrap; word-break: break-all; }
+.diff .ln.add { background: var(--verified-bg); color: var(--verified-fg); }
+.diff .ln.del { background: var(--rejected-bg); color: var(--rejected-fg); }
+.diff .ln.skip { color: var(--muted); text-align: center; user-select: none; }
+.diffstat { font-size: .8rem; margin-left: .3rem; white-space: nowrap; }
+.diffstat .add { color: var(--verified-fg); }
+.diffstat .del { color: var(--rejected-fg); }
 table.kv { border-collapse: collapse; width: 100%; }
 table.kv td { border-bottom: 1px solid var(--border); padding: .45rem .6rem .45rem 0; vertical-align: top; }
 table.kv td.k { color: var(--muted); width: 11rem; white-space: nowrap; }
@@ -375,6 +432,19 @@ table.rules.edit tr.invalid > td { background: var(--rejected-bg); }
 
 /* ---- markdown body ---- */
 .md h1, .md h2, .md h3, .md h4, .md h5, .md h6 { line-height: 1.3; margin: 1.1em 0 .4em; }
+/* An anchored heading lands below the sticky top bar, not under it. */
+.md [id] { scroll-margin-top: 4.2rem; }
+/* The outline (outline.js): the document's own shape, above the body,
+   for the documents long enough to need a map. */
+.toc {
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  padding: .45rem .95rem; margin: .9rem 0; font-size: .9rem; max-width: 30rem;
+}
+.toc summary { cursor: pointer; font-weight: 600; color: var(--muted); }
+.toc ol { list-style: none; margin: .35rem 0 .3rem; padding: 0; }
+.toc li { padding: .12rem 0; }
+.toc li.lv1 { padding-left: 1rem; }
+.toc li.lv2 { padding-left: 2rem; }
 .md h1 { font-size: 1.3rem; } .md h2 { font-size: 1.15rem; } .md h3 { font-size: 1rem; }
 /* h4 and below stop growing and start leaning on weight and colour:
    past the third level a document is showing structure, not shouting. */

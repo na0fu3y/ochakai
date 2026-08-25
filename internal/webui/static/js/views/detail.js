@@ -4,10 +4,12 @@
 import { applyStatus, liftRejection, moveEntry, rejectEntry, verifyEntry } from '../actions.js';
 import { BASE, api, toast } from '../api.js';
 import { hitCard } from '../cards.js';
+import { diffHTML, diffLines, diffStats } from '../diff.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { actorStr, conceptURL, crumbTrail, displayTitle, fmtDate, fmtSize, idPath, isVerified, lastVerification, trustOf } from '../format.js';
 import { descHTML, md } from '../markdown.js';
+import { headingAnchors, tocHTML } from '../outline.js';
 import { knownDirs, refreshTree, revealInTree } from '../tree.js';
 import { STATUSES, icon } from '../vocab.js';
 
@@ -202,10 +204,18 @@ export async function viewDetail(id) {
     // Sources sit under the prose they support rather than in a tab of
     // their own: OKF's own model is body footnotes keyed to source ids, so
     // whoever is reading the body is exactly who needs the list.
-    overview: () => `
+    overview: () => {
+      // The body with its outline: ids on the headings, and a table of
+      // contents when there are enough of them to need a map. The
+      // description stays out of both — its headings describe, they do
+      // not structure the document.
+      const body_ = docBody ? headingAnchors(md(docBody, resolveFile, resolveEntry)) : { html: '', headings: [] };
+      return `
       ${entry.description ? descHTML(entry.description, 'lead') : ''}
-      ${docBody ? `<div class="md">${md(docBody, resolveFile, resolveEntry)}</div>` : ''}
-      ${!entry.description && !docBody ? '<div class="empty">description も本文もありません。</div>' : ''}`,
+      ${tocHTML(body_.headings)}
+      ${docBody ? `<div class="md">${body_.html}</div>` : ''}
+      ${!entry.description && !docBody ? '<div class="empty">description も本文もありません。</div>' : ''}`;
+    },
     // The document, whole and unrendered. It replaced tabs that each
     // redrew a slice of the frontmatter in some other shape — which is
     // the duplication document-first exists to remove, and the reason
@@ -324,17 +334,28 @@ export async function viewDetail(id) {
       // ?history is the object's own ledger, at the object's own address
       // (design doc 0046 §3.5); the log.md beside it is the directory's.
       const { revisions } = await api('/api/v1/bundle/' + idPath(entry.id) + '.md?history&limit=200');
-      const rows = (revisions || []).map(r => `
+      // Newest first, so a revision's neighbor below is what it changed
+      // from — the oldest diffs against nothing, and is the document.
+      const revs = revisions || [];
+      const rows = revs.map((r, i) => {
+        const stats = diffStats(diffLines((revs[i + 1] || {}).document || '', r.document || ''));
+        const diff = diffHTML((revs[i + 1] || {}).document || '', r.document || '');
+        return `
         <tr>
           <td class="k mono">#${r.rev}</td>
           <td>
-            <div><strong>${esc(r.change)}</strong> · ${esc(actorStr(r.changed_by))} · ${esc(fmtDate(r.changed_at))}</div>
+            <div><strong>${esc(r.change)}</strong> · ${esc(actorStr(r.changed_by))} · ${esc(fmtDate(r.changed_at))}
+              <span class="diffstat"><span class="add">+${stats.added}</span> <span class="del">−${stats.removed}</span></span></div>
+            ${diff
+              ? `<details${i === 0 ? ' open' : ''}><summary style="cursor:pointer;color:var(--muted);font-size:.84rem">差分</summary>${diff}</details>`
+              : `<div class="provenance">ドキュメントに変更はありません。</div>`}
             <details><summary style="cursor:pointer;color:var(--muted);font-size:.84rem">ドキュメント</summary>
               <pre>${esc(r.document || '')}</pre></details>
           </td>
-        </tr>`).join('');
+        </tr>`;
+      }).join('');
       return () => `
-        <p class="provenance" style="margin:0 0 .8rem">すべての変更を新しい順に並べています。誰が変えたのかと、そのときのドキュメントです。</p>
+        <p class="provenance" style="margin:0 0 .8rem">すべての変更を新しい順に並べています。誰が何を変えたのかを差分で、そのときの全文をドキュメントで確かめられます。</p>
         <table class="kv">${rows}</table>`;
     },
   };
