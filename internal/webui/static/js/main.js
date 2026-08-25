@@ -1,6 +1,7 @@
 // Boot: the chrome that belongs to no view, then the first render.
 
 import { markPosture } from './api.js';
+import { initCopyButtons } from './clipboard.js';
 import { $ } from './dom.js';
 import { initPalette } from './palette.js';
 import { refreshQueues } from './queues.js';
@@ -27,4 +28,5 @@ refreshQueues();
 markPosture();
 markAccessTab();
 initPalette();
+initCopyButtons();
 route();

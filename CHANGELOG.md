@@ -39,6 +39,26 @@ last entry.
   away — what a reviewer deciding whether to verify actually needs from
   a revision is the three lines that moved.
 
+- **Four more of them, for the reader rather than the reviewer — still
+  no new API.** Every rendered code block carries a **copy button** (a
+  fenced block in a body, the SQL on a result card, the whole stored
+  document, a past revision), and a concept's header copies its
+  `ochakai://` address: knowledge here is written to be used somewhere
+  else, and selecting a verified query by hand was the last step of
+  reading it. Headings gained **permalinks** — hovering one shows a ¶
+  whose address is `#/k/<id>?h=<heading>`, so a section can be sent
+  rather than described; clicking it puts that address in the bar and on
+  the clipboard without redrawing the page, and opening one lands on the
+  heading. Search results and the palette **mark the words that were
+  typed**, in the title, the description and the snippet, so a hit says
+  why it is one. And a link to a concept that is not there is drawn as a
+  **dead link** rather than as an ordinary one, with the page behind it
+  saying so in its own words — the id, a search for its last segment,
+  and, for whoever may write, the editor with that id already filled in.
+  Only a `not_found` marks a link: a network failure or a refused read
+  says nothing about whether a concept exists, and each neighbour is
+  asked about once per session, four at a time, up to thirty per body.
+
 ## [0.27.3] - 2026-08-25
 
 ### Added

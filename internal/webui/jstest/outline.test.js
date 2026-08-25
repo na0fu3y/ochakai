@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { headingAnchor, headingAnchors, TOC_MIN, tocHTML } from '../static/js/outline.js';
+import { headingAnchor, headingAnchors, permalinks, TOC_MIN, tocHTML } from '../static/js/outline.js';
 import { md } from '../static/js/markdown.js';
 
 test('an anchor is the heading in the URL, Japanese included', () => {
@@ -50,6 +50,22 @@ test('the outline waits for a document long enough to need one', () => {
   // Levels indent relative to the shallowest heading present.
   assert.match(html, /<li class="lv0"><a href="#a">a<\/a><\/li>/);
   assert.match(html, /<li class="lv1"><a href="#c">c<\/a><\/li>/);
+});
+
+test('a heading links to itself, within the concept', () => {
+  const { html } = headingAnchors(md('## 検証の順番\n\nprose'));
+  const linked = permalinks(html, 'insights/how-to-read');
+  // The route carries the concept and the heading together: an anchor
+  // alone would lose the concept it is inside.
+  assert.match(linked, /<a class="hlink" href="#\/k\/insights\/how-to-read\?h=%E6%A4%9C%E8%A8%BC%E3%81%AE%E9%A0%86%E7%95%AA"/);
+  // The heading keeps its own text and id.
+  assert.match(linked, /<h2 id="検証の順番">検証の順番<a class="hlink"/);
+});
+
+test('a heading with no id gets no permalink', () => {
+  // headingAnchors leaves an empty heading alone; so does this.
+  const { html } = headingAnchors('<h2></h2>');
+  assert.equal(permalinks(html, 'a/b'), '<h2></h2>');
 });
 
 test('the outline stops at h3', () => {
