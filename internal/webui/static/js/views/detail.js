@@ -4,14 +4,17 @@
 import { applyStatus, liftRejection, moveEntry, rejectEntry, verifyEntry } from '../actions.js';
 import { BASE, api, toast } from '../api.js';
 import { hitCard } from '../cards.js';
+import { copyText } from '../clipboard.js';
 import { diffHTML, diffLines, diffStats } from '../diff.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
-import { actorStr, conceptURL, crumbTrail, displayTitle, fmtDate, fmtSize, idPath, isVerified, lastVerification, trustOf } from '../format.js';
+import { actorStr, conceptURL, crumbTrail, displayTitle, fmtDate, fmtSize, idPath, isVerified, lastVerification, parseKPath, trustOf } from '../format.js';
+import { checkTargets } from '../links.js';
 import { descHTML, md } from '../markdown.js';
-import { headingAnchors, tocHTML } from '../outline.js';
+import { headingAnchors, permalinks, tocHTML } from '../outline.js';
 import { knownDirs, refreshTree, revealInTree } from '../tree.js';
 import { STATUSES, icon } from '../vocab.js';
+import { explore, viewExplore } from './explore.js';
 
 // A resource is whatever the writer put there: an external URL, a
 // bundle-relative path, a scope descriptor. Only http(s) becomes a real
@@ -44,7 +47,67 @@ export const TAB_LABELS = {
 // signals as the writer recorded them and scores nothing: §5.1 leaves
 // weighing them to whoever is reading.
 
-export async function viewDetail(id) {
+// The concepts this session has already found: a body that links to a
+// neighbour is usually one of several that do, and a concept that is
+// there does not stop being there while a reader walks between them.
+//
+// Only the positive answer is kept. A missing one is asked again on
+// every render, because it is the answer that can change under the
+// reader — the page they are looking at offers to write the concept the
+// link is missing, and coming back to find the link still red would
+// have the page contradicting what it just did.
+const found = new Set();
+
+// The links a body draws are routes, so the ids come back out of them
+// the same way the router reads them.
+const idFromHash = href => parseKPath(String(href).replace(/^#\/k\//, '')).id;
+
+// A page asks about no more than this many neighbours. A probe is a
+// whole concept read — the contract has no lighter way to ask whether
+// something exists (design doc 0107 froze the core) — and a body citing
+// dozens of others is a body whose reader is not waiting on the colour
+// of the thirty-first link.
+const MAX_PROBES = 30;
+
+// The page behind a link to knowledge nobody has written. A wiki has
+// always answered this address with a page rather than an error, and for
+// the reason that matters here: the reader arrived holding a name, which
+// is the most useful thing anyone has about the concept that is missing.
+// So the name is offered back to them twice — as a search over what does
+// exist, and, for whoever may write, as the id of a new document.
+export async function viewMissing(id) {
+  const segs = String(id).split('/');
+  const name = segs.at(-1) || id;
+  view.innerHTML = `
+    <nav class="crumbs mono">${crumbTrail(segs.slice(0, -1))}</nav>
+    <div class="detail-head"><h1>${esc(name)}</h1></div>
+    <p class="provenance"><code>${esc(id)}</code></p>
+    <div class="status-note">このナレッジはまだありません。リンクをたどってここに来た場合は、リンク元が古いか、まだ誰も書いていません。</div>
+    <div class="toolbar">
+      <button class="btn small" id="missing-search" title="この名前で検索します">🔍「${esc(name)}」を検索</button>
+      <a class="btn small write-only" href="#/new/${idPath(id)}" title="この id でナレッジを作成します">＋ ここに作成</a>
+    </div>
+    <div id="missing-near" style="margin-top:1.2rem"></div>`;
+  $('#missing-search').addEventListener('click', () => {
+    explore.q = name;
+    explore.ageFeed = explore.failedFeed = explore.expiredFeed = false;
+    explore.source = '';
+    if (location.hash === '#/search') viewExplore();
+    else location.hash = '#/search';
+  });
+  // Whatever the base does have under that name, in place. A search that
+  // fails says nothing here: the page's answer is already given above,
+  // and an error banner under it would describe a second problem the
+  // reader did not have.
+  const near = $('#missing-near');
+  try {
+    const { hits = [] } = await api('/api/v1/search?q=' + encodeURIComponent(name) + '&limit=5');
+    if (!near.isConnected || !hits.length) return;
+    near.innerHTML = `<div class="section-title">近い名前のナレッジ</div>` + hits.map(hitCard).join('');
+  } catch { /* the page stands without it */ }
+}
+
+export async function viewDetail(id, heading = '') {
   revealInTree(id); // in parallel with the entry fetch; harmless on 404
   view.innerHTML = '<div class="empty">…</div>';
   let entry, observed, document_;
@@ -57,6 +120,12 @@ export async function viewDetail(id) {
     observed = v.observed || {};
     document_ = v.document || '';
   } catch (e) {
+    // A concept that is not there is not an error the reader caused, and
+    // an error banner is what a page says when something went wrong.
+    // What went wrong here is that somebody followed a link to knowledge
+    // nobody has written — which is a page of its own, with the two ways
+    // on: find what does exist, or write it.
+    if (e.code === 'not_found') { viewMissing(id); return; }
     view.innerHTML = `<div class="error-banner" role="alert">${esc(id)} を読み込めませんでした: ${esc(e.message)}</div>`;
     return;
   }
@@ -96,7 +165,10 @@ export async function viewDetail(id) {
   const atts = entry.files || [];
 
   view.innerHTML = `
-    <nav class="crumbs mono">${crumbTrail(entry.id.split('/').slice(0, -1))} <span class="badge">${esc(entry.type)}</span></nav>
+    <nav class="crumbs mono">${crumbTrail(entry.id.split('/').slice(0, -1))} <span class="badge">${esc(entry.type)}</span>
+      <button type="button" class="copy-btn inline" data-copy="ochakai://${esc(entry.id)}"
+              data-copy-done="ochakai:// のアドレスをコピーしました。"
+              title="このナレッジのアドレスをコピーします" aria-label="このナレッジのアドレスをコピー">ochakai://</button></nav>
     <div class="detail-head">
       <span class="type-ico" style="font-size:1.4rem">${icon(entry.type)}</span>
       <h1>${esc(displayTitle(entry))}</h1>
@@ -210,10 +282,13 @@ export async function viewDetail(id) {
       // description stays out of both — its headings describe, they do
       // not structure the document.
       const body_ = docBody ? headingAnchors(md(docBody, resolveFile, resolveEntry)) : { html: '', headings: [] };
+      // Each heading also gains a link to itself, so a section can be
+      // sent as an address rather than described.
+      const bodyHTML = body_.html ? permalinks(body_.html, entry.id) : '';
       return `
       ${entry.description ? descHTML(entry.description, 'lead') : ''}
       ${tocHTML(body_.headings)}
-      ${docBody ? `<div class="md">${body_.html}</div>` : ''}
+      ${docBody ? `<div class="md">${bodyHTML}</div>` : ''}
       ${!entry.description && !docBody ? '<div class="empty">description も本文もありません。</div>' : ''}`;
     },
     // The document, whole and unrendered. It replaced tabs that each
@@ -359,6 +434,20 @@ export async function viewDetail(id) {
         <table class="kv">${rows}</table>`;
     },
   };
+  // Links to concepts that are not there, drawn as what they are. The
+  // verdict is this render's, and the marking runs after every tab
+  // render — a tab body is redrawn from its template each time it opens,
+  // which throws the classes away with the markup.
+  const missing = new Set();
+  function markDead() {
+    for (const a of body.querySelectorAll('a[href^="#/k/"]')) {
+      if (missing.has(idFromHash(a.getAttribute('href')))) {
+        a.classList.add('dead');
+        a.title = 'リンク先のナレッジがありません';
+      }
+    }
+  }
+
   async function showTab(name) {
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
     body.innerHTML = tabs[name]();
@@ -374,9 +463,60 @@ export async function viewDetail(id) {
         }
       }
     }
+    markDead();
   }
   document.querySelectorAll('#tabs button').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
   showTab('overview');
+
+  // A heading named by the route: the overview renders synchronously
+  // above, so the element is there to scroll to. getElementById rather
+  // than a selector, because an anchor is the heading's own words and a
+  // Japanese one would have to be escaped to sit in a selector.
+  if (heading) document.getElementById(heading)?.scrollIntoView();
+
+  // ¶ — the reader gets the address in the bar and on the clipboard,
+  // and the view is not redrawn to give it to them. replaceState leaves
+  // route._current holding the previous hash until the next navigation;
+  // its only reader is the editor's unsaved-changes restore, which
+  // cannot be open behind this view.
+  //
+  // The listener sits on the tab body rather than on the view, because
+  // the view outlives every render and would collect one of these per
+  // concept opened.
+  body.addEventListener('click', e => {
+    const a = e.target.closest && e.target.closest('a.hlink');
+    if (!a) return;
+    e.preventDefault();
+    const href = a.getAttribute('href');
+    history.replaceState(null, '', href);
+    document.getElementById(parseKPath(href.replace(/^#\/k\//, '')).heading)?.scrollIntoView();
+    copyText(location.href, '見出しへのリンクをコピーしました。');
+  });
+
+  // Ask about the neighbours this body names — the ones this session has
+  // not already found.
+  (async () => {
+    const targets = new Set();
+    for (const l of entry.links || []) {
+      const t = String(l.target || '').replace(/^ochakai:\/\//, '');
+      if (t) targets.add(t);
+    }
+    for (const a of body.querySelectorAll('a[href^="#/k/"]')) targets.add(idFromHash(a.getAttribute('href')));
+    // A heading's own ¶ is a link to this concept, which is the one
+    // concept on the page already known to be there.
+    targets.delete(entry.id);
+    const ask = [...targets].filter(t => t && !found.has(t)).slice(0, MAX_PROBES);
+    if (!ask.length) return;
+    // Whatever the probes did not find out about is left in neither set,
+    // so a server that was briefly unreachable teaches this session
+    // nothing rather than teaching it that every neighbour is fine.
+    const seen = await checkTargets(ask, t => api(conceptURL(t)), 4);
+    for (const t of seen.found) found.add(t);
+    for (const t of seen.dead) missing.add(t);
+    // The reader may have walked on while the probes were out; the view
+    // holding this body is the one that asked.
+    if (body.isConnected) markDead();
+  })();
 
   // Status is a picker, not a row of transition buttons: any transition
   // the API allows is offered (provenance over authorization, design doc

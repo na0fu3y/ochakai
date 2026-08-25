@@ -13,6 +13,7 @@ import { api } from './api.js';
 import { $ } from './dom.js';
 import { esc } from './escape.js';
 import { displayTitle, entryHash } from './format.js';
+import { highlightIn, terms } from './highlight.js';
 import { icon } from './vocab.js';
 import { debounce, explore, viewExplore } from './views/explore.js';
 
@@ -34,13 +35,21 @@ function render() {
          <span class="type-ico" aria-hidden="true">🔍</span>
          <span class="palette-title">「${esc(q)}」を検索</span><span class="palette-id">結果の一覧と絞り込みを開きます</span>
        </div>`
-    : `<div ${attrs(i)}>
+    : `<div ${attrs(i)} data-hit>
          <span class="type-ico" aria-hidden="true">${icon(r.hit.type)}</span>
          <span class="palette-title">${esc(displayTitle(r.hit))}</span>
          <span class="palette-id mono">${esc(r.hit.id)}</span>
          <span class="badge ${esc(r.hit.status)}">${esc(r.hit.status)}</span>
        </div>`).join('');
   list.innerHTML = items || `<div class="empty">${q ? '一致するナレッジが見つかりません。' : 'まだナレッジがありません。'}</div>`;
+  // The typed words, marked in the titles and ids they matched. The
+  // synthetic search row is skipped: it quotes the query already, and
+  // marking a quotation of itself says nothing.
+  if (q) {
+    const ts = terms(q);
+    list.querySelectorAll('.palette-row[data-hit] .palette-title, .palette-row[data-hit] .palette-id')
+      .forEach(el => highlightIn(el, ts));
+  }
   list.querySelectorAll('.palette-row').forEach(el => {
     el.addEventListener('click', () => go(Number(el.dataset.i)));
     // Hover moves the selection the way the arrows do, so the keyboard

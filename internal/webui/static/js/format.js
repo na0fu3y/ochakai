@@ -61,6 +61,35 @@ export function idPath(id) {
   return String(id).split('/').map(encodeURIComponent).join('/');
 }
 export const entryHash = e => '#/k/' + idPath(e.id);
+// A link to one section of one concept. A bare "#anchor" cannot do this
+// job: the page routes on the hash, so an address holding only an anchor
+// has lost the concept it was an anchor within — reloading it lands on
+// the home page. The heading rides in the route instead, as a query
+// suffix an anchor can never contain (headingAnchor drops `#%?`), which
+// is what makes the split below unambiguous.
+export const headingHash = (id, anchor) => '#/k/' + idPath(id) + '?h=' + encodeURIComponent(anchor);
+// The inverse, run on the still-encoded path so that a `?h=` a writer
+// put inside a segment survives as text: the route's own separator is
+// the first one, and the id is decoded segment by segment after the cut.
+export function parseKPath(raw) {
+  const s = String(raw ?? '');
+  const at = s.indexOf('?h=');
+  const idPart = at === -1 ? s : s.slice(0, at);
+  const heading = at === -1 ? '' : dec(s.slice(at + 3));
+  return { id: idPart.split('/').map(dec).join('/'), heading };
+}
+// A half-typed or truncated address — "%zz", or a "%E3%81" a chat client
+// cut in two — is a bad address, not an exception. Throwing out of the
+// router leaves the page showing the concept the reader was on while the
+// bar names another one; the raw text finds nothing, which says what
+// happened.
+function dec(s) {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
 // API path for a concept: it lives in the bundle at its id plus `.md`,
 // which is the only address it has (design doc 0046 §3.5).
 export const conceptURL = id => '/api/v1/bundle/' + idPath(id) + '.md';

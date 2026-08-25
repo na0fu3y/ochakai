@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { hitCard } from '../cards.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
+import { highlightIn, terms } from '../highlight.js';
 import { KNOWN_TYPES, STATUSES, icon } from '../vocab.js';
 
 // Filter state survives navigation within the session.
@@ -233,6 +234,15 @@ export async function runSearch(append = false) {
       html += `<div class="truncation-note">先頭 ${limit} 件を表示しています(サーバー側の上限)。絞り込むか、より具体的な問いで範囲を狭めてください。</div>`;
     }
     out.innerHTML = scopeNote + html;
+    // The words that were typed, marked in the text they matched. It
+    // runs on the rendered cards rather than on the strings above,
+    // because a mark inserted into markup is a mark that can break it —
+    // here it can only ever replace a text node. A feed answers no
+    // query, so there is nothing to mark in one.
+    if (q && !isFeed) {
+      const ts = terms(q);
+      out.querySelectorAll('.card .title, .card .desc, .card .snippet').forEach(el => highlightIn(el, ts));
+    }
     wireScope();
     $('#feed-more')?.addEventListener('click', e => { e.preventDefault(); runSearch(true); });
   } catch (e) {

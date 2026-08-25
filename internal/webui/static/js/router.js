@@ -4,6 +4,7 @@
 // modules have finished evaluating.
 
 import { $, view } from './dom.js';
+import { parseKPath } from './format.js';
 import { markTreeSelection } from './tree.js';
 import { viewAccess } from './views/access.js';
 import { viewDetail } from './views/detail.js';
@@ -55,7 +56,11 @@ export function route() {
     if (a) { a.classList.add('active'); a.setAttribute('aria-current', 'page'); }
   };
   if (head === 'k' && rest.length >= 1) {
-    viewDetail(rest.map(decodeURIComponent).join('/'));
+    // A concept, and optionally one heading inside it: the route is
+    // split before anything is decoded, because the separator is the
+    // route's and an encoded one inside a segment is the writer's.
+    const { id, heading } = parseKPath(rest.join('/'));
+    viewDetail(id, heading);
   } else if (head === 'dir') {
     // A directory's index page — the web rendering of the index.md the
     // OKF export generates at every level. #/dir/ (the root) shows the

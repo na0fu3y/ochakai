@@ -408,10 +408,11 @@ func TestWriteAffordancesAreHiddenOnAReadOnlyDeployment(t *testing.T) {
 	}
 
 	// Controls that carry the class themselves. Every link into the editor
-	// counts: the sidebar ＋, the tree's per-directory ＋, and the two the
-	// search view offers.
-	if n := strings.Count(page, `href="#/new`); n != 4 {
-		t.Errorf("the page has %d literal links to the editor, not the 4 this guard knows; gate the new one and update the count", n)
+	// counts: the sidebar ＋, the tree's per-directory ＋, the two the
+	// search view offers, and the one on the page for a concept that does
+	// not exist ("ここに作成").
+	if n := strings.Count(page, `href="#/new`); n != 5 {
+		t.Errorf("the page has %d literal links to the editor, not the 5 this guard knows; gate the new one and update the count", n)
 	}
 	for _, i := range indexesOf(page, `href="#/new`) {
 		if _, tag := tagAt(t, page, i); !hidesOnReadOnly(tag) {

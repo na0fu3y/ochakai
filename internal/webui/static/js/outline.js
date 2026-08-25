@@ -11,6 +11,7 @@
 // writer typed can match it: a `<h2>` in their prose arrives escaped.
 
 import { esc } from './escape.js';
+import { headingHash } from './format.js';
 
 // The entities esc() writes, undone for the anchor only: a heading
 // "A & B" should anchor as A-B, not A-amp-B. The visible text keeps the
@@ -50,6 +51,22 @@ export function headingAnchors(html) {
     return `<h${level} id="${esc(id)}">${inner}</h${level}>`;
   });
   return { html: out, headings };
+}
+
+// permalinks gives each heading a link to itself — the ¶ every
+// documentation service puts in the margin, so that "the part about
+// re-verification" can be sent as an address rather than described.
+//
+// It runs on the html headingAnchors returned, matching the same shape
+// that function wrote, and leaves a heading without an id alone: an
+// empty heading anchors nowhere, and a heading in a code fence arrived
+// escaped and was never an <hN> to begin with.
+export function permalinks(html, id) {
+  return String(html ?? '').replace(/<h([1-6]) id="([^"]*)">([\s\S]*?)<\/h\1>/g,
+    (m, level, anchor, inner) =>
+      `<h${level} id="${anchor}">${inner}` +
+      `<a class="hlink" href="${esc(headingHash(id, anchor))}" title="この見出しへのリンクをコピーします" aria-label="この見出しへのリンク">¶</a>` +
+      `</h${level}>`);
 }
 
 // How many headings make an outline worth its height: below this a

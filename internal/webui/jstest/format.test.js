@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 
 import {
   actorStr, conceptURL, crumbTrail, daysSince, dirHash, displayTitle,
-  entryHash, fmtAge, fmtSize, isVerified, lastVerification, trustOf,
+  entryHash, fmtAge, fmtSize, headingHash, isVerified, lastVerification,
+  parseKPath, trustOf,
 } from '../static/js/format.js';
 import { esc } from '../static/js/escape.js';
 
@@ -15,6 +16,36 @@ test('an id keeps its slashes and encodes everything else', () => {
   assert.equal(entryHash({ id: 'metrics/revenue' }), '#/k/metrics/revenue');
   assert.equal(entryHash({ id: 'a b/c#d' }), '#/k/a%20b/c%23d');
   assert.equal(conceptURL('metrics/revenue'), '/api/v1/bundle/metrics/revenue.md');
+});
+
+test('a heading link carries the concept and the section together', () => {
+  assert.equal(headingHash('metrics/revenue', '定義'), '#/k/metrics/revenue?h=%E5%AE%9A%E7%BE%A9');
+  // And comes back apart the same way.
+  assert.deepEqual(parseKPath('metrics/revenue?h=%E5%AE%9A%E7%BE%A9'),
+    { id: 'metrics/revenue', heading: '定義' });
+});
+
+test('a route with no heading is the concept alone', () => {
+  assert.deepEqual(parseKPath('metrics/revenue'), { id: 'metrics/revenue', heading: '' });
+  assert.deepEqual(parseKPath(''), { id: '', heading: '' });
+});
+
+test('the id is decoded segment by segment, after the heading is cut off', () => {
+  // An encoded slash inside a segment is part of the segment, not a
+  // separator — the same rule idPath writes with.
+  assert.deepEqual(parseKPath('a%20b/c%23d?h=x'), { id: 'a b/c#d', heading: 'x' });
+  // A "?h=" a writer put in a segment travels encoded, so the first one
+  // in the raw path really is the route's own.
+  const raw = 'a/' + encodeURIComponent('q?h=1');
+  assert.deepEqual(parseKPath(raw), { id: 'a/q?h=1', heading: '' });
+});
+
+test('a malformed address is a bad address, not an exception', () => {
+  // A truncated or hand-typed escape used to throw URIError out of the
+  // router, which left the previous concept on screen under the new
+  // address. The raw text finds nothing, which is what happened.
+  assert.deepEqual(parseKPath('metrics/revenue?h=%zz'), { id: 'metrics/revenue', heading: '%zz' });
+  assert.deepEqual(parseKPath('metrics/%E3%81'), { id: 'metrics/%E3%81', heading: '' });
 });
 
 test('a directory hash tolerates a trailing slash', () => {
