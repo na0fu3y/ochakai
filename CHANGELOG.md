@@ -21,6 +21,24 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The web UI reads the way a documentation service does — three
+  affordances, no new API.** All three are the curation surface doing
+  its own job (design doc 0067 §1: search, browse, rulings, history)
+  over endpoints that already existed, so REST, MCP and the CLI are
+  untouched. Ctrl+K (⌘K on a Mac) opens a **quick-open palette** from
+  any page: type, arrows, Enter, and the concept is open — nothing typed
+  lists by demand, the same `sort=usage` the search view lands on, and a
+  last row hands the words to the full search view. A long body's
+  overview tab now opens with its **outline** (目次) — every heading
+  gets an anchor id, drawn from the rendered body rather than by parsing
+  the markdown twice. And the history tab shows each revision as a
+  **diff** against the one before it, `+n −n` beside the change, with
+  the unchanged middle elided and the full document still one disclosure
+  away — what a reviewer deciding whether to verify actually needs from
+  a revision is the three lines that moved.
+
 ## [0.27.3] - 2026-08-25
 
 ### Added

@@ -2,6 +2,7 @@
 
 import { markPosture } from './api.js';
 import { $ } from './dom.js';
+import { initPalette } from './palette.js';
 import { refreshQueues } from './queues.js';
 import { route } from './router.js';
 import { refreshTree } from './tree.js';
@@ -25,4 +26,5 @@ refreshTree();
 refreshQueues();
 markPosture();
 markAccessTab();
+initPalette();
 route();

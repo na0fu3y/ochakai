@@ -25,7 +25,17 @@ export function route() {
   // footnote landed on the home page, which is worse than the marker
   // not being a link.
   const hash = location.hash;
-  if (hash && !hash.startsWith('#/')) return;
+  if (hash && !hash.startsWith('#/')) {
+    // Except at boot: an anchor is all the URL holds then — the route it
+    // jumped within is gone — and returning without rendering left the
+    // whole page blank. The home page is the honest answer to an address
+    // that names a place inside a document it does not name.
+    if (!route._rendered) {
+      route._rendered = true;
+      viewHome();
+    }
+    return;
+  }
   if (unsaved && unsaved() && !confirm('保存していない変更を破棄しますか？')) {
     // Put the URL back; replaceState does not re-fire hashchange.
     history.replaceState(null, '', route._current || '#/');
