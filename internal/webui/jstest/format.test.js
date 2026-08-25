@@ -40,6 +40,14 @@ test('the id is decoded segment by segment, after the heading is cut off', () =>
   assert.deepEqual(parseKPath(raw), { id: 'a/q?h=1', heading: '' });
 });
 
+test('a malformed address is a bad address, not an exception', () => {
+  // A truncated or hand-typed escape used to throw URIError out of the
+  // router, which left the previous concept on screen under the new
+  // address. The raw text finds nothing, which is what happened.
+  assert.deepEqual(parseKPath('metrics/revenue?h=%zz'), { id: 'metrics/revenue', heading: '%zz' });
+  assert.deepEqual(parseKPath('metrics/%E3%81'), { id: 'metrics/%E3%81', heading: '' });
+});
+
 test('a directory hash tolerates a trailing slash', () => {
   assert.equal(dirHash('insights/q1'), '#/dir/insights/q1');
   assert.equal(dirHash('insights/q1/'), '#/dir/insights/q1');

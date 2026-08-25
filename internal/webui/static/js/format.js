@@ -75,8 +75,20 @@ export function parseKPath(raw) {
   const s = String(raw ?? '');
   const at = s.indexOf('?h=');
   const idPart = at === -1 ? s : s.slice(0, at);
-  const heading = at === -1 ? '' : decodeURIComponent(s.slice(at + 3));
-  return { id: idPart.split('/').map(decodeURIComponent).join('/'), heading };
+  const heading = at === -1 ? '' : dec(s.slice(at + 3));
+  return { id: idPart.split('/').map(dec).join('/'), heading };
+}
+// A half-typed or truncated address — "%zz", or a "%E3%81" a chat client
+// cut in two — is a bad address, not an exception. Throwing out of the
+// router leaves the page showing the concept the reader was on while the
+// bar names another one; the raw text finds nothing, which says what
+// happened.
+function dec(s) {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
 }
 // API path for a concept: it lives in the bundle at its id plus `.md`,
 // which is the only address it has (design doc 0046 §3.5).

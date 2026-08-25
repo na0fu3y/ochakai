@@ -24,15 +24,33 @@ export function terms(q) {
 // a query is user input, and building a pattern out of it is where the
 // escaping bugs live. Substring also means Japanese needs no word
 // boundaries, which it does not have.
+// Lowercased without changing where anything is. `toLowerCase` is not
+// length-preserving — U+0130 (İ) lowercases to two code units — and the
+// offsets found in the folded text are used to cut the original, so one
+// such character shifts every mark after it by one. A character whose
+// lowercase is not one unit keeps its own form here: it stops matching
+// case-insensitively, which is a smaller loss than marking the wrong
+// word (and than the empty <mark> the shift could leave behind).
+function fold(s) {
+  const lower = s.toLowerCase();
+  if (lower.length === s.length) return lower;
+  let out = '';
+  for (const ch of s) {
+    const c = ch.toLowerCase();
+    out += c.length === ch.length ? c : ch;
+  }
+  return out;
+}
+
 export function segments(text, ts) {
   const s = String(text ?? '');
   if (!s || !ts || !ts.length) return s ? [{ text: s, hit: false }] : [];
-  const hay = s.toLowerCase();
+  const hay = fold(s);
   // Every match from every term, then merged: two terms overlapping in
   // one place is one mark, not two nested ones.
   const spans = [];
   for (const t of ts) {
-    const needle = t.toLowerCase();
+    const needle = fold(t);
     if (!needle) continue;
     for (let i = hay.indexOf(needle); i !== -1; i = hay.indexOf(needle, i + 1)) {
       spans.push([i, i + needle.length]);

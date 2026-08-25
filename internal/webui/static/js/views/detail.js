@@ -507,8 +507,12 @@ export async function viewDetail(id, heading = '') {
     targets.delete(entry.id);
     const ask = [...targets].filter(t => t && !found.has(t)).slice(0, MAX_PROBES);
     if (!ask.length) return;
-    const dead = await checkTargets(ask, t => api(conceptURL(t)), 4);
-    for (const t of ask) (dead.has(t) ? missing : found).add(t);
+    // Whatever the probes did not find out about is left in neither set,
+    // so a server that was briefly unreachable teaches this session
+    // nothing rather than teaching it that every neighbour is fine.
+    const seen = await checkTargets(ask, t => api(conceptURL(t)), 4);
+    for (const t of seen.found) found.add(t);
+    for (const t of seen.dead) missing.add(t);
     // The reader may have walked on while the probes were out; the view
     // holding this body is the one that asked.
     if (body.isConnected) markDead();

@@ -46,6 +46,18 @@ test('a query with no match leaves the text in one piece', () => {
   assert.deepEqual(segments('', terms('sql')), []);
 });
 
+test('a character that grows when lowercased does not shift the marks', () => {
+  // U+0130 lowercases to two code units, so offsets found in the folded
+  // text used to cut the original one character late: the mark landed on
+  // "İs" + "tanbul" instead of on the word that matched, and enough of
+  // them left a <mark> holding nothing at all.
+  assert.deepEqual(segments('İstanbul', terms('stanbul')),
+    [{ text: 'İ', hit: false }, { text: 'stanbul', hit: true }]);
+  const parts = segments('İİİx', terms('x'));
+  assert.deepEqual(parts, [{ text: 'İİİ', hit: false }, { text: 'x', hit: true }]);
+  assert.ok(parts.every(p => p.text));
+});
+
 test('a regular expression in the query is text, not a pattern', () => {
   // Building a pattern out of user input is the bug this avoids: `.*`
   // matches itself here and nothing else.
