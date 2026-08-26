@@ -166,12 +166,32 @@ pre:hover .copy-btn, .copy-btn:focus-visible { opacity: 1; }
 }
 
 /* ---- layout: persistent tree sidebar + content pane ---- */
-.shell { display: grid; grid-template-columns: 17rem minmax(0, 1fr); }
+/* The tree column is the dragged width when the user set one (--side-w,
+   written by main.js), the default otherwise. Clamped where it is used,
+   not where it is set, so a stale stored value can never wedge the page:
+   the floor keeps the tree readable, the ceiling keeps the content pane
+   the wider half on any viewport. */
+.shell {
+  display: grid;
+  --side-col: clamp(12rem, var(--side-w, 17rem), min(34rem, 45vw));
+  grid-template-columns: var(--side-col) minmax(0, 1fr);
+  position: relative; /* anchors the drag handle to the column edge */
+}
 /* The topbar toggle collapses the sidebar for reading room; the choice
    persists per browser. Narrow screens have their own disclosure, so
    the toggle is desktop-only. */
 .shell.side-collapsed { grid-template-columns: minmax(0, 1fr); }
 .shell.side-collapsed .sidebar { display: none; }
+/* The handle rides the sidebar's right border for the shell's full
+   height. Wider than the border so it can be grabbed; visible only on
+   hover or mid-drag so the border stays a border. */
+.side-resize {
+  position: absolute; top: 0; bottom: 0; left: calc(var(--side-col) - .3rem);
+  width: .6rem; cursor: col-resize; touch-action: none;
+}
+.side-resize:hover, .side-resize.dragging { background: var(--accent-weak); }
+.shell.side-collapsed .side-resize { display: none; }
+@media (max-width: 800px) { .side-resize { display: none; } }
 /* The second cell holds the view and whatever banner sits above it, so
    the grid has exactly two children however many banners are shown. A
    grid item's floor is its own content, which an unbreakable line — a

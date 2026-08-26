@@ -21,6 +21,14 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The web UI's tree sidebar is resizable.** The tree holds names the
+  user chose, so no fixed width suits every bundle: drag the divider
+  (bounded both ways, so a drag can never wedge the page), double-click
+  it to return to the default. The width persists per browser next to
+  the collapsed choice. Web UI only — no API, CLI or MCP change.
+
 ## [0.27.4] - 2026-08-26
 
 ### Added

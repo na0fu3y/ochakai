@@ -60,6 +60,12 @@
       <div id="tree" class="browse"><div class="empty">…</div></div>
     </details>
   </aside>
+  <!-- The divider between tree and content is draggable: the tree holds
+       names the user chose, so no fixed width can be right for every
+       bundle. Absolutely positioned, so the grid still has exactly two
+       cells. Pointer-only by design — the default width needs no
+       adjustment to use the page, so it carries no keyboard surface. -->
+  <div class="side-resize" id="side-resize" aria-hidden="true" title="ドラッグで幅を調整、ダブルクリックで元に戻します"></div>
   <!-- The banners are content, not a column. Left as siblings of <main>
        they were grid items of their own: a displayed one took the
        content cell and pushed the view into the second row of the
