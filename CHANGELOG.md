@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.27.4] - 2026-08-26
+
 ### Added
 
 - **The web UI reads the way a documentation service does — three
@@ -59,6 +61,47 @@ last entry.
   says nothing about whether a concept exists, and each neighbour is
   asked about once per session, four at a time, up to thirty per body.
 
+- **The positioning page now answers Google's own catalog.** Dataplex
+  Universal Catalog became
+  [Knowledge Catalog](https://cloud.google.com/products/knowledge-catalog)
+  on 2026-04-10 and was repositioned as a context engine for agents:
+  automatic harvesting, lineage, quality and glossaries at GA, Gemini
+  generating descriptions and example queries on top, and retrieval
+  through semantic search, Context APIs and a remote MCP server at
+  `https://dataplex.googleapis.com/mcp`. The neighbours table had no row
+  for it, though it is the one neighbour no disqualifier removes —
+  ochakai stands on Google Cloud (C2), and the first-party catalog
+  stands on the same IAM with nothing to run. A row and a section say
+  where the overlap is real (verified queries and semantic guardrails,
+  in Preview, aim at what `Attested Computation` holds) and where the
+  axis differs: that one generates and promotes while the other
+  adjudicates and keeps its rejections (C7), and that the exit is a
+  whole OKF v0.2 bundle rather than a metadata export (C1, C3). The
+  section also separates the product from
+  [GoogleCloudPlatform/knowledge-catalog](https://github.com/GoogleCloudPlatform/knowledge-catalog),
+  the repository the OKF spec ochakai follows lives in — the competitor
+  and the standard share a name. It also says what the shapes decide:
+  a table's system entry takes at most one aspect per aspect type at the
+  entry level and attaching replaces it, so a second reading of the same
+  table — another team's, or a draft nobody has ruled on — needs another
+  aspect type or a parallel custom entry, while here `resource` is a
+  field rather than a key and any number of concepts address one table,
+  each with its own author, verification state and history. "Where ochakai loses" and "choosing"
+  each gain an entry. `DOC-LINES` crosses a boundary, 7,500 → 8,000.
+
+### Changed
+
+- **The help text and the operating guide carry the root-grant shape
+  the 0.27.3 fix made writable.** `ochakai access -h` now says what a
+  grant at the root does to `ochakai stats` — it is the whole bundle,
+  so that answer declares no subtree and keeps its misses rather than
+  withholding them — and the operating guide's *ディレクトリごとの
+  閲覧者と編集者* gained the two-row policy that spells *everyone
+  reads, a few write*, whose length is the number of editors rather
+  than the number of employees. The rest of that section was tightened
+  rather than extended: what the design records already say was cut
+  back to what an operator has to do.
+
 ## [0.27.3] - 2026-08-25
 
 ### Added
@@ -89,33 +132,6 @@ last entry.
   absence as "off" would hide a working upload on every older
   deployment.
 
-- **The positioning page now answers Google's own catalog.** Dataplex
-  Universal Catalog became
-  [Knowledge Catalog](https://cloud.google.com/products/knowledge-catalog)
-  on 2026-04-10 and was repositioned as a context engine for agents:
-  automatic harvesting, lineage, quality and glossaries at GA, Gemini
-  generating descriptions and example queries on top, and retrieval
-  through semantic search, Context APIs and a remote MCP server at
-  `https://dataplex.googleapis.com/mcp`. The neighbours table had no row
-  for it, though it is the one neighbour no disqualifier removes —
-  ochakai stands on Google Cloud (C2), and the first-party catalog
-  stands on the same IAM with nothing to run. A row and a section say
-  where the overlap is real (verified queries and semantic guardrails,
-  in Preview, aim at what `Attested Computation` holds) and where the
-  axis differs: that one generates and promotes while the other
-  adjudicates and keeps its rejections (C7), and that the exit is a
-  whole OKF v0.2 bundle rather than a metadata export (C1, C3). The
-  section also separates the product from
-  [GoogleCloudPlatform/knowledge-catalog](https://github.com/GoogleCloudPlatform/knowledge-catalog),
-  the repository the OKF spec ochakai follows lives in — the competitor
-  and the standard share a name. It also says what the shapes decide:
-  a table's system entry takes at most one aspect per aspect type at the
-  entry level and attaching replaces it, so a second reading of the same
-  table — another team's, or a draft nobody has ruled on — needs another
-  aspect type or a parallel custom entry, while here `resource` is a
-  field rather than a key and any number of concepts address one table,
-  each with its own author, verification state and history. "Where ochakai loses" and "choosing"
-  each gain an entry. `DOC-LINES` crosses a boundary, 7,500 → 8,000.
 
 ### Fixed
 
@@ -150,9 +166,6 @@ last entry.
   **Reading everything is still not administering everything.** The
   archive of the base, `move`, `reembed` and the policy itself stay with
   `OCHAKAI_ADMINS` (0109 §3), and a write still needs `may_write`.
-  `ochakai access -h` says both halves now, and the operating guide's
-  *ディレクトリごとの閲覧者と編集者* carries the shape the fix makes
-  writable: everyone reads, a few principals write, one row each.
 
 ## [0.27.2] - 2026-08-24
 
@@ -5794,7 +5807,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.27.3...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.27.4...HEAD
+[0.27.4]: https://github.com/na0fu3y/ochakai/compare/v0.27.3...v0.27.4
 [0.27.3]: https://github.com/na0fu3y/ochakai/compare/v0.27.2...v0.27.3
 [0.27.2]: https://github.com/na0fu3y/ochakai/compare/v0.27.1...v0.27.2
 [0.27.1]: https://github.com/na0fu3y/ochakai/compare/v0.27.0...v0.27.1
