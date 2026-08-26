@@ -23,6 +23,33 @@ $('#side-toggle').addEventListener('click', () => {
   localStorage.setItem('ochakai.sidebar', collapsed ? 'collapsed' : 'open');
 });
 
+// The divider drags: the raw pointer x is the width, and app.css clamps
+// it where it is used, so nothing here needs to know the bounds. The
+// width persists per browser like the collapsed choice; double-click
+// forgets it, which is the default width again.
+const sideResize = $('#side-resize');
+const storedW = localStorage.getItem('ochakai.sidebar-width');
+if (storedW) shell.style.setProperty('--side-w', storedW);
+sideResize.addEventListener('pointerdown', e => {
+  e.preventDefault(); // a drag, not a text selection
+  sideResize.setPointerCapture(e.pointerId);
+  sideResize.classList.add('dragging');
+});
+sideResize.addEventListener('pointermove', e => {
+  if (!sideResize.hasPointerCapture(e.pointerId)) return;
+  shell.style.setProperty('--side-w', `${e.clientX}px`);
+});
+// lostpointercapture covers both the release and a cancelled drag.
+sideResize.addEventListener('lostpointercapture', () => {
+  sideResize.classList.remove('dragging');
+  const w = shell.style.getPropertyValue('--side-w');
+  if (w) localStorage.setItem('ochakai.sidebar-width', w);
+});
+sideResize.addEventListener('dblclick', () => {
+  shell.style.removeProperty('--side-w');
+  localStorage.removeItem('ochakai.sidebar-width');
+});
+
 refreshTree();
 refreshQueues();
 markPosture();
