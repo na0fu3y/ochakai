@@ -34,55 +34,45 @@ const RUNTIMES = ['bigquery', 'postgres', 'dbt', 'python', 'looker'];
 // generated. A producer's own key is not here either — it has no field,
 // and it is not lost: the document keeps it, and the form says so.
 export const FIELDS = [
-  {
-    key: 'type', kind: 'combo', label: '型', options: KNOWN_TYPES, required: true,
-    hint: 'OKF が必須にする唯一のキーです。一覧は推奨の語彙で、どんな文字列でも書けます。',
-  },
-  {
-    key: 'title', kind: 'text', label: 'タイトル',
-    hint: '空のままなら、ID の最後の区切りが名前になります。',
-  },
+  { key: 'type', kind: 'combo', label: '型', options: KNOWN_TYPES, required: true },
+  { key: 'title', kind: 'text', label: 'タイトル' },
   { key: 'description', kind: 'prose', label: '説明', hint: '一文で。検索結果と一覧に出ます。' },
   {
     key: 'resource', kind: 'text', label: '実体の場所',
     placeholder: 'bigquery://project/dataset/table',
-    hint: 'この知識が指している物の正準 URI です。テーブル、ダッシュボード、外部ページなど。',
+    hint: 'この知識が指している物の URI。テーブル、ダッシュボード、外部ページなど。',
   },
   { key: 'tags', kind: 'list', label: 'タグ', placeholder: 'sales' },
   {
     key: 'sources', kind: 'rows', label: '出典', addLabel: '出典を足す',
-    hint: 'この知識が何から導かれたかです。書いた人しか知らないので、ochakai は埋められません。',
+    hint: 'この知識が何から導かれたかです。',
     columns: [
       { name: 'resource', label: '場所', placeholder: 'bigquery://project/dataset/table' },
       { name: 'title', label: '見出し' },
-      { name: 'id', label: '識別子', hint: '本文から個別に引くときの鍵です。' },
+      { name: 'id', label: '識別子' },
       { name: 'author', label: '作成者', placeholder: 'human:tanaka@example.co.jp' },
       { name: 'usage_count', label: '参照回数', kind: 'number' },
       { name: 'last_modified', label: '最終更新', kind: 'date' },
     ],
   },
   {
-    key: 'usage_window', kind: 'object', label: '参照回数を数えた期間',
+    key: 'usage_window', kind: 'object', label: '参照回数を数えた期間', onlyIfPresent: true,
     hint: '上の参照回数が、いつからいつまでを数えたものかです。',
     columns: [
       { name: 'from', label: '開始', kind: 'date' },
       { name: 'to', label: '終了', kind: 'date' },
     ],
   },
-  {
-    key: 'status', kind: 'enum', label: '状態', options: STATUSES,
-    hint: '書かなければ stable として読まれます(SPEC §5.4)。誰が確認したかは別の台帳で、ここでは決まりません。',
-  },
-  {
-    key: 'stale_after', kind: 'date', label: '再確認日',
-    hint: 'この日を過ぎたら見直す、という日付です。過ぎても隠れません。',
-  },
+  { key: 'status', kind: 'enum', label: '状態', options: STATUSES },
+  { key: 'stale_after', kind: 'date', label: '再確認日' },
   {
     key: 'runtime', kind: 'combo', label: '実行環境', options: RUNTIMES,
+    types: ['Attested Computation'],
     hint: '計算を約束する型では必須です(SPEC §10.2)。ochakai は記録するだけで、実行はしません。',
   },
   {
     key: 'parameters', kind: 'rows', label: 'パラメータ', addLabel: 'パラメータを足す',
+    types: ['Attested Computation'],
     hint: 'エージェントが埋める穴です。',
     columns: [
       { name: 'name', label: '名前', placeholder: 'year' },
@@ -92,10 +82,12 @@ export const FIELDS = [
   },
   {
     key: 'computation', kind: 'text', label: '計算の置き場所',
+    types: ['Attested Computation'],
     hint: '空のままなら、本文の <code># Computation</code> のコードブロックが計算です。',
   },
   {
     key: 'executor', kind: 'object', label: '実行のしかた',
+    types: ['Attested Computation'],
     columns: [
       { name: 'resource', label: '手順・コードの場所' },
       { name: 'receipt', label: '実行が返すべき項目', kind: 'list' },
@@ -103,6 +95,7 @@ export const FIELDS = [
   },
   {
     key: 'attester', kind: 'object', label: '検証のしかた',
+    types: ['Attested Computation'],
     hint: '実行が正しく行われたかを機械的に確かめるコードの場所です。',
     columns: [{ name: 'resource', label: 'コードの場所' }],
   },
@@ -179,12 +172,28 @@ function scalarValue(col, raw) {
 
 // ---- markup -----------------------------------------------------------
 
-// fieldsMarkup renders every field from the frontmatter's values. The
-// values come from the server's read of the document, so what is drawn
-// here is the document — not a second store the page keeps beside it.
+// visibleFields picks the fields worth drawing for this document. A key
+// the document carries always gets its editor — hiding one would make it
+// uneditable without saying so. A field tied to types (the Attested
+// Computation contract, SPEC §10.2) appears only when the type asks for
+// it, and one marked onlyIfPresent stays away until a document brings
+// the key: every field at once was a form nobody could see whole.
+export function visibleFields(values) {
+  const v = values || {};
+  return FIELDS.filter(f => {
+    if (v[f.key] !== undefined) return true;
+    if (f.types) return f.types.includes(v.type);
+    return !f.onlyIfPresent;
+  });
+}
+
+// fieldsMarkup renders the visible fields from the frontmatter's values.
+// The values come from the server's read of the document, so what is
+// drawn here is the document — not a second store the page keeps beside
+// it.
 export function fieldsMarkup(values) {
   const v = values || {};
-  return FIELDS.map(f => fieldMarkup(f, v[f.key])).join('');
+  return visibleFields(v).map(f => fieldMarkup(f, v[f.key])).join('');
 }
 
 export function fieldMarkup(field, value) {

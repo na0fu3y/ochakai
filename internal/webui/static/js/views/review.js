@@ -1,7 +1,7 @@
 // The review queue: what agents drafted, what was reported wrong, what
 // is past its expiry — and the loop's own numbers above them.
 
-import { rejectEntry, verifyEntry } from '../actions.js';
+import { applyStatus, rejectEntry, verifyEntry } from '../actions.js';
 import { api, toast } from '../api.js';
 import { cardThumbs } from '../cards.js';
 import { $, view } from '../dom.js';
@@ -15,7 +15,7 @@ import { debounce, explore } from './explore.js';
 
 // A draft with zero search hits, older than this, is flagged stale — the
 // inventory case (nobody's finding it; a candidate to drop). Sort=usage
-// already sinks these to the bottom; the toggle isolates them.
+// already sinks these to the bottom; the badge names them there.
 export const STALE_DAYS = 14;
 // The windows the flow numbers can be asked about — `days` on the stats
 // call, whose default is the 30 this page opens with. 180 is the
@@ -26,16 +26,15 @@ export const STALE_DAYS = 14;
 export const STATS_WINDOWS = [7, 30, 90, 180];
 // loaded and cursor walk the draft queue a page at a time (design doc
 // 0050 §2.1): the queue is a ledger, so it has an end rather than a cap.
-// days and prefix are what the loop's numbers above it are asked about;
-// both are parameters the stats call already takes.
-export const review = { staleOnly: false, loaded: [], cursor: '', days: 30, prefix: '' };
+// days is what the loop's numbers are asked about; prefix scopes both
+// the numbers and the draft queue below them, so one control answers
+// "how is my subtree doing, and what of it is waiting on me".
+export const review = { loaded: [], cursor: '', days: 30, prefix: '' };
 
 export function viewReview() {
   view.innerHTML = `
     <div class="section-title">draft のレビューキュー</div>
     <div class="read-only-note">この ochakai は read-only のため、レビューの操作は表示されません。キューそのものは本物です。書き込めるデプロイのレビュアーが解消していくのは、これと同じ列です。</div>
-    <p style="color:var(--muted);max-width:48rem">エージェントが書き戻した draft を、求められている順に並べています。順位を決めるのは検索に出た回数ではなく、実際に読み込まれた回数です。直近の期間を先に見て、同じなら通算で比べます。正しいものは検証し、そうでないものは却下してください(理由が <code>status_note</code> として残るため、エージェントは同じ提案を繰り返さなくなります)。一度も読まれていない draft は下に並ぶので、<em>放置されたものだけ</em>に切り替えると仕分けができます。</p>
-    <p style="color:var(--muted);font-size:.9rem;max-width:48rem">検証済みのナレッジには、それ自身のキューが二つあります。<a href="#/search/reported-wrong">再検証</a>(失敗の報告にまだ応えていないナレッジ)と、<a href="#/search/verification-age">検証の古さ</a>(検証の古いものから順)です。検証し直すと、前者からは消え、後者では最後尾に回ります。三つ目の<a href="#/search/stale">期限切れ</a>は、書き手が宣言した期限を過ぎたナレッジを並べます。こちらは検証では解消せず、ナレッジを編集して期限を宣言し直すと消えます。</p>
     <div class="toolbar" style="margin:.2rem 0 .5rem">
       <label class="check" style="white-space:nowrap">期間
         <select id="loop-days" aria-label="集計期間">${STATS_WINDOWS.map(d =>
@@ -48,13 +47,10 @@ export function viewReview() {
     </div>
     <div id="loop-stats"></div>
     <div class="toolbar">
-      <label class="check"><input type="checkbox" id="r-stale" ${review.staleOnly ? 'checked' : ''}>
-        放置されたものだけ(検索ヒット 0 件・作成から ${STALE_DAYS} 日以上)</label>
       <span class="grow"></span>
       <span id="queue-strip" style="display:flex;gap:.35rem">${queueStrip()}</span>
     </div>
     <div id="review-results"><div class="empty">…</div></div>`;
-  $('#r-stale').addEventListener('change', () => { review.staleOnly = $('#r-stale').checked; runReview(); });
   // The directories the tree has loaded, offered as completions — the
   // same list the move dialog completes against, and the reason the
   // scope is typed as a path rather than picked from a fixed menu:
@@ -63,7 +59,7 @@ export function viewReview() {
   $('#loop-days').addEventListener('change', e => { review.days = Number(e.target.value); loadLoopStats(); });
   $('#loop-prefix').addEventListener('input', e => {
     review.prefix = e.target.value.replace(/^\/+|\/+$/g, '').trim();
-    debounce(loadLoopStats, 250);
+    debounce(() => { loadLoopStats(); runReview(); }, 250);
   });
   refreshQueues();
   runReview();
@@ -107,7 +103,7 @@ function sparkline(weeks) {
     <svg viewBox="0 0 ${weeks.length * (w + gap) - gap} ${h}" width="${weeks.length * (w + gap) - gap}"
          height="${h}" role="img" aria-label="直近 ${weeks.length} 週の検証数、古い順: ${
       weeks.map(week => week.verifications).join('、')}">${bars}</svg>
-    <figcaption>直近 ${weeks.length} 週の検証(計 ${total} 件)。左が古い順です</figcaption>
+    <figcaption>週ごとの検証数(直近 ${weeks.length} 週・計 ${total} 件)</figcaption>
   </figure>`;
 }
 
@@ -154,14 +150,9 @@ export async function loadLoopStats() {
   // request: a caller whose grants cover part of the bundle gets their
   // own numbers whether or not they picked a prefix here (design doc
   // 0123). `scope` absent means the whole bundle.
-  const scope = Array.isArray(s.scope) ? s.scope : null;
-  const scoped = scope !== null;
+  const scoped = Array.isArray(s.scope);
   const withheld = !!s.misses?.withheld;
-  const scopeText = scoped
-    ? (scope.length ? scope.map(p => `<code>/${esc(p)}</code>`).join('、') : 'あなたに見えている範囲')
-    : '';
-  out.innerHTML = (scoped ? `
-    <p style="max-width:48rem;margin:0 0 .8rem;color:var(--muted);font-size:.9rem">${scopeText} の下だけを数えています。<strong>該当なしの検索だけは絞れません。</strong>何も返さなかった検索にはナレッジの id が無いため、どこで尋ねられたかを言えないからです。${withheld ? 'そのため、範囲を持つ利用者には出していません — 全体の数は管理者に尋ねてください。' : 'その数と一覧はインスタンス全体のものです。'}下のキューの帯と draft の一覧も絞っていません。</p>` : '') + `
+  out.innerHTML = `
     <div class="tile-band">いまの姿</div>
     <div class="stat-tiles band" style="max-width:52rem;margin:0 0 1rem">
       <div class="tile"><div class="num">${s.concepts?.total ?? 0}</div><div class="lbl">ナレッジ</div></div>
@@ -183,12 +174,24 @@ export async function loadLoopStats() {
     <p style="max-width:48rem;margin:0 0 1.2rem;color:var(--muted);font-size:.9rem">
       ${truncated} 件のナレッジが、埋め込みモデルの入力窓に収まらず<strong>前半だけ</strong>ベクトル検索に載っています(全 ${s.embedding.vectors} 件中)。後半に書かれた内容では見つかりません。語句そのものが含まれていれば字句検索では見つかります。長すぎるナレッジを分けるか、より広い窓のモデルに移すかのどちらかが必要です。</p>` : '') + (gaps.length ? `
     <details style="max-width:48rem;margin:0 0 1.2rem">
-      <summary style="cursor:pointer;color:var(--muted)">該当なしの検索(${scoped ? '全体・' : ''}次に書くもの)</summary>
-      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日で何も返さなかった検索を、多く尋ねられた順に並べています。誰かが解消するキューではありません。答えになるナレッジが書かれれば、この一覧からは自然に消えます。${scoped ? 'この一覧だけは範囲の指定を受けません。何も返さなかった検索は、どこで尋ねられたかを言えないからです。' : ''}</p>
+      <summary style="cursor:pointer;color:var(--muted)">該当なしの検索(次に書くべきもの)</summary>
+      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日で何も返さなかった検索を、多く尋ねられた順に並べています。</p>
       ${gaps.map(g => `<div style="display:flex;gap:.6rem;align-items:baseline;padding:.25rem 0">
         <span class="badge">${g.count}×</span>
         <a href="#/search" class="mono" data-gap="${esc(g.query)}">${esc(g.query)}</a></div>`).join('')}
     </details>` : '');
+  // The strip is drawn from this same answer, so its depths narrow with
+  // the band and the draft list around it (QueueCounts takes the same
+  // filter the feeds take, design doc 0049). A scoped count has to lead
+  // to a scoped feed, so the links carry the prefix into the search view.
+  const strip = $('#queue-strip');
+  if (strip) {
+    strip.innerHTML = queueStrip(s.queues);
+    if (review.prefix) {
+      strip.querySelectorAll('a[href^="#/search/"]').forEach(a =>
+        a.addEventListener('click', () => { explore.prefix = review.prefix; }));
+    }
+  }
   // A gap is a question; clicking it asks it again, which is how a
   // curator sees what is there before writing what is not.
   out.querySelectorAll('[data-gap]').forEach(a => a.addEventListener('click', () => {
@@ -210,17 +213,18 @@ export async function runReview(append = false) {
   const my = runReview._seq = (runReview._seq || 0) + 1;
   const limit = 100;
   let url = '/api/v1/search?sort=usage&status=draft&limit=' + limit;
+  // The scope control above narrows this queue too, so the numbers and
+  // the cards under them answer about the same subtree.
+  if (review.prefix) url += '&prefix=' + encodeURIComponent(review.prefix);
   if (append && review.cursor) url += '&cursor=' + encodeURIComponent(review.cursor);
   else { review.loaded = []; review.cursor = ''; }
   try {
     const page = await api(url);
     if (my !== runReview._seq || out !== $('#review-results')) return; // stale response
-    const hits = review.loaded = review.loaded.concat(page.hits || []);
+    const list = review.loaded = review.loaded.concat(page.hits || []);
     review.cursor = page.cursor || '';
-    let list = hits;
-    if (review.staleOnly) list = list.filter(isStaleDraft);
     if (!list.length) {
-      out.innerHTML = `<div class="empty">${review.staleOnly ? '放置された draft はありません。' : 'レビュー待ちの draft はありません。'}</div>`;
+      out.innerHTML = `<div class="empty">レビュー待ちの draft はありません。</div>`;
       return;
     }
     out.innerHTML = list.map(reviewCard).join('')
@@ -264,10 +268,10 @@ export function reviewCard(h) {
       <span class="type-ico" title="${esc(h.type)}">${icon(h.type)}</span>
       <a class="title" href="${entryHash(h)}" title="ochakai://${esc(h.id)}">${esc(displayTitle(h))}</a>
       <span class="badge draft">draft</span>
-      ${isStaleDraft(h) ? '<span class="badge" title="検索ヒット 0 件で動きもありません(削除の候補)">🕸️ 放置</span>' : ''}
+      ${isStaleDraft(h) ? '<span class="badge" title="作成から日が経っても検索ヒットがありません(削除の候補)">🕸️ 未使用</span>' : ''}
       ${tags}
       <span class="actions write-only" style="margin-left:auto;display:flex;gap:.45rem">
-        <button class="btn small primary" data-act="verify">✓ 検証</button>
+        <button class="btn small primary" data-act="verify" title="検証として記録し、stable にします">✓ 検証</button>
         <button class="btn small danger" data-act="reject">却下</button>
       </span>
     </div>
@@ -281,13 +285,19 @@ export function wireReviewActions(container) {
   container.querySelectorAll('[data-act]').forEach(btn => btn.addEventListener('click', async () => {
     const card = btn.closest('[data-id]');
     const id = card.dataset.id;
-    // Both are rulings against the entry as it stands, so neither needs
-    // the entry's current content — there is no full-replacement PUT here
-    // to clobber a body edited since the queue loaded.
     try {
       if (btn.dataset.act === 'verify') {
         await verifyEntry(id);
-        toast('検証しました。');
+        // This queue lists drafts, so a verified card that stayed made ✓
+        // look like a no-op. The ruling and the promotion stay separate
+        // acts on the wire (design doc 0043 §3.2); the queue composes
+        // them because accepting a draft is what its ✓ means here.
+        try {
+          await applyStatus(id, 'stable');
+          toast('検証し、stable にしました。');
+        } catch (e) {
+          toast('検証しました(stable への変更には失敗: ' + e.message + ')');
+        }
       } else {
         const note = prompt('却下の理由をご記入ください。裁定として残るため、エージェントは同じ提案を繰り返さなくなります。', '');
         if (note === null) return;
@@ -296,6 +306,7 @@ export function wireReviewActions(container) {
       }
       refreshTree(); // the tree shows status badges (and hides rejected)
       runReview();
+      loadLoopStats(); // the band and the strip count what the ruling moved
     } catch (e) {
       toast((btn.dataset.act === 'verify' ? '検証' : '却下') + 'できませんでした: ' + e.message);
     }

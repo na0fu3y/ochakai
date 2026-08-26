@@ -27,20 +27,22 @@ export async function refreshQueues() {
   badge.textContent = total;
   badge.hidden = !total;
   badge.title = total ? `未処理 ${total} 件(draft ${waiting.drafts}・再検証 ${waiting.failed}・期限切れ ${waiting.stale_after})` : '';
-  const strip = $('#queue-strip');
-  if (strip) strip.innerHTML = queueStrip();
 }
 
 // The same three numbers as links into the feed each one counts. Zero is
 // worth printing here (unlike on the tab): on the review page it is the
 // answer to "is there anything else", and it is an answer nothing gave
 // before.
-export function queueStrip() {
-  if (!waiting) return '';
+//
+// counts defaults to the whole instance's; the review page passes the
+// queues from its own scoped stats call, so the strip narrows with the
+// numbers and the draft list around it.
+export function queueStrip(counts = waiting) {
+  if (!counts) return '';
   return [
-    ['#/review', waiting.drafts, 'draft'],
-    ['#/search/reported-wrong', waiting.failed, '再検証'],
-    ['#/search/stale', waiting.stale_after, '期限切れ'],
+    ['#/review', counts.drafts, 'draft'],
+    ['#/search/reported-wrong', counts.failed, '再検証'],
+    ['#/search/stale', counts.stale_after, '期限切れ'],
   ].map(([href, n, label]) =>
     `<a class="badge${n ? ' draft' : ''}" href="${href}">${label} ${n}</a>`).join(' ');
 }

@@ -2,7 +2,6 @@
 // it turns responses into, the read-only banner, and the toast.
 
 import { $ } from './dom.js';
-import { esc } from './escape.js';
 
 // The page always talks to its own origin — both serving paths
 // (`ochakai ui`, `ochakai serve-ui`) proxy /api/v1 with the right
@@ -43,13 +42,16 @@ export async function markPosture() {
 // What this deployment cannot do, and who gets told how to change it
 // (design doc 0131).
 //
-// Two sentences out of one answer. The capability is everybody's,
-// because everybody is who a button that can only fail would have lied
-// to — so the affordance goes away for every caller, the way the write
-// affordances go away on a read-only deployment. The variable that turns
-// it on is an operator's sentence, and it arrives only for a caller the
-// server considers an administrator: **the page never decides who is
-// who**, it renders what the answer carried (design doc 0130 §1).
+// The capability is everybody's, because everybody is who a button that
+// can only fail would have lied to — so the affordance goes away for
+// every caller, the way the write affordances go away on a read-only
+// deployment. The variable that turns it on is an operator's sentence,
+// and it arrives only for a caller the server considers an
+// administrator: **the page never decides who is who**, it renders what
+// the answer carried (design doc 0130 §1). It is kept here and drawn on
+// the files tab — the one place somebody meets the refusal — rather
+// than as a page-wide banner.
+export let FILES_VARIABLE = '';
 function markCapabilities(s) {
   // Absent is not "off". A server that predates the field answers
   // nothing here, and the page goes on offering what it always offered
@@ -57,13 +59,7 @@ function markCapabilities(s) {
   const files = s.files;
   if (!files || files.enabled !== false) return;
   document.body.classList.add('no-files');
-  if (!files.variable) return;
-  const note = $('#setup-note');
-  note.innerHTML = `<strong>このデプロイはファイルを保存できません。</strong>`
-    + `<code>${esc(files.variable)}</code> にバケットを設定すると、ナレッジに画像・PDF・テキストを添付できるようになります。`
-    + `設定するまで、ファイルの追加はどの面からも断られます。`
-    + `<span class="who">この案内は、このデプロイの管理者にだけ表示されています。</span>`;
-  note.hidden = false;
+  FILES_VARIABLE = files.variable || '';
 }
 
 // The archive is a representation of the bundle root, asked for with an

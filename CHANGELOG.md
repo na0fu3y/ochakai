@@ -29,6 +29,36 @@ last entry.
   it to return to the default. The width persists per browser next to
   the collapsed choice. Web UI only — no API, CLI or MCP change.
 
+### Changed
+
+- **The web UI says less, and its review queue empties by verifying.**
+  A curation pass driven by field feedback pared every page's copy down:
+  the long explainers (review queue, access policy, editor hints, the
+  per-tab notes on a concept) are gone or cut to a line, the dev-mode
+  and sandbox banners are one sentence each, and the "cannot store
+  files" setup note moved off the page top onto the files tab it is
+  about. The editor draws only the frontmatter fields the document's
+  type asks for — the Attested Computation contract appears on its own
+  type, and a key a document already carries always keeps its editor —
+  and the fields pane flows with the page instead of scrolling inside
+  itself, with the document pane sticky beside it. On the review page,
+  ✓ 検証 now records the verification *and* promotes the draft to
+  stable, so the queue a ruling resolves visibly shrinks (the two acts
+  stay separate on the wire, design doc 0043 §3.2); the scope input
+  narrows the draft list and the queue chips along with the loop's
+  numbers, and the stale-drafts toggle is gone (sort order and the
+  未使用 badge already carry it). The access page opens directly on its
+  row editor; its JSON textarea is gone — `ochakai access --json` /
+  `-f` remain the JSON surface. Web UI only — no API, CLI or MCP
+  change.
+
+### Fixed
+
+- **The web UI's status picker changes a status again.** The concept
+  page's status dropdown called a helper the module never imported, so
+  every change threw and nothing was saved; the ruling actions beside
+  it were unaffected.
+
 ## [0.27.4] - 2026-08-26
 
 ### Added

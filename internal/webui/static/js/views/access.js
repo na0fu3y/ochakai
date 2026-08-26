@@ -1,26 +1,24 @@
 // Who may read and write under which directory (design doc 0109), on
 // the surface the person who decides it already uses.
 //
-// One table to read and one table to edit, and behind both the same
-// document. The policy is read as a set, because that is how the
-// question arrives — "who can see personnel/" is answered by reading all
-// of it — and it is sent as a set too: the save replaces the whole
-// document the way `ochakai access -f` does, which is what §5 decided
-// and what keeps the wire at one verb instead of three.
+// One table to read and one table to edit. The policy is read as a set,
+// because that is how the question arrives — "who can see personnel/" is
+// answered by reading all of it — and it is sent as a set too: the save
+// replaces the whole policy the way `ochakai access -f` does, which is
+// what §5 decided and what keeps the wire at one verb instead of three.
 //
-// What the rows are is the *editing* of that document. Spelling
-// `human:` and a pair of booleans into JSON by hand is not what deciding
-// a boundary is, and a JSON syntax error is the worst thing to meet
-// while doing it. The document stays one disclosure away, because it is
-// the form the CLI takes and the form that goes into git.
+// The rows are the whole editor. Spelling `human:` and a pair of
+// booleans into JSON by hand is not what deciding a boundary is, and a
+// JSON syntax error is the worst thing to meet while doing it — the
+// JSON form stays on the CLI (`ochakai access --json` / `-f`), which is
+// where git and automation take it from.
 
 import { api, toast } from '../api.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { fmtDate } from '../format.js';
 import {
-  ACTOR_KINDS, ANY_PRINCIPAL, joinPrincipal, parsePolicyDocument, policyDocument,
-  splitPrincipal, validateRules,
+  ACTOR_KINDS, ANY_PRINCIPAL, joinPrincipal, splitPrincipal, validateRules,
 } from '../policy.js';
 import { knownDirs } from '../tree.js';
 
@@ -50,7 +48,7 @@ export async function viewAccess() {
       : `<div class="error-banner" role="alert">アクセスポリシーを読み込めませんでした: ${esc(e.message)}</div>`);
     return;
   }
-  renderAccess(rules, false, version);
+  renderAccess(rules, version);
 }
 
 function ruleRow(r) {
@@ -117,13 +115,10 @@ function editRow(r) {
   </tr>`;
 }
 
-// open keeps the editor open across the re-render a save causes, so the
-// operator reads back the policy they just sent — which is the whole of
-// the advice `ochakai access` gives at the terminal.
 // version is what the editor sends back as If-Match: the page saves the
 // policy it read, and refuses rather than dropping the rules somebody
 // else added in between (design doc 0120).
-export function renderAccess(rules, open = false, version = '') {
+export function renderAccess(rules, version = '') {
   const table = rules.length ? `
     <div class="scroll-x">
       <table class="rules">
@@ -137,22 +132,13 @@ export function renderAccess(rules, open = false, version = '') {
     <code>sales/sample</code> も書けます。表に無いところは、その人には <strong>404</strong> です。見えないのではなく、無いものとして答えます。</p>
     <p style="color:var(--muted);max-width:48rem;font-size:.9rem">バンドル全体にまたがる操作
     (統計・エクスポート・<code>move</code>・再埋め込み・このポリシー自身)は管理者のものです。塞げないものが一つあります。読めるナレッジの本文が、隠した id を名指していれば、その id は本文の中で読めてしまいます。この表が約束するのは、一覧・検索・取得・エクスポート・履歴から<em>出てこない</em>ことまでです。</p>`
-    : `<div class="empty" style="padding:1.5rem 0">境界はまだありません。</div>
-    <p style="color:var(--muted);max-width:48rem;font-size:.9rem">付与が一行も無いデプロイでは、ここに届いた人が全部を読み書きします。<strong>最初の一行が、全員に対して同時に境界を入れます。</strong>段階的に効かせる仕組みはありません。部門ごとに秘匿しながら全社の用語集は検証済みのまま共有する、といった、デプロイを分けるだけでは実現できない要件のための機構です。</p>`;
+    : '';
 
   view.innerHTML = `
     <div class="section-title">アクセス</div>
     ${table}
     <div class="read-only-note">この ochakai は read-only のため、ポリシーは表示のみです。知識の側だけが凍結されて境界は動かせる、という状態を作らないためです。</div>
-    <details class="write-only" id="access-edit"${open ? ' open' : ''}>
-      <summary style="cursor:pointer">編集する</summary>
-      <div class="caution">
-        <strong>保存が誰として記録されるかは、この UI の配り方で決まります。</strong>
-        <code>ochakai ui</code> なら、あなた自身(<code>human:…</code>)です。
-        <code>ochakai serve-ui</code> を IAP 無しで置いた場合は、全員が同じサービスアカウント
-        (<code>process:…</code>)に畳まれるため、<strong>この URL に届く全員がこのポリシーを編集できます</strong>。ポリシーに履歴はありません。残るのは、いまの表と、それを設定した人だけです。
-      </div>
-      <p style="color:var(--muted);max-width:48rem;font-size:.9rem">この表が<strong>ポリシーの全部</strong>です。保存すると、いまサーバーにあるものが、ここに並んでいる行で丸ごと置き換わります。行を消して保存すれば、その付与は無くなります。「ディレクトリ」を空にするとバンドル全体で、入力欄には読み込み済みのディレクトリが候補として出ます。</p>
+    <div class="write-only" id="access-edit">
       <div class="scroll-x">
         <table class="rules edit" id="access-rows">
           <thead><tr><th>ディレクトリ</th><th>対象</th><th>できること</th><th></th></tr></thead>
@@ -160,24 +146,13 @@ export function renderAccess(rules, open = false, version = '') {
         </table>
       </div>
       <datalist id="access-dirs">${knownDirs().map(p => `<option value="${esc(p)}">`).join('')}</datalist>
-      <div id="access-empty" class="empty" style="padding:.8rem 0"${rules.length ? ' hidden' : ''}>付与はまだ一行もありません。</div>
+      <div id="access-empty" class="empty" style="padding:.8rem 0"${rules.length ? ' hidden' : ''}>付与が 1 件も無いあいだは、誰でもすべてを読み書きできます。1 件でも付与すると、全員に同時にアクセス権限境界が入ります。</div>
       <div class="toolbar"><button class="btn small" id="access-add" type="button">＋ 行を追加</button></div>
       <div id="access-error"></div>
-      <details id="access-json">
-        <summary style="cursor:pointer;color:var(--muted);font-size:.9rem">JSON として扱う</summary>
-        <p style="color:var(--muted);max-width:48rem;font-size:.9rem"><code>ochakai access --json</code> が出力するもの、<code>-f</code> が受け取るものと同じ形式です。上の表をそのまま写しているので、git に入れる文書はここからコピーします。貼り付けたものを表に入れるには「行に取り込む」を押してください — 保存が送るのは、いつでも上の表です。</p>
-        <textarea id="access-doc" rows="12" class="mono" spellcheck="false"
-          aria-label="アクセスポリシーの文書">${esc(policyDocument(rules))}</textarea>
-        <div id="access-json-error"></div>
-        <div class="toolbar" style="justify-content:flex-end">
-          <button class="btn small" id="access-import" type="button">行に取り込む</button>
-        </div>
-      </details>
       <div class="toolbar" style="justify-content:flex-end">
-        <button class="btn" id="access-reset" type="button">サーバーの内容に戻す</button>
         <button class="btn primary" id="access-save" type="button">保存</button>
       </div>
-    </details>`;
+    </div>`;
 
   const rowsBody = $('#access-rows tbody');
   if (!rowsBody) return; // read-only: the editor is not on the page
@@ -215,46 +190,12 @@ export function renderAccess(rules, open = false, version = '') {
     afterRowsChanged();
     rowsBody.lastElementChild.querySelector('[data-f="prefix"]').focus();
   });
-  $('#access-reset').addEventListener('click', () => {
-    rowsBody.innerHTML = rules.map(editRow).join('');
-    $('#access-error').innerHTML = '';
-    afterRowsChanged();
-  });
   $('#access-save').addEventListener('click', () => saveAccess(rules, version));
-  // The document is written from the rows every time it is opened, so
-  // what is copied out of it is what would be saved — never a stale
-  // snapshot of the rows as they were rendered.
-  $('#access-json').addEventListener('toggle', e => {
-    if (e.target.open) syncDocument();
-  });
-  $('#access-import').addEventListener('click', () => importDocument());
 }
 
-// afterRowsChanged keeps the two things that describe the rows honest:
-// the "nothing here yet" line and the document behind the disclosure.
+// afterRowsChanged keeps the "nothing here yet" line honest.
 function afterRowsChanged() {
   $('#access-empty').hidden = !!$('#access-rows tbody').children.length;
-  if ($('#access-json').open) syncDocument();
-}
-
-function syncDocument() {
-  $('#access-doc').value = policyDocument(currentRules());
-}
-
-function importDocument() {
-  const errBox = $('#access-json-error');
-  errBox.innerHTML = '';
-  let next;
-  try {
-    next = parsePolicyDocument($('#access-doc').value);
-  } catch (e) {
-    errBox.innerHTML = `<div class="error-banner" role="alert">${esc(e.message)}</div>`;
-    return;
-  }
-  $('#access-rows tbody').innerHTML = next.map(editRow).join('');
-  $('#access-error').innerHTML = '';
-  afterRowsChanged();
-  toast(`${next.length} 行を表に取り込みました。まだ保存していません。`);
 }
 
 // currentRules reads the rows as they stand, without judging them: the
@@ -303,7 +244,7 @@ async function saveAccess(rules, version) {
     const saved = await api('/api/v1/access',
       { method: 'PUT', body: { rules: next }, ifMatch: version ? `"${version}"` : undefined });
     toast('アクセスポリシーを保存しました。');
-    renderAccess(saved.rules || [], true, saved.version);
+    renderAccess(saved.rules || [], saved.version);
   } catch (e) {
     // The precondition failed: somebody replaced the policy while this
     // page held it. Saying so is the whole point — the alternative was

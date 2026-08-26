@@ -2,7 +2,7 @@
 // history, and the actions a reader can take on it.
 
 import { applyStatus, liftRejection, moveEntry, rejectEntry, verifyEntry } from '../actions.js';
-import { BASE, api, toast } from '../api.js';
+import { BASE, FILES_VARIABLE, api, toast } from '../api.js';
 import { hitCard } from '../cards.js';
 import { copyText } from '../clipboard.js';
 import { diffHTML, diffLines, diffStats } from '../diff.js';
@@ -154,11 +154,11 @@ export async function viewDetail(id, heading = '') {
   ].filter(Boolean).join(' · ');
 
   // A passed stale_after is a prompt to re-check, never a claim the entry
-  // is wrong (OKF SPEC §5.5) — the comparison is a plain date one.
-  const staleNote = entry.stale_after
-    ? (entry.stale_after <= new Date().toISOString().slice(0, 10)
-        ? `<div class="status-note">${esc(entry.stale_after)} から期限切れです。内容を確かめ直してください。</div>`
-        : `<div class="provenance">${esc(entry.stale_after)} まで(stale_after)</div>`)
+  // is wrong (OKF SPEC §5.5) — the comparison is a plain date one. A
+  // date still in the future says nothing a reader needs yet, so nothing
+  // is drawn until it passes.
+  const staleNote = entry.stale_after && entry.stale_after <= new Date().toISOString().slice(0, 10)
+    ? `<div class="status-note">${esc(entry.stale_after)} から期限切れです。内容を確かめ直してください。</div>`
     : '';
 
   const tags = (entry.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ');
@@ -295,17 +295,13 @@ export async function viewDetail(id, heading = '') {
     // redrew a slice of the frontmatter in some other shape — which is
     // the duplication document-first exists to remove, and the reason
     // design doc 0044 puts the format itself in front of the reader.
-    document: () => `
-      <p class="provenance" style="margin:0 0 .8rem">ochakai が保存しているままのドキュメントです。
-      OKF の frontmatter と markdown で、「編集」が開くのも export が書き出すのも、このテキストです。</p>
-      <pre class="mono">${esc(document_)}</pre>`,
+    document: () => `<pre class="mono">${esc(document_)}</pre>`,
     // Read-only: links come from the body's markdown links (design doc
     // 0024), so the body editor is where they are changed.
     links: () => {
       const links = entry.links || [];
       if (!links.length) return '<div class="empty">本文はまだ他のナレッジを指していません。</div>';
-      return `<p class="provenance" style="margin:0 0 .8rem">本文の markdown リンクから取り出しています。変更するには本文を編集してください。</p>`
-        + '<table class="kv">' + links.map(l => {
+      return '<table class="kv">' + links.map(l => {
         const target = String(l.target || '').replace(/^ochakai:\/\//, '');
         const href = target ? '#/k/' + idPath(target) : null;
         const text = l.text || target.split('/').pop() || target;
@@ -340,15 +336,17 @@ export async function viewDetail(id, heading = '') {
       }).join('');
       return `
         ${cards || '<div class="empty files-only">ファイルはありません。</div>'}
-        <div class="empty files-off">このデプロイはファイルを保存しません。ナレッジは markdown だけです。</div>
+        <div class="empty files-off">このデプロイはファイルを保存しません。${FILES_VARIABLE
+          ? `<br><code>${esc(FILES_VARIABLE)}</code> にバケットを設定すると添付できるようになります。`
+          : ''}</div>
         <div class="toolbar write-only files-only" style="margin-top:1rem">
           <input type="file" id="att-file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,.txt,.csv,.json" multiple hidden>
           <button class="btn small" id="att-choose">ファイルを選択…</button>
           <span class="provenance" id="att-chosen" style="margin:0"></span>
           <button class="btn small primary" id="att-upload">ファイルを追加</button>
         </div>
-        <p class="provenance write-only files-only">形式は問わず、1 ファイル 5 MiB までです。本文から参照しておくと
-        (<code>![alt](${esc(lastSeg)}/name.png)</code> または <code>[name](${esc(lastSeg)}/name.txt)</code>)、検索で見つかるようになり、OKF export にも残ります。</p>`;
+        <p class="provenance write-only files-only">本文から参照しておくと
+        (<code>![alt](${esc(lastSeg)}/name.png)</code> または <code>[name](${esc(lastSeg)}/name.txt)</code>)、埋め込みできるようになります。</p>`;
     },
     linked: () => '<div class="empty">…</div>',
     usage: () => '<div class="empty">…</div>',
@@ -396,13 +394,12 @@ export async function viewDetail(id, heading = '') {
           <div class="tile"><div class="num">${u.worked ?? 0}</div><div class="lbl">成功</div></div>
           <div class="tile"><div class="num">${u.failed ?? 0}</div><div class="lbl">失敗</div></div>
         </div>
-        <p class="provenance">${u.last_used_at ? '最終利用: ' + esc(fmtDate(u.last_used_at)) : 'まだ使われていません'}</p>`;
+        <p class="provenance">${u.last_used_at ? '最終利用日: ' + esc(fmtDate(u.last_used_at)) : 'まだ使われていません'}</p>`;
     },
     linked: async () => {
       const { hits: entries = [] } = await api('/api/v1/search?links_to=' + encodeURIComponent(entry.id) + '&limit=100');
       return () => (entries && entries.length)
-        ? `<p class="provenance" style="margin:0 0 .8rem">このナレッジを指しているナレッジです。このナレッジ自身のリンクは「リンク」タブにあります。</p>`
-          + entries.map(hitCard).join('')
+        ? entries.map(hitCard).join('')
         : '<div class="empty">このナレッジを指しているものは、まだありません。</div>';
     },
     history: async () => {
@@ -429,9 +426,7 @@ export async function viewDetail(id, heading = '') {
           </td>
         </tr>`;
       }).join('');
-      return () => `
-        <p class="provenance" style="margin:0 0 .8rem">すべての変更を新しい順に並べています。誰が何を変えたのかを差分で、そのときの全文をドキュメントで確かめられます。</p>
-        <table class="kv">${rows}</table>`;
+      return () => `<table class="kv">${rows}</table>`;
     },
   };
   // Links to concepts that are not there, drawn as what they are. The

@@ -63,9 +63,6 @@ export async function viewEditor(id, prefix = '') {
           <input type="text" id="e-id" class="mono" value="${esc(entryID)}"
                  placeholder="sales/monthly-revenue"
                  ${editing ? 'disabled' : 'required'}>
-          <div class="hint">${editing
-            ? 'ナレッジの置き場所です(移動はナレッジのページから行います)。'
-            : 'ディレクトリを「/」で区切ったフルパスです。最後の区切りがナレッジの名前になります(例: 売上、monthly-revenue)。一緒に読まれるべきものは、一緒に置いてください。'}</div>
         </div>`;
 
   view.innerHTML = `
@@ -82,7 +79,7 @@ export async function viewEditor(id, prefix = '') {
         <div class="pane">
           <div class="pane-head">ドキュメント</div>
           <textarea id="e-doc" rows="30" class="mono" spellcheck="false" required>${esc(doc)}</textarea>
-          <div class="hint"><code>---</code> の行にはさまれた OKF frontmatter、そのあとに markdown を書きます。左の欄はこの本文を読んで描かれ、左で直すとここが書き換わります。どちらで書いても、保存されるのはこのドキュメントです。他のナレッジへは、そのパスへの markdown リンク(<code>[revenue](/metrics/revenue.md)</code>)で結ぶと、両方向のリンクになります。ochakai が定義していないキーは書いたまま保たれます。サーバーが持つキー(<code>generated</code>・<code>verified</code>・<code>created_by</code>)は、あなたが決めるものではないため、書いてあっても無視されます。</div>
+          <div class="hint">他のナレッジへは、そのパスへの markdown リンク(<code>[revenue](/metrics/revenue.md)</code>)で結びます。</div>
         </div>
       </div>
       <div id="editor-error"></div>
@@ -248,12 +245,16 @@ export async function viewEditor(id, prefix = '') {
       }
     }
     await push(sets, value === undefined ? [field.key] : null);
-    // Only the seeding branch redraws, so a key the type change added
-    // has to reach its own field by hand.
-    for (const k of Object.keys(sets)) {
-      if (k === field.key) continue;
-      const input = fields.querySelector(`[data-fm-key="${k}"]:not([data-fm-path])`);
-      if (input && !input.value) input.value = sets[k];
+    // A type change decides which fields are drawn (frontmatter.js
+    // filters on it), so it is the one non-seeding edit that redraws the
+    // form — the keys it added reach their fields in the same stroke.
+    // Safe here where push's no-redraw rule is not: the change fired
+    // because its writer left the type field.
+    if (field.key === 'type') {
+      await inOrder(async () => {
+        const out = await frontmatter({ document: docEl.value });
+        if (out) draw(out);
+      });
     }
   });
 

@@ -1,9 +1,8 @@
-// The access policy as rows and as a document (design doc 0109 §5): the
-// grants an operator edits, the text the CLI takes, and the validation
-// both go through before either is sent.
+// The access policy as rows (design doc 0109 §5): the grants an operator
+// edits, and the validation they go through before being sent.
 //
 // A module of its own, importing nothing a browser has to provide, for
-// the reason documents.js is one — the round trip is what a test can
+// the reason documents.js is one — the normalization is what a test can
 // hold, and this is the half of the access view worth holding.
 
 // The spellings a grant can name, mirroring domain.ValidPrincipal.
@@ -13,61 +12,14 @@
 export const ACTOR_KINDS = ['human', 'process'];
 export const ANY_PRINCIPAL = '*';
 
-// policyDocument renders the rules as the document the API takes back —
-// the same one `ochakai access --json` prints and `-f` reads, so an
-// operator can move a policy between the two surfaces by copying it.
-//
-// granted_at and granted_by are left out. The server records them and
-// ignores them on write, so a document that carried them would invite an
-// edit that silently does nothing; who granted what belongs in the table
-// above the editor, where nothing looks editable.
-//
-// Nothing here validates: the rows in front of the operator are allowed
-// to be half-typed, and this is what shows them the document they are
-// building out of them. The save is the one place that refuses.
-export function policyDocument(rules) {
-  const body = (rules || []).map(r => ({
-    prefix: r.prefix || '',
-    principal: r.principal || '',
-    may_write: r.may_write === true,
-    // Carried only where it is set, so a policy that delegates nothing
-    // reads exactly as it did before this field existed (design doc 0124).
-    ...(r.may_admin === true ? { may_admin: true } : {}),
-  }));
-  return JSON.stringify({ rules: body }, null, 2) + '\n';
-}
-
-// parsePolicyDocument turns the document back into rules, or throws a
-// sentence naming the row that is wrong.
-//
-// The server validates all of this again and stays the only judge — this
-// is here because it can say *which row*, and what is in front of the
-// operator is a thing with rows. The same division the concept editor
-// draws with its frontmatter check (design doc 0044 §2.3).
-export function parsePolicyDocument(text) {
-  let doc;
-  try {
-    doc = JSON.parse(text);
-  } catch (e) {
-    throw new Error('JSON として読めません: ' + e.message);
-  }
-  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
-    throw new Error('rules を一つ持つオブジェクトにしてください。');
-  }
-  if (!Array.isArray(doc.rules)) {
-    throw new Error('rules の配列がありません。付与を全部消すなら {"rules": []} です。');
-  }
-  return validateRules(doc.rules);
-}
-
-// validateRules is the check both editors share: the rows the form holds
-// and the rows a pasted document parses to are one thing by the time
-// they arrive here, so neither shape can send what the other would have
-// refused.
+// validateRules normalizes the rows the form holds into the rules the
+// wire takes, or throws a sentence naming the row that is wrong. The
+// server validates all of this again and stays the only judge — this is
+// here because it can say *which row*, and what is in front of the
+// operator is a thing with rows.
 //
 // The error carries the position it is about (`row`, 1-based) as well as
-// naming it in the sentence, because the form can point at the row and a
-// document cannot.
+// naming it in the sentence.
 export function validateRules(list) {
   const seen = new Set();
   return (list || []).map((r, i) => {

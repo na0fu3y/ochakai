@@ -102,10 +102,27 @@ test('a date the control cannot hold is shown as text rather than erased', () =>
   assert.match(odd, /type="text"[^>]*value="2026-12-31T09:00:00Z"/);
 });
 
+test('a field appears when its type asks for it or its key is present', () => {
+  // The Attested Computation contract (SPEC §10.2) is noise on every
+  // other type, and usage_window earns its place only when a document
+  // brings it. A key the document carries always gets its editor —
+  // hiding one would make it uneditable without saying so.
+  const base = fieldsMarkup({ type: 'Insight' });
+  assert.ok(!base.includes('data-fm-key="runtime"'), 'runtime drawn for a type with no contract');
+  assert.ok(!base.includes('data-fm-key="usage_window"'), 'usage_window drawn with no key to edit');
+  const ac = fieldsMarkup({ type: 'Attested Computation' });
+  assert.ok(ac.includes('data-fm-key="runtime"'), 'the contract is missing from its own type');
+  const carried = fieldsMarkup({ type: 'Insight', runtime: 'bigquery', usage_window: { from: '2026-01-01' } });
+  assert.ok(carried.includes('data-fm-key="runtime"'), 'a carried key lost its editor');
+  assert.ok(carried.includes('data-fm-key="usage_window"'), 'a carried usage_window lost its editor');
+});
+
 test('every control says which key and column it belongs to', () => {
   // The editor reads the form back by walking these markers; a control
-  // without them is a value that never reaches the document.
-  const html = fieldsMarkup({});
+  // without them is a value that never reaches the document. Rendered
+  // from a document that draws every field: the Attested Computation
+  // contract by its type, usage_window by being present.
+  const html = fieldsMarkup({ type: 'Attested Computation', usage_window: { from: '2026-01-01' } });
   for (const f of FIELDS) {
     assert.ok(html.includes(`data-fm-key="${f.key}"`) || html.includes(`data-fm-rows="${f.key}"`)
       || html.includes(`data-fm-list="${f.key}"`), `${f.key} has no marker`);

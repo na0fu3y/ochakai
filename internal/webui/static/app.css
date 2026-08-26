@@ -458,12 +458,6 @@ table.rules.edit td.who { white-space: nowrap; }
 table.rules.edit td.who select { width: 10rem; }
 table.rules.edit td.who input[type=text] { width: 12rem; margin-left: .35rem; }
 table.rules.edit tr.invalid > td { background: var(--rejected-bg); }
-/* A warning no server field turns on or off: the page cannot know which
-   way it is being served (design doc 0130 §1), so it names both. */
-.caution {
-  background: var(--rejected-bg); border: 1px solid var(--rejected-bd); color: var(--rejected-fg);
-  border-radius: 8px; padding: .6rem .9rem; margin: .8rem 0; font-size: .92rem; max-width: 48rem;
-}
 .stat-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .8rem; max-width: 42rem; }
 .stat-tiles .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .9rem 1rem; }
 .tile .num { font-size: 1.7rem; font-weight: 700; }
@@ -661,9 +655,10 @@ mark { background: var(--mark-bg); color: var(--mark-fg); border-radius: 3px; pa
   text-transform: none; margin-bottom: .5rem;
   padding-bottom: .3rem; border-bottom: 1px solid var(--border);
 }
-/* The fields are the taller pane on anything real, so it scrolls inside
-   itself rather than dragging the textarea off the screen. */
-@media (min-width: 901px) { #fm-fields { max-height: 68vh; overflow-y: auto; padding-right: .4rem; } }
+/* The fields flow with the page — an inner scrollbar hid most of the
+   form. The document pane sticks instead, so the text the fields are
+   writing stays in view while the page scrolls. */
+@media (min-width: 901px) { .editor-panes .pane:last-child { position: sticky; top: 3.8rem; } }
 #fm-fields .fieldset { margin-bottom: .9rem; }
 /* The frontmatter's groups hold one to six columns, not three, and a
    fixed trio left an attester's single path a third of the width with
@@ -717,7 +712,7 @@ body.read-only .read-only-note {
    so they take the view's text column: 62rem less the 1.2rem <main>
    insets its text by, which puts a banner's edge where the first line
    of the page starts. */
-.dev-note, .sandbox-note, .setup-note {
+.dev-note, .sandbox-note {
   max-width: calc(min(62rem, 100%) - 2.4rem); margin: 1.4rem auto 0;
 }
 /* A sandbox is writable, so nothing is hidden — what it needs is to
@@ -740,20 +735,6 @@ body.sandbox .sandbox-note {
   border-radius: 8px; padding: .6rem .9rem;
   font-size: .92rem;
 }
-/* What the deployment cannot do because a variable is unset, shown to
-   whoever may set it (design doc 0131). Quieter than both of its
-   neighbours: nothing here is being lost or misrecorded — something is
-   simply not switched on — and the caller reading it is the one person
-   who can end it. Hidden until api.js fills it, since an administrator
-   is not something the page can tell on its own. */
-.setup-note {
-  background: var(--surface); border: 1px dashed var(--border);
-  border-radius: 8px; padding: .6rem .9rem;
-  font-size: .92rem; color: var(--muted);
-}
-.setup-note code { font-size: .92em; }
-.setup-note .who { display: block; margin-top: .3rem; font-size: .88em; }
-
 /* A deployment with no bucket stores markdown concepts only (design doc
    0075 §1), so every affordance that would write or read a file can only
    be refused. Hidden rather than disabled, for the reason the read-only
