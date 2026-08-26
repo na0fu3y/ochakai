@@ -5,7 +5,7 @@
 import { READ_ONLY, api, toast } from './api.js';
 import { withStatus } from './documents.js';
 import { $ } from './dom.js';
-import { idPath } from './format.js';
+import { conceptURL, idPath } from './format.js';
 import { refreshQueues } from './queues.js';
 import { refreshTree } from './tree.js';
 

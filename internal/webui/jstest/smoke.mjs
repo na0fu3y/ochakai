@@ -347,15 +347,14 @@ try {
     await waitFor(`${textOf('#loop-stats')}.includes('直近 7 日に起きたこと')`), shown);
 
   // examples/demo keeps its metrics under metrics/, and a scope the base
-  // does not have would draw the same note over nothing at all.
+  // does not have would change nothing at all.
   await evalJS(`(() => { const p = document.querySelector('#loop-prefix'); if (!p) return;
     p.value = 'metrics'; p.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   // Scoped, the misses beside the other numbers are still the whole
-  // instance's and cannot be anything else (design doc 0069 §5.1) — so
-  // the reading says which of its numbers did not narrow.
-  await check('a scoped reading says what it could not scope',
-    await waitFor(`(() => { const t = ${textOf('#loop-stats')};
-      return t.includes('該当なしの検索だけは絞れません') && t.includes('/metrics'); })()`), shown);
+  // instance's and cannot be anything else (design doc 0069 §5.1) — the
+  // one number that did not narrow says so on its tile.
+  await check('a scoped reading marks the number it could not scope',
+    await waitFor(`${textOf('#loop-stats')}.includes('該当なしの検索(全体)')`), shown);
 
   // The access policy (design doc 0109 §5). The tab is absent until the
   // server answers for it, so this is also the check that the probe ran
@@ -365,26 +364,18 @@ try {
     await waitFor(`(() => { const a = document.querySelector('#nav-access');
       return !!a && !a.hidden && getComputedStyle(a).display !== 'none'; })()`), shown);
   await go('#/access');
-  await check('the access policy renders', await waitFor(`${textOf('#view')}.includes('境界はまだありません')`), shown);
-  // The document the CLI's -f takes is still there, seeded from what the
-  // server just sent — behind two disclosures now, which is why this
-  // asks the textarea's value rather than what is on screen.
-  await check('the policy is offered as the document `ochakai access -f` takes',
-    await waitFor(`(() => { const t = document.querySelector('#access-doc');
-      return !!t && t.value.includes('"rules"'); })()`), shown);
-  // A grant is added as a row of controls, and the document is written
-  // from the rows — so what an operator would copy into git is what the
-  // save would send, never a snapshot of how the rows started.
-  await evalJS(`(() => { document.querySelector('#access-edit').open = true;
-    document.querySelector('#access-add').click();
+  // CI's deployment has no policy, so the page opens straight on the
+  // editor with the sentence that says what no grants means.
+  await check('the access policy renders', await waitFor(`${textOf('#view')}.includes('付与が 1 件も無い')`), shown);
+  // A grant is added as a row of controls, and the "no grants yet" line
+  // yields to it.
+  await evalJS(`(() => { document.querySelector('#access-add').click();
     const tr = document.querySelector('#access-rows tbody tr');
     tr.querySelector('[data-f="prefix"]').value = 'metrics';
-    tr.querySelector('[data-f="name"]').value = 'tanaka@example.co.jp';
-    document.querySelector('#access-json').open = true; })()`);
-  await check('a grant typed as a row is the document the CLI takes',
-    await waitFor(`(() => { const t = document.querySelector('#access-doc');
-      return !!t && t.value.includes('"metrics"')
-        && t.value.includes('human:tanaka@example.co.jp'); })()`), shown);
+    tr.querySelector('[data-f="name"]').value = 'tanaka@example.co.jp'; })()`);
+  await check('a grant is typed as a row of controls',
+    await waitFor(`(() => { const tr = document.querySelector('#access-rows tbody tr');
+      return !!tr && document.querySelector('#access-empty').hidden; })()`), shown);
 
   await go('#/new');
   await check('the editor renders', await waitFor(`!!document.querySelector('#view textarea')`), shown);

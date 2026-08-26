@@ -315,11 +315,13 @@ func TestTheUploadIsHiddenWhereFilesAreUnsupported(t *testing.T) {
 	// The variable that would turn files on is the server's to send or
 	// withhold. A page that decided this for itself would be deciding
 	// who is an administrator, which it cannot know (design doc 0130 §1).
-	if !strings.Contains(body, "if (!files.variable) return;") {
-		t.Errorf("the setup banner is not gated on the server having sent the variable:\n%s", body)
+	// It is drawn on the files tab — where the refusal is met — not as a
+	// page-wide banner.
+	if !strings.Contains(body, "FILES_VARIABLE = files.variable") {
+		t.Errorf("the page no longer keeps the variable the server sent for the files tab to draw:\n%s", body)
 	}
-	if tag := section(t, asset(t, "index.html"), `id="setup-note"`, ">"); !strings.Contains(tag, "hidden") {
-		t.Errorf("the setup banner ships visible: %s", tag)
+	if !strings.Contains(detail, "FILES_VARIABLE") {
+		t.Error("the files tab no longer tells an administrator which variable turns files on")
 	}
 }
 
