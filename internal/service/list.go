@@ -18,8 +18,9 @@ import (
 // MCP (search_concepts) both expose, so the two cannot drift: one place
 // decides whether a request searches or lists, validates the mode, and
 // runs it. A sort mode names one of the listing feeds (see list); with no
-// sort, a source filter and no query is the reverse lookup; otherwise it
-// is a search.
+// sort and no query, a source or links_to filter is the reverse lookup
+// and anything else is the plain enumeration, in address order;
+// otherwise it is a search.
 //
 // Sort and query are mutually exclusive rather than combined: a feed is a
 // queue a reviewer works through, and ranking it by relevance to a query
@@ -64,6 +65,19 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort, cursor string, 
 		case f.LinksTo != "":
 			return s.list(ctx, sortByLinksTo, cursor, f, limit)
 		}
+		// No text to rank by and no feed to walk: what is left is the set
+		// the filters describe — "everything under this directory", and
+		// with no filter at all, the base. That is a listing like the two
+		// above and answers the same way: address order, a cursor to walk
+		// it, and no usage recorded, which is what keeps enumerating a
+		// subtree out of the very counts the usage feed ranks by.
+		//
+		// It was refused for a while, on the grounds that a filter
+		// narrows a listing rather than making one. But address order is an order, the reverse lookups
+		// have always been listed in it, and a caller who wants a subtree
+		// had to borrow a feed's ordering to get one — naming `usage` to
+		// ask a question that has nothing to do with usage.
+		return s.list(ctx, sortByAddress, cursor, f, limit)
 	}
 	if cursor != "" {
 		return nil, searchBoundError()
@@ -75,13 +89,16 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort, cursor string, 
 	return &Listing{Hits: hits, Degraded: degraded}, nil
 }
 
-// The listing modes a reverse-lookup filter with no query selects.
-// Neither is one of domain.ListSorts: no caller can ask for them by name,
-// because the filter already says what is wanted. They are distinct so
-// that a cursor names the listing it came from.
+// The listing modes a query-less request selects for itself: the two
+// reverse lookups, and the enumeration that is left when neither filter
+// is set. None is one of domain.ListSorts — no caller can ask for them
+// by name, because the request already says which one it is. They are
+// distinct so that a cursor names the listing it came from, even though
+// all three walk the same address order.
 const (
 	sortBySource  = "source"
 	sortByLinksTo = "links_to"
+	sortByAddress = "address"
 )
 
 // askableKeys are the frontmatter keys "fm." answers, and askableHint is
@@ -176,6 +193,8 @@ func checkedFilter(f store.Filter) (store.Filter, error) {
 //     editing the concept to declare a new expiry (design doc 0037 §2.2).
 //   - source — the concepts citing one resource, the reverse of
 //     sources[].resource (design doc 0037 §2.3).
+//   - address — everything the filters match, by id: the enumeration a
+//     request with no query, no feed and no reverse lookup asks for.
 //
 // Every mode pages: each has a total order ending in the id, so a cursor
 // carries a position in it and the caller walks past the cap instead of
@@ -220,9 +239,11 @@ func (s *Service) listPage(ctx context.Context, sort string, f store.Filter, aft
 	switch sort {
 	case "stale_after":
 		list = s.Store.ListByStaleAfter
-	case sortBySource, sortByLinksTo:
-		// Both reverse lookups are the same query with a different
-		// filter, in address order (design doc 0050: a listing pages).
+	case sortBySource, sortByLinksTo, sortByAddress:
+		// The two reverse lookups and the plain enumeration are one
+		// query under three different filters, in address order (design
+		// doc 0050: a listing pages). The mode names them apart only so
+		// a cursor cannot cross between them.
 		list = s.Store.ListByAddress
 	}
 	entries, err := list(ctx, f, after, limit)

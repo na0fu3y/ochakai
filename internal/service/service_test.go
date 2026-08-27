@@ -239,7 +239,10 @@ func TestSearchRejectsEmptyQuery(t *testing.T) {
 // differently: an unknown sort is a client error, and a sort combined
 // with a query is one for every mode in domain.ListSorts (a feed is a
 // queue to work through, not something to rank by relevance). All of it
-// runs before any store access — the Service below has none.
+// runs before any store access — the Service below has none, which is
+// also why the one combination that is now answered rather than refused,
+// a request with neither a query nor a feed, is pinned in an integration
+// test instead.
 func TestSearchOrListValidation(t *testing.T) {
 	s := &Service{}
 	ctx := context.Background()
@@ -255,13 +258,13 @@ func TestSearchOrListValidation(t *testing.T) {
 			t.Errorf("sort=%s with a query: got %v, want a cannot-be-combined InvalidInputError", sort, err)
 		}
 	}
-	if _, err := s.SearchOrList(ctx, "  ", "", "", store.Filter{}, 0); !errors.As(err, &inputErr) ||
-		!strings.Contains(err.Error(), "needs a query") {
-		t.Errorf("neither query nor sort: got %v, want a needs-a-query InvalidInputError", err)
-	}
-	// The way out of that error is a listing mode, so the message has to
-	// name all of them. It named three for as long as there were three.
-	_, err = s.SearchOrList(ctx, "", "", "", store.Filter{}, 0)
+	// A request with neither is no longer refused — it enumerates, which
+	// needs a store, so TestEnumerationListsInAddressOrderIntegration
+	// covers it.
+	// What still has to hold here is that the guard the ranking half
+	// keeps names every feed, since a caller who reaches it directly has
+	// only that sentence to learn them from.
+	_, _, err = s.Search(ctx, "", store.Filter{}, 0)
 	for _, sort := range domain.ListSorts {
 		if !strings.Contains(err.Error(), sort) {
 			t.Errorf("the needs-a-query message never mentions sort=%s: %v", sort, err)

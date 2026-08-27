@@ -145,9 +145,12 @@ export async function runSearch(append = false) {
   else if (explore.failedFeed) p.set('sort', 'failed');
   else if (explore.expiredFeed) p.set('sort', 'stale_after');
   else if (q) p.set('q', explore.q);
-  // Nothing selects a mode: the landing view lists by demand instead of
-  // searching, since an empty q is a 400 (searching needs a query to rank
-  // by). A source filter alone is already a listing, so it stays put.
+  // Nothing selects a mode: the landing view lists by demand rather than
+  // by address. A request carrying no mode at all is the plain
+  // enumeration, which this view could ask for and deliberately does not
+  // — what somebody opens Explore for is the queue, and the tree beside
+  // it is already the address order. A source filter alone is already a
+  // listing, so it stays put.
   else if (!explore.source) p.set('sort', 'usage');
   for (const t of explore.types) p.append('type', t);
   for (const s of explore.statuses) p.append('status', s);

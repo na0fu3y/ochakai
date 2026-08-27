@@ -143,22 +143,33 @@ paths:
         two feeds above, verifying does not clear this one: the date is
         the writer's declaration, so a concept leaves only when someone
         edits it to declare a new expiry (or removes the declaration).
-        Exactly one of q and sort is required: combining them is a 400,
-        and so is omitting both (searching needs a query to rank by).
-        source and prefix are filters rather than modes, so they compose
-        with either.
-        A listing — any sort, or source with no q — pages: it answers
+        q and sort are alternatives and neither is required: q ranks, sort
+        walks a feed, and asking for both at once is a 400. A request
+        with neither lists the concepts the filters match in address
+        order — the plain enumeration, and with no filter at all, the
+        base. source and links_to are the two reverse lookups of that
+        same listing; they and prefix are filters rather than modes, so
+        they compose with a query or with a sort as well.
+        A listing — any sort, or any request with no q — pages: it answers
         with a cursor when more concepts follow, and walks past the limit
         one page at a time (design doc 0068 §2.1). A search does not: it is
         bounded by limit, and passing a cursor with q is a 400.
+        Only a search records what it read: a listing is how the review
+        feeds and the enumeration are walked, and counting those would
+        inflate the very usage the feeds rank by.
       parameters:
         - name: q
           in: query
-          description: Search text. Required unless sort is set.
+          description: >
+            Search text. Omit it and the endpoint lists rather than ranks:
+            a feed if sort is set, otherwise the filters' own matches in
+            address order.
           schema: { type: string }
         - name: sort
           in: query
-          description: Mutually exclusive with q.
+          description: >
+            Which feed to walk. Mutually exclusive with q; omit both to
+            list in address order.
           schema: { type: string, enum: [verified_at, usage, failed, stale_after] }
         - name: type
           in: query
@@ -487,11 +498,6 @@ paths:
                   summary: q and sort are mutually exclusive
                   value:
                     error: sort=usage lists concepts; it cannot be combined with a search query (q)
-                    code: invalid
-                noQuery:
-                  summary: Neither q nor sort was given
-                  value:
-                    error: search needs a query; use sort=verified_at|usage|failed|stale_after to list concepts without one, or source=URI to list what cites a resource
                     code: invalid
                 cursorOnSearch:
                   summary: A ranking has no next page

@@ -30,14 +30,17 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 	// macOS path) must still match it byte-wise.
 	query = domain.Normalize(query)
 	// An empty query has nothing to rank by: SearchLexical splits the
-	// query into fragments and gets none, so guard here — once, for
-	// every surface — and point the caller at the listing modes.
+	// query into fragments and gets none. SearchOrList now answers a
+	// query-less request with a listing rather than sending it here, so
+	// this guards a direct caller of the ranking half — a surface that
+	// reaches past the router — and tells it what the router would have
+	// done instead.
 	if strings.TrimSpace(query) == "" {
-		// The modes come from domain.ListSorts rather than a sentence:
+		// The feeds come from domain.ListSorts rather than a sentence:
 		// this message named three of them for as long as there were
 		// three, and stale_after (design doc 0037) never reached it.
-		return nil, false, Invalidf("search needs a query; use sort=%s to list concepts without one, "+
-			"or source=URI to list what cites a resource", strings.Join(domain.ListSorts, "|"))
+		return nil, false, Invalidf("search needs a query; a request without one lists instead — "+
+			"in address order, or by feed with sort=%s", strings.Join(domain.ListSorts, "|"))
 	}
 	f, err := checkedFilter(f)
 	if err != nil {

@@ -175,6 +175,10 @@ func (e *APIError) Error() string {
 
 // SearchParams are the query parameters of GET /api/v1/search.
 type SearchParams struct {
+	// Query ranks the answer by relevance. Empty is a request rather
+	// than a mistake: with no Sort and neither reverse lookup set, the
+	// server lists what the filters match in address order — the plain
+	// enumeration, which pages like every other listing.
 	Query    string
 	Types    []string
 	Statuses []string

@@ -1024,3 +1024,102 @@ func TestOKFFamilyValidationIntegration(t *testing.T) {
 		t.Fatalf("editing a source's title: changed=%v err=%v, want a write", changed, err)
 	}
 }
+
+// A request with no query and no feed is the plain enumeration: the set
+// the filters describe, in address order (design doc 0068 §2). It is what
+// a curator asks to take stock of a directory — "what is under here" —
+// and until this landed the only way to ask was to name a feed whose
+// order had nothing to do with the question.
+//
+// Two things have to hold, and neither is visible from one call. The
+// order is the id, so a caller can pair the answer with a destination and
+// a script can diff it. And nothing is recorded as read: walking a
+// subtree is not demand for what is in it, and the usage feed ranks on
+// exactly that count (design doc 0069), so an enumeration that counted
+// would move the queue a reviewer works from.
+func TestEnumerationListsInAddressOrderIntegration(t *testing.T) {
+	dbURL := testdb.URL(t)
+	ctx := context.Background()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler)}
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+
+	run := testdb.Unique(t, "svcit-enumerate-")
+	// Created out of address order, so an answer that came back in
+	// insertion order would fail rather than pass by luck.
+	var want []string
+	for _, seg := range []string{"c", "a", "b"} {
+		id := run + "/" + seg
+		want = append(want, id)
+		if err := s.Create(ctx, &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: "草案 " + seg,
+			Status: domain.StatusDraft, CreatedBy: actor,
+		}, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	slices.Sort(want)
+
+	filter := func() store.Filter { return store.Filter{Prefixes: []string{run}} }
+	// A query of nothing but spaces is a request with nothing to rank by,
+	// which is the same request as one carrying no query at all — the
+	// service trims before it decides, so the two cannot diverge.
+	for _, query := range []string{"", "  \t"} {
+		page, err := svc.SearchOrList(ctx, query, "", "", filter(), 100)
+		if err != nil {
+			t.Fatalf("query %q: %v", query, err)
+		}
+		var got []string
+		for _, h := range page.Hits {
+			got = append(got, h.ID)
+		}
+		if !slices.Equal(got, want) {
+			t.Errorf("query %q listed %v, want %v in address order", query, got, want)
+		}
+		if page.Cursor != "" {
+			t.Errorf("query %q: a listing that ended handed back a cursor: %q", query, page.Cursor)
+		}
+	}
+
+	// The whole base is the same listing with the prefix dropped: asking
+	// for everything is a request the server answers rather than a
+	// mistake it reports. The test database is shared, so what is pinned
+	// is that this run's entries are in it, still in address order.
+	all, err := svc.SearchOrList(ctx, "", "", "", store.Filter{}, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var mine []string
+	for _, h := range all.Hits {
+		if strings.HasPrefix(h.ID, run+"/") {
+			mine = append(mine, h.ID)
+		}
+	}
+	// A shared database can hold more than one page of entries before
+	// this run's, so an unfiltered walk may not reach them at all. What
+	// it must never do is hand them back out of order.
+	if !slices.IsSorted(mine) {
+		t.Errorf("the unfiltered listing is out of address order: %v", mine)
+	}
+
+	if err := s.FlushUsage(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range want {
+		u, err := svc.Usage(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if u.SearchHits != 0 || u.Fetches != 0 {
+			t.Errorf("%s was counted as read by an enumeration: %d search hits, %d fetches",
+				id, u.SearchHits, u.Fetches)
+		}
+	}
+}

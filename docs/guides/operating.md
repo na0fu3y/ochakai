@@ -899,7 +899,9 @@ Cloud Run job を叩き、job が既知のバンドルを書き戻す形にす�
 ```sh
 # ジョブが実行するもの。ベースを空にしてから、種のバンドルを入れ直す。
 ochakai export - > /tmp/before.tar.gz   # 任意: 直前の状態を残したいとき
-ochakai list --json | jq -r '.hits[].id' | while read -r id; do
+# フィードもフィルタも渡さない list は、id 順の素の列挙である。
+# 1 ページずつ返るので、ベースが 1000 件を超えるならもう一周要る。
+ochakai list --limit 1000 --json | jq -r '.hits[].id' | while read -r id; do
   ochakai delete "$id" && ochakai purge "$id"
 done
 ochakai import /seed
