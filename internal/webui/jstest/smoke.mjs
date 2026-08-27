@@ -316,6 +316,52 @@ try {
     await waitFor(`location.hash.startsWith('#fn-')
       && !!document.querySelector('#view .md:not(.desc) .footnotes')`), shown);
 
+  // The status picker, driven end to end. It is here because this is the
+  // check that would have caught what the picker shipped broken from
+  // v0.21.0 to v0.27.4: applyStatus threw a ReferenceError on its first
+  // line, its own handler caught it and turned it into a toast, and so
+  // there was no console error and no blank panel — every check above
+  // this line passed while the one control that writes changed nothing.
+  //
+  // It is the only write the smoke makes, and it is put back: flipped to
+  // the other value and flipped again, asserting the badge each way,
+  // because a picker that always redraws the same pill would pass a
+  // one-way check. The concept keeps an explicit `status:` line it may
+  // not have had (the value it names is the one it started with), which
+  // is what a throwaway database is for.
+  const status0 = await waitFor(`(document.querySelector('#act-status') || {}).value`);
+  // A native <select> opens no popup under CDP, so the picker is driven
+  // the way the page hears it: set the value, then say it changed.
+  const flip = t => evalJS(`(() => { const s = document.querySelector('#act-status');
+    if (!s) return false;
+    s.value = ${json(t)};
+    s.dispatchEvent(new Event('change', { bubbles: true }));
+    return true; })()`);
+  // Asserted on the pill's class rather than its text: the transparent
+  // select over it puts every option's label in textContent, so the text
+  // says draft, stable and deprecated whatever the concept is.
+  const shows = t => `!!document.querySelector('.badge.status-pick.' + ${json(t)})`;
+  // A failure here is reported by the page, not by the console, so the
+  // toast is what the log should carry: it is where "conceptURL is not
+  // defined" was, all along, for anybody who had thought to look.
+  const toasted = async () =>
+    (await evalJS(`(document.querySelector('#toast') || {}).textContent || ''`)) || await shown();
+  if (await evalJS(`document.body.classList.contains('read-only')`)) {
+    console.log('skip the status picker: this deployment is read-only');
+  } else {
+    const other = status0 === 'draft' ? 'stable' : 'draft';
+    await flip(other);
+    const changed = await waitFor(shows(other));
+    await check('the status picker writes the change', changed, toasted);
+    await flip(status0);
+    // Only asked when the first flip landed: against a picker that
+    // changes nothing, "it went back" is true of a badge that never
+    // left, and a hollow ok under a FAIL reads as a partial success.
+    if (changed) {
+      await check('and the change can be put back', await waitFor(shows(status0)), toasted);
+    }
+  }
+
   await go('#/review');
   await check('the review queue renders', await waitFor(`${textOf('#view')}.length > 100`), shown);
   // Only a route the top nav names has a current item — a directory page
