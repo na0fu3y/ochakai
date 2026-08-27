@@ -79,6 +79,18 @@ current exception, and no design doc is proposed but unlanded. If something you
 need is missing from this list, that is a reason to say so, not a sign it was
 already considered.
 
+- **Spell the demand feed something other than `usage`, at 1.0.** The CLI reads
+  `ochakai usage <id>` for one concept's totals and `ochakai list usage` for
+  the feed ordered by them: one word, two commands, and the reader learns
+  which is which from the shape of the line rather than from the word. It
+  waits for the freeze to lift, and that is the whole of the decision —
+  `sort=usage` is a line in [api/openapi.frozen.txt](api/openapi.frozen.txt),
+  and [0064](docs/design/0064-rest-stops-at-api-v1.md) §11 leaves a security
+  defect as the only reason to move one. Renaming it in the CLI alone would
+  set the client against the contract it is a thin client of
+  ([0067](docs/design/0067-four-faces-and-what-they-decline.md) §2) and pay for
+  the same rename twice.
+
 ## Considered and deliberately not doing
 
 These are decisions, not backlog. Each has a document behind it, and where a
