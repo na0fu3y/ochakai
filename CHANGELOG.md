@@ -21,6 +21,29 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **A listing with no feed is the plain enumeration.** `ochakai list`
+  with no feed and no reverse lookup — and `GET /api/v1/search` with
+  neither `q` nor `sort` — used to be refused (`list needs a feed`,
+  `search needs a query`). It now lists the concepts the filters match
+  in address order, and with no filter at all, the base: `ochakai list
+  --prefix teams/growth` is what somebody taking stock of a directory
+  was asking for, and until now the only way to ask was to name a feed
+  whose order had nothing to do with the question — `list usage
+  --prefix …` was the idiom, and `usage` was noise in it. It is a
+  listing like the two reverse lookups it joins, which already walked
+  this same address order: it pages with `--cursor`, `--limit` defaults
+  to 100, and it records no read against the concepts it names, so
+  enumerating a subtree cannot move the usage feed a reviewer works
+  from. A `q` carrying only whitespace is a request with nothing to
+  rank by, so it lists too, where it used to be a 400. **MCP is
+  deliberately unchanged**: `list_concepts` still asks for `sort` or
+  `source`, because an agent's question about a subtree is a search and
+  a tool's description is paid for out of its context window (design
+  doc 0067). The web UI is unchanged as well — its tree is already the
+  address-order face, and Explore lands on the demand feed by choice.
+
 ## [0.27.5] - 2026-08-27
 
 ### Added

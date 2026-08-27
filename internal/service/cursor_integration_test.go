@@ -23,7 +23,8 @@ import (
 // its own predicate: a descending count beside an ascending timestamp
 // (usage), two counts and a nullable verification time (failed), a date
 // (stale_after), the nullable time alone (verified_at), and the id by
-// itself (the source lookup).
+// itself — which the source lookup and the plain enumeration share, and
+// which is the seam a filter-only request now walks.
 func TestListingsWalkToTheEndIntegration(t *testing.T) {
 	dbURL := testdb.URL(t)
 	ctx := context.Background()
@@ -106,6 +107,7 @@ func TestListingsWalkToTheEndIntegration(t *testing.T) {
 		{name: "failed", sort: "failed"},
 		{name: "stale_after", sort: "stale_after"},
 		{name: "source lookup", source: resource},
+		{name: "enumeration"},
 	} {
 		t.Run(mode.name, func(t *testing.T) {
 			f := filter()

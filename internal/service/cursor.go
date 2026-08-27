@@ -140,7 +140,7 @@ func cursorKeys(sort string, h domain.SearchHit) []*string {
 			cursorCount(u.Recent.Failed), cursorCount(u.Failed),
 			cursorCount(u.Worked), cursorTime(h.VerifiedAt),
 		}
-	default: // the reverse lookups order by id alone
+	default: // the reverse lookups and the enumeration order by id alone
 		return nil
 	}
 }

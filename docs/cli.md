@@ -27,8 +27,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
   search <query>          search knowledge; verified concepts rank higher
-  list [feed]             list a review feed or a reverse lookup, page by page
-                          (usage, verified_at, failed, stale_after)
+  list [feed]             page a feed (usage, verified_at, failed, stale_after),
+                          a reverse lookup, or the concepts a filter matches
   browse [prefix]         list one level of the ID hierarchy (folder view)
   get <id>                print one concept as an OKF document (stderr notes
                           what links at it)
@@ -364,10 +364,10 @@ Flags:
 ```
 Usage: ochakai list [flags] [feed]
 
-List concepts as a set rather than a ranking: the review feeds, and the
-two reverse lookups. A listing is a total order, so it pages — a page
-with more behind it prints the way on to stderr, and passing that back
-with --cursor reads the next one.
+List concepts as a set rather than a ranking: the review feeds, the two
+reverse lookups, and the plain enumeration. A listing is a total order,
+so it pages — a page with more behind it prints the way on to stderr,
+and passing that back with --cursor reads the next one.
 
 The feed is the argument; it sets the order and the first column:
 
@@ -384,11 +384,15 @@ The feed is the argument; it sets the order and the first column:
                 the writer's declaration, so clearing it means editing
                 the concept to re-declare an expiry
 
-Without a feed, --source or --links-to lists in address order, because a
-set is the answer and there is no text to rank it by — so those two
-print no first column, the address being the first field. --source is
-what cites one resource (the reverse of sources[].resource);
---links-to is what points at one concept (its backlinks).
+Without a feed it lists in address order: the concepts the filters
+match, and with no filter at all, the whole base. That is the plain
+enumeration — what is under this directory — and it is a listing like
+any other, so it pages and counts as no read against the concepts it
+names. The two reverse lookups are the same listing under a filter of
+their own: --source is what cites one resource (the reverse of
+sources[].resource), --links-to is what points at one concept (its
+backlinks). None of the three prints a first column, the address being
+the first field.
 
 To rank by relevance instead, use `ochakai search`.
 
@@ -406,6 +410,8 @@ Examples:
   ochakai list verified_at --type 'Attested Computation' --trust human-reviewed --limit 100
   ochakai list --source https://wiki.example/finance/revenue-recognition  # what cites this
   ochakai list --links-to metrics/revenue --type Insight   # which insights read this metric
+  ochakai list --prefix metrics/sales                 # everything under a directory, by id
+  ochakai list --prefix metrics/sales --json | jq -r '.hits[].id'   # the ids, for a script
 ```
 
 ## ochakai log

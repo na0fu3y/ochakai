@@ -51,10 +51,12 @@ credentials found)` になっているのが同じ状態の別の見え方であ
 
 ## 検索
 
-**`search needs a query`、HTTP 400。** search はクエリか、クエリなしで
-一覧できる `sort`(`verified_at`、`usage`、`failed`、`stale_after`)か、
-あるリソースを引用しているものを列挙する `--source` のいずれかを必要と
-する。すべてを一覧するモードは意図的に存在しない。
+**`sort=usage lists concepts; it cannot be combined with a search query`、
+HTTP 400。** フィードは順に読むキューであって、関連度で並べ替える対象では
+ない。テキストで絞るならクエリだけを、キューを歩くならフィードだけを渡す。
+**どちらも渡さなければ列挙になる** — フィルタが一致する concept が id 順に
+並び、フィルタも無ければベース全体である(`ochakai list --prefix
+teams/growth`)。
 
 **concept があるはずのベースで検索が何も返さない。**
 

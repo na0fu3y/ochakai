@@ -76,7 +76,7 @@ _ochakai() {
   local -a commands
   commands=(
     'search:search knowledge; verified concepts rank higher'
-    'list:list a review feed or a reverse lookup, page by page'
+    'list:page a feed, a reverse lookup, or the concepts a filter matches'
     'browse:list one level of the ID hierarchy (folder view)'
     'get:print one concept as an OKF document'
     'put:write one object of the bundle: a concept from OKF markdown or JSON, or a file'
@@ -307,7 +307,7 @@ const fishCompletionTmpl = `# fish completion for ochakai — ochakai completion
 complete -c ochakai -f
 
 complete -c ochakai -n __fish_use_subcommand -a search -d 'search knowledge; verified concepts rank higher'
-complete -c ochakai -n __fish_use_subcommand -a list -d 'list a review feed or a reverse lookup, page by page'
+complete -c ochakai -n __fish_use_subcommand -a list -d 'page a feed, a reverse lookup, or the concepts a filter matches'
 complete -c ochakai -n __fish_use_subcommand -a browse -d 'list one level of the ID hierarchy (folder view)'
 complete -c ochakai -n __fish_use_subcommand -a get -d 'print one concept as an OKF document'
 complete -c ochakai -n __fish_use_subcommand -a put -d 'write one object of the bundle: a concept from OKF markdown or JSON, or a file'

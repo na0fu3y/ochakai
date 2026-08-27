@@ -218,8 +218,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   use [name | url]        pick the server for later commands (saved locally)
   whoami                  print target server, identity, and reachability
   search <query>          search knowledge; verified concepts rank higher
-  list [feed]             list a review feed or a reverse lookup, page by page
-                          (usage, verified_at, failed, stale_after)
+  list [feed]             page a feed (usage, verified_at, failed, stale_after),
+                          a reverse lookup, or the concepts a filter matches
   browse [prefix]         list one level of the ID hierarchy (folder view)
   get <id>                print one concept as an OKF document (stderr notes
                           what links at it)

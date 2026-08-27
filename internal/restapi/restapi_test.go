@@ -111,8 +111,6 @@ func TestBadRequestValidation(t *testing.T) {
 		name, url, wantSubstr string
 	}{
 		{"invalid sort", "/api/v1/search?sort=created_at", "invalid sort"},
-		{"neither q nor sort", "/api/v1/search", "needs a query"},
-		{"whitespace query", "/api/v1/search?q=%20%09", "needs a query"},
 		{"sort with query", "/api/v1/search?sort=verified_at&q=revenue", "cannot be combined"},
 		{"usage sort with query", "/api/v1/search?sort=usage&q=revenue", "cannot be combined"},
 		{"failed sort with query", "/api/v1/search?sort=failed&q=revenue", "cannot be combined"},

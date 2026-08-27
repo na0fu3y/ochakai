@@ -852,9 +852,11 @@ func captureStdout(t *testing.T, f func()) string {
 // `--links-to X` on its own lists the backlinks of X, exactly as the wire
 // does (design doc 0046 §3.5): a set is the answer and there is no text to
 // rank it by. That makes it a listing rather than a search, so it lives on
-// `ochakai list` (design doc 0062) — and the refusal each command gives
-// has to point at the other one, because a reader who reached for the
-// wrong half learns the split from that sentence or from nowhere.
+// `ochakai list` (design doc 0062) — and a search with no query is
+// refused with a sentence pointing at the other half, because a reader
+// who reached for the wrong one learns the split there or nowhere. The
+// listing half refuses nothing: with no feed and no reverse lookup it
+// enumerates, which is the answer a filter alone asks for.
 func TestListStandsAloneOnAReverseLookup(t *testing.T) {
 	var got string
 	mux := http.NewServeMux()
@@ -890,14 +892,20 @@ func TestListStandsAloneOnAReverseLookup(t *testing.T) {
 	if !strings.Contains(err.Error(), "ochakai list") {
 		t.Errorf("refusal %q does not send the reader to `ochakai list`", err)
 	}
-	err = cmdList(context.Background(), []string{"--url", srv.URL})
-	if err == nil {
-		t.Fatal("a listing with no feed and no reverse lookup was accepted")
+	// The other direction is not a refusal: a listing with no feed and no
+	// reverse lookup is the plain enumeration, so it asks for no mode at
+	// all and the server answers in address order.
+	if err := cmdList(context.Background(), []string{"--url", srv.URL}); err != nil {
+		t.Fatalf("list with no feed: %v", err)
 	}
-	for _, want := range append(append([]string{}, domain.ListSorts...), "--source", "--links-to") {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("refusal %q does not name %s", err, want)
-		}
+	if strings.Contains(got, "sort=") || strings.Contains(got, "q=") {
+		t.Errorf("query = %q, want neither a feed nor a query on it", got)
+	}
+	if err := cmdList(context.Background(), []string{"--prefix", "metrics", "--url", srv.URL}); err != nil {
+		t.Fatalf("list --prefix: %v", err)
+	}
+	if !strings.Contains(got, "prefix=metrics") || strings.Contains(got, "sort=") {
+		t.Errorf("query = %q, want the prefix and no mode", got)
 	}
 	if err := cmdList(context.Background(), []string{"nonsense", "--url", srv.URL}); err == nil {
 		t.Error("an unknown feed was accepted")
