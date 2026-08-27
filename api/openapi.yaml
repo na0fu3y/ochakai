@@ -1422,17 +1422,38 @@ paths:
         one of them is outside, the move is refused whole rather than
         performed without the rewrites it may not make (design doc
         0129).
+
+
+        **With from_prefix/to_prefix it moves a directory instead**, and
+        everything addressed under it goes: the concepts, the concepts a
+        human rejected, the concepts that were deleted and still hold
+        their ids, and every file — including the ones no concept's
+        namespace covers. One transaction, so it moves whole or not at
+        all, and the destination directory has to be empty. It exists
+        because a client cannot do this for itself: those last three are
+        absent from every listing, so a loop over the search face leaves
+        them behind and the old directory never empties (design doc
+        0132). A concept whose id is exactly from_prefix does not move —
+        a concept and a directory may share a name (0075 §2), so the two
+        forms address different things and neither is inferred from the
+        other. The scope test above reads at this grain too: everything
+        the whole rewrite touches must be the caller's to write.
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
         - $ref: "#/components/parameters/Producer"
       requestBody:
         required: true
-        description: A key outside from/to is a 400 naming it (design doc 0064).
+        description: >
+          Two shapes, told apart by their keys: from/to move a concept,
+          from_prefix/to_prefix move a directory. A key outside the four
+          is a 400 naming it (design doc 0064), and so is sending both
+          pairs — an id and a directory are different addresses, and a
+          request that names one of each is a contradiction rather than a
+          question (design doc 0132 §3).
         content:
           application/json:
             schema:
               type: object
-              required: [from, to]
               properties:
                 from:
                   type: string
@@ -1440,19 +1461,53 @@ paths:
                 to:
                   type: string
                   description: The new id (bundle path).
+                from_prefix:
+                  type: string
+                  description: The directory to move, as a bundle path with no trailing slash.
+                to_prefix:
+                  type: string
+                  description: Where it goes. Must hold no objects.
+              oneOf:
+                - required: [from, to]
+                - required: [from_prefix, to_prefix]
             examples:
               rename:
                 summary: Move a metric one level deeper
                 value:
                   from: metrics/revenue
                   to: metrics/finance/revenue
+              renameDirectory:
+                summary: Rename a whole directory
+                value:
+                  from_prefix: teams/growth
+                  to_prefix: teams/growth-archive
       responses:
         "200":
-          description: The moved concept, now at its new id.
+          description: >
+            The moved concept at its new id — or, for a directory, how
+            many objects moved. No ETag on that one: a directory is not
+            an object and has no version (design doc 0075 §2), and the
+            count is the part the caller could not have known.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/View" }
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/View"
+                  - type: object
+                    required: [from_prefix, to_prefix, moved]
+                    properties:
+                      from_prefix: { type: string }
+                      to_prefix: { type: string }
+                      moved:
+                        type: integer
+                        description: How many objects moved — concepts of every state, and files.
               examples:
+                movedDirectory:
+                  summary: A directory and everything under it
+                  value:
+                    from_prefix: teams/growth
+                    to_prefix: teams/growth-archive
+                    moved: 24
                 moved:
                   summary: The concept at its new address
                   description: >

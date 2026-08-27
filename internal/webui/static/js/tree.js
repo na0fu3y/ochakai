@@ -85,7 +85,7 @@ export function nodeHTML(prefix, label, count) {
   // The ＋ prefills the editor's ID with this directory — no retyping the
   // full path to create knowledge next to its neighbors.
   return `<details class="node" data-prefix="${esc(prefix)}" ${browse.open.has(prefix) ? 'open' : ''}>
-    <summary>${label}<span class="count">${count}</span><a class="node-new write-only"
+    <summary draggable="${READ_ONLY ? 'false' : 'true'}">${label}<span class="count">${count}</span><a class="node-new write-only"
       href="#/new/${prefix.split('/').filter(Boolean).map(encodeURIComponent).join('/')}/"
       title="${esc(prefix)} にナレッジを作成します">＋</a></summary>
     <div class="children"><div class="empty">…</div></div>
@@ -96,8 +96,9 @@ export function nodeHTML(prefix, label, count) {
 // concepts at this level — title-first with a short status hint; the id
 // and full status ride in the tooltip. A directory's name is a link to
 // its index page (the ▸ marker and the rest of the row still toggle
-// expansion). Concepts are draggable: dropping one on a directory moves
-// it there (references rewritten server-side) — except on a read-only
+// expansion). Concepts and directories are both draggable: dropping one
+// on a directory moves it there, and a directory takes everything under
+// it in one server-side transaction (references rewritten either way) — except on a read-only
 // deployment, where the move would only 403 (design doc 0040 §2.3). A
 // level is rendered from a browse response, so READ_ONLY is known by
 // the time this runs; the drag handlers check it again at drag time.

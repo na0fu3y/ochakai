@@ -41,7 +41,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
                           or a file by the path it lives at
   purge <id>              hard-delete a soft-deleted concept, freeing its id
   reembed                 embed concepts missing a vector for the current model
-  move <id> <new-id>      move (rename) a concept; references are rewritten
+  move <id> <new-id>      move (rename) a concept, or a whole directory with
+                          --directory; references are rewritten either way
   usage <id>              show usage totals (search hits, fetches, outcomes)
   stats                   the whole loop: what is stored, what each queue holds,
                           what review did, what came back empty
@@ -470,25 +471,44 @@ Examples:
 
 ```
 Usage: ochakai move [flags] <id> <new-id>
+       ochakai move --directory [flags] <old> <new>
 
 Move (rename) a knowledge concept to a new id. Revisions, usage, and
 files follow, and inbound references (link targets, and
 a `model` key where a document carries one) are rewritten so nothing
 breaks.
 
+With --directory the two arguments are directories, and everything
+addressed under the old one moves: the concepts, the concepts a human
+rejected, the concepts that were deleted and still hold their ids, and
+the files — including the ones no concept's namespace covers. It moves
+whole or not at all, in one transaction, so a refused move has changed
+nothing. Doing this by hand cannot be made to work: the last three are
+invisible to `ochakai list`, so a loop over it leaves them behind and
+the old directory never empties.
+
+The flag is how you say which, and it is not sugar: a concept and a
+directory may share a name, so `metrics/revenue` addresses two things
+and only you know which was meant. The destination directory has to be
+empty.
+
 Where the deployment has an access policy, a move runs when its whole
 rewrite fits inside what you may write: the concept, the destination,
-and everything that links at the concept. When something you cannot
+and everything that links at the concept — for a directory, everything
+that links at anything in it. When something you cannot
 write links at it, the move is refused rather than performed without
 those rewrites — the links it skipped would point at an id that is gone
 — and an administrator can move it for you.
 
 Flags:
+  -directory
+    	move a whole directory: both arguments are paths, and every object under the first one moves to the second (a concept whose id is exactly that path is a different address and stays)
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
   ochakai move insights/revenue-seasonality insights/sales/revenue-seasonality
+  ochakai move --directory teams/growth teams/growth-archive
 ```
 
 ## ochakai purge

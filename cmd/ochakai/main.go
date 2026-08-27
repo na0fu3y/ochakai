@@ -232,7 +232,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
                           or a file by the path it lives at
   purge <id>              hard-delete a soft-deleted concept, freeing its id
   reembed                 embed concepts missing a vector for the current model
-  move <id> <new-id>      move (rename) a concept; references are rewritten
+  move <id> <new-id>      move (rename) a concept, or a whole directory with
+                          --directory; references are rewritten either way
   usage <id>              show usage totals (search hits, fetches, outcomes)
   stats                   the whole loop: what is stored, what each queue holds,
                           what review did, what came back empty

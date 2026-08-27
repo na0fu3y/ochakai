@@ -85,7 +85,7 @@ _ochakai() {
     'delete:remove one object: a concept by id, or a file by its bundle path'
     'purge:hard-delete a soft-deleted concept, freeing its id'
     'reembed:embed concepts that have no vector for the configured model'
-    'move:move (rename) a concept; references are rewritten'
+    'move:move (rename) a concept, or a whole directory with --directory'
     'usage:show usage totals for a concept'
     'stats:the whole loop: what is stored, what each queue holds, what review did'
     'access:show or replace the access policy (administrators only)'
@@ -187,8 +187,11 @@ _ochakai() {
     delete)
       _arguments '--if-match[delete only if the concept still has this version]:version:' '--url[server URL]:url:'
       ;;
-    purge|move)
+    purge)
       _arguments '--url[server URL]:url:'
+      ;;
+    move)
+      _arguments '--directory[move a whole directory: both arguments are paths]' '--url[server URL]:url:'
       ;;
     reembed)
       _arguments '--limit[max concepts per pass]:limit:' '--once[a single pass]' '--json[print JSON]' '--url[server URL]:url:'
@@ -275,7 +278,8 @@ _ochakai() {
     verify)        opts="--json --url" ;;
     reject)        opts="--note --withdraw --json --url" ;;
     delete)        opts="--if-match --url" ;;
-    purge|move)    opts="--url" ;;
+    purge)         opts="--url" ;;
+    move)          opts="--directory --url" ;;
     reembed)       opts="--limit --once --json --url" ;;
     export)        opts="--url --no-files --prefix" ;;
     seed)          opts="--project --prefix" ;;
@@ -316,7 +320,7 @@ complete -c ochakai -n __fish_use_subcommand -a reject -d 'record that a concept
 complete -c ochakai -n __fish_use_subcommand -a delete -d 'remove one object: a concept by id, or a file by its bundle path'
 complete -c ochakai -n __fish_use_subcommand -a purge -d 'hard-delete a soft-deleted concept, freeing its id'
 complete -c ochakai -n __fish_use_subcommand -a reembed -d 'embed concepts that have no vector for the configured model'
-complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) a concept; references are rewritten'
+complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) a concept, or a whole directory with --directory'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for a concept'
 complete -c ochakai -n __fish_use_subcommand -a stats -d 'the whole loop: what is stored, what each queue holds, what review did'
 complete -c ochakai -n __fish_use_subcommand -a access -d 'show or replace the access policy (administrators only)'
@@ -337,6 +341,7 @@ complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 complete -c ochakai -n __fish_use_subcommand -a help -d 'print the command list'
 
 complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify reject delete purge reembed move usage stats access report revisions log export import whoami ui mcp-stdio' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from move' -l directory -d 'move a whole directory: both arguments are paths'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'

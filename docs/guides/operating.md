@@ -733,7 +733,9 @@ ochakai access -f policy.json --if-match "$(jq -r .version policy.json)"
    **丸ごと断られる**(設計ドキュメント
    [0129](../design/0129-a-move-runs-when-its-rewrite-fits.md))。断られた
    ときは管理者に頼む。「あなたの書けないところから参照されている」という
-   文言は、**どこからかは言わない**。
+   文言は、**どこからかは言わない**。`--directory` を付けた形も同じ判定を
+   **配下の全体について**行う(設計ドキュメント
+   [0132](../design/0132-a-directory-moves-whole-or-not-at-all.md))。
    **`ochakai stats`** は範囲を持つ利用者も自分の数を読める(設計ドキュメント
    [0123](../design/0123-the-numbers-say-what-they-counted.md)) — `scope`
    行が何を数えたかを言い、全体を数えたときだけ出ない。ただし
