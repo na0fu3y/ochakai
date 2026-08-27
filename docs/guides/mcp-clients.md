@@ -3,32 +3,44 @@
 ochakai は `/mcp` で streamable HTTP による MCP を提供する。クライアント
 の設定に何を書くかは二つの事実だけが決め、どちらも好みの問題ではない:
 
-**サーバーがどこにあるか。** Cloud Run に対しては、すべてのリクエスト
-が MCP クライアントの誰も発行できない Google ID トークンを運ばなければ
-ならないので、接続は `ochakai mcp-stdio` を通す — stdin/stdout で MCP
-を話し、他のクライアントコマンドと同じ方法で identity を解決し、
-JSON-RPC メッセージをそのまま転送する(設計ドキュメント
-[0067](../design/0067-four-faces-and-what-they-decline.md) §3)。クライアント側の設定に
-資格情報は要らない、そもそも設定するものが無いからである。ローカル
-ではこの要件が消え、URL がそのまま使える。
+**サーバーが identity を読むか。** 読むデプロイに対しては、すべての
+リクエストが MCP クライアントの誰も発行できない Google ID トークンを
+運ばなければならないので、接続は `ochakai mcp-stdio` を通す —
+stdin/stdout で MCP を話し、他のクライアントコマンドと同じ方法で
+identity を解決し、JSON-RPC メッセージをそのまま転送する(設計
+ドキュメント [0067](../design/0067-four-faces-and-what-they-decline.md) §3)。
+クライアント側の設定に資格情報は要らない、そもそも設定するものが無い
+からである。**読まないデプロイではこの要件が消え、URL がそのまま
+使える** — ローカルの `dev` だけでなく、公開された `public` や
+サンドボックスも同じで、これは所在ではなく posture の問題である
+(設計ドキュメント [0066](../design/0066-four-postures-one-word.md))。
+どちらかは `ochakai whoami` の `posture:` 行が答える。
 
 **クライアントが何を開けるか。** コマンドを起動して stdio で話すこと
 しかできないクライアントもある。そうしたクライアントには、サーバーが
 どちらであってもブリッジが答えになる。
 
-つまり: **ローカルサーバー、かつ対応できるクライアントなら URL。それ
-以外はブリッジ** — ブリッジには独自の前提条件があり、どの設定より前に
-[下](#what-the-bridge-needs)で挙げる。
+つまり: **identity を読まないサーバー、かつ対応できるクライアントなら
+URL。それ以外はブリッジ** — ブリッジには独自の前提条件があり、どの設定
+より前に[下](#what-the-bridge-needs)で挙げる。
 
-| クライアント | ローカル `docker compose` | Cloud Run | 設定の置き場所 |
+| クライアント | identity を読まないサーバー | identity を読むサーバー | 設定の置き場所 |
 |---|---|---|---|
 | [Claude Code](#claude-code)* | URL | ブリッジ | `.mcp.json`、または `claude mcp add` |
-| [Claude Desktop](#claude-desktop) | ブリッジ | ブリッジ | `claude_desktop_config.json` |
+| [Claude Desktop](#claude-desktop) | ブリッジ(または [`.mcpb`](#claude-desktop)) | ブリッジ | `claude_desktop_config.json` |
 | [その他のクライアント](#その他のクライアント) | URL | ブリッジ | クライアントごと(下の表) |
-| [ホスト型アシスタント](#clients-that-cannot-reach-your-deployment) | — | — | 設計上、届かない |
+| [ホスト型アシスタント](#clients-that-cannot-reach-your-deployment) | 公開デプロイなら届く | 設計上、届かない | 製品ごと |
 
-下にあるローカル URL は `http://localhost:8080/mcp` で、
-`deploy/compose.yaml` が渡すものそのものである。
+**何もインストールせずに一番速く繋ぐ**なら、公開デモが URL をそのまま
+取る — Claude Code なら一コマンドで、Go も gcloud も要らない:
+
+```sh
+claude mcp add --transport http ochakai https://demo.ochak.ai/mcp
+```
+
+自分のサーバーに対する URL は、ローカルの `docker compose` なら
+`http://localhost:8080/mcp` で、`deploy/compose.yaml` が渡すものその
+ものである。
 
 \* Claude Code はこの表の唯一の例外である: シェルを持っているので、
 [推奨される経路は CLI](#claude-code) であって MCP ではない。
@@ -89,8 +101,8 @@ JSON のキー名が違うだけなので、[その他のクライアント](#�
 ## ブリッジが必要とするもの
 
 下の設定のうちコマンドを起動するものはどれも、クライアントの `PATH`
-上に `ochakai` を必要とする。Cloud Run に対してはさらに二つ必要で、
-どちらもマシンに既定では入っていない:
+上に `ochakai` を必要とする。identity を読むデプロイに対してはさらに
+二つ必要で、どちらもマシンに既定では入っていない:
 
 - **`gcloud` CLI。** ID トークンの出どころである。ブリッジはまず
   サービスアカウントの ADC を試し、それが無ければ
@@ -119,8 +131,28 @@ https://your-service.run.app`)にも同じ方法で同じトークンを解決�
 クライアントは、たいてい「サーバーにツールが無い」という形でそれを
 報告するからである。
 
-これはすべて Cloud Run に対する話で、トークンを一切要求しないローカル
-の `docker compose` サーバーには当てはまらない。
+### 切れるのはトークンではなくセッションである
+
+ID トークンは一時間で失効するが、**それは誰も触らずに回る**: ブリッジ
+はトークンの `exp` を読んで期限を知り、切れていれば次のリクエストの
+ために発行し直す。設定を書いたあと繰り返し打つコマンドは無い。
+
+切れるのはその下の **gcloud のセッション**のほうで、いつ切れるかを
+決めるのは ochakai ではなくあなたの組織である — Google Workspace の
+セッション長ポリシー、パスワードの変更、長い無活動、`gcloud auth
+revoke`。復旧は端末で `gcloud auth login` を打ち直すことだけで、
+**動いているクライアントを再起動する必要は無い**: 次の呼び出しが新しい
+セッションからトークンを取る。例外は起動時で、ブリッジは identity を
+解決できないと即座に終了するため(それを「ツールが無い」として黙らせ
+ないためである)、その場合だけクライアント側の再接続が要る。
+
+これより永続的な形はサービスアカウントの ADC だが、それは鍵をディスク
+に置くことを意味する。ochakai が secret を一つも持たない姿勢
+([0065](../design/0065-identity-and-provenance.md))で到達できる永続性の
+上限が、この gcloud セッションである。
+
+以上は identity を読むデプロイに対する話で、トークンを一切要求しない
+`dev` や `public` のサーバーには当てはまらない。
 
 ## Claude Code
 
@@ -132,13 +164,14 @@ https://your-service.run.app`)にも同じ方法で同じトークンを解決�
 
 ### それでも MCP のツールが欲しい場合
 
-ローカルサーバーに対して:
+identity を読まないサーバー(ローカルの `docker compose`、公開デモ)に
+対して:
 
 ```sh
 claude mcp add --transport http ochakai http://localhost:8080/mcp
 ```
 
-Cloud Run に対して、ブリッジ経由:
+identity を読むサーバーに対して、ブリッジ経由:
 
 ```sh
 claude mcp add ochakai -- ochakai mcp-stdio
@@ -149,6 +182,31 @@ claude mcp add ochakai -- ochakai mcp-stdio
 `.mcp.json` に書き込む — これはコミットされる形で、このリポジトリ自身
 の `.mcp.json` はローカルの `docker compose` サーバーを指し、それが
 動いていれば自動的に繋がる。
+
+その `.mcp.json` は `Ochakai-On-Behalf-Of` ヘッダも載せている:
+
+```json
+{
+  "mcpServers": {
+    "ochakai": {
+      "type": "http",
+      "url": "http://localhost:8080/mcp",
+      "headers": { "Ochakai-On-Behalf-Of": "process:claude-code" }
+    }
+  }
+}
+```
+
+**`dev` のサーバーに書き戻すつもりなら、これを省いてはならない。**
+`dev` は呼び出し元を全員 `human:anonymous` として記録するので、ヘッダの
+無い接続から書かれた concept は人が書いたものと区別が付かなくなる —
+エージェントの下書きを人の裁定と取り違えないための区別が、台帳から
+消える。ヘッダを付ければ `process:claude-code via human:anonymous` と
+両方が残る。`dev` では誰でも委譲できるので
+`OCHAKAI_DELEGATING_CALLERS` を設定する必要は無く、本番ではそれが
+呼び出し元を許していることが要る([設定](../configuration.md#environment-variables))。
+identity を読むデプロイでは呼び出し元が本物の Google の身元を運ぶので、
+自分を名乗らせるためにこのヘッダを足す理由は無い。
 
 ## Claude Desktop
 
@@ -239,10 +297,10 @@ Cloud Run に対しては、この設定だけではマシンに gcloud とロ�
 誰も気づかない(設計ドキュメント
 [0068](../design/0068-how-a-face-is-added-and-removed.md) §3)。
 
-## Cloud Run に対して機能する URL
+## identity を読むサーバーに対して機能する URL
 
-クライアントが URL を要求し、サーバーが Cloud Run 上にあるなら、
-`ochakai ui` がそれを与えるローカルのプロキシである。あなたの identity
+クライアントが URL しか取らず、サーバーが identity を読むなら、
+`ochakai ui` がその URL を与えるローカルのプロキシである。あなたの identity
 で認証し、web UI と並べて `/mcp` を、ループバックに束縛して公開する:
 
 ```sh
@@ -268,11 +326,18 @@ ChatGPT のコネクタ、OpenAI の Responses API、Claude Desktop のカスタ
 これはギャップではなく、アクセスモデルが働いている証拠である:
 到達できることそのものが認可である(設計ドキュメント
 [0065](../design/0065-identity-and-provenance.md) §1)ので、デプロイを第三者のサーバー
-から届くようにすることは、そのまま公開到達可能にすることを意味する —
-ochakai を公開で呼び出せる状態にすることは、デプロイの一形態ではなく
+から届くようにすることは、そのまま公開到達可能にすることを意味する。
+チームの知識を持つデプロイをそこへ置くのは、デプロイの一形態ではなく
 設定ミスである。ローカルコードも動かせるホスト型アシスタント
 (ブリッジ越しの Claude Desktop、Claude Code、Cursor)が、サポートされる
 経路である。
+
+**例外は、公開することが決定であるデプロイだけである** — `public` と
+サンドボックス([0066](../design/0066-four-postures-one-word.md) §3・
+[0087](../design/0087-a-sandbox-says-it-is-one.md))は、誰から届くかを
+選んでいないのだから、ベンダーのインフラから届いても失うものが無い。
+公開デモがその形で、ここでは誰も動かしていないので、各アシスタントの
+コネクタ UI がそれを受け入れるかどうかは、それぞれの製品の話である。
 
 ## 繋がらないとき
 

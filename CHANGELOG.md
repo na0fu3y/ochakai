@@ -21,6 +21,46 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Connecting an MCP client is decided by identity, not by location.**
+  [docs/guides/mcp-clients.md](docs/guides/mcp-clients.md) drew its rule
+  as "local server → URL, otherwise the bridge", which used the
+  deployment's address as a stand-in for whether it demands a Google ID
+  token. That stand-in stopped being true when design doc
+  [0066](docs/design/0066-four-postures-one-word.md) put the posture in
+  one word: `public` and sandbox deployments read no identity and take
+  the URL wherever they live, so the old table sent everyone who
+  published one to install gcloud and a binary they did not need. The
+  rule, the table and the `ochakai ui` section are now drawn on the axis
+  that actually decides, and `ochakai whoami`'s `posture:` line is named
+  as the way to read it. **The consequence users see**: trying ochakai
+  from Claude Code is one command with nothing installed —
+  `claude mcp add --transport http ochakai https://demo.ochak.ai/mcp` —
+  which worked all along and was written down for Claude Desktop only,
+  through the `.mcpb` bundle's default.
+- **What expires against Cloud Run is the gcloud session, not the
+  token.** The guide listed `gcloud auth login` as a prerequisite and
+  said nothing about the day it lapses. The bridge reads each ID token's
+  `exp` and mints the next one itself, so the hourly expiry needs
+  nobody; a lapsed gcloud session is recovered by `gcloud auth login`
+  alone, without restarting the client, and only a bridge that could not
+  resolve an identity *at startup* needs a reconnect. The same section
+  now says that a service-account key would be the only more durable
+  form, and that holding one is what design doc
+  [0065](docs/design/0065-identity-and-provenance.md) declines.
+- **The header this repository's own `.mcp.json` carries is documented.**
+  Against a `dev` server every caller is recorded as `human:anonymous`,
+  so an agent writing back through a plain URL connection is
+  indistinguishable from the human who reviews it —
+  `Ochakai-On-Behalf-Of: process:claude-code` is what keeps both halves
+  in the ledger, and the guide had shown the file without it.
+- README said MCP clients see "seven tools"; there have been six since
+  design doc [0076](docs/design/0076-two-tools-leave-mcp.md) took two
+  off. The `MCP: 6` ceiling in [docs/surface.md](docs/surface.md) is
+  checked against the build, but a count spelled out in prose is not —
+  which is the blind spot, not the typo.
+
 ## [0.27.6] - 2026-08-27
 
 ### Added
