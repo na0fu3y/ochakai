@@ -331,10 +331,17 @@ go run ./cmd/ochakai import examples/demo
 `dev` is the only posture that is writable without an identity in front,
 and a dev deployment now says so on every page, so a capture taken this
 way carries the banner — and an アクセス tab, because dev's anonymous
-caller reads as an administrator — and the committed ones do not. Crop
-them out, or shoot against a deployment whose callers are authenticated:
-what the pictures are for is the product, and both of those are about the
-machine you happen to be running it on.
+caller reads as an administrator — and the committed ones do not: what
+the pictures are for is the product, and both of those are about the
+machine you happen to be running it on. Remove them from the page before
+capturing — `.dev-note`, `.sandbox-note` and `#nav-access`. Neither of
+the two obvious alternatives works. A crop cannot reach the banner,
+which sits inside `.content` below the header rather than being a strip
+across the top, so taking it off takes the navigation with it; and no
+other posture can be shot from here, because the default one asks for an
+identity `ochakai ui` has none to give (`/api/v1` answers 401) while
+`read-only` and `public` refuse the writes the review queue is a picture
+of.
 
 The bundle already carries the two drafts the review queue needs and a
 draft whose `stale_after` has passed. The re-verification feed is the one
@@ -367,10 +374,10 @@ a UI change moves them.
 
 | Route | File | Height |
 |---|---|---|
-| `#/review` | `webui-review.png` | 870 |
+| `#/review` | `webui-review.png` | 790 |
 | `#/k/metrics/revenue` | `webui-entry.png` | 360 |
-| `#/search/reported-wrong` | `webui-wrong.png` | 420 |
-| `#/` | `webui-tree.png` | 540 |
+| `#/search/reported-wrong` | `webui-wrong.png` | 395 |
+| `#/` | `webui-tree.png` | 700 |
 
 Three things have to be forced, or the pictures come out wrong in ways
 that are easy to miss:
