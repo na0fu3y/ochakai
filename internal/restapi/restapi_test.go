@@ -795,3 +795,28 @@ func TestAnArchiveNamesTheSubtreeItCarriesInAnySpelling(t *testing.T) {
 		}
 	}
 }
+
+// A move addresses one thing. from/to name a concept and
+// from_prefix/to_prefix name a directory (design doc 0132 §3), and a
+// request carrying both is a contradiction rather than a question — the
+// same answer a repeated key gets (design doc 0125). Pinned here rather
+// than in the integration test because that server validates every
+// request against api/openapi.yaml, whose oneOf already refuses this
+// shape, so the request cannot be sent through the contract check.
+func TestMoveRefusesBothAddresses(t *testing.T) {
+	h := Handler(&service.Service{})
+	body := `{"from":"a","to":"b","from_prefix":"c","to_prefix":"d"}`
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/move", strings.NewReader(body))
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("both pairs = %d, want 400 (body: %s)", rec.Code, rec.Body)
+	}
+	// The message names both spellings, because a caller who sent both
+	// has to be told which one to keep.
+	for _, want := range []string{"from/to", "from_prefix/to_prefix"} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("the 400 does not name %s: %s", want, rec.Body)
+		}
+	}
+}

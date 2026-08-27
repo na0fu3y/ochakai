@@ -37,7 +37,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
 | OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
-| 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5。**`.md` が concept の住所であり、そこに座れるものは concept だけであることは [0100](0100-md-is-how-a-concept-is-spelled.md)**(0075 §3.3 を改訂) |
+| 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。**ディレクトリを丸ごと動かす形は [0132](0132-a-directory-moves-whole-or-not-at-all.md)**(0075 §2 に prefix の move を足す — 丸ごと動くか、動かない)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5。**`.md` が concept の住所であり、そこに座れるものは concept だけであることは [0100](0100-md-is-how-a-concept-is-spelled.md)**(0075 §3.3 を改訂) |
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md)。**バケットの無いデプロイがそう言い、どの面もファイルを差し出さなくなることは [0131](0131-a-deployment-says-what-it-cannot-do.md)** — `stats` が `files` を答え、直し方(変数の名前)はバンドル全体を持つ呼び出し元にだけ載る |
@@ -274,6 +274,20 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 
 ## ナレッジモデル(構造・ID・型・名前・リンク)
 
+- [0132 ディレクトリは、丸ごと動くか、動かない](0132-a-directory-moves-whole-or-not-at-all.md)
+  — **Accepted**。`move` が prefix を取る(`from_prefix` / `to_prefix`、
+  CLI は `--directory`)。**一件ずつ回すクライアント側のループは不便なので
+  はなく、原理的に不完全である**: 一覧の述語が `deleted_at IS NULL AND
+  id IS NOT NULL` なので、ディレクトリ直下のファイル・却下された concept・
+  論理削除された concept のどれもクライアントからは見えず、古い住所を握った
+  まま残る(論理削除は一件ずつの `move` でも動かせない)。**ディレクトリの
+  全体を見られるのはサーバーだけ**である。動くのは prefix の下の全
+  オブジェクトで、一つのトランザクション。範囲の判定は
+  [0129](0129-a-move-runs-when-its-rewrite-fits.md) をそのまま prefix の粒で
+  読み(**はみ出すなら丸ごと断る**)、内側で閉じたリンクの書き換えは move の
+  一部であって `update` リビジョンを積まない。**推測はしない** — 0075 §2 が
+  concept とディレクトリの同名を許しているので、`old` がどちらかを server は
+  決められず、だから鍵で言わせる。`FLAG` 28 → 29。
 - [0079 文書を受け取る](0079-taking-the-document.md) —
   **Accepted**。**取り込みが文書を拒む条件と、CLI が送るバイト列の現行
   ドキュメント**(0075 §3 / §4.2 と 0074 §1 を改訂。**REST は変えない**)。

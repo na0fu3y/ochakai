@@ -1062,10 +1062,39 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		var in struct {
-			From string `json:"from"`
-			To   string `json:"to"`
+			From       string `json:"from"`
+			To         string `json:"to"`
+			FromPrefix string `json:"from_prefix"`
+			ToPrefix   string `json:"to_prefix"`
 		}
 		if !readJSON(w, r, &in) {
+			return
+		}
+		// The two forms are told apart by the keys rather than by a flag,
+		// because they address different things: an id and a directory
+		// are two kinds of address, and a concept may share a name with a
+		// directory (design docs 0075 §2, 0132 §3). Asking for both at
+		// once is a contradiction, not a question — the same answer a
+		// repeated key gets (design doc 0125).
+		id, dir := in.From != "" || in.To != "", in.FromPrefix != "" || in.ToPrefix != ""
+		if id && dir {
+			writeError(w, service.Invalidf(
+				"a move addresses one thing: from/to move a concept, from_prefix/to_prefix move a directory"))
+			return
+		}
+		if dir {
+			n, err := svc.MovePrefix(r.Context(), in.FromPrefix, in.ToPrefix, httpauth.Actor(r.Context()))
+			if err != nil {
+				writeError(w, err)
+				return
+			}
+			// No ETag: what moved is a directory, and a directory is not
+			// an object with a version (design doc 0075 §2). The count is
+			// what the caller could not have known — the rejected, the
+			// deleted and the loose files it could not list.
+			writeJSON(w, http.StatusOK, map[string]any{
+				"from_prefix": in.FromPrefix, "to_prefix": in.ToPrefix, "moved": n,
+			})
 			return
 		}
 		moved, err := svc.Move(r.Context(), in.From, in.To, httpauth.Actor(r.Context()))

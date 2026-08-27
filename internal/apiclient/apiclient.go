@@ -590,6 +590,28 @@ func (c *Client) Move(ctx context.Context, id, newID string) (*domain.View, erro
 	return &moved, nil
 }
 
+// MovePrefix moves a whole directory — every object addressed under
+// prefix, including the rejected concepts, the deleted ones and the files
+// no concept's namespace covers — and returns how many objects moved
+// (design doc 0132). One transaction: it moves whole or not at all.
+//
+// A separate call rather than a flag on Move, because the two address
+// different things: a concept may share a name with a directory (0075
+// §2), so an id and a prefix cannot be told apart by their spelling.
+func (c *Client) MovePrefix(ctx context.Context, prefix, newPrefix string) (int, error) {
+	in := struct {
+		FromPrefix string `json:"from_prefix"`
+		ToPrefix   string `json:"to_prefix"`
+	}{prefix, newPrefix}
+	var out struct {
+		Moved int `json:"moved"`
+	}
+	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/move", nil, in, &out); err != nil {
+		return 0, err
+	}
+	return out.Moved, nil
+}
+
 // File fetches one file's bytes and media type by its bundle path
 // (GET /api/v1/bundle/{path}). Metadata travels with the entry that
 // shows it (Get → Knowledge.Files), each carrying its path.

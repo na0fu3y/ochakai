@@ -874,3 +874,65 @@ func validateOKF(k *domain.Knowledge) error {
 }
 
 // --- search ---
+
+// MovePrefix moves a whole directory — every object addressed under
+// oldPrefix — to newPrefix, and returns how many objects moved. It is
+// Move one level up (design doc 0132): the same rewrite, the same scope
+// test, and the same refusal to do half of it.
+//
+// The directory is named rather than inferred. A concept and a directory
+// may share a name (0075 §2), so "old" addresses two things and only the
+// caller knows which was meant; a concept whose id is exactly oldPrefix
+// stays where it is.
+func (s *Service) MovePrefix(ctx context.Context, oldPrefix, newPrefix string, actor domain.Actor) (int, error) {
+	if err := s.readOnly(); err != nil {
+		return 0, err
+	}
+	from, err := normalizePrefix(oldPrefix)
+	if err != nil {
+		return 0, err
+	}
+	to, err := normalizePrefix(newPrefix)
+	if err != nil {
+		return 0, err
+	}
+	// The root is the whole bundle, and moving it is not a rename: it is
+	// an export and an import, which is the round trip C1 already has
+	// (design doc 0009).
+	if from == "" || to == "" {
+		return 0, Invalidf("the root is not a directory that can be moved: name a directory under it")
+	}
+	sc, err := s.scope(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if err := mayWriteIn(sc, from); err != nil {
+		return 0, err
+	}
+	// Named rather than hidden, for the reason the one-concept move gives
+	// (0129 §2): nothing is stored at the destination yet, so saying "you
+	// may not write there" answers no question about what the bundle holds.
+	if !sc.MayWrite(to) {
+		return 0, fmt.Errorf("%w: the destination %s is outside the directories this caller may write",
+			ErrForbidden, to)
+	}
+	// Into itself, at any depth: the destination would be inside the
+	// address space being moved, so there would be no answer to where a
+	// concept ends up. Checked after the scope, not before: a caller who
+	// may not write here learns that and nothing else, which is the
+	// shape every other write on this surface takes (design doc 0109 §4).
+	if domain.Under(to, from) {
+		return 0, Invalidf("%s is inside %s: a directory cannot move into itself", to, from)
+	}
+	var within []string
+	if !sc.Everything() {
+		within = append([]string{}, sc.Write...)
+	}
+	moved, err := s.Store.MovePrefix(ctx, from, to, actor, within)
+	if errors.Is(err, store.ErrOutsideScope) {
+		return 0, fmt.Errorf("%w: something under %s is referenced from outside the directories this caller "+
+			"may write, and a move rewrites every reference rather than skipping any: an administrator "+
+			"can move it", ErrForbidden, from)
+	}
+	return moved, err
+}

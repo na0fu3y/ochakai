@@ -3903,3 +3903,79 @@ func TestRESTIntegrationASubtreeArchiveSaysItIsOne(t *testing.T) {
 		t.Errorf("the subtree archive is missing its own concept: %v", paths)
 	}
 }
+
+// The directory form of the same operation (design doc 0132). On the
+// wire it is the same endpoint under a different pair of keys, and the
+// two are told apart by the keys rather than by a flag — a concept and a
+// directory may share a name, so nothing here can be inferred. This is
+// also what puts the form under the OpenAPI contract check.
+func TestRESTIntegrationMoveDirectory(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+
+	root := testdb.Unique(t, "restmovedir")
+	old, dst := root+"/old", root+"/new"
+	create := func(id, body string) {
+		t.Helper()
+		payload := docFrom(t, map[string]any{"type": root, "id": id, "title": "t", "body": body})
+		resp := putDoc(t, srv.URL, id, payload, true)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			b, _ := io.ReadAll(resp.Body)
+			t.Fatalf("create %s = %d: %s", id, resp.StatusCode, b)
+		}
+	}
+	create(old+"/a", "見出し [b](/"+old+"/b.md) を参照。")
+	create(old+"/b", "本文。")
+	// The concept that shares the directory's name: it must not move.
+	create(old, "同名の concept。")
+	removeEntries(t, srv, old, old+"/a", old+"/b", dst+"/a", dst+"/b")
+
+	// The status and the bytes, so no response escapes this helper for a
+	// caller to forget to close.
+	post := func(body map[string]string) (int, []byte) {
+		t.Helper()
+		b, _ := json.Marshal(body)
+		resp, err := http.Post(srv.URL+"/api/v1/move", "application/json", bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		out, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, out
+	}
+
+	// Naming both an id and a directory at once is refused, and the
+	// refusal is pinned in TestMoveRefusesBothAddresses rather than here:
+	// this server validates every request against api/openapi.yaml, and
+	// the spec's oneOf already says the two pairs are exclusive, so a
+	// request carrying both cannot be sent through the contract check.
+	code, body := post(map[string]string{"from_prefix": old, "to_prefix": dst})
+	if code != http.StatusOK {
+		t.Fatalf("move --directory = %d, want 200: %s", code, body)
+	}
+	var out struct {
+		FromPrefix string `json:"from_prefix"`
+		ToPrefix   string `json:"to_prefix"`
+		Moved      int    `json:"moved"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		t.Fatalf("decode: %v: %s", err, body)
+	}
+	if out.Moved != 2 || out.FromPrefix != old || out.ToPrefix != dst {
+		t.Errorf("answer = %+v, want the two concepts under %s and not the one named like it", out, old)
+	}
+	// The link that closed inside the directory followed both ends.
+	var backlinks struct {
+		Hits []domain.SearchHit `json:"hits"`
+	}
+	getJSON(t, srv.URL+"/api/v1/search?links_to="+url.QueryEscape(dst+"/b"), &backlinks)
+	if len(backlinks.Hits) != 1 || backlinks.Hits[0].ID != dst+"/a" {
+		t.Errorf("links_to after the directory move = %+v, want %s", backlinks.Hits, dst+"/a")
+	}
+	// The concept sharing the directory's name is where it was.
+	var kept domain.View
+	getJSON(t, srv.URL+"/api/v1/bundle/"+old+".md", &kept)
+	if kept.ID != old {
+		t.Errorf("the concept named like the directory = %q, want it left at %s", kept.ID, old)
+	}
+}

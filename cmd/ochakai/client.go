@@ -1507,8 +1507,11 @@ func cmdReembed(ctx context.Context, args []string) error {
 func cmdMove(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"move",
-		"Usage: ochakai move [flags] <id> <new-id>\n\nMove (rename) a knowledge concept to a new id. Revisions, usage, and\nfiles follow, and inbound references (link targets, and\na `model` key where a document carries one) are rewritten so nothing\nbreaks.\n\nWhere the deployment has an access policy, a move runs when its whole\nrewrite fits inside what you may write: the concept, the destination,\nand everything that links at the concept. When something you cannot\nwrite links at it, the move is refused rather than performed without\nthose rewrites — the links it skipped would point at an id that is gone\n— and an administrator can move it for you.",
-		"  ochakai move insights/revenue-seasonality insights/sales/revenue-seasonality\n")
+		"Usage: ochakai move [flags] <id> <new-id>\n       ochakai move --directory [flags] <old> <new>\n\nMove (rename) a knowledge concept to a new id. Revisions, usage, and\nfiles follow, and inbound references (link targets, and\na `model` key where a document carries one) are rewritten so nothing\nbreaks.\n\nWith --directory the two arguments are directories, and everything\naddressed under the old one moves: the concepts, the concepts a human\nrejected, the concepts that were deleted and still hold their ids, and\nthe files — including the ones no concept's namespace covers. It moves\nwhole or not at all, in one transaction, so a refused move has changed\nnothing. Doing this by hand cannot be made to work: the last three are\ninvisible to `ochakai list`, so a loop over it leaves them behind and\nthe old directory never empties.\n\nThe flag is how you say which, and it is not sugar: a concept and a\ndirectory may share a name, so `metrics/revenue` addresses two things\nand only you know which was meant. The destination directory has to be\nempty.\n\nWhere the deployment has an access policy, a move runs when its whole\nrewrite fits inside what you may write: the concept, the destination,\nand everything that links at the concept — for a directory, everything\nthat links at anything in it. When something you cannot\nwrite links at it, the move is refused rather than performed without\nthose rewrites — the links it skipped would point at an id that is gone\n— and an administrator can move it for you.",
+		"  ochakai move insights/revenue-seasonality insights/sales/revenue-seasonality\n  ochakai move --directory teams/growth teams/growth-archive\n")
+	directory := fs.Bool("directory", false,
+		"move a whole directory: both arguments are paths, and every object under the first one "+
+			"moves to the second (a concept whose id is exactly that path is a different address and stays)")
 	id, rest, err := idArgs(fs, args, 2)
 	if err != nil {
 		return err
@@ -1520,6 +1523,16 @@ func cmdMove(ctx context.Context, args []string) error {
 	c, err := newClient(ctx, *url)
 	if err != nil {
 		return err
+	}
+	if *directory {
+		n, err := c.MovePrefix(ctx, id, newID)
+		if err != nil {
+			return err
+		}
+		// The count is the part a caller could not have worked out: what
+		// went includes the objects `ochakai list` cannot show them.
+		fmt.Printf("moved %s/ -> %s/ (%d objects)\n", id, newID, n)
+		return nil
 	}
 	moved, err := c.Move(ctx, id, newID)
 	if err != nil {

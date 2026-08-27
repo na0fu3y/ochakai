@@ -21,6 +21,34 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **A directory moves whole or not at all** (design doc
+  [0132](docs/design/0132-a-directory-moves-whole-or-not-at-all.md)).
+  `ochakai move --directory <old> <new>` renames a directory, and
+  `POST /api/v1/move` takes `from_prefix` / `to_prefix` beside the
+  `from` / `to` it already had. Everything addressed under the directory
+  goes, in one transaction: the concepts, the concepts a human rejected,
+  the concepts that were deleted and still hold their ids, and every file
+  — including the ones no concept's namespace covers. **Doing this by
+  hand could not be made to work**: the last three are absent from every
+  listing (`deleted_at IS NULL AND id IS NOT NULL` is what a listing
+  stands on), and a soft-deleted concept cannot be moved one at a time at
+  all, so a loop over `ochakai list --prefix` left them behind and the
+  old directory never emptied. **The flag is not sugar**: a concept and a
+  directory may share a name (0075 §2), so `metrics/revenue` addresses
+  two things and the server has no ground to guess which — a concept
+  whose id is exactly the directory's name stays put. The destination
+  directory has to be empty, the root cannot be moved, and a directory
+  cannot move into itself. Where an access policy exists the scope test
+  is 0129's, read over the whole rewrite: one referrer outside what the
+  caller may write refuses the move whole. Links that close inside the
+  directory are repaired as part of the move and take no `update`
+  revision; a concept outside pointing in still gets one. In the web UI a
+  directory node in the tree is draggable. **Not on MCP** (0067 §5.1) —
+  move is curation, not something an agent's loop needs in one call.
+  REST stays at 13 operations and the CLI at 25; `FLAG` 28 → 29.
+
 ### Changed
 
 - **A listing with no feed is the plain enumeration.** `ochakai list`
