@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.27.6] - 2026-08-27
+
 ### Added
 
 - **A directory moves whole or not at all** (design doc
@@ -5898,7 +5900,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.27.5...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.27.6...HEAD
+[0.27.6]: https://github.com/na0fu3y/ochakai/compare/v0.27.5...v0.27.6
 [0.27.5]: https://github.com/na0fu3y/ochakai/compare/v0.27.4...v0.27.5
 [0.27.4]: https://github.com/na0fu3y/ochakai/compare/v0.27.3...v0.27.4
 [0.27.3]: https://github.com/na0fu3y/ochakai/compare/v0.27.2...v0.27.3
