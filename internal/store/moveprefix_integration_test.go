@@ -20,6 +20,7 @@ import (
 // can list — which is the whole reason this operation exists rather than
 // being a loop somebody writes in shell.
 func TestMovePrefixMovesTheWholeDirectoryIntegration(t *testing.T) {
+	lockLiveAttachments(t, testdb.URL(t)) // loose.markdown rides a fake blob store other packages' export scans can't read
 	ctx, s := movePrefixStore(t)
 	run := testdb.Unique(t, "stit-moveprefix-")
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}

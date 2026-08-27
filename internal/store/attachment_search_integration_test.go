@@ -2,6 +2,9 @@ package store
 
 import (
 	"context"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -290,5 +293,66 @@ func TestIntegrationAttachmentVectorsAreKeyedByPath(t *testing.T) {
 	}
 	if !got[one.ID] || !got[two.ID] {
 		t.Errorf("the shared file ranked %v, want both %s and %s", hits, one.ID, two.ID)
+	}
+}
+
+// The lock above is a convention until something checks it, and the
+// restapi package learned that once already: issue #546 was one archive
+// test out of five that did not take it, so a guard there now reads that
+// rule back off the source. That guard can only see its own file, and
+// this is the other end of the same rule — the side that *holds* a live
+// attachment rather than the side that scans for one. A test here that
+// writes a file against this package's blob fake and skips the lock is
+// invisible to restapi's guard, and it flakes restapi rather than store,
+// which is a long way from where anyone would then look.
+//
+// So the holders are read back here too: a function that calls PutFile
+// takes the lock, itself or through a helper that does (several tests
+// share one store constructor, and the lock belongs with the blob fake
+// that constructor installs).
+func TestEveryLiveAttachmentTestTakesTheLock(t *testing.T) {
+	names, err := filepath.Glob("*_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Function bodies, split on the column-0 brace that ends each one.
+	// Crude, and enough: this package's test functions are all
+	// top-level, which is the assumption restapi's guard makes too.
+	type fn struct{ file, name, body string }
+	var fns []fn
+	locks := map[string]bool{} // functions that take the lock, for the helper hop
+	for _, name := range names {
+		src, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, body := range strings.Split(string(src), "\nfunc ")[1:] {
+			f, _, _ := strings.Cut(body, "(")
+			fns = append(fns, fn{name, f, body})
+			if strings.Contains(body, "lockLiveAttachments(t") {
+				locks[f] = true
+			}
+		}
+	}
+	checked := 0
+	for _, f := range fns {
+		if f.name == "lockLiveAttachments" || !strings.Contains(f.body, "PutFile(") {
+			continue
+		}
+		checked++
+		locked := locks[f.name]
+		for helper := range locks {
+			if strings.Contains(f.body, helper+"(t") {
+				locked = true
+			}
+		}
+		if !locked {
+			t.Errorf("%s in %s writes a file without lockLiveAttachments(t, ...): "+
+				"its bytes live in a blob fake only this package can read, so a "+
+				"whole-bundle scan in another package fails on it (#546)", f.name, f.file)
+		}
+	}
+	if checked < 8 {
+		t.Errorf("only %d live-attachment tests found; the guard stopped matching them", checked)
 	}
 }
