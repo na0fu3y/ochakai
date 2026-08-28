@@ -285,6 +285,10 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	// and one is still a lifecycle value (design doc 0043 §§3.2-3.3), so
 	// the guards are exercised through the three real paths rather than
 	// through a status enum they no longer share.
+	// A rejection is not among them: it is a deletion carrying its reason
+	// (design doc 0135), and it gates nothing — the id it leaves behind is
+	// open to the next writer, which "a rejected id stays writable" below
+	// is the test for.
 	rulings := []struct {
 		ruling domain.Ruling
 		rule   func(t *testing.T, k *domain.Knowledge)
@@ -296,17 +300,6 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, nil},
-		{domain.RulingRejected, func(t *testing.T, k *domain.Knowledge) {
-			t.Helper()
-			if _, err := svc.Reject(ctx, k.ID, "because the numbers were wrong", human); err != nil {
-				t.Fatal(err)
-			}
-		}, func(t *testing.T, k *domain.Knowledge) {
-			t.Helper()
-			if _, err := svc.WithdrawRejection(ctx, k.ID, human); err != nil {
-				t.Fatal(err)
-			}
-		}},
 		{domain.RulingDeprecated, func(t *testing.T, k *domain.Knowledge) {
 			t.Helper()
 			setStatus(t, k, domain.StatusDeprecated, human)
@@ -322,7 +315,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil, "") })
 		version, err := svc.RefuseIfCurated(ctx, id, "update")
 		if err != nil {
 			t.Fatalf("draft must be writable: %v", err)
@@ -339,7 +332,6 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	// an agent that meets a wall with no door stalls or works around it.
 	advice := map[domain.Ruling]string{
 		domain.RulingVerified:   "report_outcome failed",
-		domain.RulingRejected:   "the reason",
 		domain.RulingDeprecated: "put_concept",
 	}
 	for _, tc := range rulings {
@@ -351,7 +343,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
+			t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil, "") })
 			tc.rule(t, k)
 
 			for _, op := range []string{"update", "delete"} {
@@ -381,33 +373,46 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		})
 	}
 
-	// The path this rule exists to close: Create refuses a live rejected
-	// entry, so without the guard an agent could delete it and recreate it
-	// as a draft, taking the reason for the rejection with it.
-	t.Run("a rejection cannot be laundered into a draft", func(t *testing.T) {
-		id := "queries/" + uid(t, "guard-launder")
-		k, err := svc.Create(ctx, &domain.Knowledge{
+	// A rejected id stays writable, from every surface including the one
+	// with no precondition (design doc 0135). The reason is information
+	// rather than a wall: it is on the revision that recorded the removal,
+	// which is what the §9 log publishes, and nothing blocks the next
+	// writer from proposing there again.
+	t.Run("a rejected id stays writable", func(t *testing.T) {
+		id := "queries/" + uid(t, "guard-rejected")
+		if _, err := svc.Create(ctx, &domain.Knowledge{
 			Type: domain.TypeMetrics, ID: id, Title: "rejected proposal",
-			StatusNote: "duplicate of an existing golden query",
-		}, actor)
+		}, actor); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.Delete(ctx, id, human, nil, "duplicate of an existing golden query"); err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.RefuseIfRevivingCurated(ctx, id); err != nil {
+			t.Errorf("a rejected id must stay open to the next writer: %v", err)
+		}
+		back, err := svc.CreateKeepingCurated(ctx, &domain.Knowledge{
+			Type: domain.TypeMetrics, ID: id, Title: "second attempt"}, actor)
+		if err != nil {
+			t.Fatalf("re-proposing at a rejected id: %v", err)
+		}
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil, "") })
+		if back.Title != "second attempt" {
+			t.Errorf("the re-proposal did not land: %+v", back)
+		}
+		// And the reason is still readable, on the revision that removed it.
+		revs, err := svc.Revisions(ctx, id, 10)
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
-		if _, err := svc.Reject(ctx, id, "duplicate of an existing golden query", human); err != nil {
-			t.Fatal(err)
+		found := false
+		for _, r := range revs {
+			if r.Change == "reject" && r.Note == "duplicate of an existing golden query" {
+				found = true
+			}
 		}
-		_ = k
-
-		if _, err := svc.RefuseIfCurated(ctx, id, "delete"); err == nil {
-			t.Fatal("deleting a rejected entry was allowed; the memory of no is erasable")
-		}
-		stored, err := svc.Get(ctx, id)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if stored.Rejection == nil || stored.Rejection.Note == "" {
-			t.Errorf("the rejection and its reason must survive: %+v", stored.Rejection)
+		if !found {
+			t.Errorf("the reason is not in the history: %+v", revs)
 		}
 	})
 
@@ -416,7 +421,6 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	// housekeeping — is revived in place by Create, status_note included.
 	t.Run("a curated tombstone cannot be revived", func(t *testing.T) {
 		tombAdvice := map[domain.Ruling]string{
-			domain.RulingRejected:   "the reason",
 			domain.RulingVerified:   "different id",
 			domain.RulingDeprecated: "no longer recommended",
 		}
@@ -431,7 +435,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			}
 			tc.rule(t, k)
 			// A human deletes it: legitimate on the REST/CLI surfaces.
-			if err := svc.Delete(ctx, id, human, nil); err != nil {
+			if err := svc.Delete(ctx, id, human, nil, ""); err != nil {
 				t.Fatal(err)
 			}
 			err = svc.RefuseIfRevivingCurated(ctx, id)
@@ -447,7 +451,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatalf("a human surface must still be able to reuse the id: %v", err)
 			}
-			t.Cleanup(func() { _ = svc.Delete(ctx, revived.ID, human, nil) })
+			t.Cleanup(func() { _ = svc.Delete(ctx, revived.ID, human, nil, "") })
 		}
 	})
 
@@ -459,7 +463,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			Type: domain.TypeMetrics, ID: id, Title: "abandoned draft"}, actor); err != nil {
 			t.Fatal(err)
 		}
-		if err := svc.Delete(ctx, id, actor, nil); err != nil {
+		if err := svc.Delete(ctx, id, actor, nil, ""); err != nil {
 			t.Fatal(err)
 		}
 		if err := svc.RefuseIfRevivingCurated(ctx, id); err != nil {
@@ -469,7 +473,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			Type: domain.TypeMetrics, ID: id, Title: "second attempt"}, actor); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil, "") })
 	})
 
 	// A free id is not a refusal, and neither is a live one: Create's own
@@ -484,8 +488,8 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
-		if _, err := svc.Reject(ctx, k.ID, "duplicate", human); err != nil {
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil, "") })
+		if _, err := svc.Verify(ctx, k.ID, human); err != nil {
 			t.Fatal(err)
 		}
 		if err := svc.RefuseIfRevivingCurated(ctx, id); err != nil {
@@ -500,7 +504,6 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 	// the next move.
 	t.Run("a live entry says what holds the id", func(t *testing.T) {
 		liveAdvice := map[domain.Ruling]string{
-			domain.RulingRejected:   "the reason",
 			domain.RulingVerified:   "report_outcome failed",
 			domain.RulingDeprecated: "no longer recommended",
 			"":                      "put_concept",
@@ -518,7 +521,7 @@ func TestRefuseIfCuratedIntegration(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			t.Cleanup(func() { _ = svc.Delete(ctx, id, human, nil) })
+			t.Cleanup(func() { _ = svc.Delete(ctx, id, human, nil, "") })
 			{
 				tc.rule(t, k)
 			}
@@ -561,7 +564,7 @@ func TestReembedIntegration(t *testing.T) {
 	}, actor); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
+	t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil, "") })
 
 	// Assertions are about this entry, not about counts: the test database
 	// is shared by every package, so a corpus-wide pass legitimately picks
@@ -638,7 +641,7 @@ func TestReembedReportsWhatIsLeft(t *testing.T) {
 		}, actor); err != nil {
 			t.Fatal(err)
 		}
-		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil) })
+		t.Cleanup(func() { _ = svc.Delete(ctx, id, actor, nil, "") })
 	}
 	svc.Embedder = &fixedEmbedder{model: model, dim: 4}
 
@@ -787,14 +790,6 @@ func TestVerificationTimestampsSurviveTheRoundTripIntegration(t *testing.T) {
 			func(k *domain.Knowledge) *time.Time {
 				if v := k.LastVerified(); v != nil {
 					return &v.At
-				}
-				return nil
-			}},
-		{"rejection",
-			func(id string) (*domain.Knowledge, error) { return svc.Reject(ctx, id, "no", actor) },
-			func(k *domain.Knowledge) *time.Time {
-				if k.Rejection != nil {
-					return &k.Rejection.At
 				}
 				return nil
 			}},

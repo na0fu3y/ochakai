@@ -154,9 +154,9 @@ curl -X PUT "$OCHAKAI_URL/api/v1/bundle/metrics/revenue.md" \
   -H "Content-Type: text/markdown" --data-binary @revenue.md
 ```
 
-これは内容だけのハッシュなので、concept を検証する・却下する・
-ファイルを添付するだけでは、保持している precondition は有効なまま
-である — 無効にするのは編集だけである。
+これは内容だけのハッシュなので、concept を検証する・ファイルを添付する
+だけでは、保持している precondition は有効なままである — 無効にするのは
+編集だけである。
 
 ## ローカルでの開発
 

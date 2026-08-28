@@ -1307,85 +1307,13 @@ func TestStatsAnnouncesADisposableSandbox(t *testing.T) {
 	}
 }
 
-// TestGetPrintsTheRulingAndWhy pins design doc 0104 on the surface that
-// was missing it. `ochakai get` prints the document on stdout and what
-// this instance observed on stderr; a rejection is an observation, and
-// it used to be the one that never got printed — the command a body link
-// sends a reader to showed a turned-down concept as an ordinary draft,
-// with the note that says what would have to change reachable only
-// through --json.
-//
-// stdout is asserted too, and for the same reason the note is: the
-// document has to keep round-tripping through `ochakai put`, so nothing
-// about the ruling may land there.
-func TestGetPrintsTheRulingAndWhy(t *testing.T) {
-	at := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
-	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0"}
-	doc := "---\ntype: Metric\ntitle: Repeat purchase rate\nstatus: draft\n---\n\nShare of buyers who bought before.\n"
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
-		id := strings.TrimSuffix(r.PathValue("path"), ".md")
-		_ = json.NewEncoder(w).Encode(domain.View{
-			ID: id, Document: doc,
-			Summary: domain.Summary{
-				Type: domain.TypeMetrics, ID: id, Status: domain.StatusDraft,
-				Title: "Repeat purchase rate", Rejected: true,
-			},
-			Observed: domain.Observed{
-				CreatedBy: domain.Actor{Kind: domain.ActorProcess, Name: "claude"},
-				Rejection: &domain.Rejection{By: human, At: at, Note: "lookback undecided; settle guest checkout first"},
-			},
-		})
-	})
-	srv := httptest.NewServer(mux)
-	defer srv.Close()
-
-	outR, outW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	errR, errW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	origOut, origErr := os.Stdout, os.Stderr
-	os.Stdout, os.Stderr = outW, errW
-	getErr := cmdGet(context.Background(), []string{"metrics/repeat-purchase-rate", "--url", srv.URL})
-	outW.Close()
-	errW.Close()
-	os.Stdout, os.Stderr = origOut, origErr
-	stdout, err := io.ReadAll(outR)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stderr, err := io.ReadAll(errR)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if getErr != nil {
-		t.Fatal(getErr)
-	}
-
-	if string(stdout) != doc {
-		t.Errorf("stdout must be the document and nothing else:\n%s", stdout)
-	}
-	for _, want := range []string{
-		"created by process:claude",
-		"rejected by human:na0 on 2026-08-01",
-		"rejection note: lookback undecided; settle guest checkout first",
-	} {
-		if !strings.Contains(string(stderr), want) {
-			t.Errorf("stderr misses %q:\n%s", want, stderr)
-		}
-	}
-}
-
 // A hit says nothing about a ruling — the columns are the concept's —
-// so the count of turned-down rows goes to stderr with the command that
-// prints the reason (design doc 0104 §3).
-func TestPrintHitsNamesTurnedDownRowsWithoutChangingThem(t *testing.T) {
+// and there are no turned-down rows to count any more: a rejection is a
+// deletion (design doc 0135), so what a curator declined is not in the
+// ranking at all.
+func TestPrintHitsKeepsTheRowToTheConcept(t *testing.T) {
 	page := &apiclient.SearchResult{Hits: []domain.SearchHit{
-		{ID: "metrics/a", Status: domain.StatusDraft, Title: "A", Rejected: true, Score: 1},
+		{ID: "metrics/a", Status: domain.StatusDraft, Title: "A", Score: 1},
 		{ID: "metrics/b", Status: domain.StatusStable, Title: "B", Score: 0.5},
 	}}
 	stdout, stderr := capture(t, func() { printHits(page, "") })
@@ -1394,11 +1322,8 @@ func TestPrintHitsNamesTurnedDownRowsWithoutChangingThem(t *testing.T) {
 			t.Errorf("the row format must not change:\n%s", stdout)
 		}
 	}
-	if strings.Contains(stdout, "rejected") || strings.Contains(stdout, "turned down") {
-		t.Errorf("a ruling must not reach the row:\n%s", stdout)
-	}
-	if !strings.Contains(stderr, "1 concept was turned down") || !strings.Contains(stderr, "ochakai get") {
-		t.Errorf("stderr must name the turned-down row and where its reason is:\n%s", stderr)
+	if strings.Contains(stdout, "rejected") || strings.Contains(stderr, "turned down") {
+		t.Errorf("a ruling must not reach the output:\n%s\n%s", stdout, stderr)
 	}
 
 	// And an empty result says so, rather than leaving a reader unable to

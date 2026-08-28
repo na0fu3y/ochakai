@@ -41,9 +41,6 @@ const (
 	// CodeNotDeleted — purge was asked of a live concept: 409. Delete
 	// first; destruction takes two steps (design doc 0031).
 	CodeNotDeleted = "not_deleted"
-	// CodeNoRejection — a withdrawal was asked of a concept carrying no
-	// rejection: 409.
-	CodeNoRejection = "no_rejection"
 	// CodePreconditionFailed — the If-Match precondition did not hold:
 	// 412. The concept changed since it was read (design doc 0030).
 	CodePreconditionFailed = "precondition_failed"
@@ -68,7 +65,6 @@ var ErrorCodes = []string{
 	CodeInternal,
 	CodeInvalid,
 	CodeMethodNotAllowed,
-	CodeNoRejection,
 	CodeNotDeleted,
 	CodeNotFound,
 	CodePreconditionFailed,

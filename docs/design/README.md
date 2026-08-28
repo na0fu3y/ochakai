@@ -44,11 +44,11 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4([0093](0093-the-budget-governs-the-whole-response.md) が予算の側を改訂)。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。**MCP の転送が stateless になり、プロトコルが 2026-07-28 になることは [0118](0118-a-call-carries-everything-it-needs.md)**(0067 §3 を改訂 — 面もツールも動かない)。一覧がいつまで持つかを自分で答えること(構築時に決まる三つの一覧だけ。concept の読みは 0 のまま)は同記録 §7。MCP のツール 7 本とその境界は [0076](0076-two-tools-leave-mcp.md) と、**7 本目を割った [0096](0096-a-listing-is-not-a-search-here-either.md)**。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂)。**CLI の行の第一列が「読み手が並べてくれと言った鍵」だけになることは [0110](0110-the-first-column-is-the-key-you-asked-for.md)**(0068 §3 の CLI への適用。`search` と逆引きからスコア列が落ちる)。**その行に太字と dim が付くのは [0111](0111-weight-for-the-eye-and-only-for-an-eye.md)**(端末のときだけ。パイプが受け取るバイト列は変わらない) |
 | Web UI | [0130](0130-the-web-ui-and-the-fields-of-a-document.md) が現行(配信・ページの形・編集を一冊で。0072 / 0092 / 0126 を畳んだ)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**このデプロイができないことをページが出さなくなり、直せる呼び出し元にだけ案内を出すことは [0131](0131-a-deployment-says-what-it-cannot-do.md)** |
-| 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)**。**却下の理由がどこまで運ばれるかは [0104](0104-a-ruling-travels-with-its-reason.md)**(CLI の出力と export へ) |
-| 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂) |
+| 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)**。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない) |
+| 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂)。**却下が削除の一種であり、理由がリビジョンに載ることは [0135](0135-a-rejection-is-a-deletion.md)** — 墓標は塞がず、`knowledge_rejection` は畳まれた |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md)。**番号は領域の決定に与え、その内側の規則には与えないことと、この表の一行が挙げてよい記録の数の天井は [0128](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)**(0048 §2.1 / §2.2 を改訂) |
-| バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**export が却下の理由まで運ぶことは [0104](0104-a-ruling-travels-with-its-reason.md)**(読み戻さないのは同じ) |
+| バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**却下が frontmatter を離れ、イベントとして `log.md` で運ばれることは [0135](0135-a-rejection-is-a-deletion.md)**(OKF の信号は単調で、否定の段はどのキーにも無い) |
 | 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**MCP OAuth コネクタの再実装の出発点は [0116](0116-the-connector-price-changed-not-its-condition.md) が差し替えた** — 戻す条件は 0070 §5 のままで、その日に開くのが 0010 の認可サーバ(863 行)ではなく、測定済みの二つの答え(180 行)になった |
 | REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md)。**本文の鍵の照合が完全一致で、同じ鍵の重複が 400 になることは [0125](0125-a-body-names-each-field-once.md)**(0064 §2 が決めた規則を、書かれたとおりに効かせたもの) |
@@ -1143,19 +1143,40 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   group by だけだとその週は消え、両隣が隣同士として描かれる。Web UI は
   レビューページに一枚、**軸も目盛りも凡例も無い**(それ以上描けば 0067 §1 が
   BI ツールではないと言った当のものになる)。MCP には出さない。
-- [0104 裁定は理由ごと運ばれる](0104-a-ruling-travels-with-its-reason.md)
-  — **Accepted**。却下の理由(`reject --note`)は REST・MCP・Web UI・
-  `ochakai context` には出ていたが、**`ochakai get` の出力と export した
-  バンドルには無かった**。get は却下された concept をただの draft として
-  印字し、バンドルは `rejected_by` / `rejected_at` は運んで「なぜ」を
-  落としていた。裁定の三つの要素のうち次の書き手が使えるのは理由だけ
-  なので、export に `rejected_note` を足し(同じ拡張キーの扱い、import は
-  読み戻さないまま)、get は裁定を stderr に印字し、検索結果に却下が
-  混じるときは一行でそう言う。**stdout の形も行の形も変えない** —
-  検索のヒットに理由を載せる案は、凍結された応答を太らせるうえに
-  ランキングの一行に散文を入れることになるので却下した。0009 §3.2 の
-  「バンドルが運ぶのはナレッジであってインスタンスの判断ではない」は
-  動かない。
+- [0135 却下は削除であり、理由は log が運ぶ](0135-a-rejection-is-a-deletion.md)
+  — **Accepted**。0104 を畳み、0068 §4 の裁定の語彙を改訂する。
+  **却下だけが減衰しなかった** — 検証には `stale_after` とフィードがあるのに、
+  却下には期限が無く、どのフィードにも並ばず、更新が持ち越すので**書き直しても
+  no が残り**、検索も一覧も既定で隠していた。理由は数週で古びるのに、裁定だけが
+  アドレスに貼り付いたままになる。OKF に置き場は無い: **信号が単調**で、
+  trust は unverified → machine-confirmed → human-reviewed と否定の段を持たず、
+  `deprecated` は「現行だったが今は違う」、`stale_after` は著者の宣言であって
+  裁定ではない。どのキーに乗せても、インスタンスの観測が旅する主張になる
+  (0009 §3.2・0075 §3.1)。**唯一の例外が SPEC §9 の `log.md`** — 主張ではなく
+  イベントを記録し、先頭の太字語は「convention, not a requirement」で、§6.1 が
+  リンク切れを許すので、**消えた concept について書ける規格唯一の語彙**である。
+  ochakai は既にそれを出しており `change` にも `reject` がある。足りないのは
+  一行の note だけだった。よって**理由はリビジョンの列になり**、`log.md` が
+  それを刷る。却下台帳(`knowledge_rejection`)は蘇生を止めるためだけに
+  あったのでテーブルごと畳まれた。**`ochakai reject` は
+  `ochakai delete --note` に畳む** — 却下が削除になった以上能力は一つで、
+  0068 §1 が verify と reject を畳まなかったのはその二つについての判断で
+  あって、reject と delete の対の判断ではない。決め手は綴りである: 却下が
+  削除になった後も `reject` を残すと、**打った人は concept が消えると
+  思わない**。そして**裁定は何も塞がない** — 却下された id はどの面からも
+  書き直せ、`--note` の有無で振る舞いは変わらない。記録した理由は情報で
+  あって次の書き手を止める権限ではなく、フラグの有無が永続性を切り替える
+  形は `git tag -m` と同じ驚き方をする。**「同じ提案が返ってこない」は
+  無くなり**、代わりにリセットを持つデプロイが種を失わなくなり、古びた裁定を
+  誰かが解除して回らなくてもよくなる。`withdrawn` は取り消すものが無いので
+  落ち、`rejected` フィルタも落ちるので**古い no は検索に居座らない**。
+  却下した案: `reject` を残すこと、`--note` の付いた削除だけ塞ぐこと、
+  人の削除をすべて裁定にすること、`stats` に却下数を残すこと、理由を
+  DELETE の本文で送ること。**コマンド一つ・フラグ二つ・符号四つと
+  テーブル一つが落ち、足すのは `--note`・クエリパラメータ `note`・
+  応答の `note` だけである。**
+- [0104 裁定は理由ごと運ばれる](0104-a-ruling-travels-with-its-reason.md) —
+  **Superseded by 0135**。
 - [0050 一覧はカーソルでページングし、順位はしない](0050-listings-page-rankings-do-not.md) — **Superseded by 0068**。
 - [0062 一覧は検索ではない](0062-a-listing-is-not-a-search.md) — **Superseded by 0068**。
 - [0056 一つの問いに一つのコマンド](0056-one-question-one-command.md) — **Superseded by 0068**。

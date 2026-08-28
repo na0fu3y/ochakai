@@ -95,9 +95,10 @@ func TestIntegration(t *testing.T) {
 		t.Errorf("vector search wrong result (score %v): %+v", score, vec)
 	}
 
-	// Rejected entries: the ruling round-trips, and search excludes them
-	// unless asked for. Rejecting is its own call — it is a ruling, not a
-	// field of the document (design doc 0043 §3.3).
+	// Rejected entries: the ruling round-trips against the tombstone, and
+	// no search returns them. Rejecting is a delete carrying its reason —
+	// a ruling, not a field of the document (design docs 0043 §3.3,
+	// 0135).
 	rej := &domain.Knowledge{
 		Type: domain.TypeMetrics, ID: "it-revenue-dup", Title: "売上(重複)",
 		Description: "統合テスト用", Status: domain.StatusDraft,
@@ -106,18 +107,29 @@ func TestIntegration(t *testing.T) {
 	if err := s.Create(ctx, rej, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Reject(ctx, rej.ID, domain.Actor{Kind: "human", Name: "test"}, "it-revenue と重複"); err != nil {
+	if err := s.SoftDelete(ctx, rej.ID, domain.Actor{Kind: "human", Name: "test"}, nil, "it-revenue と重複"); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.Get(ctx, rej.ID)
+	if _, err := s.Get(ctx, rej.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a rejected entry is still live: %v", err)
+	}
+	// The lifecycle value is untouched: a rejection is a judgment about
+	// the entry, not a stage of it. The reason rides on the revision that
+	// recorded the removal, which is what the §9 log publishes.
+	got, err := s.GetTombstone(ctx, rej.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The lifecycle value is untouched: a rejection is a judgment about
-	// the entry, not a stage of it.
-	if got.Status != domain.StatusDraft || got.Rejection == nil ||
-		got.Rejection.By.Name != "test" || got.Rejection.Note != "it-revenue と重複" {
-		t.Errorf("the ruling did not round-trip: %+v", got.Rejection)
+	if got.Status != domain.StatusDraft {
+		t.Errorf("the tombstone lost its lifecycle value: %+v", got.Status)
+	}
+	revs, err := s.ListRevisions(ctx, rej.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if revs[0].Change != "reject" || revs[0].Note != "it-revenue と重複" ||
+		revs[0].ChangedBy.Name != "test" {
+		t.Errorf("the ruling did not round-trip onto the revision: %+v", revs[0])
 	}
 	def, err := s.SearchLexical(ctx, "売上", Filter{}, 10)
 	if err != nil {
@@ -125,16 +137,8 @@ func TestIntegration(t *testing.T) {
 	}
 	for _, h := range def {
 		if h.ID == rej.ID {
-			t.Error("default search must exclude rejected entries")
+			t.Error("search must not return a rejected entry")
 		}
-	}
-	onlyRejected := true
-	only, err := s.SearchLexical(ctx, "売上", Filter{Rejected: &onlyRejected}, 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(only) != 1 || only[0].ID != rej.ID {
-		t.Errorf("status=rejected filter should return the rejected entry: %+v", only)
 	}
 
 	// Type filters match case-insensitively while storage keeps the written
@@ -232,7 +236,7 @@ func TestIntegration(t *testing.T) {
 		t.Errorf("outcome note did not round-trip: %q", note)
 	}
 
-	// ListByVerifiedAt: oldest verification first, rejected excluded by
+	// ListByVerifiedAt: oldest verification first, deleted excluded by
 	// the default filter.
 	oldAt := time.Now().UTC().Add(-365 * 24 * time.Hour)
 	older := &domain.Knowledge{
@@ -415,11 +419,11 @@ func TestIntegrationToleratesMissingEmbeddingTable(t *testing.T) {
 		Type: domain.TypeTerms, ID: "it-delete-me", Title: "delete me",
 		Status: domain.StatusDraft, CreatedBy: domain.Actor{Kind: "human", Name: "test"},
 	}
-	_ = s.SoftDelete(ctx, k.ID, k.CreatedBy, nil) // clean rerun
+	_ = s.SoftDelete(ctx, k.ID, k.CreatedBy, nil, "") // clean rerun
 	if err := s.Create(ctx, k, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, k.ID, k.CreatedBy, nil); err != nil {
+	if err := s.SoftDelete(ctx, k.ID, k.CreatedBy, nil, ""); err != nil {
 		t.Fatalf("SoftDelete: %v", err)
 	}
 	if _, err := s.Get(ctx, k.ID); err == nil {
@@ -463,7 +467,7 @@ func TestIntegrationListLinkingTo(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := s.SoftDelete(ctx, "it-link-gone", actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, "it-link-gone", actor, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -754,7 +758,7 @@ func TestIntegrationMove(t *testing.T) {
 	if _, err := s.Move(ctx, src, taken, actor, nil); !errors.Is(err, ErrAlreadyExists) {
 		t.Fatalf("move onto a live entry: got %v, want ErrAlreadyExists", err)
 	}
-	if err := s.SoftDelete(ctx, taken, actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, taken, actor, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Move(ctx, src, taken, actor, nil); !errors.Is(err, ErrAlreadyExists) {
@@ -860,8 +864,9 @@ func TestIntegrationMove(t *testing.T) {
 
 // Create over a soft-deleted entry revives it — otherwise the ID is dead
 // forever (the deleted row still owns the primary key while Update
-// refuses deleted rows). Live entries, including rejected ones, still
-// conflict.
+// refuses deleted rows). Live entries still conflict, and a tombstone
+// carrying a ruling is refused on the surfaces that ask for that
+// (design doc 0135).
 func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 	dbURL := testdb.URL(t)
 	ctx := context.Background()
@@ -897,7 +902,7 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		t.Fatalf("create over a live entry = %v, want ErrAlreadyExists", err)
 	}
 
-	if err := s.SoftDelete(ctx, first.ID, actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, first.ID, actor, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -942,7 +947,10 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 		}
 	}
 
-	// Rejected entries are live: the memory of no is not overwritable.
+	// A rejected entry leaves an ordinary tombstone: the reason it was
+	// turned down is on the revision, and it gates nothing (design doc
+	// 0135). Even the guarded create — the surface with no precondition —
+	// revives it, because the id stays open to the next writer.
 	rejected := &domain.Knowledge{
 		Type: domain.TypeTerms, ID: "it-revive-no", Title: "rejected",
 		Status: domain.StatusDraft, CreatedBy: actor,
@@ -950,15 +958,29 @@ func TestIntegrationCreateRevivesSoftDeleted(t *testing.T) {
 	if err := s.Create(ctx, rejected, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Reject(ctx, rejected.ID, actor, "duplicate"); err != nil {
+	if err := s.SoftDelete(ctx, rejected.ID, actor, nil, "duplicate"); err != nil {
 		t.Fatal(err)
 	}
 	again := &domain.Knowledge{
 		Type: domain.TypeTerms, ID: "it-revive-no", Title: "try again",
 		Status: domain.StatusDraft, CreatedBy: actor,
 	}
-	if err := s.Create(ctx, again, false); !errors.Is(err, ErrAlreadyExists) {
-		t.Fatalf("create over a rejected entry = %v, want ErrAlreadyExists", err)
+	if err := s.Create(ctx, again, true); err != nil {
+		t.Fatalf("a rejected id must stay open to the next writer: %v", err)
+	}
+	// And the reason is still readable, on the revision that removed it.
+	revs, err := s.ListRevisions(ctx, again.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, r := range revs {
+		if r.Change == "reject" && r.Note == "duplicate" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the reason is not in the history: %+v", revs)
 	}
 }
 
@@ -1077,7 +1099,7 @@ func TestIntegrationAttachments(t *testing.T) {
 	if _, _, err := s.PutFile(ctx, path, "image/png", png, actor); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, k.ID, actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, k.ID, actor, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if list, err := s.ListAttachments(ctx, k.ID); err != nil || len(list) != 0 {
@@ -1116,7 +1138,7 @@ func TestIntegrationListRevisions(t *testing.T) {
 	if err := s.Update(ctx, k, actor, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, k.ID, actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, k.ID, actor, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1312,7 +1334,7 @@ func TestIntegrationPurgeFreesIDForMove(t *testing.T) {
 		t.Fatalf("move onto a live entry: got %v, want ErrAlreadyExists", err)
 	}
 
-	if err := s.SoftDelete(ctx, dst, actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, dst, actor, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	// Still taken — but the error must say so, or the caller goes looking
@@ -1408,7 +1430,7 @@ func TestIntegrationPurgeLosesToRevival(t *testing.T) {
 	}, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, id, actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, id, actor, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1933,7 +1955,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 		t.Fatal(err)
 	}
 	const id = "it-verify-feed"
-	for _, table := range []string{"object", "knowledge_revision", "knowledge_verification", "knowledge_rejection"} {
+	for _, table := range []string{"object", "knowledge_revision", "knowledge_verification"} {
 		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id = $1`, id); err != nil {
 			t.Fatal(err)
 		}
@@ -2255,7 +2277,7 @@ func TestIntegrationExportSnapshotIsConsistent(t *testing.T) {
 	}
 
 	// The world moves on while the archive is being written.
-	if err := s.SoftDelete(ctx, doomed, actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, doomed, actor, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2290,11 +2312,13 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 	}
 	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
 
-	// Two of the three rulings are ledgers now, so the guard has to read
-	// them: a rejected-then-deleted entry is a draft tombstone as far as
-	// the status column knows (design doc 0043 §3.3), and a guard that
-	// only compared statuses would quietly stop protecting it.
-	tombstone := func(t *testing.T, id string, rule func(id string)) {
+	// One of the two rulings is a ledger, so the guard has to read it: a
+	// ruled-on tombstone is a draft as far as the status column knows
+	// (design doc 0043 §3.2), and a guard that only compared statuses
+	// would quietly stop protecting it. A rejection is not among them —
+	// it is the delete, and it leaves the id open (design doc 0135),
+	// which the note case below is the test for.
+	tombstone := func(t *testing.T, id string, rule func(id string), rejectNote string) {
 		t.Helper()
 		k := &domain.Knowledge{Type: domain.TypeTerms, ID: id, Title: id,
 			Status: domain.StatusDraft, CreatedBy: actor}
@@ -2302,7 +2326,7 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 			t.Fatal(err)
 		}
 		rule(id)
-		if err := s.SoftDelete(ctx, id, actor, nil); err != nil {
+		if err := s.SoftDelete(ctx, id, actor, nil, rejectNote); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -2314,17 +2338,13 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 	for _, tc := range []struct {
 		ruling domain.Ruling
 		rule   func(id string)
+		note   string
 	}{
 		{domain.RulingVerified, func(id string) {
 			if _, err := s.Verify(ctx, id, actor); err != nil {
 				t.Fatal(err)
 			}
-		}},
-		{domain.RulingRejected, func(id string) {
-			if _, err := s.Reject(ctx, id, actor, "why"); err != nil {
-				t.Fatal(err)
-			}
-		}},
+		}, ""},
 		{domain.RulingDeprecated, func(id string) {
 			k, err := s.Get(ctx, id)
 			if err != nil {
@@ -2334,11 +2354,11 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 			if err := s.Update(ctx, k, actor, nil); err != nil {
 				t.Fatal(err)
 			}
-		}},
+		}, ""},
 	} {
 		t.Run("guarded create refuses a "+string(tc.ruling)+" tombstone", func(t *testing.T) {
 			id := testdb.Unique(t, "it-tomb-"+string(tc.ruling)+"-")
-			tombstone(t, id, tc.rule)
+			tombstone(t, id, tc.rule, tc.note)
 			if err := s.Create(ctx, revive(id), true); !errors.Is(err, ErrCuratedTombstone) {
 				t.Fatalf("create = %v, want ErrCuratedTombstone", err)
 			}
@@ -2368,7 +2388,7 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 
 	t.Run("guarded create still revives a draft tombstone", func(t *testing.T) {
 		id := testdb.Unique(t, "it-tomb-draft-")
-		tombstone(t, id, func(string) {})
+		tombstone(t, id, func(string) {}, "")
 		if err := s.Create(ctx, revive(id), true); err != nil {
 			t.Fatalf("draft tombstone must stay revivable: %v", err)
 		}
@@ -2630,24 +2650,23 @@ func TestIntegrationMoveAndPurgeCarryTheLedgers(t *testing.T) {
 	if _, err := s.Verify(ctx, from, actor); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Reject(ctx, from, actor, "on second thoughts"); err != nil {
-		t.Fatal(err)
-	}
 	moved, err := s.Move(ctx, from, to, actor, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(moved.Verifications) != 1 || moved.Rejection == nil {
-		t.Errorf("move dropped the ledgers: %+v %+v", moved.Verifications, moved.Rejection)
+	if len(moved.Verifications) != 1 {
+		t.Errorf("move dropped the ledger: %+v", moved.Verifications)
 	}
 
-	if err := s.SoftDelete(ctx, to, actor, nil); err != nil {
+	// The rejection ledger is a tombstone's (design doc 0135), so this is
+	// where a row lands in it — and the purge below has to reach it too.
+	if err := s.SoftDelete(ctx, to, actor, nil, "on second thoughts"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Purge(ctx, to, actor); err != nil {
 		t.Fatal(err)
 	}
-	for _, table := range []string{"knowledge_verification", "knowledge_rejection"} {
+	for _, table := range []string{"knowledge_verification"} {
 		var n int
 		if err := s.pool.QueryRow(ctx, `SELECT count(*) FROM `+table+` WHERE id = $1`, to).Scan(&n); err != nil {
 			t.Fatal(err)
@@ -2691,8 +2710,6 @@ func TestIntegrationContentHashMovesOnlyWithContent(t *testing.T) {
 		do   func() error
 	}{
 		{"verifying", func() error { _, err := s.Verify(ctx, id, actor); return err }},
-		{"rejecting", func() error { _, err := s.Reject(ctx, id, actor, "no"); return err }},
-		{"lifting a rejection", func() error { _, err := s.WithdrawRejection(ctx, id, actor); return err }},
 	} {
 		if err := tc.do(); err != nil {
 			t.Fatalf("%s: %v", tc.what, err)
@@ -3171,7 +3188,6 @@ func TestIntegrationProducerRidesEveryActor(t *testing.T) {
 		_, _ = s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id)
 		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_revision WHERE id = $1`, id)
 		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_verification WHERE id = $1`, id)
-		_, _ = s.pool.Exec(ctx, `DELETE FROM knowledge_rejection WHERE id = $1`, id)
 	}
 	cleanup()
 	defer cleanup()
@@ -3235,18 +3251,6 @@ func TestIntegrationProducerRidesEveryActor(t *testing.T) {
 		t.Errorf("verification producer = %+v, want empty", last)
 	}
 
-	rejecter := domain.Actor{Kind: domain.ActorHuman, Name: "na0@example.co.jp", Producer: "ochakai-webui/0.15.0"}
-	if _, err := s.Reject(ctx, id, rejecter, "not yet"); err != nil {
-		t.Fatal(err)
-	}
-	got, err = s.Get(ctx, id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Rejection == nil || got.Rejection.By.Producer != rejecter.Producer {
-		t.Errorf("rejection = %+v, want the producer carried", got.Rejection)
-	}
-
 	revs, err := s.ListRevisions(ctx, id, 10)
 	if err != nil {
 		t.Fatal(err)
@@ -3264,6 +3268,28 @@ func TestIntegrationProducerRidesEveryActor(t *testing.T) {
 	}
 	if len(log) == 0 || log[len(log)-1].ChangedBy.Producer != agent.Producer {
 		t.Errorf("log row lost the producer: %+v", log)
+	}
+
+	// A ruling carries the producer too, and the ruling that ends a
+	// concept is its deletion (design doc 0135), so the tombstone is
+	// where this one is read back from.
+	rejecter := domain.Actor{Kind: domain.ActorHuman, Name: "na0@example.co.jp", Producer: "ochakai-webui/0.15.0"}
+	turned := testdb.Unique(t, "it-prod-no-")
+	if err := s.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeTerms, ID: turned, Title: turned, Status: domain.StatusDraft, CreatedBy: agent,
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SoftDelete(ctx, turned, rejecter, nil, "not yet"); err != nil {
+		t.Fatal(err)
+	}
+	turnedRevs, err := s.ListRevisions(ctx, turned, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if turnedRevs[0].Change != "reject" || turnedRevs[0].ChangedBy.Producer != rejecter.Producer ||
+		turnedRevs[0].Note != "not yet" {
+		t.Errorf("ruling revision = %+v, want the producer and the reason carried", turnedRevs[0])
 	}
 }
 
@@ -3382,7 +3408,7 @@ func TestIntegrationQueueCounts(t *testing.T) {
 	mk("expired", domain.StatusStable, yesterday)
 	mk("not-yet", domain.StatusStable, tomorrow)
 	rejected := mk("rejected-draft", domain.StatusDraft, "")
-	if _, err := s.Reject(ctx, rejected, actor, "no"); err != nil {
+	if err := s.SoftDelete(ctx, rejected, actor, nil, "no"); err != nil {
 		t.Fatal(err)
 	}
 	// The answer to a failure report is a verification, and it must land

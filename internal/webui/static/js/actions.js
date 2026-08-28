@@ -35,7 +35,7 @@ export async function moveEntry(from, to) {
 // from_prefix/to_prefix). Everything addressed under it goes in one
 // transaction — including the rejected concepts, the deleted ones and the
 // loose files this page never lists — so it moves whole or not at all
-// (design doc 0132). The count comes back because it is the part nobody
+// (design doc 0135). The count comes back because it is the part nobody
 // on this side could have worked out.
 export async function movePrefixEntry(from, to) {
   if (!to || to === from) return false;
@@ -129,7 +129,7 @@ export async function movePrefixEntry(from, to) {
     if (to === from) return; // dropped on its own directory
     if (wasDir) {
       // Into itself at any depth: there would be no answer to where the
-      // concepts end up (design doc 0132 §6). The server refuses it too;
+      // concepts end up (design doc 0135 §6). The server refuses it too;
       // refusing here keeps the gesture from looking like it worked.
       if ((to + '/').startsWith(from + '/')) return;
       if (confirm(`${from}/ → ${to}/ へ移動しますか？\n配下のすべて（却下されたもの・削除済みのもの・ファイルを含む）が` +
@@ -162,23 +162,24 @@ export async function applyStatus(id, status) {
   return true;
 }
 
-// The two rulings. Neither edits the document: confirming an entry and
-// turning it down are judgments about it, so they have their own
-// endpoints and leave the lifecycle status alone (design doc 0043
-// §§3.2-3.3). Verifying is an append, so the first confirmation and the
-// tenth re-check are the same call.
+// The two rulings a curator makes. Verifying does not edit the document —
+// confirming an entry is a judgment about it, so it has its own endpoint
+// and leaves the lifecycle status alone (design doc 0043 §3.2) — and it
+// is an append, so the first confirmation and the tenth re-check are the
+// same call.
 export async function verifyEntry(id) {
   await api('/api/v1/review/' + idPath(id), { method: 'POST', body: { ruling: 'verified' } });
   refreshQueues();
   return true;
 }
+
+// Rejecting removes the concept, keeping the reason against its
+// tombstone: a rejection is a deletion (design doc 0135), so what a
+// curator turned down is gone from every listing rather than hidden in
+// one, and the reason travels as an OKF SPEC §9 log entry. An agent
+// writing to the same id meets the ruling instead of reviving it.
 export async function rejectEntry(id, note) {
-  await api('/api/v1/review/' + idPath(id), { method: 'POST', body: { ruling: 'rejected', note } });
-  refreshQueues();
-  return true;
-}
-export async function liftRejection(id) {
-  await api('/api/v1/review/' + idPath(id), { method: 'POST', body: { ruling: 'withdrawn' } });
+  await api(conceptURL(id) + '?note=' + encodeURIComponent(note), { method: 'DELETE' });
   refreshQueues();
   return true;
 }

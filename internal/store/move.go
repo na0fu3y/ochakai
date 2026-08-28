@@ -115,7 +115,6 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 			`UPDATE knowledge_revision SET path = $2 || substr(path, length($1) + 1)
 			 WHERE id IS NULL AND starts_with(path, $1 || '/')`,
 			`UPDATE knowledge_verification SET id=$2 WHERE id=$1`,
-			`UPDATE knowledge_rejection SET id=$2 WHERE id=$1`,
 			`UPDATE attachment SET knowledge_id=$2 WHERE knowledge_id=$1`,
 			`UPDATE knowledge_usage SET knowledge_id=$2 WHERE knowledge_id=$1`,
 			`UPDATE knowledge_event SET knowledge_id=$2 WHERE knowledge_id=$1`,
@@ -144,7 +143,7 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		if err := s.rewriteReferences(ctx, tx, oldID, k, actor, within); err != nil {
 			return err
 		}
-		return s.addRevision(ctx, tx, k, "move", actor)
+		return s.addRevision(ctx, tx, k, "move", actor, "")
 	})
 	if err != nil {
 		return nil, err
@@ -317,7 +316,7 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 			moved.ContentHash = r.ContentHash
 			continue
 		}
-		if err := s.addRevision(ctx, tx, r, "update", actor); err != nil {
+		if err := s.addRevision(ctx, tx, r, "update", actor, ""); err != nil {
 			return err
 		}
 	}

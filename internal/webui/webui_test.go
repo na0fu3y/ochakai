@@ -445,7 +445,6 @@ func TestWriteAffordancesAreHiddenOnAReadOnlyDeployment(t *testing.T) {
 		{"Edit", `href="#/edit/`, `<span class="actions write-only">`, "</span>"},
 		{"Verify", `id="act-verify"`, `<span class="actions write-only">`, "</span>"},
 		{"Reject…", `id="act-reject"`, `<span class="actions write-only">`, "</span>"},
-		{"Withdraw rejection", `id="act-withdraw"`, `<span class="actions write-only">`, "</span>"},
 		{"Move…", `id="act-move"`, `<span class="actions write-only">`, "</span>"},
 		{"Delete…", `id="act-delete"`, `<span class="actions write-only">`, "</span>"},
 		{"queue Verify", `data-act="verify"`, `<span class="actions write-only" style="margin-left:auto`, "</span>"},

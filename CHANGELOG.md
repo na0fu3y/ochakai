@@ -21,6 +21,70 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **BREAKING: a rejection is a deletion, and the reason travels as an
+  OKF §9 log entry** ([design doc
+  0135](docs/design/0135-a-rejection-is-a-deletion.md)). A rejection was
+  the one ruling that never decayed: verification has `stale_after` and
+  a feed, while a rejection had no expiry, appeared in no queue, was
+  carried over by every update — so rewriting the document did not lift
+  the no — and was hidden by default from search and from browsing. One
+  ruling buried an address permanently, while the reason it rested on
+  goes stale in weeks. **`ochakai reject` is now `ochakai delete
+  --note`**: the concept is removed and the reason goes on the revision
+  that recorded the removal, whose change reads `reject` — the word the
+  generated `log.md` renders, and the only vocabulary OKF has for
+  something that is no longer there, since its signals are monotone and
+  §5.3's trust ladder has no rung below `unverified`. The delete brings
+  `--if-match`, which `reject` never had, so a rejection can name the
+  version it read.
+
+  **A ruling blocks nothing.** A rejected id is writable again from
+  every surface, MCP included, and `--note` changes no behaviour at all:
+  it records why, and `ochakai log`, `ochakai revisions` and the web
+  UI's history print it. A recorded reason is information rather than
+  authority, and a flag whose presence silently decided permanence would
+  be the `git tag -m` surprise, landing on the destructive side.
+  `--withdraw` is gone because there is nothing to take back — an event
+  is not a state — and the `knowledge_rejection` table is dropped
+  outright, since it existed only to block revival. A concept that was
+  *verified* before being deleted stays guarded, unchanged: the
+  verification is the ruling there, not the removal. What this costs is
+  the promise that agents stop re-proposing; nothing enforces the
+  reason. What it buys is a sandbox reset that stops losing seed
+  concepts to a visitor's ruling, and a stale ruling nobody has to go
+  around lifting.
+
+  **What breaks.** `ochakai reject`, `--withdraw` and `--rejected` are
+  gone from the CLI; `rejected` is gone from `search_concepts`;
+  `ruling: rejected` and `ruling: withdrawn` are 400 on `POST
+  /api/v1/review/{id}` (the refusal says where the operation went); the
+  exported frontmatter no longer carries `rejected_by` / `rejected_at` /
+  `rejected_note`, which import ignored anyway; `Revision` and `Change`
+  gain an optional `note`, which is an addition to a response-only
+  schema and no break. **Four of those lines
+  are inside the frozen OKF core** — `GET /api/v1/search`'s `rejected`
+  parameter, `Summary.rejected`, `Observed.rejection`, and the
+  `no_rejection` error code — and none of the three reasons
+  [docs/compatibility.md](docs/compatibility.md) allowed covers them, so
+  the page now names a fourth: a field left behind by a capability that
+  was withdrawn. All four could have stayed, answering `false`, absent
+  and the empty set forever; a field whose value can never vary again
+  keeps telling a client something is still there. `DELETE
+  /api/v1/bundle/{path}?note=` is the new spelling and is an optional
+  query parameter, which was never a break. A migration moves each
+  recorded reason onto the revision that ruled, turns every concept a
+  curator had turned down into a tombstone, and drops the ledger — so
+  nothing that was rejected becomes readable again, and every reason
+  that was written survives where the log can print it.
+
+  The reason now rides on a query string, and the cost of that is worth
+  stating: on a deployment that logs request lines, a rejection's reason
+  reaches the access log. A `DELETE` body would keep it out of there and
+  is dropped in transit by some intermediaries, which is the worse
+  failure.
+
 ### Fixed
 
 - **A `stale_after` an hour from now is no longer dropped: OKF's

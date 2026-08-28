@@ -272,7 +272,7 @@ export function reviewCard(h) {
       ${tags}
       <span class="actions write-only" style="margin-left:auto;display:flex;gap:.45rem">
         <button class="btn small primary" data-act="verify" title="検証として記録し、stable にします">✓ 検証</button>
-        <button class="btn small danger" data-act="reject">却下</button>
+        <button class="btn small danger" data-act="reject" title="理由を残して削除します">却下</button>
       </span>
     </div>
     <div class="meta">${meta}</div>
@@ -299,12 +299,12 @@ export function wireReviewActions(container) {
           toast('検証しました(stable への変更には失敗: ' + e.message + ')');
         }
       } else {
-        const note = prompt('却下の理由をご記入ください。裁定として残るため、エージェントは同じ提案を繰り返さなくなります。', '');
-        if (note === null) return;
+        const note = prompt('却下の理由をご記入ください。このナレッジは削除され、理由が裁定として残ります(履歴は残ります)。', '');
+        if (note === null || note.trim() === '') return;
         await rejectEntry(id, note);
         toast('却下しました。');
       }
-      refreshTree(); // the tree shows status badges (and hides rejected)
+      refreshTree(); // the tree shows status badges
       runReview();
       loadLoopStats(); // the band and the strip count what the ruling moved
     } catch (e) {

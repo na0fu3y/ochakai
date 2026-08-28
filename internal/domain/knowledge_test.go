@@ -346,13 +346,13 @@ func TestOKFStatusMapping(t *testing.T) {
 	}
 }
 
-// Ruling is what the curation guards ask, and it is no longer a property
-// of the status alone: two of the three rulings are ledgers now (design
-// doc 0043 §§3.2-3.3).
+// Ruling is what the curation guards ask, and it is not a property of
+// the status alone: one of the two is a ledger (design doc 0043 §3.2).
+// Turning a concept down is not among them — that is a deletion carrying
+// its reason, and it gates nothing (design doc 0135).
 func TestRuling(t *testing.T) {
 	at := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
 	v := []Verification{{By: Actor{Kind: ActorHuman, Name: "na0"}, At: at}}
-	r := &Rejection{By: Actor{Kind: ActorHuman, Name: "na0"}, At: at, Note: "double-counts"}
 	for _, tc := range []struct {
 		what string
 		k    Knowledge
@@ -362,10 +362,6 @@ func TestRuling(t *testing.T) {
 		{"a stable entry nobody checked", Knowledge{Status: StatusStable}, ""},
 		{"a verified draft", Knowledge{Status: StatusDraft, Verifications: v}, RulingVerified},
 		{"a deprecated entry", Knowledge{Status: StatusDeprecated}, RulingDeprecated},
-		{"a rejected entry", Knowledge{Status: StatusDraft, Rejection: r}, RulingRejected},
-		// Reject keeps the verifications, so both can be present; the
-		// later ruling is the one in force.
-		{"verified then rejected", Knowledge{Status: StatusStable, Verifications: v, Rejection: r}, RulingRejected},
 	} {
 		if got := tc.k.Ruling(); got != tc.want {
 			t.Errorf("%s: Ruling() = %q, want %q", tc.what, got, tc.want)

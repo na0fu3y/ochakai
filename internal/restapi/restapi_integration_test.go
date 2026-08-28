@@ -614,9 +614,8 @@ func docFrom(t *testing.T, entry map[string]any) []byte {
 
 // putDoc writes a document to id. onlyIfAbsent asks for a create, which
 // is what the tests that used to POST mean.
-// postRuling records one human ruling on an entry — the single face that
-// replaced verify, reject and un-reject (design doc 0055 §3.1). The body
-// travels as a string so a test can send one the vocabulary refuses.
+// postRuling records one human ruling on an entry. The body travels as a
+// string so a test can send one the vocabulary refuses.
 func postRuling(base, id, body string) (*http.Response, error) {
 	return http.Post(base+"/api/v1/review/"+id, "application/json", strings.NewReader(body))
 }
@@ -714,13 +713,13 @@ func TestRESTIntegrationEveryRulingIsAccepted(t *testing.T) {
 	removeEntries(t, srv, id)
 	putDoc(t, srv.URL, id, docFrom(t, map[string]any{"type": typ, "id": id}), true).Body.Close()
 
-	// In this order the three are legal back to back: a rejection to
-	// stand up, then a withdrawal to take it back, then a verification.
+	// One value is left: a rejection is a deletion (design doc 0135), and
+	// the ruling that takes one back is a person putting the concept back.
 	// What a ruling outside the list does is restapi_test.go's
 	// TestReviewRefusesRulingsItCannotRecord — a body the spec refuses is
 	// one this suite cannot send, because every request here is validated
 	// against api/openapi.yaml before it is answered.
-	for _, ruling := range []string{"rejected", "withdrawn", "verified"} {
+	for _, ruling := range []string{"verified"} {
 		if !slices.Contains(domain.Rulings, ruling) {
 			t.Fatalf("this test rules %q, which domain.Rulings no longer names", ruling)
 		}
@@ -735,42 +734,9 @@ func TestRESTIntegrationEveryRulingIsAccepted(t *testing.T) {
 		}
 	}
 	for _, ruling := range domain.Rulings {
-		if !slices.Contains([]string{"rejected", "withdrawn", "verified"}, ruling) {
+		if !slices.Contains([]string{"verified"}, ruling) {
 			t.Errorf("domain.Rulings names %q, which this test never sends", ruling)
 		}
-	}
-}
-
-// TestRESTIntegrationWithdrawWithNothingToWithdrawIs409 pins design doc
-// 0064: a live concept carrying no rejection is a 409 on "withdrawn", the
-// same shape purge-on-a-live-concept already answers — not a 404, which
-// would be indistinguishable from "no such concept".
-func TestRESTIntegrationWithdrawWithNothingToWithdrawIs409(t *testing.T) {
-	srv, _ := newIntegrationServer(t)
-
-	typ := testdb.Unique(t, "restnowithdraw")
-	id := typ + "/never-rejected"
-	putDoc(t, srv.URL, id, docFrom(t, map[string]any{"type": typ, "id": id}), true).Body.Close()
-
-	resp, err := postRuling(srv.URL, id, `{"ruling":"withdrawn"}`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("withdraw with nothing to withdraw = %d, want 409: %s", resp.StatusCode, body)
-	}
-
-	// A concept that never existed is still a 404 — the two are told
-	// apart, not both folded into one status.
-	resp, err = postRuling(srv.URL, typ+"/does-not-exist", `{"ruling":"withdrawn"}`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusNotFound {
-		t.Errorf("withdraw on a missing concept = %d, want 404", resp.StatusCode)
 	}
 }
 
@@ -3349,19 +3315,6 @@ func TestRESTIntegrationErrorCodes(t *testing.T) {
 	}
 	if got := codeOf(t, resp); got != domain.CodeNotDeleted {
 		t.Errorf("live purge code = %q, want %q", got, domain.CodeNotDeleted)
-	}
-
-	// 409, a different condition under the same status.
-	resp, err = postRuling(srv.URL, id, `{"ruling":"withdrawn"}`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.StatusCode != http.StatusConflict {
-		resp.Body.Close()
-		t.Fatalf("withdraw with no rejection = %d, want 409", resp.StatusCode)
-	}
-	if got := codeOf(t, resp); got != domain.CodeNoRejection {
-		t.Errorf("absent rejection code = %q, want %q", got, domain.CodeNoRejection)
 	}
 
 	// 412: the If-Match precondition did not hold.

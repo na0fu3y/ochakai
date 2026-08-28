@@ -89,7 +89,7 @@ func zeroed[T ~string](values []T) map[string]int64 {
 }
 
 // statsConcepts tallies the live concepts by lifecycle and trust tier in
-// one pass, and counts the rejections and the new arrivals beside them.
+// one pass, and counts the new arrivals beside them.
 //
 // The two tiers are derived exactly as the trust filter derives them
 // (buildWhere) and as SPEC §5.3 defines them: a person makes it
@@ -109,12 +109,11 @@ func (s *Store) statsConcepts(ctx context.Context, st *domain.Stats, since time.
 					WHERE v.id = k.id) THEN '%s'
 				ELSE '%s'
 			END AS trust,
-			EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = k.id) AS rejected,
 			count(*) FILTER (WHERE k.created_at >= $1) AS created,
 			count(*) AS n
 		FROM object k
 		WHERE k.deleted_at IS NULL AND k.id IS NOT NULL%s
-		GROUP BY 1, 2, 3`,
+		GROUP BY 1, 2`,
 		domain.ActorHuman, domain.TrustHuman, domain.TrustMachine, domain.TrustUnverified, scope),
 		append([]any{since}, scopeArgs...)...)
 	if err != nil {
@@ -123,9 +122,8 @@ func (s *Store) statsConcepts(ctx context.Context, st *domain.Stats, since time.
 	defer rows.Close()
 	for rows.Next() {
 		var status, trust string
-		var rejected bool
 		var created, n int64
-		if err := rows.Scan(&status, &trust, &rejected, &created, &n); err != nil {
+		if err := rows.Scan(&status, &trust, &created, &n); err != nil {
 			return fmt.Errorf("stats: concepts: %w", err)
 		}
 		// A concept whose document names no status reads as OKF's default
@@ -135,9 +133,6 @@ func (s *Store) statsConcepts(ctx context.Context, st *domain.Stats, since time.
 		st.Concepts.Trust[trust] += n
 		st.Concepts.Total += n
 		st.Concepts.Created += created
-		if rejected {
-			st.Concepts.Rejected += n
-		}
 	}
 	return rows.Err()
 }

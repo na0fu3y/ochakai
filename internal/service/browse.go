@@ -277,6 +277,7 @@ func RenderLog(prefix string, rows []store.LogRow) []byte {
 	for _, r := range rows {
 		lines = append(lines, okf.LogLine{
 			At: r.ChangedAt, Change: r.Change, Path: r.Path, Title: r.Title, By: r.ChangedBy,
+			Note: r.Note,
 		})
 	}
 	return okf.LogDocument(title, prefix, lines)

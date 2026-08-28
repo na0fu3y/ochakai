@@ -15,8 +15,9 @@ import (
 // paths; these queries read that hierarchy one level at a time — the
 // subdirectories and entries directly under a prefix — so the web UI can
 // render a file-tree without loading the whole knowledge base. The root
-// is prefix "": the top-level segments themselves. Soft-deleted and
-// rejected entries stay out, the same default as search.
+// is prefix "": the top-level segments themselves. Soft-deleted entries
+// stay out, the same default as search — and a rejected concept is a
+// deleted one (design doc 0135).
 
 // DirCount is one subdirectory (ID segment) with the number of entries
 // anywhere beneath it.
@@ -63,17 +64,11 @@ type BrowseConcept struct {
 	UpdatedAt   time.Time     `json:"updated_at"`
 }
 
-// browseNotRejected mirrors Filter's default: rejected entries are
-// knowledge that was never accepted and must not resurface while
-// browsing, exactly as in search. A rejection is a ledger row rather than
-// a status (design doc 0043 §3.3), so the id is qualified — the ledger
-// has an id column of its own, and a bare one inside the subquery would
-// bind to it and match everything.
-// id IS NOT NULL keeps files out: browsing lists the concepts in a
-// directory, and a file in the same directory is listed as a file
-// (design doc 0046 §3.7), not as an entry with no title.
-const browseNotRejected = `deleted_at IS NULL AND id IS NOT NULL
-	AND NOT EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = object.id)`
+// browseLive mirrors Filter's default. id IS NOT NULL keeps files out:
+// browsing lists the concepts in a directory, and a file in the same
+// directory is listed as a file (design doc 0046 §3.7), not as an entry
+// with no title.
+const browseLive = `deleted_at IS NULL AND id IS NOT NULL`
 
 // MaxBrowseEntries bounds one page of a directory listing. It used to
 // bound the listing itself, on the reasoning that a directory this wide
@@ -146,7 +141,7 @@ func (s *Store) Browse(ctx context.Context, prefix string, after *BrowseAfter, s
 		rows, err := s.pool.Query(ctx, `
 			SELECT split_part(substr(id, length($1::text)+1), '/', 1) AS dir, count(*)
 			FROM object
-			WHERE `+browseNotRejected+`
+			WHERE `+browseLive+`
 			  AND left(id, length($1::text)) = $1
 			  AND strpos(substr(id, length($1::text)+1), '/') > 0
 			  `+browseScope("id", scope, &args)+`
@@ -172,7 +167,7 @@ func (s *Store) Browse(ctx context.Context, prefix string, after *BrowseAfter, s
 		rows, err := s.pool.Query(ctx, fmt.Sprintf(`
 			SELECT type, id, title, description, status, updated_at
 			FROM object
-			WHERE `+browseNotRejected+`
+			WHERE `+browseLive+`
 			  AND left(id, length($1::text)) = $1
 			  AND strpos(substr(id, length($1::text)+1), '/') = 0
 			  %s%s

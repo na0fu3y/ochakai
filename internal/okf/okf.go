@@ -74,12 +74,6 @@ type frontmatter struct {
 	Executor    *executor   `yaml:"executor,omitempty"`
 	Attester    *attester   `yaml:"attester,omitempty"`
 	CreatedBy   text        `yaml:"created_by,omitempty"` // ochakai extension: OKF records only who produced the current content
-	RejectedBy  text        `yaml:"rejected_by,omitempty"`
-	RejectedAt  text        `yaml:"rejected_at,omitempty"`
-	// The reason, which is the half of a rejection the next writer acts
-	// on (design doc 0104). text rather than string because a note is
-	// free prose and may span lines.
-	RejectedNote text `yaml:"rejected_note,omitempty"`
 }
 
 // The YAML spelling of the v0.2 families lives here rather than on the
@@ -539,22 +533,15 @@ func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 			fm.Verified = append(fm.Verified, actorEvent(&v.By, &v.At))
 		}
 	}
-	// A rejection is this instance's ruling and not a portable claim, so
-	// it stays an ochakai extension key that import never reads back
-	// (design docs 0009, 0043 §3.3). The status beside it is now the
-	// entry's real lifecycle value rather than deprecated, which is what
-	// the ruling used to be folded onto — an assertion ("this was once
-	// current") that a rejection specifically denies.
-	//
-	// All three keys, because a ruling without its reason is the half a
-	// reader cannot act on (design doc 0104): who and when say a
-	// proposal was turned down, and only the note says what would have
-	// to change for the next one to land.
-	if serverKeys && k.Rejection != nil {
-		fm.RejectedBy = text(k.Rejection.By.String())
-		fm.RejectedAt = text(k.Rejection.At.UTC().Format(time.RFC3339))
-		fm.RejectedNote = text(k.Rejection.Note)
-	}
+	// No rejection keys. A rejection is a deletion (design doc 0135), so
+	// there is no live concept carrying one to render — and OKF has no
+	// negative signal anywhere in its frontmatter (SPEC §5.3's ladder
+	// runs unverified to human-reviewed with no rung below it), so a key
+	// here would be this instance's observation travelling as a claim,
+	// which 0009 §3.2 and 0075 §3.1 refuse. What travels is the §9 log
+	// entry the removal wrote. The reader still ignores the keys on the
+	// way in: bundles written before this carry them, and they are the
+	// document's own claim rather than truth.
 
 	fmYAML, err := yaml.Marshal(&fm)
 	if err != nil {

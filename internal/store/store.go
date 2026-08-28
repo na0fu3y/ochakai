@@ -59,13 +59,6 @@ var ErrNotDeleted = errors.New("knowledge is live; soft-delete it before purging
 // refuse (0109 §4).
 var ErrOutsideScope = errors.New("the rewrite this operation performs reaches outside the caller's scope")
 
-// ErrNoRejection is returned by WithdrawRejection for a live entry that
-// carries no rejection to withdraw — a state conflict, the same shape as
-// ErrNotDeleted, not a missing resource (design doc 0064: this used to
-// come back as ErrNotFound, indistinguishable on the wire from "no such
-// concept").
-var ErrNoRejection = errors.New("knowledge carries no rejection to withdraw")
-
 // NowStored is the current UTC time truncated to the microsecond precision
 // PostgreSQL timestamptz stores. Setting entity timestamps from it means an
 // in-memory updated_at always equals the value that round-trips through the
@@ -181,26 +174,25 @@ const knowledgeCols = `type, id, title, description, resource, tags, status, sta
 	updated_by_kind, updated_by_name, updated_by_via, updated_by_producer,
 	links, attrs, body, created_at, updated_at, content_changed_at, doc, frontmatter, content_hash`
 
-// ledgerCols is the two instance ledgers — verifications and the
-// rejection — read as JSON beside the entry's own columns (design doc
-// 0043 §§3.2-3.3). alias names the knowledge table in the surrounding
-// query, since some read it as "knowledge" and the ones that join give
-// it "k".
+// ledgerCols is the instance ledger — the verifications — read as JSON
+// beside the entry's own columns (design doc 0043 §3.2). alias names the
+// knowledge table in the surrounding query, since some read it as
+// "knowledge" and the ones that join give it "k".
 //
-// They are correlated subqueries rather than joins so that no caller has
-// to remember them: every read path selects knowledgeSelect or
-// knowledgeSelectK, and an entry that arrives without its ledgers would
+// It is a correlated subquery rather than a join so that no caller has
+// to remember it: every read path selects knowledgeSelect or
+// knowledgeSelectK, and an entry that arrives without its ledger would
 // silently read as unverified — which is the one wrong answer that looks
 // like a valid one.
+//
+// There is no second ledger. Turning a concept down is a deletion
+// carrying its reason (design doc 0135), and the reason belongs to that
+// event: it is on the revision, and the §9 log is what publishes it.
 func ledgerCols(alias string) string {
 	return `(SELECT jsonb_agg(jsonb_build_object(
 			'by', jsonb_build_object('kind', v.by_kind, 'name', v.by_name, 'via', v.by_via, 'producer', v.by_producer),
 			'at', v.at) ORDER BY v.seq)
-		FROM knowledge_verification v WHERE v.id = ` + alias + `.id),
-		(SELECT jsonb_build_object(
-			'by', jsonb_build_object('kind', r.by_kind, 'name', r.by_name, 'via', r.by_via, 'producer', r.by_producer),
-			'at', r.at, 'note', r.note)
-		FROM knowledge_rejection r WHERE r.id = ` + alias + `.id)`
+		FROM knowledge_verification v WHERE v.id = ` + alias + `.id)`
 }
 
 // lastVerifiedAt is the newest verification's timestamp for the entry
@@ -296,13 +288,16 @@ func sortedKeys(m map[string]string) []string {
 
 // notCurated is Knowledge.Curated() as a SQL predicate, for the guards
 // that must agree with it inside a transaction. alias names the knowledge
-// table. Curation is no longer a property of the status alone, so a guard
-// that only compared statuses would stop protecting a verified or
-// rejected entry the moment those became ledgers.
+// table. Curation is not a property of the status alone, so a guard that
+// only compared statuses would stop protecting a verified entry the
+// moment verification became a ledger.
+//
+// A concept somebody turned down is not curated here, deliberately: that
+// is a deletion carrying its reason (design doc 0135), and the id stays
+// open to the next writer. What was decided is in the log, not in a wall.
 func notCurated(alias string) string {
 	return alias + `.status <> 'deprecated'
-		AND NOT EXISTS (SELECT 1 FROM knowledge_verification v WHERE v.id = ` + alias + `.id)
-		AND NOT EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = ` + alias + `.id)`
+		AND NOT EXISTS (SELECT 1 FROM knowledge_verification v WHERE v.id = ` + alias + `.id)`
 }
 
 // The SQL fragments that restate knowledgeCols are derived from it once,
@@ -377,7 +372,7 @@ func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish fu
 	var staleAfter *time.Time
 	var links, attrs []byte
 	var sources, usageWindow, parameters, executor, attester []byte
-	var verifications, rejection []byte
+	var verifications []byte
 	dests = []any{&k.Type, &k.ID, &k.Title, &k.Description, &k.Resource, &k.Tags, &k.Status, &k.StatusNote, &staleAfter,
 		&sources, &usageWindow, &k.Runtime, &parameters, &k.Computation, &executor, &attester,
 		&k.CreatedBy.Kind, &k.CreatedBy.Name, &k.CreatedBy.Via, &k.CreatedBy.Producer,
@@ -386,7 +381,7 @@ func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish fu
 	if withDoc {
 		dests = append(dests, &k.Doc)
 	}
-	dests = append(dests, &k.ContentHash, &verifications, &rejection)
+	dests = append(dests, &k.ContentHash, &verifications)
 	finish = func() error {
 		defer func() { k.Trust = domain.TrustOf(k.Verifications) }()
 		if staleAfter != nil {
@@ -402,7 +397,7 @@ func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish fu
 			{sources, &k.Sources}, {parameters, &k.Parameters},
 			{usageWindow, &k.UsageWindow}, {executor, &k.Executor}, {attester, &k.Attester},
 			{links, &k.Links}, {attrs, &k.Attrs},
-			{verifications, &k.Verifications}, {rejection, &k.Rejection},
+			{verifications, &k.Verifications},
 		} {
 			if len(d.raw) == 0 {
 				continue
@@ -798,15 +793,13 @@ func (s *Store) Create(ctx context.Context, k *domain.Knowledge, keepCuratedTomb
 			return ErrAlreadyExists
 		}
 		// A create is a new entry even when it lands on a tombstone's id,
-		// so it starts with no rulings. Carrying the old ones over would
+		// so it starts with no rulings. Carrying the old one over would
 		// have a verification vouch for content nobody verified.
-		for _, ledger := range []string{"knowledge_verification", "knowledge_rejection"} {
-			if _, err := tx.Exec(ctx, `DELETE FROM `+ledger+` WHERE id = $1`, k.ID); err != nil {
-				return err
-			}
+		if _, err := tx.Exec(ctx, `DELETE FROM knowledge_verification WHERE id = $1`, k.ID); err != nil {
+			return err
 		}
-		k.Verifications, k.Rejection = nil, nil
-		return s.addRevision(ctx, tx, k, "create", k.CreatedBy)
+		k.Verifications = nil
+		return s.addRevision(ctx, tx, k, "create", k.CreatedBy, "")
 	})
 }
 
@@ -883,7 +876,7 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 			}
 			return ErrNotFound
 		}
-		return s.addRevision(ctx, tx, k, "update", actor)
+		return s.addRevision(ctx, tx, k, "update", actor, "")
 	})
 }
 
@@ -904,10 +897,6 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 // precondition does not lose it because somebody else confirmed the
 // entry. Promoting a draft to stable is a separate act by a writer, on
 // the document.
-//
-// A rejection is cleared: an entry cannot be both vouched for and turned
-// down, and confirming one is the plainest possible statement that the
-// ruling no longer holds.
 //
 // The timestamp comes from the database, not from NowStored: the feed
 // compares it against the last failure report, which RecordOutcome stamps
@@ -933,88 +922,10 @@ func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*dom
 		if err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM knowledge_rejection WHERE id = $1`, id); err != nil {
-			return err
-		}
 		if k, err = s.getOneTx(ctx, tx, id, false); err != nil {
 			return err
 		}
-		return s.addRevision(ctx, tx, k, "verify", actor)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return k, nil
-}
-
-// Reject records this instance's ruling that an entry was not accepted,
-// replacing any earlier ruling. Like Verify it is a ledger write and
-// leaves the document alone: rejecting is a judgment about the entry, not
-// an edit of it, so the status and the ETag do not move (design doc 0043
-// §3.3).
-//
-// Verifications are not cleared. A rejection that follows a confirmation
-// is exactly the history worth keeping — somebody vouched for this, and
-// somebody later ruled against it — and erasing the first half would make
-// the record agree with whoever wrote last.
-func (s *Store) Reject(ctx context.Context, id string, actor domain.Actor, note string) (*domain.Knowledge, error) {
-	var k *domain.Knowledge
-	err := s.withTx(ctx, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `INSERT INTO knowledge_rejection (id, by_kind, by_name, by_via, by_producer, at, note)
-			SELECT $1, $2, $3, $4, $5, now(), $6
-			WHERE EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)
-			ON CONFLICT (id) DO UPDATE SET
-				by_kind=EXCLUDED.by_kind, by_name=EXCLUDED.by_name, by_via=EXCLUDED.by_via,
-				by_producer=EXCLUDED.by_producer, at=EXCLUDED.at, note=EXCLUDED.note`,
-			id, actor.Kind, actor.Name, actor.Via, actor.Producer, note)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrNotFound
-		}
-		if k, err = s.getOneTx(ctx, tx, id, false); err != nil {
-			return err
-		}
-		return s.addRevision(ctx, tx, k, "reject", actor)
-	})
-	if err != nil {
-		return nil, err
-	}
-	return k, nil
-}
-
-// WithdrawRejection withdraws a ruling. ErrNotFound when the entry is
-// gone; ErrNoRejection when it is live but was never rejected — lifting
-// nothing is a mistake worth reporting, not a no-op to swallow, and the
-// two are told apart on the wire (design doc 0064): a missing concept is
-// still a 404, a live one with nothing to withdraw is a 409, the same
-// shape purge-on-a-live-concept already answers.
-func (s *Store) WithdrawRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
-	var k *domain.Knowledge
-	err := s.withTx(ctx, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx, `DELETE FROM knowledge_rejection r
-			WHERE r.id = $1
-			  AND EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)`, id)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			var live bool
-			if err := tx.QueryRow(ctx,
-				`SELECT EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)`,
-				id).Scan(&live); err != nil {
-				return err
-			}
-			if live {
-				return ErrNoRejection
-			}
-			return ErrNotFound
-		}
-		if k, err = s.getOneTx(ctx, tx, id, false); err != nil {
-			return err
-		}
-		return s.addRevision(ctx, tx, k, "withdraw", actor)
+		return s.addRevision(ctx, tx, k, "verify", actor, "")
 	})
 	if err != nil {
 		return nil, err
@@ -1023,13 +934,22 @@ func (s *Store) WithdrawRejection(ctx context.Context, id string, actor domain.A
 }
 
 // SoftDelete hides an entry from reads while keeping full history.
-// Create on the same id revives it. ifMatch is the same optional
+// Create on the same id revives it.
+//
+// A non-empty note makes the removal a rejection (design doc 0135): the
+// reason is written to the ruling ledger against the tombstone and the
+// revision says "reject" rather than "delete", which is the word the OKF
+// SPEC §9 log renders. The tombstone is then curated, so the surfaces
+// with no If-Match channel will not revive it — an unexplained removal
+// stays revivable, because housekeeping is not a ruling.
+//
+// ifMatch is the same optional
 // optimistic-concurrency precondition Update takes (design docs 0030,
 // 0064): non-nil, the delete lands only if the stored content_hash still
 // equals it, closing the same read-then-act race a stale write would —
 // deleting a version the caller never saw because a delete request
 // crossed with somebody else's edit.
-func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor, ifMatch *string) error {
+func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor, ifMatch *string, note string) error {
 	return s.withTx(ctx, func(tx pgx.Tx) error {
 		k, err := s.Get(ctx, id)
 		if err != nil {
@@ -1069,7 +989,11 @@ func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor, i
 		if err := execTolerateMissingTable(ctx, tx, `DELETE FROM knowledge_embedding WHERE id=$1`, id); err != nil {
 			return err
 		}
-		return s.addRevision(ctx, tx, k, "delete", actor)
+		change := "delete"
+		if note != "" {
+			change = "reject"
+		}
+		return s.addRevision(ctx, tx, k, change, actor, note)
 	})
 }
 
@@ -1138,7 +1062,6 @@ func (s *Store) Purge(ctx context.Context, id string, actor domain.Actor) error 
 			`DELETE FROM knowledge_event WHERE knowledge_id=$1`,
 			`DELETE FROM knowledge_revision WHERE id=$1`,
 			`DELETE FROM knowledge_verification WHERE id=$1`,
-			`DELETE FROM knowledge_rejection WHERE id=$1`,
 		} {
 			if _, err := tx.Exec(ctx, q, id); err != nil {
 				return err

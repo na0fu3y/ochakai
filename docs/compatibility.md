@@ -10,11 +10,13 @@ The short version, so nobody has to infer it:
 > tool or a CLI command a release renames keeps answering under its old
 > spelling until the next release, and nothing else gets a window
 > ([0088](design/0088-a-retired-name-answers-for-one-release.md)). Only
-> the latest release is supported. Three things can still break the core
+> the latest release is supported. Four things can still break the core
 > — a security defect, output that does not conform to OKF
-> ([0100](design/0100-md-is-how-a-concept-is-spelled.md)), and folding
+> ([0100](design/0100-md-is-how-a-concept-is-spelled.md)), folding
 > away a second spelling of something OKF already defines
-> ([0102](design/0102-one-history-in-one-spelling.md)) — though a *new
+> ([0102](design/0102-one-history-in-one-spelling.md)), and a field left
+> behind by a capability that was withdrawn
+> ([0135](design/0135-a-rejection-is-a-deletion.md)) — though a *new
 > field in a response* and a *new optional query parameter* were never
 > breaks, and are allowed
 > ([0082](design/0082-what-the-freeze-holds-still.md),
@@ -23,6 +25,19 @@ The short version, so nobody has to infer it:
 That is the actual policy, not a disclaimer. If you are deciding whether
 to build on ochakai, decide against *this*, not against what "SemVer"
 usually implies at 0.x.
+
+**The fourth reason is new, and it is a real break rather than a
+reading.** [0135](design/0135-a-rejection-is-a-deletion.md) withdrew the
+ability to reject a concept as a live ruling — a rejection is a deletion
+now — and took the frozen shapes that ability had left behind with it:
+`GET /api/v1/search`'s `rejected` parameter, `Summary.rejected`,
+`Observed.rejection`, and the `no_rejection` error code. All four could
+have stayed, answering `false`, absent, and the empty set forever; the
+freeze was kept for the client's sake, and a field whose value can never
+vary again keeps telling that client something is still there. A client
+reading any of the four breaks on that release, and the changelog marks
+it **BREAKING**. The reason is narrow on purpose: it reaches a frozen
+line only when the capability behind it is gone, never to tidy one up.
 
 **The core is narrower than the freeze first announced, and that is a
 retraction, not a reinterpretation.** From 2026-08-02

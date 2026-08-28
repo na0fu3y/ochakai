@@ -111,7 +111,7 @@ func TestIntegrationUnderscoreIsNotAWildcard(t *testing.T) {
 	})
 
 	t.Run("purge", func(t *testing.T) {
-		if err := s.SoftDelete(ctx, root+"/moved", actor, nil); err != nil {
+		if err := s.SoftDelete(ctx, root+"/moved", actor, nil, ""); err != nil {
 			t.Fatal(err)
 		}
 		if err := s.Purge(ctx, root+"/moved", actor); err != nil {

@@ -159,7 +159,7 @@ func (s *Store) MovePrefix(ctx context.Context, oldPrefix, newPrefix string, act
 			if k == nil {
 				return fmt.Errorf("moving %s: %s vanished under the move", oldPrefix, c.new)
 			}
-			if err := s.addRevision(ctx, tx, k, "move", actor); err != nil {
+			if err := s.addRevision(ctx, tx, k, "move", actor, ""); err != nil {
 				return err
 			}
 		}
@@ -203,7 +203,6 @@ func rekeyConcept(ctx context.Context, tx pgx.Tx, oldID, newID string, actor dom
 	for _, q := range []string{
 		`UPDATE knowledge_revision SET id=$2, path=$2 || '.md' WHERE id=$1`,
 		`UPDATE knowledge_verification SET id=$2 WHERE id=$1`,
-		`UPDATE knowledge_rejection SET id=$2 WHERE id=$1`,
 		`UPDATE attachment SET knowledge_id=$2 WHERE knowledge_id=$1`,
 		`UPDATE knowledge_usage SET knowledge_id=$2 WHERE knowledge_id=$1`,
 		`UPDATE knowledge_event SET knowledge_id=$2 WHERE knowledge_id=$1`,
@@ -359,7 +358,7 @@ func (s *Store) rewritePrefixReferences(ctx context.Context, tx pgx.Tx, pairs []
 		if self {
 			continue // its "move" revision carries this text
 		}
-		if err := s.addRevision(ctx, tx, r, "update", actor); err != nil {
+		if err := s.addRevision(ctx, tx, r, "update", actor, ""); err != nil {
 			return nil, err
 		}
 	}

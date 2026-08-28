@@ -11,7 +11,7 @@ import { KNOWN_TYPES, STATUSES, icon } from '../vocab.js';
 // loaded and cursor are the listing walk: the hits already on screen and
 // where the next page resumes, both reset by any change that restarts the
 // listing (design doc 0050 §2.1).
-export const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, loaded: [], cursor: '', verified: false, rejected: false };
+export const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, loaded: [], cursor: '', verified: false };
 
 // If the viewport grows past the breakpoint while the filter disclosure is
 // collapsed, its summary disappears — reopen it so filters stay reachable.
@@ -29,16 +29,14 @@ export function viewExplore() {
       <span class="type-ico">${icon(t)}</span>${esc(t)}</label>`).join('');
   const statusChips = STATUSES.map(s => `
     <label class="chip"><input type="checkbox" data-status="${s}" aria-label="ステータス ${s}" ${explore.statuses.has(s) ? 'checked' : ''}>${s}</label>`).join('')
-    // Two rulings, asked independently of the lifecycle value (design doc
-    // 0043 §§3.2-3.3). Rejected is the only way to see entries a human
-    // turned down: they are hidden from every other listing, which is the
-    // point — and being able to read them is how somebody checks what was
-    // already declined.
+    // The verification ledger, asked independently of the lifecycle value
+    // (design doc 0043 §3.2). There is no rejected chip: a rejection is a
+    // deletion (design doc 0135), so what a curator turned down is not in
+    // any listing to filter for.
     + `
     <label class="chip" title="誰かが確認したナレッジだけに絞ります(machine-confirmed / human-reviewed)"><input type="checkbox" id="f-verified"
       aria-label="確認済みのみ" ${explore.verified ? 'checked' : ''}>✓ 確認済み</label>
-    <label class="chip" title="人が却下したナレッジだけに絞ります(他の一覧では表示されません)"><input type="checkbox" id="f-rejected"
-      aria-label="却下されたもののみ" ${explore.rejected ? 'checked' : ''}>rejected</label>`;
+`;
   // Filters collapse into a disclosure on narrow screens; keep it open on
   // wide ones (the summary is hidden there, so it could never be reopened).
   const wide = matchMedia('(min-width: 761px)').matches;
@@ -91,7 +89,7 @@ export function viewExplore() {
     cb.addEventListener('change', () => { cb.checked ? explore.types.add(cb.dataset.type) : explore.types.delete(cb.dataset.type); rerun(); }));
   document.querySelectorAll('.fb-row input[data-status]').forEach(cb =>
     cb.addEventListener('change', () => { cb.checked ? explore.statuses.add(cb.dataset.status) : explore.statuses.delete(cb.dataset.status); rerun(); }));
-  for (const [sel, key] of [['#f-verified', 'verified'], ['#f-rejected', 'rejected']]) {
+  for (const [sel, key] of [['#f-verified', 'verified']]) {
     $(sel).addEventListener('change', () => { explore[key] = $(sel).checked; rerun(); });
   }
   $('#f-type-extra').addEventListener('keydown', e => {
@@ -157,7 +155,6 @@ export async function runSearch(append = false) {
   // The filter asks SPEC §5.3's question — who confirmed this — rather
   // than a boolean the spec has no word for (design doc 0046 §3.10).
   if (explore.verified) { p.append('trust', 'human-reviewed'); p.append('trust', 'machine-confirmed'); }
-  if (explore.rejected) p.set('rejected', 'true');
   if (explore.tag) p.append('tag', explore.tag);
   // A path scope is a filter like tag, so it rides along with whatever
   // mode the chain above picked (design doc 0041 §2.1). The UI takes one

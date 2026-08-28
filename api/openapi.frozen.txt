@@ -23,6 +23,7 @@ DELETE /api/v1/bundle/{path} header Ochakai-On-Behalf-Of ref=OnBehalfOf
 DELETE /api/v1/bundle/{path} header Ochakai-Producer ref=Producer
 DELETE /api/v1/bundle/{path} operationId=deleteBundlePath
 DELETE /api/v1/bundle/{path} path path required=true type=string
+DELETE /api/v1/bundle/{path} query note required=false type=string maxLength=2000
 DELETE /api/v1/bundle/{path} query purge required=false type=boolean default=false
 DELETE /api/v1/bundle/{path} response 204
 DELETE /api/v1/bundle/{path} response 204 header Ochakai-Read-Only ref=ReadOnly
@@ -103,7 +104,6 @@ GET /api/v1/search query links_to required=false type=string
 GET /api/v1/search query prefix required=false type=array
 GET /api/v1/search query prefix[] type=string
 GET /api/v1/search query q required=false type=string
-GET /api/v1/search query rejected required=false type=boolean
 GET /api/v1/search query sort required=false type=string enum=["verified_at" "usage" "failed" "stale_after"]
 GET /api/v1/search query source required=false type=string
 GET /api/v1/search query status required=false type=array
@@ -205,7 +205,7 @@ components/parameters/Producer name=Ochakai-Producer in=header required=false
 components/parameters/Producer schema type=string maxLength=128
 components/responses/Error
 components/responses/Error content application/json type=object
-components/responses/Error content application/json.code required=true type=string enum=["already_exists" "forbidden" "internal" "invalid" "method_not_allowed" "no_rejection" "not_deleted" "not_found" "precondition_failed" "read_only" "too_large" "unsupported"]
+components/responses/Error content application/json.code required=true type=string enum=["already_exists" "forbidden" "internal" "invalid" "method_not_allowed" "not_deleted" "not_found" "precondition_failed" "read_only" "too_large" "unsupported"]
 components/responses/Error content application/json.error required=true type=string
 components/responses/Error header Ochakai-Read-Only ref=ReadOnly
 components/responses/Forbidden
@@ -258,6 +258,7 @@ components/schemas/Change type=object
 components/schemas/Change.change required=true type=string
 components/schemas/Change.changed_at required=true type=string format="date-time"
 components/schemas/Change.changed_by required=true ref=Actor
+components/schemas/Change.note required=false type=string
 components/schemas/Change.path required=true type=string
 components/schemas/Change.title required=false type=string
 components/schemas/File type=object
@@ -280,19 +281,14 @@ components/schemas/ObjectHistory.revisions[] ref=Revision
 components/schemas/Observed type=object
 components/schemas/Observed.created_by required=true ref=Actor
 components/schemas/Observed.generated required=true ref=Generated
-components/schemas/Observed.rejection required=false
-components/schemas/Observed.rejection/allOf/0 ref=Rejection
 components/schemas/Observed.verified required=false type=array
 components/schemas/Observed.verified[] ref=Verification
-components/schemas/Rejection type=object
-components/schemas/Rejection.at required=true type=string format="date-time"
-components/schemas/Rejection.by required=true ref=Actor
-components/schemas/Rejection.note required=false type=string
 components/schemas/Revision type=object
 components/schemas/Revision.change required=true type=string
 components/schemas/Revision.changed_at required=true type=string format="date-time"
 components/schemas/Revision.changed_by required=true ref=Actor
 components/schemas/Revision.document required=true type=string
+components/schemas/Revision.note required=false type=string
 components/schemas/Revision.rev required=true type=integer
 components/schemas/SearchHit
 components/schemas/SearchHit/allOf/0 ref=Summary
@@ -311,7 +307,6 @@ components/schemas/Summary.description required=false type=string
 components/schemas/Summary.id required=true type=string pattern="^[^./][^/]{0,127}(/[^./][^/]{0,127})*$"
 components/schemas/Summary.links required=false type=array
 components/schemas/Summary.links[] ref=Link
-components/schemas/Summary.rejected required=true type=boolean
 components/schemas/Summary.resource required=false type=string
 components/schemas/Summary.stale_after required=false type=string
 components/schemas/Summary.status required=true ref=Status

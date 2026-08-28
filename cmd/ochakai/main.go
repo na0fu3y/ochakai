@@ -227,9 +227,9 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
                           markdown or JSON at <id>, or a file at its own path
                           (every change kept as a revision)
   verify <id>             record a verification (re-affirms a verified concept too)
-  reject <id>             record a rejection and why (--withdraw takes it back)
   delete <path>           remove one object: a concept by id (history retained)
-                          or a file by the path it lives at
+                          or a file by the path it lives at; --note makes the
+                          removal a ruling and says why it was not accepted
   purge <id>              hard-delete a soft-deleted concept, freeing its id
   reembed                 embed concepts missing a vector for the current model
   move <id> <new-id>      move (rename) a concept, or a whole directory with

@@ -88,7 +88,7 @@ func firstDiff(a, b string) int {
 // — --limit stays out, since its default differs between a ranking and
 // a page.
 var sharedFilterFlags = []string{
-	"fm", "json", "links-to", "prefix", "rejected",
+	"fm", "json", "links-to", "prefix",
 	"source", "status", "tag", "trust", "type", "url",
 }
 

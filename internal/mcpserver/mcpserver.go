@@ -305,9 +305,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 		Name:        "search_concepts",
 		Annotations: readOnly,
 		Description: "Search the knowledge base; verified concepts rank higher. Filenames and file " +
-			"contents count too, and a hit is always the owning concept. Rejected concepts are " +
-			"excluded unless you pass rejected=true — ask for them to check whether a proposal " +
-			"was already turned down.\n" +
+			"contents count too, and a hit is always the owning concept.\n" +
 			"Ranking, so it ends at limit and has no page two: a search that needs more is one " +
 			"that needs narrowing. To walk a whole feed instead, use list_concepts.\n" +
 			"degraded=true in the answer means the query could not be embedded and this ranking " +
@@ -413,8 +411,8 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			"a better draft at a different id, linking the concept it would replace from its " +
 			"body so the reviewer sees both, and let a human promote it. An id whose concept " +
 			"was deleted can be reused, which revives it as your draft — unless a human had " +
-			"ruled on it (verified, rejected, or deprecated), and then this surface refuses too. " +
-			"Search rejected=true first so you do not re-propose what was already turned down.\n" +
+			"ruled on it, and then this surface refuses and says what the ruling was: a concept " +
+			"a curator turned down is deleted with the reason, and the refusal carries it.\n" +
 			"Links are never a field: a markdown link to another concept's path in body — " +
 			"[revenue](/metrics/revenue.md) — becomes a link both ways.\n" +
 			"Pick the type by what the concept holds; any other single-line type works too:\n" + domain.TypesGuide(),
@@ -595,12 +593,11 @@ func parseKnowledgeURI(uri string) (id string, ok bool) {
 // take, in one embedded struct rather than repeated per tool: they are
 // the same question everywhere, and a schema written twice is a schema
 // that starts differing. get_context has its own contextIn instead,
-// without rejected or source.
+// without source.
 type filters struct {
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type, case-insensitive: Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated — confirmation is a separate question, ask it with trusts"`
 	Trusts   []string `json:"trusts,omitempty" jsonschema:"filter by who confirmed it: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); several are OR-ed, omit to not ask. Independent of status"`
-	Rejected *bool    `json:"rejected,omitempty" jsonschema:"true to ask only for concepts a human turned down — how you check whether a proposal was already rejected. Omit and they stay out"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Source   string   `json:"source,omitempty" jsonschema:"only concepts citing this resource, matched exactly against sources[].resource — \"this material changed, what derives from it?\""`
 	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes to a subtree (\"metrics\" covers metrics/ but not metrics-legacy/); several are OR-ed"`
@@ -610,7 +607,7 @@ func (f filters) filter() store.Filter {
 	return store.Filter{
 		Types: domain.ToTypes(f.Types), Statuses: domain.ToStatuses(f.Statuses),
 		Tags: f.Tags, Source: f.Source, Prefixes: f.Prefixes,
-		Trust: domain.ToTrusts(f.Trusts), Rejected: f.Rejected,
+		Trust: domain.ToTrusts(f.Trusts),
 	}
 }
 
@@ -667,8 +664,7 @@ type listOut struct {
 // 0069, 0096 §3). Per-response, so it costs no resident bytes.
 const conceptHint = "After acting on this knowledge, call report_outcome (worked/failed) on the concepts you " +
 	"used — failed reports are how stale verified knowledge gets caught. If this session " +
-	"produced reusable knowledge, write it back with put_concept as a draft; search " +
-	"rejected=true first so you do not re-propose something already turned down. " +
+	"produced reusable knowledge, write it back with put_concept as a draft. " +
 	// The other half of the write-back, and the one this surface never
 	// said. A relationship between concepts is a markdown link in the
 	// body and nothing else (design doc 0024) — so a draft that does not

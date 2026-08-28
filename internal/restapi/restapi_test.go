@@ -27,7 +27,6 @@ func TestWriteErrorStatuses(t *testing.T) {
 		{"not found", store.ErrNotFound, http.StatusNotFound},
 		{"already exists", store.ErrAlreadyExists, http.StatusConflict},
 		{"not deleted", store.ErrNotDeleted, http.StatusConflict},
-		{"no rejection to withdraw", store.ErrNoRejection, http.StatusConflict},
 		{"if-match conflict", store.ErrConflict, http.StatusPreconditionFailed},
 		{"invalid input", service.Invalidf("title is required"), http.StatusBadRequest},
 		{"unsupported", service.Unsupportedf("files need GCS"), http.StatusNotImplemented},
@@ -285,9 +284,14 @@ func TestUnknownQueryParamNamedIsDeterministic(t *testing.T) {
 //
 // A note is the case worth a test. Dropping it would be the quiet
 // failure: a reviewer who wrote down why, and finds later that nowhere
-// kept it, is worse off than one told at the time. It belongs to
-// `rejected` alone — a verification says the concept is right as it
-// stands, and anything more to say about it belongs in the concept.
+// kept it, is worse off than one told at the time. This face carries
+// none — a verification says the concept is right as it stands, and the
+// reason a concept was turned down rides on the delete that turns it
+// down (design doc 0135).
+//
+// The retired rulings are here too: a caller that still sends
+// `rejected` gets a refusal that says where the operation went, not a
+// bare vocabulary error.
 //
 // These live here rather than beside the integration test because the
 // checked server validates every request against the spec, and a request
@@ -300,7 +304,8 @@ func TestReviewRefusesRulingsItCannotRecord(t *testing.T) {
 		{"unknown ruling", `{"ruling":"approved"}`, "ruling must be"},
 		{"no ruling", `{}`, "ruling must be"},
 		{"note on a verification", `{"ruling":"verified","note":"looks right"}`, "carries no note"},
-		{"note on a withdrawal", `{"ruling":"withdrawn","note":"changed my mind"}`, "carries no note"},
+		{"the retired rejection", `{"ruling":"rejected","note":"no"}`, "DELETE the concept's address"},
+		{"the retired withdrawal", `{"ruling":"withdrawn"}`, "DELETE the concept's address"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

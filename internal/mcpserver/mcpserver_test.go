@@ -509,14 +509,18 @@ func TestReportOutcomeValidation(t *testing.T) {
 // by the spelling searchIn accepts, and the status vocabulary is named as
 // what the hint must not reach for.
 func TestConceptHint(t *testing.T) {
-	for _, want := range []string{"report_outcome", "put_concept", "rejected=true"} {
+	for _, want := range []string{"report_outcome", "put_concept"} {
 		if !strings.Contains(conceptHint, want) {
 			t.Errorf("hint does not mention %q: %s", want, conceptHint)
 		}
 	}
-	if strings.Contains(conceptHint, "statuses") {
-		t.Errorf("rejected is a ruling, not a lifecycle status: the hint must ask for it "+
-			"with the rejected filter, not through statuses: %s", conceptHint)
+	// A rejection is a deletion (design doc 0135), so there is no filter
+	// left to teach and no listing that could answer one. The refusal an
+	// agent meets when it writes the id again is what carries the ruling.
+	for _, gone := range []string{"rejected=true", "statuses"} {
+		if strings.Contains(conceptHint, gone) {
+			t.Errorf("the hint teaches a filter that no longer exists (%q): %s", gone, conceptHint)
+		}
 	}
 
 	// The linking half, pinned the same way: the hint teaches a spelling,
@@ -548,7 +552,7 @@ func TestCuratedGuardIsAdvertised(t *testing.T) {
 		// already written the draft (design doc 0067 §5.1). Deleting one
 		// was the second until design doc 0076 took the tool away.
 		"put_concept": {"deleted can be reused", "verified, rejected, deprecated", "different id",
-			"verified, rejected, or deprecated", "report_outcome failed"},
+			"the refusal carries it", "report_outcome failed"},
 	}
 	for _, tool := range res.Tools {
 		substrs, ok := want[tool.Name]

@@ -128,11 +128,8 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 	k := domain.Knowledge{
 		Type: domain.TypeInsights, ID: "insights/dup-insight",
 		Title: "重複した知見", Status: domain.StatusDraft,
-		StatusNote: "revenue-seasonality と重複",
-		CreatedBy:  domain.Actor{Kind: "process", Name: "claude-code"},
-		Rejection: &domain.Rejection{
-			By: domain.Actor{Kind: "human", Name: "na0"}, At: rejectedAt, Note: "重複",
-		},
+		StatusNote:       "revenue-seasonality と重複",
+		CreatedBy:        domain.Actor{Kind: "process", Name: "claude-code"},
 		UpdatedAt:        rejectedAt,
 		ContentChangedAt: rejectedAt,
 	}
@@ -141,25 +138,23 @@ func TestDocumentRejectedProvenance(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := string(doc)
-	// The entry's real lifecycle value goes out. A rejection used to be
-	// folded onto deprecated, which asserts the opposite thing about the
-	// entry ("was correct, no longer current"); it is this instance's
-	// ruling now, so it travels as an extension key beside the true
-	// status and import never reads it back (design doc 0043 §3.3).
+	// The entry's real lifecycle value goes out, and the ruling does not.
+	// A rejection is a deletion (design doc 0135), so no live concept
+	// carries one to render — and OKF has no negative signal in
+	// frontmatter to put it in, so a key here would be this instance's
+	// observation travelling as a claim. What travels is the §9 log
+	// entry the removal wrote.
 	for _, want := range []string{
 		"status: draft",
 		"status_note: revenue-seasonality と重複",
-		"rejected_by: human:na0",
-		`rejected_at: "2026-07-16T00:00:00Z"`,
-		// The reason travels with the ruling (design doc 0104): who and
-		// when are audit, and the note is the part the next writer acts
-		// on. It rode on the wire and never on the bundle until then, so
-		// a base moved to another instance said "somebody turned this
-		// down" and nothing about what would have to change.
-		"rejected_note: 重複",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("document missing %q:\n%s", want, s)
+		}
+	}
+	for _, unwanted := range []string{"rejected_by", "rejected_at", "rejected_note"} {
+		if strings.Contains(s, unwanted) {
+			t.Errorf("a ruling must not travel in frontmatter (%q):\n%s", unwanted, s)
 		}
 	}
 	if strings.Contains(s, "status: deprecated") {
@@ -439,7 +434,6 @@ func TestCanonicalOmitsServerOwnedKeys(t *testing.T) {
 		Verifications: []domain.Verification{
 			{By: domain.Actor{Kind: "human", Name: "na0"}, At: at},
 		},
-		Rejection:        &domain.Rejection{By: domain.Actor{Kind: "human", Name: "na0"}, At: at, Note: "重複"},
 		UpdatedAt:        at,
 		ContentChangedAt: at,
 	}
@@ -477,7 +471,7 @@ func TestCanonicalOmitsServerOwnedKeys(t *testing.T) {
 	// A ruling must not move the hash. This is the invariant that lets
 	// verify leave a held If-Match alone.
 	bare := k
-	bare.Verifications, bare.Rejection = nil, nil
+	bare.Verifications = nil
 	bareCanon, err := Canonical(&bare)
 	if err != nil {
 		t.Fatal(err)
