@@ -3851,14 +3851,20 @@ func TestRESTIntegrationASubtreeArchiveSaysItIsOne(t *testing.T) {
 		t.Errorf("a whole-base archive declared a scope:\n%s", index)
 	}
 
-	// A subtree names itself twice.
+	// A subtree names itself twice — in the heading and in the body of
+	// the root index.md, and in the filename. Not in frontmatter: SPEC §8
+	// lets a bundle-root index.md carry okf_version and nothing else, and
+	// §11's third rule holds a reserved filename to §8 (design doc 0135).
 	sub := root + "/teams/growth"
 	disp, index, paths := read(t, "/"+sub)
 	if !strings.Contains(disp, "ochakai-okf-"+strings.ReplaceAll(sub, "/", "-")+".tar.gz") {
 		t.Errorf("a subtree archive arrived as %q, want its own name", disp)
 	}
-	if !strings.Contains(index, `bundle_scope: "`+sub+`"`) {
-		t.Errorf("the root index carries no bundle_scope:\n%s", index)
+	if !strings.Contains(index, "# ochakai knowledge bundle: "+sub) {
+		t.Errorf("the root index does not name the subtree in its heading:\n%s", index)
+	}
+	if strings.Contains(index, "bundle_scope") {
+		t.Errorf("the root index carries a key SPEC §8 has no room for:\n%s", index)
 	}
 	if !strings.Contains(index, "not a whole-base backup") {
 		t.Errorf("the root index does not say what it is to a person:\n%s", index)
@@ -3896,8 +3902,8 @@ func TestRESTIntegrationASubtreeArchiveSaysItIsOne(t *testing.T) {
 	if got := archiveFilename(root + "/営業"); strings.Contains(disp, `filename="`+got+`"`) {
 		t.Errorf("the archive of %q arrived under the name of %q: %q", jp, root+"/営業", disp)
 	}
-	if !strings.Contains(index, `bundle_scope: "`+jp+`"`) {
-		t.Errorf("the root index carries no bundle_scope:\n%s", index)
+	if !strings.Contains(index, "# ochakai knowledge bundle: "+jp) {
+		t.Errorf("the root index does not name the subtree in its heading:\n%s", index)
 	}
 	if !slices.Contains(paths, jp+"/実績.md") {
 		t.Errorf("the subtree archive is missing its own concept: %v", paths)

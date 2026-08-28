@@ -59,10 +59,9 @@ ochakai export --prefix teams/growth -   # 一つのディレクトリだけ(バ
 
 **`--prefix` はバックアップではない。** 一つのディレクトリを持ち出すため
 のもので、そのディレクトリを読める人なら誰でも取れる(設計ドキュメント
-[0127](../design/0127-an-archive-says-which-part-it-is.md))。取れたものは
-自分が部分であることを二箇所で名乗る — 根の `index.md` の
-`bundle_scope` と、`ochakai-okf-teams-growth.tar.gz` というファイル名で
-ある。**ベース全体のバックアップは `--prefix` を付けない形のほうで、
+[0134](../design/0134-an-archive-says-which-part-it-is.md) §3)。取れたものは
+自分が部分であることを二箇所で名乗る — 根の `index.md` の見出しと本文の
+一文、そして `ochakai-okf-teams-growth.tar.gz` というファイル名である。**ベース全体のバックアップは `--prefix` を付けない形のほうで、
 そちらは管理者だけが取れる。**
 
 バンドルは OKF v0.2 のディレクトリである: concept ごとに YAML
@@ -727,7 +726,7 @@ ochakai access -f policy.json --if-match "$(jq -r .version policy.json)"
    (`--prefix` の付かない形)と `ochakai reembed`。以下は別である。
    **`--prefix` を付けた export** は、そのディレクトリを読める人なら
    取れる — アーカイブが自分の範囲を名乗る(設計ドキュメント
-   [0127](../design/0127-an-archive-says-which-part-it-is.md))。
+   [0134](../design/0134-an-archive-says-which-part-it-is.md))。
    **`ochakai move`** は、動かす concept・移動先・**その concept を指して
    いるものすべて**が自分の書けるところにあれば通り、一つでも外にあると
    **丸ごと断られる**(設計ドキュメント

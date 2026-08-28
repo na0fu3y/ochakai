@@ -154,10 +154,16 @@ export async function viewDetail(id, heading = '') {
   ].filter(Boolean).join(' · ');
 
   // A passed stale_after is a prompt to re-check, never a claim the entry
-  // is wrong (OKF SPEC §5.5) — the comparison is a plain date one. A
-  // date still in the future says nothing a reader needs yet, so nothing
-  // is drawn until it passes.
-  const staleNote = entry.stale_after && entry.stale_after <= new Date().toISOString().slice(0, 10)
+  // is wrong (OKF SPEC §5.5) — the comparison is a plain one against now.
+  // A moment still in the future says nothing a reader needs yet, so
+  // nothing is drawn until it passes.
+  //
+  // Date.parse reads both spellings the key takes (design doc 0133), and
+  // reads a bare date as the UTC midnight opening it, which is what the
+  // server compares too. Comparing the strings instead would have put a
+  // datetime and a date in the wrong order on the day they share.
+  const staleAt = entry.stale_after ? Date.parse(entry.stale_after) : NaN;
+  const staleNote = !Number.isNaN(staleAt) && staleAt <= Date.now()
     ? `<div class="status-note">${esc(entry.stale_after)} から期限切れです。内容を確かめ直してください。</div>`
     : '';
 

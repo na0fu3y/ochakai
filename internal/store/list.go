@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -37,6 +38,31 @@ type orderCol struct {
 	// null marks a column ordered ASC NULLS LAST — the one nullable
 	// position any of the feeds has (verification age).
 	null bool
+}
+
+// utcCursorKey rewrites a one-key cursor's value into RFC 3339, so the
+// ::timestamptz cast in the keyset predicate resolves it the same way on
+// every deployment.
+//
+// The cursor carries the position as the reader saw it, and a stale_after
+// reads back as a bare date whenever its time of day is midnight
+// (domain.FormatInstant). PostgreSQL resolves '2026-12-31'::timestamptz
+// in the session's own TimeZone, which would put the resumed page a few
+// hours off the page before it — the one place widening the column to an
+// instant (design doc 0133) could have let a timezone back in.
+//
+// A cursor value that is neither spelling is malformed rather than
+// mysterious: it did not come from a listing this server rendered.
+func utcCursorKey(a *After) (*After, error) {
+	if a == nil || len(a.Keys) != 1 || a.Keys[0] == nil {
+		return a, nil
+	}
+	t, ok := domain.ParseInstant(*a.Keys[0])
+	if !ok {
+		return nil, fmt.Errorf("cursor holds %q, which is not %s", *a.Keys[0], domain.InstantsHint)
+	}
+	v := t.Format(time.RFC3339)
+	return &After{Keys: []*string{&v}, ID: a.ID}, nil
 }
 
 // keysetAfter renders "strictly after this position" for an ORDER BY of
@@ -124,8 +150,12 @@ func (s *Store) ListByAddress(ctx context.Context, f Filter, after *After, limit
 // (design doc 0037 §2.2).
 func (s *Store) ListByStaleAfter(ctx context.Context, f Filter, after *After, limit int) ([]domain.Knowledge, error) {
 	where, args := f.buildWhere("")
+	after, err := utcCursorKey(after)
+	if err != nil {
+		return nil, err
+	}
 	keyset, err := keysetAfter(
-		[]orderCol{{expr: "stale_after", cast: "date"}}, "id", after, &args)
+		[]orderCol{{expr: "stale_after", cast: "timestamptz"}}, "id", after, &args)
 	if err != nil {
 		return nil, err
 	}

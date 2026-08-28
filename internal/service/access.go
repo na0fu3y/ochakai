@@ -190,7 +190,7 @@ func mayWriteIn(sc *Scope, id string) error {
 // The list has shrunk three times, each by a record that found a way to
 // return a part without it being mistaken for the whole: the statistics
 // declare what they counted (0123), a subtree's archive names itself
-// (0127), and a move runs when its rewrite fits inside the caller's
+// (0134), and a move runs when its rewrite fits inside the caller's
 // scope (0129). What remains is what nobody has found that answer for.
 // On a deployment with no rules every scope is Everything, so passing
 // here does not mean the caller is an administrator. The two callers
@@ -210,7 +210,7 @@ func (s *Service) RequireAdmin(ctx context.Context, op string) error {
 }
 
 // MayArchive decides who may take the OKF archive at a bundle path
-// (design doc 0127).
+// (design doc 0134).
 //
 // **The whole bundle is the administrator's**, and asking for the root
 // is how it is asked for: an archive of everything a scoped caller can
@@ -233,7 +233,7 @@ func (s *Service) MayArchive(ctx context.Context, prefix string) error {
 	}
 	if prefix == "" {
 		return fmt.Errorf("%w: the archive of the whole bundle is an administrator's operation; ask for a "+
-			"directory this caller may read and the archive of it says which one it is (design doc 0127)",
+			"directory this caller may read and the archive of it says which one it is (design doc 0134)",
 			ErrForbidden)
 	}
 	if !sc.MayRead(prefix) {

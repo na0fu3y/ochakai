@@ -931,8 +931,20 @@ records are not cheaper than the split — 0109 §3's own sentence is why
 the split takes a record at all — and the ones still pooled there are the
 ones nobody has needed yet.
 
-    RECORD-CORPUS-LINES: 11500
+    RECORD-CORPUS-LINES: 12000
     RECORD-CORPUS-LINES-SLACK: 500
+
+**11,500 → 12,000 is 0133 and 0134**, the two records of the OKF
+conformance pass. The boundary is worth the paragraph because of what the
+pair cost against what they bought: the corpus grew by one net record —
+0134 absorbs 0127, which drops to a tombstone — for a change whose whole
+subject is that ochakai had been reading OKF v0.2 wrongly in two places
+and saying so in its own comments. 0133 is the larger of the two and most
+of it is §1 and §6: what the spec actually fixes, and why 0069 §2.2 and
+0074 §4.1 are amended rather than superseded. That second half is the
+paragraph this ceiling exists to make somebody write — the alternative
+was folding three area records into three replacements, roughly 600 lines
+of restatement, for a defect that moves neither area's decision.
 
 `RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded
 ones included: they still ship in the tree, and a reader following a

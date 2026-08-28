@@ -33,10 +33,10 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 |---|---|
 | 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
-| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**ディレクトリごとの管理者は [0124](0124-a-directory-can-have-its-own-administrator.md)**(0109 §3 を改訂 — `may_admin` は prefix に縛られ、根には置けない)。**subtree のアーカイブを読める者に開いたのは [0127](0127-an-archive-says-which-part-it-is.md)**(0109 §3 を改訂 — アーカイブが自分の範囲を名乗る)。**`stats` が範囲を持つ呼び出し元にも答えることは [0123](0123-the-numbers-say-what-they-counted.md)**(0109 §3 を改訂 — 答えが自分の範囲を宣言する)。**`move` が書き換えの収まる範囲で動くことは [0129](0129-a-move-runs-when-its-rewrite-fits.md)**(0109 §3 を改訂 — はみ出すなら丸ごと断る)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
+| 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**ディレクトリごとの管理者は [0124](0124-a-directory-can-have-its-own-administrator.md)**(0109 §3 を改訂 — `may_admin` は prefix に縛られ、根には置けない)。**subtree のアーカイブを読める者に開いたのは [0134](0134-an-archive-says-which-part-it-is.md)**(0109 §3 を改訂 — アーカイブが自分の範囲を名乗る)。**`stats` が範囲を持つ呼び出し元にも答えることは [0123](0123-the-numbers-say-what-they-counted.md)**(0109 §3 を改訂 — 答えが自分の範囲を宣言する)。**`move` が書き換えの収まる範囲で動くことは [0129](0129-a-move-runs-when-its-rewrite-fits.md)**(0109 §3 を改訂 — はみ出すなら丸ごと断る)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
-| OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2 |
+| OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2。**SPEC が瞬間で定義した値(`stale_after`・`sources[].last_modified`・`usage_window`)の綴りは [0133](0133-an-okf-moment-is-an-instant.md)** — RFC 3339 の datetime と `YYYY-MM-DD` の日付の両方を取り、日付はそれが開く UTC の真夜中である |
 | 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。**ディレクトリを丸ごと動かす形は [0132](0132-a-directory-moves-whole-or-not-at-all.md)**(0075 §2 に prefix の move を足す — 丸ごと動くか、動かない)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5。**`.md` が concept の住所であり、そこに座れるものは concept だけであることは [0100](0100-md-is-how-a-concept-is-spelled.md)**(0075 §3.3 を改訂) |
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
@@ -288,6 +288,33 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   一部であって `update` リビジョンを積まない。**推測はしない** — 0075 §2 が
   concept とディレクトリの同名を許しているので、`old` がどちらかを server は
   決められず、だから鍵で言わせる。`FLAG` 28 → 29。
+- [0133 OKF の瞬間は、瞬間である](0133-an-okf-moment-is-an-instant.md)
+  — **Accepted**。**SPEC が瞬間で定義した値を ochakai がどう綴るかの現行
+  ドキュメント**(`stale_after`・`sources[].last_modified`・`usage_window`)。
+  SPEC §5 は "Every timestamp-valued key in OKF is an ISO 8601 datetime with
+  an explicit UTC offset" と型を固定し §5.5 は "an absolute instant" と言う
+  のに、ochakai は `YYYY-MM-DD` だけを取り、**しかもそれを SPEC の規定として
+  コードに書いていた**(`DateLayout` の注釈、マイグレーション 0019 の散文)。
+  代金は **SPEC 自身の worked example(Appendix A)が読めないこと**で、
+  真夜中は日付に潰れて通り、**真夜中でない瞬間は note 一行で落ちていた** —
+  文書のバイト列は残るので export は無事(C1)、壊れていたのは**読む面の
+  全部**である: 封筒が `stale_after` を持たないと答え、期限切れフィードに
+  永久に上がらず、`stats` が数えず、Web UI のフォームが空欄を見せる。
+  **黙って値を落とす**のは 0130 §3 が名指しで断った壊れ方で、それが見て
+  いなかった場所に一つあった。決定は、**RFC 3339 の datetime と
+  `YYYY-MM-DD` の日付の両方を取り、どちらも書き換えないこと** — 日付は
+  それが開く UTC の真夜中で、それが二つを一つの比較にする。offset の無い
+  datetime は絶対でないので取らない。列は `date` → `timestamptz`
+  (マイグレーション 0046)、比較は `now()` になり、**0069 §2.2 が守ろうと
+  した「セッションの TimeZone に従わせない」は前より強く成り立つ** —
+  UTC を手で綴らなければならなかったのは裸の日付のほうだった。凍結された
+  契約から `format: date` が外れるが、0064 §11 が残した **OKF 適合の欠陥**の
+  口であり(0100・0102 と同じ)、**向きは広がる側だけ**である。0069 §2.2 と
+  0074 §4.1 は退役させない — 動くのは機構の綴りで、**決定はどちらもそのまま**
+  だからである(0128 §2.1、記録の §6)。面の数はどれも動かない。
+  却下: 列を `date` のまま封筒だけ原文を返す(索引と封筒が別の値を持ち、
+  0043 §3.1 の導出でなくなる)、すべて RFC 3339 に正規化して戻す(書いて
+  いない綴りを返す)、日付を捨てて瞬間だけにする(狭めることが誤りだった)。
 - [0079 文書を受け取る](0079-taking-the-document.md) —
   **Accepted**。**取り込みが文書を拒む条件と、CLI が送るバイト列の現行
   ドキュメント**(0075 §3 / §4.2 と 0074 §1 を改訂。**REST は変えない**)。
@@ -698,24 +725,34 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   却下: 絞って通す、範囲外への書き込みを別の actor 名で行う(台帳に
   「システム」は無い)、件数を 403 に載せる、読める範囲を基準にする、
   `reembed` も同時に割る(詰まった人がいない)。
-- [0127 アーカイブは、自分がどの部分かを言う](0127-an-archive-says-which-part-it-is.md)
-  — **Accepted**。0109 §3 の「export は管理者のもの」を改訂する — **全体は
-  管理者のまま、subtree は読める者のもの**。**測ったら危険の形が違った**:
-  `ochakai import` は加算的で削除しないので「戻したときに残りが消える」は
-  起きず、本当の危険は**部分と全体が同じ形で届くこと**だった — 実測すると
-  subtree アーカイブも根の `index.md` を持ち、名前も同じ
-  `ochakai-okf.tar.gz` で、**どちらかを言うものが一つも無い**。つまり
-  0109 §3 が恐れた事態は管理者だけが使える今日すでに作れており、断ることは
+- [0127 アーカイブは、自分がどの部分かを言う](0127-an-archive-says-which-part-it-is.md) — **Superseded by 0134**。
+- [0134 アーカイブは、自分がどの部分かを言う](0134-an-archive-says-which-part-it-is.md)
+  — **Accepted**。[0127](0127-an-archive-says-which-part-it-is.md) を畳んで
+  吸収する(0128 §2.2 — 差分ではなく領域を丸ごと)。0109 §3 の
+  「export は管理者のもの」を改訂する — **全体は管理者のまま、subtree は
+  読める者のもの**。**測ったら危険の形が違った**: `ochakai import` は加算的で
+  削除しないので「戻したときに残りが消える」は起きず、本当の危険は**部分と
+  全体が同じ形で届くこと**だった — subtree アーカイブも根の `index.md` を持ち、
+  名前も同じ `ochakai-okf.tar.gz` で、**どちらかを言うものが一つも無い**。
+  つまり 0109 §3 が恐れた事態は断っている間もすでに作れており、断ることは
   それを一度も防いでいなかった。決定は、読む人が出会う二箇所に書くこと —
-  根の index の frontmatter `bundle_scope`(機械)と本文の一文(人)、そして
-  ファイル名 `ochakai-okf-<subtree>.tar.gz`(**復旧する人は展開する前に
-  ファイル名を打つ**)。深い階層の index も全体のアーカイブも一字も
-  変わらない。見分けが付く以上、断ることが買うものは無くなる — subtree の
-  中身は呼び出し元が concept を一つずつ取れば既に得られるもので、断って
-  いたのは知識ではなく便宜だった。**根は 403、読めない subtree は 404**。
-  これで [0119](0119-an-operated-fleet-is-deployments-or-directories.md) §4 が
+  根の index の**見出しと本文の一文**、そしてファイル名
+  `ochakai-okf-<subtree>.tar.gz`(**復旧する人は展開する前にファイル名を
+  打つ**)。**0127 から動いたのはここだけである**: 0127 は機械向けに
+  frontmatter の `bundle_scope` を置いたが、SPEC §8 は予約ファイルの
+  frontmatter に `okf_version` 以外の置き場を持たず(§11 の適合条件 3 が
+  §8 に縛る)、`--prefix` のアーカイブは **OKF v0.2 に適合していなかった** —
+  未知の鍵を許す §4.1 は concept 文書の規則で、ここには届かない。しかも
+  同じことを見出しと本文とファイル名が既に言っており、見出しは §8 が形を
+  決めている当のものなので、機械の読む口も残る。深い階層の index も全体の
+  アーカイブも一字も変わらない。見分けが付く以上、断ることが買うものは
+  無くなる — subtree の中身は呼び出し元が concept を一つずつ取れば既に
+  得られるもので、断っていたのは知識ではなく便宜だった。**根は 403、
+  読めない subtree は 404**。これで
+  [0119](0119-an-operated-fleet-is-deployments-or-directories.md) §4 が
   代金に数えた「出口(C1)に運用者が要る」が返る。面はどれも動かない
-  (`--prefix` は既にある綴り)。却下: import に読ませて警告(予約ファイルを
+  (`--prefix` は既にある綴り)。却下: `bundle_scope` を適合しないまま残す、
+  本文に機械向けの新しい綴りを発明する、import に読ませて警告(予約ファイルを
   読み戻さない決定を曲げ、手書きバンドルに誤警告が出る。ファイル名のほうが
   早く届く)、re-root(id とリンクが壊れ、卒業経路も壊れる)、別コマンド、
   スコープ持ちに「見える範囲の全体」を渡すこと、署名やマニフェスト。

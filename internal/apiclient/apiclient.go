@@ -686,7 +686,7 @@ func (c *Client) Stats(ctx context.Context, days int, prefixes []string) (*domai
 // after downloading.
 // A non-empty prefix takes the archive of that subtree instead of the
 // whole base — the same address a read of it uses, asked for as an
-// archive (design doc 0127).
+// archive (design doc 0134).
 func (c *Client) Export(ctx context.Context, files bool, prefix string) (io.ReadCloser, error) {
 	var q url.Values
 	if !files {
