@@ -37,9 +37,11 @@ jobs:
     # What that test actually reads is not only PostgreSQL. Above the BMP
     # the default parser asks the C library whether a character is a
     # letter, so the answer belongs to the image's glibc as much as to
-    # the server: on glibc 2.39 the extension-I characters Unicode 17
-    # added are letters and the test fails, on bookworm's 2.36 they are
-    # not and it passes. Both plain tags below resolve to bookworm today
+    # the server: on glibc 2.39 the extension-I characters (Unicode 15.1,
+    # not 17 — what 17 added is extension J) are letters and the pin does
+    # not hold, on bookworm's 2.36 they are not and it does. The test pins
+    # the frontier only here, where the image makes the provider a
+    # controlled variable; off CI it reports what it found. Both plain tags below resolve to bookworm today
     # — pg17 is pg17-bookworm and pg18 is pg18-bookworm — which is what
     # makes this matrix vary one thing. If upstream ever repoints one of
     # them at trixie, that test is the one that will say so, and its

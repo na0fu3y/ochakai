@@ -22,16 +22,28 @@
 --
 -- **This does not make the new characters findable, and no class would.**
 -- All 645 of them live above the BMP, and what becomes a lexeme up there
--- is decided by PostgreSQL's own Unicode knowledge rather than by this
--- class: a non-BMP character the parser knows becomes a token (mangled,
--- but mangled the same way on both sides, so a query reproduces it), and
--- one it does not know becomes `blank` — nothing, on both sides. On
--- PostgreSQL 17, extension I is the second case.
--- TestWhatPostgresCanIndexAboveTheBMP holds both halves of that, so the
--- day a PostgreSQL lifts the limit is a day ochakai finds out rather
--- than a day it keeps a stale sentence. What this migration settles is
--- the agreement, which is what the pin asks for and what lets ochakai be
--- built on Go 1.27 at all.
+-- is decided outside this class: a non-BMP character the text-search
+-- parser reads as a word character becomes a token (mangled, but mangled
+-- the same way on both sides, so a query reproduces it), and one it does
+-- not becomes `blank` — nothing, on both sides.
+--
+-- **What decides it is the database's ctype provider, not PostgreSQL's
+-- version**, and this sentence used to say otherwise. Above the BMP the
+-- parser asks the C library whether a character is a letter, so the
+-- frontier moves with glibc: 2.36 (bookworm) reads extension I as blank,
+-- 2.39 reads it as a word character — same PostgreSQL, opposite answers —
+-- and a cluster in the C locale reads every non-ASCII character as a word
+-- character, so it has no frontier at all. The same sentence also called
+-- extension I a Unicode 17 addition; it is **Unicode 15.1**, and what 17
+-- added is extension J at U+323B0.
+--
+-- TestWhatPostgresCanIndexAboveTheBMP pins the frontier where the
+-- provider is a controlled variable — in CI, whose images are bookworm
+-- (.github/workflows/ci.yaml says so beside its matrix), so a red row
+-- there means the image was repointed. Off CI it reports instead, the
+-- provider being whatever the developer has. What this migration settles
+-- is the agreement between the class and the binary, which is what the
+-- pin asks for and what lets ochakai be built on Go 1.27 at all.
 --
 -- The class below is generated, not edited: it is what
 -- store.scriptWithoutSpaces answers over the whole code space. The test
