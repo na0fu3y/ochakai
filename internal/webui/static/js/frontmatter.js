@@ -246,10 +246,13 @@ function inputMarkup(field, id, key, path, value, col) {
       // goes wrong the first time a font changes.
       return `<input type="checkbox" class="check" id="${id}" ${at}${value === true ? ' checked' : ''}>`;
     case 'date':
-      // A date input takes YYYY-MM-DD and hands one back, which is what
-      // OKF writes (SPEC §5.5). A value in any other spelling would be
-      // dropped by the control, so it falls back to a text box rather
-      // than being erased by being shown.
+      // A date input takes YYYY-MM-DD and hands one back, which is one of
+      // the two spellings OKF allows (SPEC §5.5 fixes an absolute
+      // instant; a date is the UTC midnight opening it — design doc
+      // 0133). The other is an RFC 3339 datetime, which this control
+      // would drop, so it falls back to a text box rather than erasing a
+      // producer's moment by showing it. The form writes dates; it does
+      // not rewrite what somebody else wrote.
       return isDate(value) || !value
         ? `<input type="date" id="${id}" ${at} value="${esc(value ?? '')}">`
         : `<input type="text" id="${id}" ${at} class="mono" value="${esc(value)}">`;

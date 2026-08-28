@@ -376,17 +376,55 @@ func TestRuling(t *testing.T) {
 	}
 }
 
+// Both spellings SPEC allows, and nothing else. The instants are the
+// half that used to be refused: SPEC §5 fixes every timestamp-valued key
+// as "an ISO 8601 datetime with an explicit UTC offset", and the worked
+// example of Appendix A writes stale_after that way (design doc 0133).
 func TestValidStaleAfter(t *testing.T) {
-	for _, ok := range []string{"", "2026-12-31", "2026-01-01"} {
+	for _, ok := range []string{"", "2026-12-31", "2026-01-01",
+		"2026-12-31T00:00:00Z", "2026-12-31T18:30:00Z", "2026-12-31T18:30:00+09:00"} {
 		if !ValidStaleAfter(ok) {
 			t.Errorf("ValidStaleAfter(%q) = false", ok)
 		}
 	}
+	// An offset is what makes a datetime absolute, so a local one is
+	// still refused — as are the loose spellings a date never took.
 	for _, bad := range []string{"soon", "2026-13-01", "2026-02-30", "2026-1-2",
-		"2026-12-31T00:00:00Z", "30 days"} {
+		"2026-12-31T18:30:00", "2026-12-31 18:30:00Z", "30 days"} {
 		if ValidStaleAfter(bad) {
 			t.Errorf("ValidStaleAfter(%q) = true", bad)
 		}
+	}
+}
+
+// A moment goes back out in the spelling it arrived in, midnight aside:
+// a bare date is the UTC midnight opening it, so the two are one value
+// and the tidier spelling is the one a reader gets back.
+func TestFormatInstantRoundTrips(t *testing.T) {
+	for _, s := range []string{"2026-12-31", "2026-12-31T18:30:00Z"} {
+		got, ok := ParseInstant(s)
+		if !ok {
+			t.Fatalf("ParseInstant(%q) = false", s)
+		}
+		if back := FormatInstant(got); back != s {
+			t.Errorf("FormatInstant(ParseInstant(%q)) = %q", s, back)
+		}
+	}
+	at, ok := ParseInstant("2026-12-31T00:00:00Z")
+	if !ok {
+		t.Fatal("ParseInstant of a midnight instant = false")
+	}
+	if got := FormatInstant(at); got != "2026-12-31" {
+		t.Errorf("a UTC midnight reads back as %q, want the date alone", got)
+	}
+	// An offset is resolved rather than kept: what is stored is the
+	// instant, and 09:00+09:00 is the midnight that opens the same day.
+	at, ok = ParseInstant("2026-12-31T09:00:00+09:00")
+	if !ok {
+		t.Fatal("ParseInstant of an offset instant = false")
+	}
+	if got := FormatInstant(at); got != "2026-12-31" {
+		t.Errorf("an offset midnight reads back as %q, want the UTC date", got)
 	}
 }
 

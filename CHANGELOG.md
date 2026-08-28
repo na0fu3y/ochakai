@@ -23,6 +23,47 @@ last entry.
 
 ### Fixed
 
+- **A `stale_after` an hour from now is no longer dropped: OKF's
+  moment-valued keys are moments.** SPEC §5 fixes every timestamp-valued
+  key as "an ISO 8601 datetime with an explicit UTC offset" and §5.5
+  calls `stale_after` "an absolute instant"; ochakai accepted only a
+  `YYYY-MM-DD` date, and said in its own comments that this was the
+  spec's rule. It was not — so **the worked example of the spec's own
+  Appendix A did not survive a read**: a midnight collapsed to a date and
+  anything else was dropped with a note, for `stale_after`,
+  `sources[].last_modified` and both bounds of `usage_window` (design doc
+  [0133](docs/design/0133-an-okf-moment-is-an-instant.md)).
+
+  The stored document was never touched, so an export always returned
+  what its writer wrote and the round trip C1 rests on was safe. **What
+  was wrong was every reading surface**: `GET /api/v1/bundle/{path}` and
+  `get_concept` reported no `stale_after` for a concept that declared
+  one, `ochakai list stale_after` never listed it, `ochakai stats` never
+  counted it in the expiry queue, and the web UI's field came up empty.
+
+  Both spellings are taken now and **neither is rewritten into the
+  other** — a date is the UTC midnight that opens it, which is what makes
+  one comparison of the two, and a datetime without an offset is not
+  absolute and is still refused. `format: date` leaves `Summary.stale_after`
+  in the frozen contract through the **OKF-conformance defect** door
+  [0064](docs/design/0064-rest-stops-at-api-v1.md) §11 left open, and it
+  only widens: every value that was valid still is. The expiry feed reads
+  the time of day now rather than the day, so two concepts expiring an
+  hour either side of now are no longer both listed as work.
+
+- **A `--prefix` archive is OKF-conformant again.** The root `index.md`
+  of a subtree archive carried a `bundle_scope` frontmatter key, and SPEC
+  §8 permits frontmatter in an index file only as a bundle-root
+  `okf_version`, with §11's third conformance rule holding a reserved
+  filename to §8. The archive still says which part it is, in the two
+  places its reader meets it — the heading and sentence of that same
+  `index.md`, and the filename `ochakai-okf-<subtree>.tar.gz` — so
+  nothing about 0127's decision moved except the spelling of one of them
+  (design doc [0134](docs/design/0134-an-archive-says-which-part-it-is.md),
+  superseding [0127](docs/design/0127-an-archive-says-which-part-it-is.md)).
+  Whole-base archives and every deeper `index.md` are byte-for-byte what
+  they were.
+
 - **Connecting an MCP client is decided by identity, not by location.**
   [docs/guides/mcp-clients.md](docs/guides/mcp-clients.md) drew its rule
   as "local server → URL, otherwise the bridge", which used the

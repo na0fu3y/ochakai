@@ -44,11 +44,18 @@ func IndexDocument(dir string, sections []IndexSection, notes ...string) []byte 
 }
 
 // SubtreeIndexDocument is IndexDocument for the root of an archive that
-// carries one subtree rather than a whole base (design doc 0127). The
-// scope is written where the two readers of an archive meet it: a key in
-// the frontmatter, for anything reading the bundle, and a sentence in
-// the body, for the person who unpacked it months later and is deciding
-// whether this is the backup they were looking for.
+// carries one subtree rather than a whole base (design doc 0134). The
+// scope is written in the heading and in a sentence of the body, for the
+// person who unpacked it months later and is deciding whether this is the
+// backup they were looking for.
+//
+// It used to be a frontmatter key beside okf_version as well, and SPEC §8
+// does not have room for one: "Index files contain no frontmatter, with
+// one exception: a bundle-root index.md MAY carry an okf_version key",
+// and §11's third conformance rule holds a reserved filename to §8. A
+// bundle_scope key there made every --prefix archive non-conformant to
+// say a third time what the heading, the body and the archive's own
+// filename already said (design doc 0134 §2).
 //
 // Only the root says it. Every deeper index.md is the same document a
 // whole-base archive would carry at that path, because it *is* that
@@ -61,9 +68,9 @@ func indexDocument(dir, scope string, sections []IndexSection, notes ...string) 
 	var b strings.Builder
 	switch {
 	case dir == "" && scope != "":
-		fmt.Fprintf(&b, "---\nokf_version: %q\nbundle_scope: %q\n---\n\n# ochakai knowledge bundle: %s\n\n"+
+		fmt.Fprintf(&b, "---\nokf_version: %q\n---\n\n# ochakai knowledge bundle: %s\n\n"+
 			"This bundle is the **%s** subtree of a larger knowledge base, not a whole-base backup: "+
-			"everything outside %s is missing from it by design.\n\n", Version, scope, scope, scope, scope)
+			"everything outside %s is missing from it by design.\n\n", Version, scope, scope, scope)
 	case dir == "":
 		fmt.Fprintf(&b, "---\nokf_version: %q\n---\n\n# ochakai knowledge bundle\n\n", Version)
 	default:

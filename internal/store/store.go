@@ -222,14 +222,16 @@ func unansweredFailure(alias string) string {
 }
 
 // pastExpiry is what puts an entry in the stale_after feed: the writer
-// declared an expiry and it has passed (design doc 0037 §2.1). "Today" is
-// UTC, spelled out rather than left to current_date — the column is a
-// bare date so staleness needs no timezone (design doc 0036 §3.9), and
-// current_date would hand that decision to whatever TimeZone the database
-// session happens to carry, making the same entry stale on one deployment
-// and not on another.
+// declared an expiry and it has passed (design doc 0037 §2.1).
+//
+// Both sides are absolute instants now (design doc 0133), so the
+// comparison is plain now() and carries no timezone for a deployment to
+// disagree about. The column used to be a bare date, which has no offset
+// to compare against — that is why this had to spell UTC out by hand
+// rather than say now(), and it is the one thing widening the column to
+// timestamptz made simpler rather than harder.
 func pastExpiry(prefix string) string {
-	return prefix + `stale_after IS NOT NULL AND ` + prefix + `stale_after <= (now() AT TIME ZONE 'UTC')::date`
+	return prefix + `stale_after IS NOT NULL AND ` + prefix + `stale_after <= now()`
 }
 
 // withoutDoc drops the stored document from a column list. A read does
@@ -388,7 +390,7 @@ func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish fu
 	finish = func() error {
 		defer func() { k.Trust = domain.TrustOf(k.Verifications) }()
 		if staleAfter != nil {
-			k.StaleAfter = staleAfter.UTC().Format(domain.StaleAfterLayout)
+			k.StaleAfter = domain.FormatInstant(*staleAfter)
 		}
 		// The nullable OKF columns decode only when present: an absent
 		// usage_window is a nil pointer, not a zero-valued one, because
@@ -476,19 +478,19 @@ func documentSays(doc []byte, k *domain.Knowledge) bool {
 	return d.SameContent(k)
 }
 
-// staleAfterArg turns the entry's stale_after into a date argument: NULL
-// when unset. The value is validated at the service boundary, so a
+// staleAfterArg turns the entry's stale_after into an instant argument:
+// NULL when unset. The value is validated at the service boundary, so a
 // malformed one here is a bug, not user input — it fails the write rather
 // than being silently dropped.
 func staleAfterArg(s string) (*time.Time, error) {
 	if s == "" {
 		return nil, nil
 	}
-	d, err := time.Parse(domain.StaleAfterLayout, s)
-	if err != nil {
-		return nil, fmt.Errorf("stale_after %q: %w", s, err)
+	t, ok := domain.ParseInstant(s)
+	if !ok {
+		return nil, fmt.Errorf("stale_after %q is not %s", s, domain.InstantsHint)
 	}
-	return &d, nil
+	return &t, nil
 }
 
 func scanKnowledge(row pgx.CollectableRow) (domain.Knowledge, error) {

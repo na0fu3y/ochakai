@@ -313,7 +313,7 @@ components/schemas/Summary.links required=false type=array
 components/schemas/Summary.links[] ref=Link
 components/schemas/Summary.rejected required=true type=boolean
 components/schemas/Summary.resource required=false type=string
-components/schemas/Summary.stale_after required=false type=string format="date"
+components/schemas/Summary.stale_after required=false type=string
 components/schemas/Summary.status required=true ref=Status
 components/schemas/Summary.tags required=false type=array
 components/schemas/Summary.tags[] type=string

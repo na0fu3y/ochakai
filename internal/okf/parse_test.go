@@ -394,6 +394,66 @@ func TestParseStaleAfter(t *testing.T) {
 	}
 }
 
+// The moment-valued keys of SPEC §5 read as moments, which is the
+// spelling the spec's own worked example uses. This is what used to be
+// dropped: a `date` was the only form ochakai took, so Appendix A's
+// concept arrived with three of its keys silently emptied and a note
+// nobody reads on an import of hundreds (design doc 0133).
+//
+// Verbatim from the spec, trimmed to the keys under test — if OKF v0.2's
+// example stops parsing here, ochakai has stopped consuming OKF v0.2.
+func TestParseTakesTheSpecsOwnInstants(t *testing.T) {
+	k, notes, err := Parse([]byte(`---
+type: Attested Computation
+title: Revenue for fiscal year
+runtime: bigquery
+stale_after: 2026-12-31T18:30:00Z
+sources:
+  - id: rev-policy
+    resource: https://wiki.acme/finance/revenue-recognition
+    last_modified: 2026-04-02T09:15:00Z
+usage_window: { from: 2026-06-01T00:00:00Z, to: 2026-06-30T23:59:59Z }
+---
+
+# Computation
+
+    SELECT 1
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notes) != 0 {
+		t.Errorf("the spec's own example was read with complaints: %v", notes)
+	}
+	if k.StaleAfter != "2026-12-31T18:30:00Z" {
+		t.Errorf("stale_after = %q, want the instant the document declared", k.StaleAfter)
+	}
+	if len(k.Sources) != 1 || k.Sources[0].LastModified != "2026-04-02T09:15:00Z" {
+		t.Errorf("sources = %+v, want last_modified kept", k.Sources)
+	}
+	if k.UsageWindow == nil || k.UsageWindow.To != "2026-06-30T23:59:59Z" {
+		t.Errorf("usage_window = %+v, want both bounds kept", k.UsageWindow)
+	}
+	// A UTC midnight is the one moment a bare date can mean, so it reads
+	// back as the date — the spelling the common case writes.
+	k, _, err = Parse([]byte("---\ntype: Insight\nstale_after: 2026-12-31T00:00:00Z\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.StaleAfter != "2026-12-31" {
+		t.Errorf("a UTC midnight read as %q, want the date alone", k.StaleAfter)
+	}
+	// An offset is what makes a datetime absolute; without one it is not
+	// a moment and is dropped the way "soon" is.
+	_, notes, err = Parse([]byte("---\ntype: Insight\nstale_after: \"2026-12-31T18:30:00\"\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(notes) != 1 {
+		t.Errorf("a datetime with no offset was taken as absolute: %v", notes)
+	}
+}
+
 // Every key OKF v0.2 defines is an envelope field, not an attr: the spec's
 // schema is the shape ochakai keeps (design doc 0036 §2). Only producer
 // extension keys ride through attrs.

@@ -64,7 +64,7 @@ const exportBatch = 100
 // is any valid UTF-8 (domain.validSegment) — which for this product's
 // first audience means the subtree is usually spelled in Japanese
 // (C8). Folding those characters to hyphens the way the unsafe ASCII
-// ones are folded is what design doc 0127 exists to prevent: "営業"
+// ones are folded is what design doc 0134 exists to prevent: "営業"
 // left nothing behind and came out as "ochakai-okf-.tar.gz", one
 // hyphen from the whole-base name, and "teams/成長" came out as
 // "ochakai-okf-teams.tar.gz" — an archive of one directory claiming to
@@ -153,7 +153,7 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 		return
 	}
 	// The whole bundle stays the administrator's, and a subtree is
-	// available to whoever may read it (design doc 0127). What made the
+	// available to whoever may read it (design doc 0134). What made the
 	// archive an administrator's operation was that a part of a base and
 	// the whole of one arrived looking identical — same root index.md,
 	// same filename — so a partial one could be kept as a backup and
@@ -205,7 +205,7 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 	w.Header().Set("Content-Type", "application/gzip")
 	// The name says what is inside, because the person who meets this
 	// archive again is reading a filename rather than unpacking it
-	// (design doc 0127). A whole base keeps the name it has always had.
+	// (design doc 0134). A whole base keeps the name it has always had.
 	w.Header().Set("Content-Disposition", archiveDisposition(prefix))
 	tgz := okf.NewTarGzWriter(w, time.Now())
 	written := make(map[string]bool, len(ids)+len(indexes))

@@ -371,30 +371,77 @@ func StatusFromOKF(raw string) (s Status, ok bool) {
 	return StatusDraft, false
 }
 
-// DateLayout is the date form OKF fixes for its absolute dates — stale_after
-// (SPEC §5.5), sources[].last_modified and usage_window (SPEC §5.1). An
-// absolute day, not a relative TTL, so staleness stays a plain date
-// comparison with no reference to when the entry was read — and with no
-// timezone to argue about.
+// DateLayout is the YYYY-MM-DD form. OKF fixes it in exactly one place —
+// the date headings of a log.md (SPEC §9) — and nowhere else: it is not
+// the form of the moments below, whatever this constant's name once
+// implied.
 const DateLayout = "2006-01-02"
 
-// StaleAfterLayout is the older name for DateLayout, kept because the date
-// rule was written for stale_after first.
-const StaleAfterLayout = DateLayout
+// The two spellings an OKF moment may arrive in.
+//
+// SPEC §5 opens by fixing the type: "Every timestamp-valued key in OKF is
+// an ISO 8601 datetime with an explicit UTC offset", and §5.5 calls
+// stale_after "an absolute instant". A bare date is not that, and ochakai
+// used to accept only a bare date — so the spec's own worked example
+// (Appendix A, stale_after: 2026-12-31T00:00:00Z) did not survive a read.
+//
+// Both are taken, and neither is rewritten into the other. A date is the
+// UTC midnight that opens it, which is what makes "now >= stale_after"
+// the same comparison for both, and it stays the tidier thing to write
+// when the time of day carries nothing (design doc 0133).
+const instantLayout = time.RFC3339
 
-// ValidDate reports whether s can be one of OKF's absolute dates: unset,
-// or a YYYY-MM-DD date that exists. Every date field in the envelope is
-// held to this one rule.
-func ValidDate(s string) bool {
+// ParseInstant reads one of OKF's moments — an RFC 3339 datetime, or a
+// YYYY-MM-DD date read as the UTC midnight that opens it. The zero time
+// and false mean s is neither.
+//
+// Unset is not a moment: "" reports false here and is handled by the
+// callers that allow an absent key, so a validator and a comparison
+// cannot disagree about what an empty string means.
+func ParseInstant(s string) (time.Time, bool) {
+	if t, err := time.Parse(instantLayout, s); err == nil {
+		return t.UTC(), true
+	}
+	if t, err := time.Parse(DateLayout, s); err == nil {
+		return t.UTC(), true
+	}
+	return time.Time{}, false
+}
+
+// ValidInstant reports whether s can be one of OKF's moments: unset, or a
+// spelling ParseInstant reads. Every such field in the envelope —
+// stale_after (SPEC §5.5), sources[].last_modified and usage_window
+// (SPEC §5.1) — is held to this one rule.
+func ValidInstant(s string) bool {
 	if s == "" {
 		return true
 	}
-	_, err := time.Parse(DateLayout, s)
-	return err == nil
+	_, ok := ParseInstant(s)
+	return ok
+}
+
+// InstantsHint is how the surfaces spell the rule to a writer, in one
+// place so the contract, the tool schema and the CLI's help cannot drift
+// apart from each other.
+const InstantsHint = "an RFC 3339 datetime (2026-12-31T18:30:00Z) or a YYYY-MM-DD date"
+
+// FormatInstant is how a moment is rendered back into the envelope: as
+// the date alone when it is a UTC midnight, and as RFC 3339 otherwise.
+//
+// The collapse is what keeps the common case unchanged — a writer who
+// wrote 2026-12-31 reads 2026-12-31 back, rather than a datetime they did
+// not write — and it is lossless, midnight being the only moment a bare
+// date can mean.
+func FormatInstant(t time.Time) string {
+	t = t.UTC()
+	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 {
+		return t.Format(DateLayout)
+	}
+	return t.Format(instantLayout)
 }
 
 // ValidStaleAfter reports whether s can be a stale_after.
-func ValidStaleAfter(s string) bool { return ValidDate(s) }
+func ValidStaleAfter(s string) bool { return ValidInstant(s) }
 
 // Usage event kinds recorded per knowledge entry (design doc 0069).
 // The first two are recorded passively by reads; worked/failed are
@@ -700,7 +747,7 @@ type UsageWindow struct {
 }
 
 func (w *UsageWindow) Valid() bool {
-	return w == nil || (ValidDate(w.From) && ValidDate(w.To))
+	return w == nil || (ValidInstant(w.From) && ValidInstant(w.To))
 }
 
 func (w *UsageWindow) sameAs(o *UsageWindow) bool {
@@ -763,7 +810,7 @@ type Source struct {
 // artifact is not a citation, which is why SPEC §5.1 makes resource
 // required inside an entry.
 func (s Source) Valid() bool {
-	return s.Resource != "" && ValidDate(s.LastModified) && s.UsageWindow.Valid() &&
+	return s.Resource != "" && ValidInstant(s.LastModified) && s.UsageWindow.Valid() &&
 		(s.UsageCount == nil || *s.UsageCount >= 0)
 }
 

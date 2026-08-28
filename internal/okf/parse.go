@@ -66,10 +66,7 @@ type Doc struct {
 func yamlScalar(v any) any {
 	switch v := v.(type) {
 	case time.Time:
-		if v.Hour() == 0 && v.Minute() == 0 && v.Second() == 0 && v.Nanosecond() == 0 {
-			return v.Format(domain.StaleAfterLayout)
-		}
-		return v.Format(time.RFC3339)
+		return domain.FormatInstant(v)
 	case []any:
 		out := make([]any, len(v))
 		for i := range v {
@@ -325,7 +322,7 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 			fm.status, domain.StatusesHint(), status))
 	}
 	if !domain.ValidStaleAfter(fm.staleAfter) {
-		notes = append(notes, fmt.Sprintf("stale_after %q is not a YYYY-MM-DD date; dropped", fm.staleAfter))
+		notes = append(notes, fmt.Sprintf("stale_after %q is not %s; dropped", fm.staleAfter, domain.InstantsHint))
 		fm.staleAfter = ""
 	}
 
@@ -416,8 +413,8 @@ func windowFrom(v any, where string) (*domain.UsageWindow, []string) {
 		name string
 		dst  *string
 	}{{"from", &w.From}, {"to", &w.To}} {
-		if !domain.ValidDate(*f.dst) {
-			notes = append(notes, fmt.Sprintf("%s.%s %q is not a YYYY-MM-DD date; dropped", where, f.name, *f.dst))
+		if !domain.ValidInstant(*f.dst) {
+			notes = append(notes, fmt.Sprintf("%s.%s %q is not %s; dropped", where, f.name, *f.dst, domain.InstantsHint))
 			*f.dst = ""
 		}
 	}
@@ -466,10 +463,10 @@ func sourcesFrom(v any) ([]domain.Source, []string) {
 			continue
 		}
 		if lm := strOf(m, "last_modified"); lm != "" {
-			if domain.ValidDate(lm) {
+			if domain.ValidInstant(lm) {
 				s.LastModified = lm
 			} else {
-				notes = append(notes, fmt.Sprintf("sources[%d].last_modified %q is not a YYYY-MM-DD date; dropped", i, lm))
+				notes = append(notes, fmt.Sprintf("sources[%d].last_modified %q is not %s; dropped", i, lm, domain.InstantsHint))
 			}
 		}
 		if n, ok := intFrom(m["usage_count"]); ok && n >= 0 {

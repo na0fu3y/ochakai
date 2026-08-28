@@ -812,7 +812,7 @@ func validate(k *domain.Knowledge) error {
 		return Invalidf("invalid status %q (valid: %s)", k.Status, domain.StatusesHint())
 	}
 	if !domain.ValidStaleAfter(k.StaleAfter) {
-		return Invalidf("invalid stale_after %q (an absolute date, YYYY-MM-DD, e.g. 2026-12-31)", k.StaleAfter)
+		return Invalidf("invalid stale_after %q (an absolute moment: %s)", k.StaleAfter, domain.InstantsHint)
 	}
 	return validateOKF(k)
 }
@@ -838,18 +838,18 @@ func validateOKF(k *domain.Knowledge) error {
 		if src.Resource == "" {
 			return Invalidf("sources[%d] needs a resource (the artifact it cites); id and title alone do not name one", i)
 		}
-		if !domain.ValidDate(src.LastModified) {
-			return Invalidf("sources[%d]: invalid last_modified %q (an absolute date, YYYY-MM-DD)", i, src.LastModified)
+		if !domain.ValidInstant(src.LastModified) {
+			return Invalidf("sources[%d]: invalid last_modified %q (an absolute moment: %s)", i, src.LastModified, domain.InstantsHint)
 		}
 		if !src.UsageWindow.Valid() {
-			return Invalidf("sources[%d]: usage_window needs absolute dates (YYYY-MM-DD)", i)
+			return Invalidf("sources[%d]: usage_window needs absolute moments (%s)", i, domain.InstantsHint)
 		}
 		if src.UsageCount != nil && *src.UsageCount < 0 {
 			return Invalidf("sources[%d]: usage_count must not be negative", i)
 		}
 	}
 	if !k.UsageWindow.Valid() {
-		return Invalidf("usage_window needs absolute dates (YYYY-MM-DD), e.g. {from: 2026-06-01, to: 2026-06-30}")
+		return Invalidf("usage_window needs absolute moments (%s), e.g. {from: 2026-06-01, to: 2026-06-30}", domain.InstantsHint)
 	}
 	for i, p := range k.Parameters {
 		if !p.Valid() {

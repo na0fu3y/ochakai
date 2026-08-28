@@ -591,9 +591,9 @@ paths:
 
 
         **An archive of a subtree says it is one**, in the two places
-        its reader meets it (design doc 0127): the root `index.md`
-        carries `bundle_scope` in its frontmatter and a sentence naming
-        what is missing, and the `Content-Disposition` filename is
+        its reader meets it (design doc 0135): the root `index.md` names
+        the subtree in its heading and in a sentence saying what is
+        missing, and the `Content-Disposition` filename is
         `ochakai-okf-<subtree>.tar.gz` rather than `ochakai-okf.tar.gz`.
         A subtree spelled outside ASCII is percent-encoded there and
         carried unescaped in `filename*` (RFC 6266), so the name never
@@ -605,7 +605,7 @@ paths:
 
         **Who may take it**: the whole bundle (the root) is an
         administrator's, and a subtree belongs to whoever may read it
-        (design docs 0109 §3, 0127). A path outside the caller's read
+        (design docs 0109 §3, 0135). A path outside the caller's read
         scope answers 404, as every other read of it does. Refusing a
         subtree bought nothing once the archive stopped being mistakable
         for a backup of the base: it carries what its caller could
@@ -2903,16 +2903,22 @@ components:
         status: { $ref: "#/components/schemas/Status" }
         stale_after:
           type: string
-          format: date
           description: >
-            Absolute date (YYYY-MM-DD) on and after which the concept is
-            stale — OKF's lifecycle date (SPEC §5.5, design doc
-            0069). A date rather than a TTL so staleness is a plain
-            comparison against today. Advisory: nothing hides a stale
-            concept and search ranking never reads it — a passed date means
-            due for a re-check, not wrong. The one surface that reads it
-            is sort=stale_after, the feed of concepts whose declared date
-            has passed (design doc 0069 §2.2).
+            The absolute moment on and after which the concept is stale —
+            OKF's lifecycle instant (SPEC §5.5). An RFC 3339 datetime
+            (`2026-12-31T18:30:00Z`), or a `YYYY-MM-DD` date, which is the
+            UTC midnight that opens it; a datetime without an offset is
+            not absolute and is refused. Absolute rather than a TTL, so
+            staleness is a plain comparison against now with no reference
+            to when the concept was read.
+
+            Whichever spelling was written comes back, midnight aside: a
+            moment at UTC midnight reads back as the date alone, the two
+            being one value (design doc 0133). Advisory: nothing hides a
+            stale concept and search ranking never reads it — a passed
+            moment means due for a re-check, not wrong. The one surface
+            that reads it is sort=stale_after, the feed of concepts whose
+            declared moment has passed (design doc 0133 §3.3).
         trust:
           allOf: [{ $ref: "#/components/schemas/Trust" }]
           description: >

@@ -3564,3 +3564,60 @@ func TestIntegrationLexicalSearchCarriesTheMatchingPassage(t *testing.T) {
 			named.Snippet)
 	}
 }
+
+// The feed reads stale_after as the moment it is, not as the day it falls
+// in (design doc 0133). Two entries expiring the same day, an hour either
+// side of now, are the case a date column could not tell apart: both were
+// stale from midnight, so half the feed was work nobody had to do yet.
+//
+// This is also what keeps the comparison free of timezones. now() and the
+// column are both absolute, so neither side depends on the session's
+// TimeZone — which the date column had to spell out by hand to avoid.
+func TestIntegrationStaleFeedReadsTheTimeOfDay(t *testing.T) {
+	dbURL := testdb.URL(t)
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	if err := s.Migrate(ctx, 4); err != nil {
+		t.Fatal(err)
+	}
+
+	run := testdb.Unique(t, "it133-")
+	actor := domain.Actor{Kind: "human", Name: "test"}
+	mk := func(name, staleAfter string) string {
+		id := run + "/" + name
+		k := &domain.Knowledge{
+			Type: domain.TypeInsights, ID: id, Title: name, Body: "b", Tags: []string{run},
+			Status: domain.StatusDraft, StaleAfter: staleAfter,
+			CreatedBy: actor, UpdatedBy: actor,
+		}
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatalf("create %s: %v", id, err)
+		}
+		return id
+	}
+
+	now := time.Now().UTC()
+	past := mk("an-hour-ago", now.Add(-time.Hour).Format(time.RFC3339))
+	mk("in-an-hour", now.Add(time.Hour).Format(time.RFC3339))
+
+	stale, err := s.ListByStaleAfter(ctx, Filter{Tags: []string{run}}, nil, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make([]string, len(stale))
+	for i, k := range stale {
+		got[i] = k.ID
+	}
+	if want := []string{past}; !slices.Equal(got, want) {
+		t.Errorf("stale feed = %v, want %v — only the moment that has passed", got, want)
+	}
+	// And the moment survives the round trip through the column, rather
+	// than reading back as the day it fell in.
+	if len(stale) == 1 && stale[0].StaleAfter != now.Add(-time.Hour).Format(time.RFC3339) {
+		t.Errorf("stale_after read back as %q, want the instant that was written", stale[0].StaleAfter)
+	}
+}

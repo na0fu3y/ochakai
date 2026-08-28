@@ -287,7 +287,7 @@ var reservedKeys = func() map[string]bool {
 // Indexes generates the index.md of every directory in the bundle.
 //
 // scope names the subtree when this is an archive of one, so the root
-// index can say so (design doc 0127); "" is a whole base.
+// index can say so (design doc 0134); "" is a whole base.
 func Indexes(entries []domain.Knowledge, files []domain.File, scope string) map[string][]byte {
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 	root := &dir{}
