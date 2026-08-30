@@ -270,7 +270,7 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 //
 // Three things are needed and all three are already here: the draft can
 // name what it would replace (a body link, which is how relationships are
-// written at all — design doc 0074 §2), the agent can see the human's
+// written at all — design doc 0136 §2), the agent can see the human's
 // ruling on its own draft (get_concept carries the verification ledger),
 // and it can find out that a proposal was already turned down before
 // spending a write on it (rejected=true). What it cannot do is rule —

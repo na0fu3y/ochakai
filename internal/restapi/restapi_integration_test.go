@@ -3095,7 +3095,7 @@ func TestRESTIntegrationDeleteIfMatch(t *testing.T) {
 // consumers MAY derive a title from the filename"), so a wire that
 // resolved it to the id's last segment asserted a value the document
 // never declared, and a client could not tell a title from a filename
-// (design docs 0064, 0074 §1). `status` stays resolved, because SPEC
+// (design docs 0064, 0136 §1). `status` stays resolved, because SPEC
 // §5.4 does give it a normative default — a resolved status reports what
 // the spec says the document means.
 //

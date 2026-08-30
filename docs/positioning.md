@@ -315,7 +315,7 @@ ochakai の前提はその逆側にある: 人を通った数千の concept(下�
 エージェントの search → get で足りる。型付き
 リレーションは持たない — `rel` は機械可読な型として導入され、機械が
 一度も読まなかったので、関係の種類は周囲の散文が運ぶ
-([0074 §2](design/0074-the-document-and-the-vocabulary-that-asks-it.md))。
+([0136 §2](design/0136-a-concept-is-addressed-not-labelled.md))。
 書き込み時のスキーマ強制も同じ向きで断っている: 型は開いた語彙
 ([0038](design/0038-type-vocabulary-realignment.md))で、品質は制約では
 なく人の裁定で買う(C7)。
@@ -345,7 +345,7 @@ AI が生んだ洞察を人が検証してオントロジーへ還流する閉�
 重なりは表面的ではない — **物理的な形が同じ**なのである。`ochakai
 export` のバンドルは YAML frontmatter を持つ markdown ファイルの
 ディレクトリで、その関係は普通の本文リンクである
-([0074](design/0074-the-document-and-the-vocabulary-that-asks-it.md) §2)。
+([0136](design/0136-a-concept-is-addressed-not-labelled.md) §2)。
 つまり**それは vault として開く**。良いエディタとグラフビューで
 ナレッジベースを眺めたいのなら、それがその道具であり、ここにあるものは
 何も競合しない。(export のルート相対リンクが Obsidian のグラフで

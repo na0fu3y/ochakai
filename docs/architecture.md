@@ -204,7 +204,7 @@ bundle のレイアウトは id だけから決まる(設計ドキュメント
 `title` は省略でき、それを持たない concept は id の最後のセグメント
 で表示される — ファイルがファイル名で呼ばれるのと同じである — そして
 id は NFC 正規化されており、それ自体が検索対象でもある(設計
-ドキュメント [0074](design/0074-the-document-and-the-vocabulary-that-asks-it.md) §1)。
+ドキュメント [0136](design/0136-a-concept-is-addressed-not-labelled.md) §1)。
 
 住所がパスであるということは、パスもまた検索の対象になるという
 ことである。`--prefix`(REST では `?prefix=`、MCP では `prefixes`)
@@ -230,7 +230,7 @@ vocabulary の隣にあるチーム独自の vocabulary のように、ディレ
 読みはその逆向きの edge を `linked_from` の行として連れて返る
 ([0106](design/0106-a-read-carries-what-points-at-it.md))。どんな種類の関係かは
 その周りの文が語るので、ochakai は自分自身の関係 vocabulary を一切
-保存しない(設計ドキュメント [0074](design/0074-the-document-and-the-vocabulary-that-asks-it.md) §2)。
+保存しない(設計ドキュメント [0136](design/0136-a-concept-is-addressed-not-labelled.md) §2)。
 フェンスされたコードブロック(``` や ~~~)の中のリンクとインラインの
 `` `code span` `` は例として扱われスキップされる — インデントされた
 コードは検出されないので、4 スペース分インデントされたリンクは本文
@@ -411,7 +411,7 @@ producer キーは索引しない: concept の別名ではなく concept につ�
 である。そこで ochakai はクエリの**用語** — ひらがなの間に挟まれた、
 漢字かカタカナを含む連なり — を取り出し、その名前を持つ concept を
 上に出す。名前は二つとも効く: `title` と、id の最後のセグメント
-(設計ドキュメント [0074 §1](design/0074-the-document-and-the-vocabulary-that-asks-it.md))。
+(設計ドキュメント [0136 §1](design/0136-a-concept-is-addressed-not-labelled.md))。
 空白で語を区切る言語ではこれをしない — 英語の質問に出てくる
 "revenue" は、revenue という名前の concept を引きに来たわけではない
 からである。

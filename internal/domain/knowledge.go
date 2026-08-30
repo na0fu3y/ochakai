@@ -1,5 +1,5 @@
 // Package domain defines the knowledge model shared by the store, MCP
-// server, and REST API. See design docs 0074 and 0075.
+// server, and REST API. See design docs 0136 and 0075.
 package domain
 
 import (
@@ -962,21 +962,27 @@ type Knowledge struct {
 // rejected_*) is not here: those keys are ignored on the way in, and the
 // bundle writer keeps its own longer list.
 var EnvelopeKeys = []string{
-	"type", "id", "title", "description", "resource", "tags",
+	"type", "title", "description", "resource", "tags",
 	"sources", "usage_window",
 	"status", "status_note", "stale_after",
 	"runtime", "parameters", "computation", "executor", "attester",
 }
 
-// OchakaiEnvelopeKeys names the two envelope keys that are ochakai's own
-// rather than OKF's: SPEC v0.2 defines no top-level `id` (a concept's id
-// is its path, §2 — `sources[].id` is a different key) and no
-// `status_note`. Both are read into columns and written back into
-// bundles, so they stay envelope keys — but the frontmatter filter's
-// vocabulary is OKF's (design doc 0074 §4.2), and when ochakai is the
-// producer its own extension keys are refused the same way anybody
-// else's are (design doc 0064).
-var OchakaiEnvelopeKeys = []string{"id", "status_note"}
+// OchakaiEnvelopeKeys names the envelope key that is ochakai's own rather
+// than OKF's: SPEC v0.2 defines no `status_note`. It is read into a column
+// and written back into bundles, so it stays an envelope key — but the
+// frontmatter filter's vocabulary is OKF's (design doc 0136 §5.2), and
+// when ochakai is the producer its own extension keys are refused the same
+// way anybody else's are (design doc 0064).
+//
+// It used to name `id` as well. That one was never written into a bundle:
+// the envelope read a top-level `id` on the way in and no renderer emitted
+// one, so the key ochakai claimed as its own was a key it only ever took
+// away from a producer that wrote it. A concept's id is its path (SPEC §2,
+// design doc 0075) — `sources[].id` is a different key — so `id` is a
+// producer's extension key here like any other, kept in attrs and handed
+// back exactly as written.
+var OchakaiEnvelopeKeys = []string{"status_note"}
 
 // FilterOwnedKeys names, for each OKF key ochakai reads through a column
 // of its own, the filter that owns the question — the one a frontmatter
@@ -996,9 +1002,8 @@ var FilterOwnedKeys = map[string]string{
 // sorted: every key OKF defines, less the ones a filter of their own
 // already asks (design doc 0047 §2). A producer's extension key is not
 // here — it is stored and handed back exactly as written (SPEC §4.1), but
-// the query vocabulary is OKF's. That rule reads ochakai's own two
-// envelope keys out too (OchakaiEnvelopeKeys): `fm.id` asks what the
-// address already answers, and an extension key ochakai may ask but
+// the query vocabulary is OKF's. That rule reads ochakai's own envelope
+// key out too (OchakaiEnvelopeKeys): an extension key ochakai may ask but
 // nobody else may would make the refusal's own reason false.
 //
 // It is derived from EnvelopeKeys rather than written out, which is what
@@ -1071,7 +1076,7 @@ func (k *Knowledge) URI() string { return fmt.Sprintf("ochakai://%s", k.ID) }
 
 // DisplayTitle returns the entry's display name: the title when one is
 // set, else the id's final segment — with title optional (design doc
-// 0074 §1), the filename usually is the name.
+// 0136 §1), the filename usually is the name.
 func (k *Knowledge) DisplayTitle() string { return DisplayTitle(k.Title, k.ID) }
 
 // DisplayTitle is the package-level form for projections that carry
@@ -1429,8 +1434,8 @@ type View struct {
 	Notes []string `json:"notes,omitempty"`
 }
 
-// The three things a write can turn out to have been (design doc 0074
-// §5, carried into the body by 0097).
+// The three things a write can turn out to have been (design doc 0136
+// §6, carried into the body by 0097).
 // They live here rather than in the surface that first needed them
 // because every surface says them now — a header on REST, a field in the
 // body on REST and MCP, a line on the CLI — and a vocabulary with one

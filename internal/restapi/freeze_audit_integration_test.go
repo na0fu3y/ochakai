@@ -244,10 +244,13 @@ func TestRESTIntegrationReembedRefusesABody(t *testing.T) {
 	}
 }
 
-// fm.id and fm.status_note are ochakai's own envelope keys, not OKF's —
-// SPEC v0.2 defines no top-level id and no status_note — and the filter
-// vocabulary is OKF's, so they are refused the way any producer's
-// extension key is (design doc 0064; 0074 §4.2).
+// Neither fm.id nor fm.status_note is askable: SPEC v0.2 defines no
+// top-level id and no status_note, and the filter vocabulary is OKF's, so
+// both are refused the way any producer's extension key is (design doc
+// 0064; 0136 §5.2). They are refused for the same reason but they are not
+// the same kind of key any more — status_note is an envelope key ochakai
+// writes into a bundle, and id is a producer's own, read into no field at
+// all, since a concept's id is its path (SPEC §2).
 func TestRESTIntegrationOchakaiOwnKeysAreNotAskable(t *testing.T) {
 	srv, _ := newIntegrationServer(t)
 

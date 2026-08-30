@@ -23,6 +23,37 @@ last entry.
 
 ### Changed
 
+- **BREAKING: a top-level `id` in frontmatter is a producer's key, not
+  ochakai's** ([design doc
+  0136](docs/design/0136-a-concept-is-addressed-not-labelled.md),
+  replacing 0074). A concept's id is its path (OKF SPEC §2), and the
+  envelope no longer reads an `id` key out of a document. It never wrote
+  one: no renderer has ever emitted `id:`, so the key ochakai called its
+  own was one it only ever took away from the producer who wrote it —
+  and it took it away inconsistently. `PUT /api/v1/bundle/{path}`
+  overwrote it from the path, bundle import overwrote it from the
+  filename, and `ochakai put <path>` overwrote it from the argument; the
+  single door where it decided anything was **`ochakai put -f doc.md`
+  with no path argument**, which now fails with `no id: pass the
+  concept's path as the argument`. That door was also the CLI reading a
+  document to choose a destination URL, which REST does nowhere ([0067
+  §2](docs/design/0067-four-faces-and-what-they-decline.md): the CLI is a
+  thin client of REST). **What an operator has to do**: nothing, unless a
+  script pipes an OKF document into `ochakai put` without naming the
+  path — add the path. **No migration runs, no re-embedding is needed and
+  `updated_at` does not move**: the stored bytes are the document itself
+  ([0079](docs/design/0079-taking-the-document.md)), so a document
+  carrying `id:` round-trips byte-identically as before. What changes is
+  where the value lands when the document is read as structure — `attrs`
+  rather than the envelope — so a concept rewritten after this release
+  reports it under `attrs` in the JSON view, and exports it back to the
+  top level where its writer put it. `fm.id` is still a 400 with the same
+  text; only its reason changes, from "it is one of ochakai's own two
+  envelope keys" to "a producer's key is not askable", which is what the
+  refusal already said. `sources[].id` is a different key and is
+  untouched, and `status_note` stays an envelope key — that one ochakai
+  really does write. The frozen REST wire does not move.
+
 - **BREAKING: a rejection is a deletion, and the reason travels as an
   OKF §9 log entry** ([design doc
   0135](docs/design/0135-a-rejection-is-a-deletion.md)). A rejection was

@@ -36,7 +36,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**ディレクトリごとの管理者は [0124](0124-a-directory-can-have-its-own-administrator.md)**(0109 §3 を改訂 — `may_admin` は prefix に縛られ、根には置けない)。**subtree のアーカイブを読める者に開いたのは [0134](0134-an-archive-says-which-part-it-is.md)**(0109 §3 を改訂 — アーカイブが自分の範囲を名乗る)。**`stats` が範囲を持つ呼び出し元にも答えることは [0123](0123-the-numbers-say-what-they-counted.md)**(0109 §3 を改訂 — 答えが自分の範囲を宣言する)。**`move` が書き換えの収まる範囲で動くことは [0129](0129-a-move-runs-when-its-rewrite-fits.md)**(0109 §3 を改訂 — はみ出すなら丸ごと断る)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
 | 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
-| OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、[0074](0074-the-document-and-the-vocabulary-that-asks-it.md)(文書の形と問いの語彙)。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2。**SPEC が瞬間で定義した値(`stale_after`・`sources[].last_modified`・`usage_window`)の綴りは [0133](0133-an-okf-moment-is-an-instant.md)** — RFC 3339 の datetime と `YYYY-MM-DD` の日付の両方を取り、日付はそれが開く UTC の真夜中である |
+| OKF 互換・バンドル・保存形 | [0075](0075-the-bundle-is-the-address-space.md)(バンドル・住所・保存形)、**[0136](0136-a-concept-is-addressed-not-labelled.md)(文書の形と問いの語彙 — 0074 を差し替え。`id` は住所であって frontmatter のキーではない)**。**取り込みが文書を拒む条件と CLI が送るバイト列は [0079](0079-taking-the-document.md) が現行**。期限と引用元は [0069](0069-the-loop-and-what-measures-it.md) §2。**SPEC が瞬間で定義した値(`stale_after`・`sources[].last_modified`・`usage_window`)の綴りは [0133](0133-an-okf-moment-is-an-instant.md)** — RFC 3339 の datetime と `YYYY-MM-DD` の日付の両方を取り、日付はそれが開く UTC の真夜中である |
 | 住所とパス | [0075](0075-the-bundle-is-the-address-space.md) が現行(パスが住所、型は属性、move、prefix)。**ディレクトリを丸ごと動かす形は [0132](0132-a-directory-moves-whole-or-not-at-all.md)**(0075 §2 に prefix の move を足す — 丸ごと動くか、動かない)。`.md` が必須でバンドルパスの一部であることは [0064](0064-rest-stops-at-api-v1.md) §5。**`.md` が concept の住所であり、そこに座れるものは concept だけであることは [0100](0100-md-is-how-a-concept-is-spelled.md)**(0075 §3.3 を改訂) |
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
@@ -336,13 +336,33 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   バイト列で正準形は導出値、他者の trust family は `received:` の主張として
   残る。帰属は本文から導出し、move は名前空間ごと動かし、`prefix` は住所で
   絞る(認可ではない)。
-- [0074 文書の形と、それに問う語彙](0074-the-document-and-the-vocabulary-that-asks-it.md)
+- [0136 文書の形と、それに問う語彙 — id は住所であって、名札ではない](0136-a-concept-is-addressed-not-labelled.md)
   — **Accepted**。**concept 文書の形と問いの語彙の現行ドキュメント**
-  (0019 / 0022 / 0024 / 0047 / 0061 の五冊を一冊にまとめたもので、決定は
-  一つも動いていない)。ファイル名が名前(title は任意、鍵として比較される
-  文字列だけ NFC)、リンクは本文から導出、id の文字種はパス安全性だけ、
-  `fm.` が引けるのは OKF が定義するキー、そして dry run は書き込みを止めた
-  ものである。
+  (0074 を差し替え、そこに散っていた改訂 — 0064 §15・§18、0079、0097、
+  0133 — を本文に畳んだ)。ファイル名が名前(title は任意、鍵として比較
+  される文字列だけ NFC)、リンクは本文から導出、id の文字種はパス安全性
+  だけ、`fm.` が引けるのは OKF が定義するキー、そして dry run は書き込みを
+  止めたものである。**動いたのは一点**: frontmatter の `id` が envelope を
+  離れ、producer の拡張キーに戻る。0074 §4.2 は `id` と `status_note` を
+  「ochakai 自身の二つのキー」と括り、0064 §23.5 は `fm.` から外しつつ
+  「envelope としては残る」と書いたが、**二つは同じ性質ではなかった** —
+  `status_note` は ochakai がバンドルに書くキーで、`id` は
+  **一度も書いたことがなく、読むだけのキー**だった。つまり自分のキーと
+  呼びながら、それを書いた producer から取り上げていた。取り上げた先も
+  一貫せず、REST・バンドル取り込み・引数付き `put` はどれもパスで上書き
+  していて、効いていたのは `ochakai put -f`(引数なし)一つだけ — 文書を
+  読んで宛先 URL を決める、REST がどこでもしない判断で、0067 §2 の
+  「CLI は REST の薄いクライアント」に反していた。**concept の id は
+  パスである**(SPEC §2、0075 §2)。保存形は一バイトも動かず、`fm.id` は
+  前と同じく 400 で、変わるのは理由のほう(ochakai のキーだから、ではなく
+  producer のキーだから)。SPEC §4.1 / §11 に対しては適合の向きに動く —
+  他所の producer が書いた `id` が、飲み込まれずに保たれるようになる。
+  却下: `id` を export に書くようにして envelope に戻す(SPEC §2 が決めた
+  住所の横に第二の綴りを置くことになり、ずれたときに誰も裁定できない)、
+  `status_note` も一緒に外す(こちらは書いているキーで、外すと現在の
+  status の理由を書く場所が消える)。
+- [0074 文書の形と、それに問う語彙](0074-the-document-and-the-vocabulary-that-asks-it.md)
+  — **Superseded by 0136**。
 - [0071 推奨する型の語彙](0071-the-recommended-type-vocabulary.md) —
   **Accepted**。**型の語彙の現行ドキュメント**(0038 / 0063 を一冊に
   まとめたもの)。推奨は 9 型で、型は閉じた集合ではない。語彙を決める根拠は
