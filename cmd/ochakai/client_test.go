@@ -72,9 +72,15 @@ func TestDecodeEntryDetectsFormat(t *testing.T) {
 	if err != nil || fromJSON.ID != "revenue" {
 		t.Fatalf("json: %v, %+v", err, fromJSON)
 	}
+	// An OKF document names no id — a concept's id is its path (SPEC §2) —
+	// so the caller's argument is the only place one comes from, and an
+	// `id` key a producer wrote is theirs, kept in attrs as written.
 	fromOKF, _, err := decodeEntry([]byte("\n---\ntype: metric\nid: revenue\ntitle: 売上\n---\n\nbody\n"))
-	if err != nil || fromOKF.ID != "revenue" || fromOKF.Body != "body" {
+	if err != nil || fromOKF.ID != "" || fromOKF.Body != "body" {
 		t.Fatalf("okf: %v, %+v", err, fromOKF)
+	}
+	if fromOKF.Attrs["id"] != "revenue" {
+		t.Errorf("a producer's id key was not kept in attrs: %v", fromOKF.Attrs)
 	}
 	if _, _, err := decodeEntry([]byte("plain text")); err == nil {
 		t.Error("garbage decoded without error")

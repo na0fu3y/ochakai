@@ -425,7 +425,7 @@ func (c *Client) Put(ctx context.Context, id string, doc []byte, ifMatch string,
 }
 
 // The three answers a plan can give, as the Ochakai-Plan header and the
-// response body both spell them (design docs 0074 §5, 0097). The values are
+// response body both spell them (design docs 0136 §6, 0097). The values are
 // domain's: one home for the vocabulary, so the client cannot come to
 // disagree with the server about a word they exchange.
 

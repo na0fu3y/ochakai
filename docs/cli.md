@@ -550,8 +550,9 @@ at, extension included. Every change is kept as a revision.
 
 As a concept: title is optional (the id's last segment is the display
 name when it is absent), JSON input is accepted at a concept's address
-too (see api/openapi.yaml), the argument overrides an id in the input
-— OKF documents carry none, the path is the id — new concepts default
+too (see api/openapi.yaml), the argument is the id — an OKF document
+carries none, and an `id` key in its frontmatter is a producer's own,
+kept as written and never read as an address — new concepts default
 to draft, and provenance is recorded from your Google identity.
 With --only-if-new the write lands only if the id is free, and fails
 instead of replacing. With --if-match it lands only if the concept still

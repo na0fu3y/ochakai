@@ -55,7 +55,6 @@ func TestParseRoundTrip(t *testing.T) {
 func TestParseAcceptsRawTypeAndHandWrittenDoc(t *testing.T) {
 	k, _, err := Parse([]byte(`---
 type: Attested Computation
-id: monthly-revenue
 title: 月次売上
 status: draft
 runtime: bigquery
@@ -68,8 +67,8 @@ Body text here.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if k.Type != domain.TypeComputations || k.ID != "monthly-revenue" {
-		t.Errorf("got %s/%s", k.Type, k.ID)
+	if k.Type != domain.TypeComputations {
+		t.Errorf("got %s", k.Type)
 	}
 	if k.Attrs["sql"] != "SELECT 1" {
 		t.Errorf("attrs = %v", k.Attrs)
@@ -99,7 +98,7 @@ func TestParseRejectsGarbage(t *testing.T) {
 // stashed in a preservation attr, so the document round-trips because
 // nothing was changed in the first place.
 func TestParseFreeTypes(t *testing.T) {
-	k, _, err := Parse([]byte("---\ntype: runbook\nid: restore-backup\ntitle: リストア手順\n---\n"))
+	k, _, err := Parse([]byte("---\ntype: runbook\ntitle: リストア手順\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +106,7 @@ func TestParseFreeTypes(t *testing.T) {
 		t.Errorf("one-word type: got type=%q attrs=%v", k.Type, k.Attrs)
 	}
 
-	k, _, err = Parse([]byte("---\ntype: Data Contract\nid: orders-contract\ntitle: 注文契約\n---\n"))
+	k, _, err = Parse([]byte("---\ntype: Data Contract\ntitle: 注文契約\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +118,7 @@ func TestParseFreeTypes(t *testing.T) {
 	// requires a consumer to tolerate unknown types, and §11 forbids
 	// rejecting a bundle over one. ochakai used to answer 400 and, on
 	// import, demote the document to a loose bundle file (design doc 0064).
-	ns, _, err := Parse([]byte("---\ntype: acme/Table\nid: warehouse/orders\n---\n"))
+	ns, _, err := Parse([]byte("---\ntype: acme/Table\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,6 +135,36 @@ func TestParseFreeTypes(t *testing.T) {
 	}
 	if strings.Contains(string(doc), "okf_type") {
 		t.Errorf("no preservation attr should exist any more:\n%s", doc)
+	}
+}
+
+// A top-level `id` is one of those producer keys and nothing more. SPEC
+// v0.2 defines no such field — a concept's id is its path (§2, design doc
+// 0075), and `sources[].id` is a different key — so the envelope does not
+// read one: it stays in attrs, exports back where its writer put it, and
+// never decides where the concept lives.
+//
+// It used to be an envelope key that filled Doc.ID. The bundle importer
+// overwrote it from the path and REST overwrote it from the address, so
+// the one door it reached was `ochakai put` with no argument; everywhere
+// else it was a producer's key quietly taken away.
+func TestParseDoesNotReadAnIDFromFrontmatter(t *testing.T) {
+	k, _, err := Parse([]byte("---\ntype: Metric\nid: acme-42\ntitle: 売上\n---\n\nBody.\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.ID != "" {
+		t.Errorf("Parse read an id out of frontmatter: %q", k.ID)
+	}
+	if k.Attrs["id"] != "acme-42" {
+		t.Errorf("a producer's id key was not kept: %v", k.Attrs)
+	}
+	doc, err := Document(&k.Knowledge)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(doc), "id: acme-42") {
+		t.Errorf("re-export lost the producer's id key:\n%s", doc)
 	}
 }
 
@@ -190,7 +219,7 @@ Body.
 }
 
 func TestParseStatusNoteRoundTrip(t *testing.T) {
-	k, _, err := Parse([]byte("---\ntype: insight\nid: dup\ntitle: 重複\nstatus: deprecated\nstatus_note: 既存と重複\n---\n"))
+	k, _, err := Parse([]byte("---\ntype: insight\ntitle: 重複\nstatus: deprecated\nstatus_note: 既存と重複\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +232,7 @@ func TestParseStatusNoteRoundTrip(t *testing.T) {
 }
 
 func TestParseNormalizesCRLF(t *testing.T) {
-	k, _, err := Parse([]byte("---\r\ntype: Glossary Term\r\nid: churn\r\ntitle: 解約\r\n---\r\n\r\n本文。\r\n"))
+	k, _, err := Parse([]byte("---\r\ntype: Glossary Term\r\ntitle: 解約\r\n---\r\n\r\n本文。\r\n"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -166,6 +166,13 @@ func Frontmatter(doc []byte) map[string]any {
 // at its original top-level position. A nested "attrs" map (the shape
 // older ochakai exports wrote) is folded in for backward compatibility.
 //
+// No id is read here. A concept's id is its path (SPEC §2, design doc
+// 0075) and every caller has one — the bundle path, or the address a
+// write is aimed at — so Doc.ID is the caller's to fill in. `id` in
+// frontmatter used to be an envelope key that set it, which meant a
+// producer's own `id` was swallowed at one door and ignored at the
+// others; it is an extension key like any other now.
+//
 // A malformed envelope value never costs the document: it is dropped and
 // reported as a note, which the importer prints separately from its skip
 // count (design doc 0036 §3.4).
@@ -227,14 +234,14 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		return s
 	}
 	var fm struct {
-		typ, resource, id, title, description, status, statusNote, staleAfter string
-		runtime, computation                                                  string
+		typ, resource, title, description, status, statusNote, staleAfter string
+		runtime, computation                                              string
 	}
 	for _, f := range []struct {
 		key string
 		dst *string
 	}{
-		{"type", &fm.typ}, {"resource", &fm.resource}, {"id", &fm.id},
+		{"type", &fm.typ}, {"resource", &fm.resource},
 		{"title", &fm.title}, {"description", &fm.description},
 		{"status", &fm.status}, {"status_note", &fm.statusNote},
 		{"stale_after", &fm.staleAfter},
@@ -288,7 +295,7 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 	}
 	for key, v := range raw {
 		switch key {
-		case "type", "resource", "id", "title", "description", "tags", "status", "status_note", "stale_after",
+		case "type", "resource", "title", "description", "tags", "status", "status_note", "stale_after",
 			"sources", "usage_window", "runtime", "parameters", "computation", "executor", "attester":
 			// envelope, extracted above and below
 		case "generated", "verified", "created_by", "rejected_by", "rejected_at", "rejected_note",
@@ -358,7 +365,6 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		Verified:    hasVerified,
 		Claimed:     claimed,
 		Type:        typ,
-		ID:          fm.id,
 		Title:       fm.title,
 		Description: fm.description,
 		Resource:    fm.resource,

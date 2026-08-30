@@ -41,7 +41,7 @@ ochakai import ./knowledge --dry-run --strict
 出すのと同じ判定**を、何も書かずに得られる — 判定の半分はサーバーの
 ものであってバンドルからは見えないので、クライアント側で作り直した
 検証では偽グリーンを踏む(設計ドキュメント
-[0074](../design/0074-the-document-and-the-vocabulary-that-asks-it.md) §5)。
+[0136](../design/0136-a-concept-is-addressed-not-labelled.md) §6)。
 
 merge されたら取り込む。実行するのは merge した人か、CI の
 サービスアカウントである:

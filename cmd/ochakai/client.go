@@ -963,7 +963,7 @@ func cmdGet(ctx context.Context, args []string) error {
 func cmdPut(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"put",
-		"Usage: ochakai put [flags] <path>\n\nWrite one object of the bundle from -f or stdin, creating it or\nreplacing what is there. The bytes decide which kind it is, as they do\non the wire: an OKF document (--- frontmatter with type, markdown body\n— the format `ochakai get` prints) is a concept, and the argument is\nits id; anything else is a file, and the argument is the path it lives\nat, extension included. Every change is kept as a revision.\n\nAs a concept: title is optional (the id's last segment is the display\nname when it is absent), JSON input is accepted at a concept's address\ntoo (see api/openapi.yaml), the argument overrides an id in the input\n— OKF documents carry none, the path is the id — new concepts default\nto draft, and provenance is recorded from your Google identity.\nWith --only-if-new the write lands only if the id is free, and fails\ninstead of replacing. With --if-match it lands only if the concept still\nhas the version you read, and fails instead of overwriting someone\nelse's edit.\n\nPick the type by what the concept holds. These are the recommended\nvocabulary; any single-line value works as a type, and one of your own\nis first-class:\n\n"+domain.TypesGuide()+"\n\nAs a file: any bytes, up to 5 MiB, and the media type is sniffed from\nthem rather than taken from the name. Nothing derives the file's\nconcept from where it sits, so the hint printed afterwards is the\nrelative markdown link to paste into a body — a file no concept links\nis a file nobody finds. Non-markdown bytes need the server to have GCS\nconfigured (OCHAKAI_GCS_BUCKET).",
+		"Usage: ochakai put [flags] <path>\n\nWrite one object of the bundle from -f or stdin, creating it or\nreplacing what is there. The bytes decide which kind it is, as they do\non the wire: an OKF document (--- frontmatter with type, markdown body\n— the format `ochakai get` prints) is a concept, and the argument is\nits id; anything else is a file, and the argument is the path it lives\nat, extension included. Every change is kept as a revision.\n\nAs a concept: title is optional (the id's last segment is the display\nname when it is absent), JSON input is accepted at a concept's address\ntoo (see api/openapi.yaml), the argument is the id — an OKF document\ncarries none, and an `id` key in its frontmatter is a producer's own,\nkept as written and never read as an address — new concepts default\nto draft, and provenance is recorded from your Google identity.\nWith --only-if-new the write lands only if the id is free, and fails\ninstead of replacing. With --if-match it lands only if the concept still\nhas the version you read, and fails instead of overwriting someone\nelse's edit.\n\nPick the type by what the concept holds. These are the recommended\nvocabulary; any single-line value works as a type, and one of your own\nis first-class:\n\n"+domain.TypesGuide()+"\n\nAs a file: any bytes, up to 5 MiB, and the media type is sniffed from\nthem rather than taken from the name. Nothing derives the file's\nconcept from where it sits, so the hint printed afterwards is the\nrelative markdown link to paste into a body — a file no concept links\nis a file nobody finds. Non-markdown bytes need the server to have GCS\nconfigured (OCHAKAI_GCS_BUCKET).",
 		"  ochakai put runbook/restore -f concept.md\n  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai put insights/revenue-seasonality-v2 --only-if-new\n  ochakai put insights/reading-revenue/weekly.png -f weekly.png\n  for f in *.csv; do ochakai put \"tables/orders/$f\" -f \"$f\"; done\n")
 	file := fs.String("f", "", "input file (default: stdin)")
 	onlyIfNew := fs.Bool("only-if-new", false, "write only if the id is free; a taken id fails instead of being replaced")
@@ -1004,9 +1004,11 @@ func cmdPut(ctx context.Context, args []string) error {
 	if path != "" {
 		k.ID = strings.TrimSuffix(path, ".md")
 	}
-	// An OKF document carries no id, so the argument is the only place most
-	// inputs can get one. Saying so here beats the server's `invalid id ""`,
-	// which describes the id format and not the missing argument.
+	// An OKF document carries no id (SPEC §2: a concept's id is its path),
+	// so for one the argument is the only place an id can come from — a
+	// JSON payload is the wire's own shape and names its id there. Saying
+	// so here beats the server's `invalid id ""`, which describes the id
+	// format and not the missing argument.
 	if k.ID == "" {
 		return errors.New("no id: pass the concept's path as the argument (e.g. `ochakai put queries/monthly-revenue -f concept.md`)")
 	}

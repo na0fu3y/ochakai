@@ -219,8 +219,10 @@ paths:
             `runtime`, `title`, `usage_window`. A key a producer
             invented is stored and handed back exactly as written (SPEC
             §4.1) but is not part of the query vocabulary — including
-            the two ochakai itself writes into a bundle, `id` and
-            `status_note`, which OKF does not define. `fm.type`,
+            `status_note`, the one such key ochakai itself writes into a
+            bundle, which OKF does not define. A top-level `id` is a
+            producer's key too: a concept's id is its path (SPEC §2), so
+            nothing here reads one out of frontmatter. `fm.type`,
             `fm.status`, `fm.tags`, `fm.sources` and `fm.stale_after`
             are read through columns that answer a different question —
             `status=stable` matches a document that says nothing, since
