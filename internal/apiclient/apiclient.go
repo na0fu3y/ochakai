@@ -514,9 +514,9 @@ func etagValue(v string) string {
 // and a stale one fails with a conflict instead of deleting someone
 // else's edit (design doc 0064). "" means unconditional, as before.
 // A non-empty note makes the removal a rejection (design doc 0135): the
-// reason a reviewer turned the concept down, kept against the tombstone
-// and rendered by the OKF SPEC §9 log. Without it the removal is
-// housekeeping and the id stays revivable.
+// reason a reviewer turned the concept down, kept on the revision and
+// rendered by the OKF SPEC §9 log. It records why and nothing else — the
+// id stays revivable either way (0135 §3).
 func (c *Client) Delete(ctx context.Context, path, ifMatch, note string) error {
 	hdr := http.Header{}
 	if ifMatch != "" {
@@ -581,8 +581,8 @@ func (c *Client) Move(ctx context.Context, id, newID string) (*domain.View, erro
 }
 
 // MovePrefix moves a whole directory — every object addressed under
-// prefix, including the rejected concepts, the deleted ones and the files
-// no concept's namespace covers — and returns how many objects moved
+// prefix, including the deleted concepts that still hold their ids and
+// the files no concept's namespace covers — and returns how many moved
 // (design doc 0132). One transaction: it moves whole or not at all.
 //
 // A separate call rather than a flag on Move, because the two address

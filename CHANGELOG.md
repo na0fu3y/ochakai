@@ -21,6 +21,45 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Every surface said `--note` closes the address; 0.28.0 decided it
+  does not.** Design doc
+  [0135](docs/design/0135-a-rejection-is-a-deletion.md) §3 made the
+  reason an event's rather than a wall — "a recorded reason is
+  information, not authority over the next writer" — and the code
+  shipped that way: a tombstone is curated only when a human verified or
+  deprecated the concept *before* it was removed
+  ([0015](docs/design/0015-surface-consistency.md) §3.1), which has
+  nothing to do with rejecting. **The prose shipped the design that was
+  argued away**, saying the opposite in seven places at once, and 0135
+  §3.1 had itself named the sweep ("README と positioning の memory of
+  *no* は、その線で書き直す") that never ran.
+
+  What a user was told, and where: the web UI's 却下 button promised
+  「エージェントは同じ id に書き戻せなくなります」; `ochakai delete
+  --help` said "a rejected id is not revived by an agent's write"; `POST
+  /api/v1/bundle/{path}`'s `note` said the tombstone is "one a surface
+  with no `If-Match` channel will not revive, so an agent writing to
+  that id is refused"; `put_concept`'s own schema — paid for out of an
+  agent's context window — said a curator's refusal "carries the
+  reason"; [docs/loop.md](docs/loop.md) said the next agent 「その理由
+  を読まされる」; the [canary
+  guide](docs/guides/golden-query-canary.md) said the write is 「以後
+  その理由ごと断られる」; and [docs/faq.md](docs/faq.md) explained MCP's
+  revival guard as being about rejection. All seven now say what the
+  code does. **No behaviour changed** — this release moves only words,
+  and an operator has nothing to do.
+
+  The same sweep drops the rejected concepts from what a directory move
+  carries (there is no such category to move), in `ochakai move
+  --directory`, `POST /api/v1/move` and the web UI, and corrects the
+  count of what is invisible to `ochakai list` from three to two.
+  [docs/positioning.md](docs/positioning.md)'s claim that a rejection
+  means "同じ提案が返ってこない" is now what 0135 §3.1 said to write
+  instead: the reason is somewhere the next writer can read, with no
+  power to make them.
+
 ## [0.28.0] - 2026-08-30
 
 ### Changed

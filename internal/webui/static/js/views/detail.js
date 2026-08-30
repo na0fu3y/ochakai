@@ -193,7 +193,7 @@ export async function viewDetail(id, heading = '') {
             <button id="act-verify" title="${isVerified(entry)
               ? '検証を追記します。再検証のフィードはこれで解消します'
               : 'あなたによる検証として記録します'}">${isVerified(entry) ? '再検証' : '検証'}</button>
-            <button class="danger" id="act-reject" title="理由を残して削除します。エージェントは同じ id に書き戻せなくなります">却下…</button>
+            <button class="danger" id="act-reject" title="理由を残して削除します。理由は履歴に残りますが、同じ id への書き戻しは塞ぎません">却下…</button>
             <button id="act-move" title="別のパスへ移します(参照は自動で書き換わります)">移動…</button>
             <button class="danger" id="act-delete">削除…</button>
           </div>

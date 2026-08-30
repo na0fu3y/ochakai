@@ -551,8 +551,13 @@ func TestCuratedGuardIsAdvertised(t *testing.T) {
 		// ruling, and an agent that only learns of it from an error has
 		// already written the draft (design doc 0067 §5.1). Deleting one
 		// was the second until design doc 0076 took the tool away.
-		"put_concept": {"deleted can be reused", "verified, rejected, deprecated", "different id",
-			"the refusal carries it", "report_outcome failed"},
+		//
+		// A rejected id is not one of these and the description has to say
+		// so: design doc 0135 §3 made the reason a log entry rather than a
+		// wall, and this test pinned the opposite claim for a release —
+		// which is how the wrong sentence reached every surface at once.
+		"put_concept": {"deleted can be reused", "verified or deprecated", "different id",
+			"a log entry rather than a wall", "report_outcome failed"},
 	}
 	for _, tool := range res.Tools {
 		substrs, ok := want[tool.Name]

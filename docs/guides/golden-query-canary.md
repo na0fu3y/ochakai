@@ -88,8 +88,8 @@ ochakai は関与しない。
   `Insight`(`kind: caveat`)を作るか、理由を書いた `status_note` 付き
   で `status: deprecated` を提案する。人が provenance を見て判断
   する。concept が誤りだと確定したら `ochakai delete <id> --note
-  "…"` になる — 却下は理由を添えた削除であり、その id への書き戻しは
-  以後その理由ごと断られる(設計ドキュメント 0135)。裁定は人の面(Web UI / CLI)から行う: エージェントが
+  "…"` になる — 却下は理由を添えた削除であり、理由は履歴に残るが
+  その id への書き戻しは塞がれない(設計ドキュメント 0135 §3)。裁定は人の面(Web UI / CLI)から行う: エージェントが
   カナリアを走らせている場合、検証済み concept の上書きと status の
   変更はどちらも MCP 経由では拒否されるので(設計ドキュメント 0067
   §6)、エージェントの出口は下の `report_outcome failed` と、別

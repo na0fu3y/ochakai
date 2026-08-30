@@ -62,7 +62,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 
 | 比較対象 | あちらが持つもの | あちらが持たないもの | 判定 |
 |---|---|---|---|
-| **[Google Cloud Knowledge Catalog](https://cloud.google.com/products/knowledge-catalog)(旧 Dataplex)** | 同じ Google Cloud の IAM、立てるものが無いこと、自動収集、lineage、品質、用語集、Gemini が生成する説明と example query、Context API と remote MCP | 人の裁定が中核であること、却下の記憶、OKF での丸ごとの出口、収集ではなくキュレーションであること、**一つのテーブルに二つ目の読み方を並べられること** | 同じ雲で正面から重なる — 下記参照 |
+| **[Google Cloud Knowledge Catalog](https://cloud.google.com/products/knowledge-catalog)(旧 Dataplex)** | 同じ Google Cloud の IAM、立てるものが無いこと、自動収集、lineage、品質、用語集、Gemini が生成する説明と example query、Context API と remote MCP | 人の裁定が中核であること、却下の理由が履歴に残ること、OKF での丸ごとの出口、収集ではなくキュレーションであること、**一つのテーブルに二つ目の読み方を並べられること** | 同じ雲で正面から重なる — 下記参照 |
 | ウェアハウス native の semantic layer(dbt MCP、Cube、Lightdash、Snowflake Semantic Views、Databricks Metric Views)と、その標準([Apache Ossie](https://github.com/apache/ossie) — 旧 OSI) | メトリクス定義、ディメンション、コンパイルされた SQL | 解釈、用語集、書き戻し、ウェアハウスをまたぐもの、そして誰が確認したか | 両立 — 下記参照 |
 | 「コンテキスト層」になったカタログ(OpenMetadata、DataHub、Atlan) | 技術メタデータ、リネージ、オーナーシップ、大規模な収集 | キュレーションされた側が OSS であること — 解釈とレビューループは商用ティアに置かれがち | 両立、あるいは既に運用しているなら ochakai の代わりになる |
 | エージェントのメモリ層(mem0、Zep、Letta) | ユーザーごと・エージェントごとの記憶、自動抽出・自動注入 | チームの所有、人のレビュー、*no* の記録 | 両立 |
@@ -102,8 +102,9 @@ search と Context API と MCP でエージェントへ配る([AI agents 向け�
 起点は機械で、data steward の仕事はあちらの use case の言葉で「AI が
 生成したメタデータをレビューし、キュレーションし、昇格させる」ことで
 ある。ochakai の起点は人か、人の裁定を待つ draft を書くエージェントで
-あり、**却下は理由ごと残るので同じ提案が返ってこない**(C7、
-[ループ](loop.md))。「誰がいつ確かめたか」は status ではなく別立ての
+あり、**却下は理由ごと履歴に残る**(C7、[ループ](loop.md)) — 次の
+書き手が読めるところに残るのであって、読ませる強制力は無い
+([0135](design/0135-a-rejection-is-a-deletion.md) §3)。「誰がいつ確かめたか」は status ではなく別立ての
 台帳であって([0065](design/0065-identity-and-provenance.md))、監査ログは
 その代わりにならない。出口も向きが違う: メタデータは Cloud Storage へ
 export して BigQuery から読めるが、形式はカタログのものであって、丸ごと
@@ -124,8 +125,8 @@ system entry が一つ自動で建ち、自動で入る required aspect は編�
 書くことではなくモデリングである。ochakai の単位は id を持つ文書で、
 `resource` は鍵ではなく欄だから、同じテーブルを指す concept は何本でも
 並ぶ — それぞれが自分の著者・検証状態・履歴を持ち、draft は verified の
-隣に住み、却下されたものは却下として残る。**キュレーションが単位を文書に
-する理由がここにある**: 一つの資産についての知識は、一つの値ではない。
+隣に住み、却下されたものは理由ごと履歴に残る。**キュレーションが単位を
+文書にする理由がここにある**: 一つの資産についての知識は、一つの値ではない。
 
 **名前は紛らわしいが、指すものが二つある。** OKF v0.2 の参照バンドルは
 [GoogleCloudPlatform/knowledge-catalog](https://github.com/GoogleCloudPlatform/knowledge-catalog)
@@ -201,7 +202,8 @@ ochakai が持つ資格情報では決してない。
 レビューせず、間違った記憶は静かに残り続ける。データ分析において
 間違った記憶は間違った意思決定であり、監査されない想起の品質の天井は
 低い。ochakai は人の裁定の後ろにあるチーム共有のナレッジであり、却下は
-その理由を保つのでエージェントは同じ提案を繰り返さなくなる。
+その理由を履歴に残すので、同じ提案をする前にエージェントが読めるものが
+ある。
 
 あちらから学ぶ価値があるのは記憶の品質ではなく人間工学のほうである:
 本当の強みは、エージェントが覚えようと*決める*必要が無いことである。
@@ -220,7 +222,7 @@ RAG は誰かが他の理由で書いた文書から断片を取ってくる。�
 もう一つの違いは向きである。RAG の索引は文書*から*作られる。ここでの
 ナレッジベースは、それを使うエージェント*によって*書かれ、人が昇格
 させる — 書き戻しのループが製品そのものであり、却下された提案はその
-理由を保つのでエージェントは同じ提案を繰り返さない。
+理由を履歴に残す。
 
 ### AI アナリスト製品に内蔵された検証済みクエリストア
 
@@ -416,8 +418,8 @@ vault が持たないのは、ファイル形式でないすべてである:
 - **Google Cloud なら純正がある。** 上の Knowledge Catalog は同じ IAM の
   上で立てるものが無く、収集は自動で、MCP も持っている。ochakai の
   プロジェクトと Postgres と月 $10 とセットアップは、人の裁定・却下の
-  記憶・OKF の出口に対して払う分であって、その三つが要らないなら払う
-  理由も無い。
+  理由が残ること・OKF の出口に対して払う分であって、その三つが要らない
+  なら払う理由も無い。
 - **インフラ。** vault を立てるのはただである。ochakai は Google Cloud
   プロジェクトと Postgres を要る — 月 $10 ほどだが、ゼロではないし、
   5 分でもない。
