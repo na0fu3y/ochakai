@@ -82,7 +82,7 @@ info:
     is a security defect, shipped in the next release with no deprecation
     window (SECURITY.md). MCP, the CLI and the stored shape stay unstable
     while the major version is 0 and may still change in a minor release.
-  version: 0.28.0
+  version: 0.28.1
   license:
     name: MIT
 servers:
@@ -1152,15 +1152,16 @@ paths:
         the same reason PUT gives.
 
         **With `note` the removal is a ruling.** A rejection is a deletion
-        carrying a reason (design doc 0135): the note is kept against the
-        tombstone, the change is recorded as `reject` rather than
-        `delete`, and that is the word the OKF SPEC §9 `log.md` renders —
-        which is where the ruling travels, since the format has no
-        negative signal in frontmatter to carry it. The tombstone is then
-        one a surface with no `If-Match` channel will not revive, so an
-        agent writing to that id is refused and told the reason instead.
-        Undoing a rejection is a person putting the concept back; there
-        is no ruling for it.
+        carrying a reason (design doc 0135): the note goes on the revision
+        that recorded the removal, the change is recorded as `reject`
+        rather than `delete`, and that is the word the OKF SPEC §9
+        `log.md` renders — which is where the ruling travels, since the
+        format has no negative signal in frontmatter to carry it. **The
+        ruling blocks nothing**: the tombstone is an ordinary one, so the
+        id is writable again from every surface, and `note` records why
+        without deciding who may write next (0135 §3). Undoing a
+        rejection is a person putting the concept back; there is no
+        ruling for it.
 
         With `purge=true` a concept that is *already* soft-deleted is
         hard-deleted instead: concept, revisions, usage and file metadata
@@ -1440,15 +1441,14 @@ paths:
 
 
         **With from_prefix/to_prefix it moves a directory instead**, and
-        everything addressed under it goes: the concepts, the concepts a
-        human rejected, the concepts that were deleted and still hold
-        their ids, and every file — including the ones no concept's
-        namespace covers. One transaction, so it moves whole or not at
-        all, and the destination directory has to be empty. It exists
-        because a client cannot do this for itself: those last three are
-        absent from every listing, so a loop over the search face leaves
-        them behind and the old directory never empties (design doc
-        0132). A concept whose id is exactly from_prefix does not move —
+        everything addressed under it goes: the concepts, the concepts
+        that were deleted and still hold their ids, and every file —
+        including the ones no concept's namespace covers. One
+        transaction, so it moves whole or not at all, and the destination
+        directory has to be empty. It exists because a client cannot do
+        this for itself: those last two are absent from every listing, so
+        a loop over the search face leaves them behind and the old
+        directory never empties (design doc 0132). A concept whose id is exactly from_prefix does not move —
         a concept and a directory may share a name (0075 §2), so the two
         forms address different things and neither is inferred from the
         other. The scope test above reads at this grain too: everything

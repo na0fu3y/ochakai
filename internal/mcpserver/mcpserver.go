@@ -406,13 +406,13 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			"Write status: draft unless you are recording something already agreed. You are " +
 			"recorded as the author and the concept stays unverified until a person confirms it; " +
 			"confirming and rejecting are not on this surface.\n" +
-			"A concept a human has ruled on — verified, rejected, deprecated — cannot be " +
+			"A concept a human has ruled on — verified or deprecated — cannot be " +
 			"replaced here: if a verified concept is wrong, report_outcome failed, otherwise put " +
 			"a better draft at a different id, linking the concept it would replace from its " +
 			"body so the reviewer sees both, and let a human promote it. An id whose concept " +
-			"was deleted can be reused, which revives it as your draft — unless a human had " +
-			"ruled on it, and then this surface refuses and says what the ruling was: a concept " +
-			"a curator turned down is deleted with the reason, and the refusal carries it.\n" +
+			"was deleted can be reused, which revives it as your draft — including one a curator " +
+			"turned down, since a rejection is a deletion and its reason is a log entry rather " +
+			"than a wall; read it in the concept's log before proposing the id again.\n" +
 			"Links are never a field: a markdown link to another concept's path in body — " +
 			"[revenue](/metrics/revenue.md) — becomes a link both ways.\n" +
 			"Pick the type by what the concept holds; any other single-line type works too:\n" + domain.TypesGuide(),
@@ -450,10 +450,11 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 
 	// delete_concept is not a tool (design doc 0076). Deleting knowledge is
 	// a ruling, and rulings stay off this surface: MCP withholds the
-	// reversible ones (verify, reject — POST /api/v1/review/{id} is not a
-	// tool) so it cannot offer the destructive one. An agent that wrote a
-	// bad draft leaves it for a human to rule on. REST, the CLI
-	// (ochakai delete) and the web UI keep the capability.
+	// reversible one (verify — POST /api/v1/review/{id} is not a tool) so
+	// it cannot offer the destructive one, which since design doc 0135 is
+	// where rejecting lives too. An agent that wrote a bad draft leaves it
+	// for a human to rule on. REST, the CLI (ochakai delete) and the web
+	// UI keep the capability.
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get_file",

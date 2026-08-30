@@ -708,8 +708,7 @@ func scanKnowledgeDocForTarget(row pgx.CollectableRow) (targetedKnowledge, error
 }
 
 // Create inserts a new entry. A live entry with the same id is
-// ErrAlreadyExists — including rejected ones, so the memory of no
-// survives. A soft-deleted entry is revived instead: the ID would
+// ErrAlreadyExists. A soft-deleted entry is revived instead: the ID would
 // otherwise be dead forever (the row still owns the primary key while
 // Update refuses deleted rows), and its history stays in the revisions
 // either way.
@@ -937,11 +936,13 @@ func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*dom
 // Create on the same id revives it.
 //
 // A non-empty note makes the removal a rejection (design doc 0135): the
-// reason is written to the ruling ledger against the tombstone and the
-// revision says "reject" rather than "delete", which is the word the OKF
-// SPEC §9 log renders. The tombstone is then curated, so the surfaces
-// with no If-Match channel will not revive it — an unexplained removal
-// stays revivable, because housekeeping is not a ruling.
+// reason goes on the revision, which says "reject" rather than "delete" —
+// the word the OKF SPEC §9 log renders. That is the whole of it. The
+// tombstone is an ordinary one either way, and the note does not decide
+// whether it revives: a recorded reason is information, not authority
+// over the next writer (0135 §3). What still refuses revival is a
+// tombstone a human ruled on before it was deleted — verified, or
+// deprecated — which is 0015 §3.1 and has nothing to do with rejection.
 //
 // ifMatch is the same optional
 // optimistic-concurrency precondition Update takes (design docs 0030,

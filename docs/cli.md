@@ -199,17 +199,17 @@ id — spell a dotted id with its .md to reach it.
 With --if-match a concept is deleted only if it still has the version
 you read, and the delete fails instead of removing someone else's edit.
 With --note the removal is a ruling: it records that the concept was
-reviewed and not accepted, and why. A rejected id is not revived by an
-agent's write, so the next one to propose it reads the reason instead;
-`ochakai log` prints the rulings, and an exported bundle carries them as
-OKF SPEC §9 log entries. A person reuses the id by putting a concept
-back at it.
+reviewed and not accepted, and why. The reason is information, not a
+wall — the id is writable again from every surface, this one and MCP
+included, and --note changes nothing else. `ochakai log` prints the
+rulings, and an exported bundle carries them as OKF SPEC §9 log
+entries, which is where the next writer can read one.
 
 Flags:
   -if-match version
     	delete only if the concept still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of deleting
-  -note string
-    	why it was not accepted — this removal is a ruling, and the next agent reads this before proposing the id again
+  -note ochakai log
+    	why it was not accepted — recorded on the revision and printed by ochakai log; it blocks nothing, the id stays writable
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
@@ -485,13 +485,13 @@ a `model` key where a document carries one) are rewritten so nothing
 breaks.
 
 With --directory the two arguments are directories, and everything
-addressed under the old one moves: the concepts, the concepts a human
-rejected, the concepts that were deleted and still hold their ids, and
-the files — including the ones no concept's namespace covers. It moves
-whole or not at all, in one transaction, so a refused move has changed
-nothing. Doing this by hand cannot be made to work: the last three are
-invisible to `ochakai list`, so a loop over it leaves them behind and
-the old directory never empties.
+addressed under the old one moves: the concepts, the concepts that were
+deleted and still hold their ids, and the files — including the ones no
+concept's namespace covers. It moves whole or not at all, in one
+transaction, so a refused move has changed nothing. Doing this by hand
+cannot be made to work: the last two are invisible to `ochakai list`,
+so a loop over it leaves them behind and the old directory never
+empties.
 
 The flag is how you say which, and it is not sugar: a concept and a
 directory may share a name, so `metrics/revenue` addresses two things

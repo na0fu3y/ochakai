@@ -33,10 +33,10 @@ export async function moveEntry(from, to) {
 
 // movePrefixEntry moves a whole directory (POST /api/v1/move with
 // from_prefix/to_prefix). Everything addressed under it goes in one
-// transaction — including the rejected concepts, the deleted ones and the
-// loose files this page never lists — so it moves whole or not at all
-// (design doc 0135). The count comes back because it is the part nobody
-// on this side could have worked out.
+// transaction — including the deleted concepts that still hold their ids
+// and the loose files this page never lists — so it moves whole or not
+// at all (design doc 0132). The count comes back because it is the part
+// nobody on this side could have worked out.
 export async function movePrefixEntry(from, to) {
   if (!to || to === from) return false;
   try {
@@ -173,11 +173,12 @@ export async function verifyEntry(id) {
   return true;
 }
 
-// Rejecting removes the concept, keeping the reason against its
-// tombstone: a rejection is a deletion (design doc 0135), so what a
-// curator turned down is gone from every listing rather than hidden in
-// one, and the reason travels as an OKF SPEC §9 log entry. An agent
-// writing to the same id meets the ruling instead of reviving it.
+// Rejecting removes the concept and puts the reason on the revision that
+// recorded the removal: a rejection is a deletion (design doc 0135), so
+// what a curator turned down is gone from every listing rather than
+// hidden in one, and the reason travels as an OKF SPEC §9 log entry.
+// It blocks nothing — the id is writable again, MCP included (0135 §3) —
+// so the history is where the next writer meets the ruling.
 export async function rejectEntry(id, note) {
   await api(conceptURL(id) + '?note=' + encodeURIComponent(note), { method: 'DELETE' });
   refreshQueues();
