@@ -193,12 +193,11 @@ func (s *Service) CreateKeepingCurated(ctx context.Context, k *domain.Knowledge,
 // returned the store's bare "knowledge already exists", the one wall on
 // the surface with no door drawn on it.
 //
-// A live rejection is the case that matters. Design doc 0015 §3.1 turns
-// on agents reading a rejection before re-proposing what it turned down,
-// and the caller that lands here is precisely the one that skipped that
-// read: it needs to be told the id holds a ruling, not that something
-// unnamed is in the way. The error stays wrapped, so a caller matching
-// on ErrAlreadyExists still matches.
+// What matters is that the caller is told which ruling stands, rather
+// than that something unnamed is in the way. The error stays wrapped, so
+// a caller matching on ErrAlreadyExists still matches. A rejection is not
+// among the answers here: it is a deletion (design doc 0135), so the id
+// holds a tombstone and RefuseIfRevivingCurated is the guard that speaks.
 func (s *Service) explainOccupiedID(ctx context.Context, id string, err error) error {
 	k, getErr := s.Store.Get(ctx, domain.Normalize(id))
 	if getErr != nil {
@@ -207,10 +206,6 @@ func (s *Service) explainOccupiedID(ctx context.Context, id string, err error) e
 	ruling := k.Ruling()
 	var instead string
 	switch ruling {
-	case domain.RulingRejected:
-		instead = "The rejection is the record of a decision and carries the reason; read it " +
-			"(get_concept) before proposing this again. If you disagree, put_concept a new " +
-			"concept at a different id and let a human judge it."
 	case domain.RulingVerified:
 		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
 			"re-verification feed. If you have something better, put_concept it at a " +
@@ -337,7 +332,7 @@ func (s *Service) settleUpdate(ctx context.Context, k *domain.Knowledge, ifMatch
 	// The ledgers belong to the instance, not to the payload: an update
 	// replaces the document and rules on nothing (design doc 0043
 	// §§3.2-3.3). Carrying them over keeps the returned concept honest.
-	k.Verifications, k.Rejection = old.Verifications, old.Rejection
+	k.Verifications = old.Verifications
 	// Three outcomes, because the document being the writer's own bytes
 	// (design doc 0046 §2.2) separates two questions that used to be one.
 	//
@@ -454,7 +449,7 @@ func (s *Service) Plan(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 }
 
 // RefuseIfCurated reports an error when id names a concept a human has
-// already ruled on — verified, rejected, or deprecated — for surfaces that
+// already ruled on — verified or deprecated — for surfaces that
 // must not overwrite that ruling in place. It returns the concept's version
 // so the caller can pass it as an If-Match precondition and close the
 // window between this check and the write.
@@ -466,15 +461,11 @@ func (s *Service) Plan(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 // not do from a surface with no If-Match channel (MCP, design doc 0030
 // §3.4) is silently replace a state a human put there.
 //
-// Rejected matters at least as much as verified, and it is the one the
-// obvious rule would have missed. Create refuses a live concept, so an agent
-// blocked by a rejection has a two-call path around it — delete, then
-// create, which revives the tombstone as a fresh draft and takes the
-// status_note with it. That erases the memory of no that the write-back
-// loop is built on (design doc 0025) and that the shipped instructions
-// tell agents to consult before re-proposing. Nobody notices: unlike a
-// deleted verified concept, a deleted rejection leaves nothing anyone was
-// using.
+// A rejection is not one of the rulings a live concept can carry: it is a
+// deletion (design doc 0135), so the id holds a tombstone and the guard
+// that speaks is RefuseIfRevivingCurated below. That is the same rule one
+// step further on — a surface with no precondition must not replace what
+// a human decided, whether the concept is still there or not.
 //
 // It is a step of a write, so it is scoped like one (design doc 0109 §4).
 // Without that, its refusal was a read of somebody else's subtree: the
@@ -495,10 +486,6 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, 
 	case domain.RulingVerified:
 		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
 			"re-verification feed. If you have something better, put_concept a new draft."
-	case domain.RulingRejected:
-		instead = "The rejection is the record of a decision and carries the reason; read it " +
-			"before proposing this again. If you disagree, put_concept a new concept at a " +
-			"different id and let a human judge it."
 	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
 			"reviving, put_concept a draft that says why."
@@ -511,21 +498,25 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, 
 }
 
 // RefuseIfRevivingCurated reports an error when id names a soft-deleted
-// concept that was ruled on — verified, rejected or deprecated — before it
-// was deleted. For surfaces that must not overwrite a ruling in place,
-// create is the second way to do it: Create revives a tombstone (ON
-// CONFLICT ... WHERE deleted_at IS NOT NULL) with the incoming status and
-// status_note, so the reason a concept was turned down is replaced by a
-// fresh draft, and the concept that comes back looks like it was never
-// judged.
+// concept that was ruled on — verified or deprecated — before it was
+// deleted. For surfaces that must not overwrite a ruling in place, create
+// is the second way to do it: Create revives a tombstone (ON CONFLICT ...
+// WHERE deleted_at IS NOT NULL) with the incoming status and status_note,
+// so a concept that a person had vouched for comes back looking like it
+// was never judged.
 //
 // RefuseIfCurated cannot see this: the row it reads is not live. Closing
 // the delete step alone (design doc 0015 §3.1) leaves every tombstone that
 // already exists — deleted before that rule, deleted from the REST/CLI
-// surfaces where deleting a rejection is legitimate housekeeping — still
-// revivable in one call. A draft tombstone stays revivable: nobody ruled
-// on it, and reviving an abandoned draft is how a create on a deleted id
-// is supposed to work.
+// surfaces as housekeeping — still revivable in one call. A draft
+// tombstone stays revivable: nobody ruled on it, and reviving an
+// abandoned draft is how a create on a deleted id is supposed to work.
+//
+// **A concept somebody turned down is revivable too** (design doc 0135).
+// The reason it was turned down is the log's, not a wall's: the same id
+// is open to the next writer from every surface, and what was decided is
+// readable rather than enforced. A rejection is a deletion carrying its
+// reason, and a reason is information.
 //
 // Scoped like RefuseIfCurated and for the same reason (design doc 0109
 // §4): a tombstone is still something at an address, and saying a
@@ -549,10 +540,6 @@ func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error 
 	ruling := k.Ruling()
 	var instead string
 	switch ruling {
-	case domain.RulingRejected:
-		instead = "The rejection is the record of a decision and carries the reason; read it " +
-			"(search_concepts with rejected=true) before proposing this again. If you disagree, " +
-			"put_concept a new concept at a different id and let a human judge it."
 	case domain.RulingVerified:
 		instead = "It was verified knowledge when it was deleted. Propose the replacement at a " +
 			"different id and let a human judge it against the history this id still holds."
@@ -567,18 +554,41 @@ func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error 
 		"the id from the web UI or CLI.", id, ruling, instead)
 }
 
+// Delete removes a concept from every live answer, keeping its history.
+//
+// A note makes the removal a rejection (design doc 0135): it records that
+// a reviewer turned the concept down and why, the tombstone becomes one
+// the surfaces with no If-Match channel will not revive, and the §9 log
+// renders the removal as `reject` rather than `delete`. Without a note it
+// is housekeeping, and the tombstone stays revivable by a later create.
+//
+// This is the memory of no the write-back loop is built on (design doc
+// 0081 §4) — what stops an agent re-proposing knowledge a human already
+// declined. Deleting is not an MCP tool, for the same reason verifying is
+// not: ruling is the human's side of the loop (design doc 0067 §6).
+//
 // ifMatch is the same optional If-Match precondition Put takes (design
 // docs 0030, 0064): non-nil, the delete lands only if the concept still
-// has that version.
-func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor, ifMatch *string) error {
+// has that version. A rejection can therefore name the version it read,
+// which the ruling face never could.
+func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor, ifMatch *string, note string) error {
 	if err := s.readOnly(); err != nil {
 		return err
+	}
+	if len(note) > maxRejectionNote {
+		return Invalidf("rejection note exceeds %d bytes", maxRejectionNote)
 	}
 	id = domain.Normalize(id)
 	if err := s.mayWrite(ctx, id); err != nil {
 		return err
 	}
-	return s.Store.SoftDelete(ctx, id, actor, ifMatch)
+	if err := s.Store.SoftDelete(ctx, id, actor, ifMatch, note); err != nil {
+		return err
+	}
+	if note != "" {
+		s.Log.Info("knowledge rejected", "id", id, "actor", actor.String())
+	}
+	return nil
 }
 
 // Verify appends a verification against the concept as it stands, whether
@@ -619,55 +629,6 @@ func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*d
 		return nil, err
 	}
 	s.Log.Info("knowledge verified", "id", id, "actor", actor.String())
-	return k, nil
-}
-
-// Reject records that a reviewer turned the concept down, with the reason.
-// Like Verify it is a ruling and not an edit: the document keeps its
-// lifecycle status and its ETag, and the concept drops out of searches that
-// did not ask for rejected ones (design doc 0043 §3.3).
-//
-// This is the memory of no that the write-back loop is built on (design
-// doc 0081 §4) — it is what stops an agent re-proposing knowledge a
-// human already declined. Not an MCP tool, for the same reason Verify is
-// not: it is the human's side of the loop.
-func (s *Service) Reject(ctx context.Context, id, note string, actor domain.Actor) (*domain.Knowledge, error) {
-	if err := s.readOnly(); err != nil {
-		return nil, err
-	}
-	if len(note) > maxRejectionNote {
-		return nil, Invalidf("rejection note exceeds %d bytes", maxRejectionNote)
-	}
-	id = domain.Normalize(id)
-	if err := s.mayWrite(ctx, id); err != nil {
-		return nil, err
-	}
-	k, err := s.Store.Reject(ctx, id, actor, note)
-	if err != nil {
-		return nil, err
-	}
-	s.Log.Info("knowledge rejected", "id", id, "actor", actor.String())
-	return k, nil
-}
-
-// WithdrawRejection withdraws a ruling, returning the concept to the
-// ordinary pool. ErrNotFound when the concept is gone, ErrNoRejection
-// when it is live but carries no rejection: lifting nothing is a mistake
-// worth reporting rather than a silent success, and design doc 0064 tells
-// the two apart on the wire rather than answering both as 404.
-func (s *Service) WithdrawRejection(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
-	if err := s.readOnly(); err != nil {
-		return nil, err
-	}
-	id = domain.Normalize(id)
-	if err := s.mayWrite(ctx, id); err != nil {
-		return nil, err
-	}
-	k, err := s.Store.WithdrawRejection(ctx, id, actor)
-	if err != nil {
-		return nil, err
-	}
-	s.Log.Info("knowledge rejection withdrawn", "id", id, "actor", actor.String())
 	return k, nil
 }
 

@@ -46,7 +46,7 @@ info:
 
     **A repeated JSON body key is a 400, naming it** (design doc 0125) —
     the sibling of the repeated query key below. A body may name each key
-    once; `{"ruling":"verified","ruling":"rejected"}` has no answer that
+    once; `{"ruling":"verified","ruling":"approved"}` has no answer that
     is what was asked, and answering for the last of them would decide
     silently which of the two the caller meant.
 
@@ -119,8 +119,7 @@ paths:
       operationId: searchConcepts
       summary: Search knowledge (lexical, plus hybrid vector search when configured)
       description: >
-        Rejected concepts are excluded unless rejected=true is passed (so
-        agents can check for already-rejected proposals). Whether a concept
+        Whether a concept
         was confirmed is asked with trust, independently of the status
         filter — status is the lifecycle value alone (design doc 0075
         §4.1).
@@ -229,14 +228,6 @@ paths:
             `type`, `status`, `tag`, `source` and `sort=stale_after`
             for those. Everything else is a 400 (design doc 0074 §4).
           schema: { type: string }
-        - name: rejected
-          in: query
-          description: >
-            true to list only concepts a human turned down. Omitted, or
-            false, keeps them out of results — asking for them is opt-in,
-            which is how an agent checks whether a proposal was already
-            rejected.
-          schema: { type: boolean }
         - name: tag
           in: query
           schema: { type: array, items: { type: string } }
@@ -265,9 +256,7 @@ paths:
 
             Single-valued, like source. Composes with q and with any
             sort; on its own it lists in address order and answers with a
-            cursor, which the endpoint it replaces could not do. Rejected
-            concepts are excluded unless `rejected=true`, as everywhere
-            else — the endpoint it replaces did not exclude them.
+            cursor, which the endpoint it replaces could not do.
           schema: { type: string }
         - name: prefix
           in: query
@@ -389,7 +378,6 @@ paths:
                         status: stable
                         trust: human-reviewed
                         verified_at: "2026-07-10T01:52:16.774301Z"
-                        rejected: false
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         content_hash: 4d1f0a86c3b25e97d0a41f6b8c2e5307ab9d4f61c8e30257ba9f1d6c4e820b73
@@ -406,7 +394,6 @@ paths:
                         stale_after: "2026-12-31"
                         trust: human-reviewed
                         verified_at: "2026-07-14T02:33:41.019778Z"
-                        rejected: false
                         links:
                           - { target: glossary/completed-order, text: completed order }
                           - { target: tables/shop-orders, text: shop.orders }
@@ -429,7 +416,6 @@ paths:
                         status: draft
                         stale_after: "2027-01-31"
                         trust: unverified
-                        rejected: false
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
@@ -452,7 +438,6 @@ paths:
                         status: draft
                         stale_after: "2027-01-31"
                         trust: unverified
-                        rejected: false
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
@@ -470,7 +455,6 @@ paths:
                         description: An order that shipped and was not refunded within the return window.
                         status: draft
                         trust: unverified
-                        rejected: false
                         content_hash: c07b4e19a35d8f206b1c94e73da508f2b6c31d9047ea825bf1c6d03b95a7e412
                         created_at: "2026-06-02T04:09:12.774903Z"
                         updated_at: "2026-06-02T04:09:12.774903Z"
@@ -626,8 +610,8 @@ paths:
         decide which — so there is nothing to attribute and nothing to
         route. `index.md` files are generated and are not concepts.
         Frontmatter keys the server owns
-        — `generated`, `verified`, `created_by`, `rejected_by`,
-        `rejected_at`, `rejected_note`, and the pre-v0.2 spellings
+        — `generated`, `verified`, `created_by`, the `rejected_*` keys
+        older bundles carry, and the pre-v0.2 spellings
         `timestamp` / `verified_by` / `verified_at` — are ignored on
         write; provenance comes from the caller's identity (design docs
         0009, 0075 §3.1).
@@ -637,8 +621,8 @@ paths:
 
         `index.md` is one level of the tree — the subdirectories directly
         under the path, each with the count of concepts beneath, plus the
-        concepts at that level (design doc 0075 §4.2). Rejected and
-        deleted concepts are excluded, as in search; a level caps at 1000
+        concepts at that level (design doc 0075 §4.2). Deleted concepts
+        are excluded, as in search; a level caps at 1000
         with truncated=true; listing records no usage.
 
         `log.md` is the update history under the path, newest first and
@@ -1165,6 +1149,17 @@ paths:
         the revisions that came before). index.md and log.md are 409 for
         the same reason PUT gives.
 
+        **With `note` the removal is a ruling.** A rejection is a deletion
+        carrying a reason (design doc 0135): the note is kept against the
+        tombstone, the change is recorded as `reject` rather than
+        `delete`, and that is the word the OKF SPEC §9 `log.md` renders —
+        which is where the ruling travels, since the format has no
+        negative signal in frontmatter to carry it. The tombstone is then
+        one a surface with no `If-Match` channel will not revive, so an
+        agent writing to that id is refused and told the reason instead.
+        Undoing a rejection is a person putting the concept back; there
+        is no ruling for it.
+
         With `purge=true` a concept that is *already* soft-deleted is
         hard-deleted instead: concept, revisions, usage and file metadata
         erased, the path freed for a move. Two calls, deliberately: the
@@ -1198,6 +1193,24 @@ paths:
             because a 204 for a value meant as a purge would report a
             path freed that is not.
           schema: { type: boolean, default: false }
+        - name: note
+          in: query
+          description: >
+            Why the concept was not accepted — the reason a reviewer
+            turned it down, which makes this removal a ruling rather than
+            housekeeping. The next writer to reach for the id meets it.
+
+            On the query string rather than in a body because a DELETE
+            body is dropped in transit by some intermediaries. The cost is
+            worth stating: on a deployment that logs request lines, the
+            reason reaches the access log.
+
+            A 400 with `purge=true` (the purge destroys the tombstone the
+            ruling would be written against — delete with the note first,
+            then purge) and a 400 at a file's path (a file carries no
+            ruling). Both are refusals rather than a note quietly going
+            nowhere.
+          schema: { type: string, maxLength: 2000 }
       responses:
         "204":
           description: Deleted.
@@ -1546,7 +1559,6 @@ paths:
                       stale_after: "2026-12-31"
                       trust: human-reviewed
                       verified_at: "2026-07-14T02:33:41.019778Z"
-                      rejected: false
                       links:
                         - { target: glossary/completed-order, text: completed order }
                         - { target: tables/shop-orders, text: shop.orders }
@@ -1583,13 +1595,15 @@ paths:
       operationId: reviewConcept
       summary: Record a human's ruling on a concept
       description: >
-        One ruling on the concept as it stands, by the caller, now. This
-        replaced three endpoints — `POST /api/v1/verify/{id}`,
-        `POST /api/v1/reject/{id}` and `DELETE /api/v1/reject/{id}` —
-        which shared every structural property and differed only in the
-        value they wrote (design doc 0068 §4).
+        One ruling on the concept as it stands, by the caller, now.
 
-        **None of them edits the concept.** The document, its lifecycle
+        One value is left. A rejection is a deletion carrying a reason
+        (design doc 0135), so the other ruling a curator makes is spelled
+        `DELETE /api/v1/bundle/{path}?note=`, and `withdrawn` went with
+        it — taking a ruling back is a person putting the concept where it
+        was.
+
+        **It does not edit the concept.** The document, its lifecycle
         status, its `updated_at` and its ETag all stay put, because
         ruling on knowledge and publishing it are different acts (design
         doc 0075 §3.2). Promoting a draft to stable is a PUT. That
@@ -1621,53 +1635,30 @@ paths:
               properties:
                 ruling:
                   type: string
-                  enum: [verified, rejected, withdrawn]
+                  enum: [verified]
                   description: >
                     `verified` appends the caller and the time to the
                     concept's verifications ledger, whether this is the
-                    first confirmation or the tenth re-check — and clears
-                    any rejection. Re-checking is why this exists at all
+                    first confirmation or the tenth re-check.
+                    Re-checking is why this exists at all
                     rather than being sugar over PUT: a PUT writes
                     nothing when the content is unchanged, so "checked
                     again, still right" could not be recorded and both
                     review feeds (`sort=verified_at`, `sort=failed`) had
                     no exit (design doc 0069 §2).
 
-                    `rejected` writes the caller, the time and the reason
-                    as the concept's live ruling, replacing any earlier
-                    one. Rejected concepts drop out of searches that did
-                    not ask for them (`rejected=true`), which is how an
-                    agent checks whether a proposal was already turned
-                    down before making it again — the memory of *no* the
-                    write-back loop is built on (design doc 0081 §4).
-                    Verifications are not cleared: somebody vouched for
-                    this and somebody later ruled against it is exactly
-                    the history worth keeping.
-
-                    `withdrawn` removes the live rejection, returning the
-                    concept to the ordinary pool. A live concept that
-                    carries no rejection is a 409, not a 404 (design doc
-                    0064): lifting nothing is a mistake worth reporting
-                    rather than a silent success, and a missing concept is
-                    a different mistake — a 404 stays that. It is spelled
-                    as a ruling rather than as a DELETE because **nothing
-                    is deleted** — the verifications stay, and the
-                    withdrawal is its own row in the concept's history,
-                    recorded with the same word the ruling uses,
-                    `withdraw`.
                 note:
                   type: string
                   maxLength: 2000
                   description: >
-                    Why it was not accepted. `rejected` only: with any
-                    other ruling it is a 400. A verification says the
-                    concept is right as it stands, and anything to say
-                    about it belongs in the concept; carrying a note there
-                    would be a new thing to say rather than the same
-                    three said once.
-
-                    The rejecter's words, distinct from the concept's own
-                    `status_note`, which belongs to whoever wrote it.
+                    Not accepted on any ruling this face takes: it is a
+                    400. A verification says the concept is right as it
+                    stands, and anything to say about it belongs in the
+                    concept. The reason a concept was turned down is
+                    carried by `DELETE /api/v1/bundle/{path}?note=`
+                    instead. The property is kept declared so a caller
+                    sending the old body gets the 400 that names it rather
+                    than an unknown-key refusal.
             examples:
               verify:
                 summary: Confirm the concept as it stands
@@ -1680,15 +1671,6 @@ paths:
                   version an editor may be holding) is untouched.
                 value:
                   ruling: verified
-              reject:
-                summary: Turn it down, with the reason
-                value:
-                  ruling: rejected
-                  note: double-counts refunds; see policies/revenue-recognition
-              withdraw:
-                summary: Lift a rejection
-                value:
-                  ruling: withdrawn
       responses:
         "200":
           description: The concept, carrying the ruling.
@@ -1730,7 +1712,6 @@ paths:
                       stale_after: "2027-01-31"
                       trust: human-reviewed
                       verified_at: "2026-07-27T00:41:12.905337Z"
-                      rejected: false
                       links:
                         - { target: metrics/revenue, text: Revenue }
                       content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
@@ -1744,50 +1725,6 @@ paths:
                       verified:
                         - by: { kind: human, name: tanaka@example.co.jp }
                           at: "2026-07-27T00:41:12.905337Z"
-                turnedDown:
-                  summary: 'POST /api/v1/review/metrics/gross-revenue {"ruling":"rejected"}'
-                  description: >
-                    The ruling is in observed.rejection, and
-                    summary.rejected is how a row says so. The document is
-                    untouched — a rejection is a judgment about the
-                    concept, not a stage of it, and it could not
-                    round-trip as a status because export would have to
-                    fold it onto deprecated, which asserts the opposite
-                    thing about the concept (design doc 0068 §4).
-                  value:
-                    id: metrics/gross-revenue
-                    document: |
-                      ---
-                      type: Metric
-                      title: Gross revenue
-                      description: Order totals before refunds.
-                      status: draft
-                      ---
-
-                      The sum of `gross_amount` over every order in
-                      [shop.orders](/tables/shop-orders.md).
-                    summary:
-                      id: metrics/gross-revenue
-                      type: Metric
-                      title: Gross revenue
-                      description: Order totals before refunds.
-                      status: draft
-                      trust: unverified
-                      rejected: true
-                      links:
-                        - { target: tables/shop-orders, text: shop.orders }
-                      content_hash: 7be31c85d0a629f4b17c08e35da4962f0b8c71e34d0a95f627b1c8e034da95f7
-                      created_at: "2026-07-24T02:18:09.441027Z"
-                      updated_at: "2026-07-24T02:18:09.441027Z"
-                    observed:
-                      created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                      generated:
-                        by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
-                        at: "2026-07-24T02:18:09.441027Z"
-                      rejection:
-                        by: { kind: human, name: sato@example.co.jp }
-                        at: "2026-07-27T02:05:44.812390Z"
-                        note: double-counts refunds; see policies/revenue-recognition
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
@@ -1807,33 +1744,16 @@ paths:
                 unknownRuling:
                   summary: A ruling outside the vocabulary
                   value:
-                    error: 'ruling must be one of verified, rejected, withdrawn, not "approved"'
+                    error: 'ruling must be one of verified, not "rejected". A rejection is a deletion now: DELETE the concept''s address with ?note=<reason>, and undo one by putting the concept back'
                     code: invalid
                 noteOnVerification:
-                  summary: A note belongs to a rejection
+                  summary: A verification carries no note
                   value:
-                    error: 'a verification carries no note: "verified" says the concept is right as it stands, and anything to say about it belongs in the concept. Use ruling=rejected to record a reason'
+                    error: 'a verification carries no note: "verified" says the concept is right as it stands, and anything to say about it belongs in the concept. To turn a concept down with a reason, DELETE its address with ?note='
                     code: invalid
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
-        "409":
-          description: >
-            `ruling: withdrawn` against a live concept that carries no
-            rejection (design doc 0064) — nothing to lift.
-          headers:
-            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error: { type: string }
-                  code: { type: string, enum: [no_rejection] }
-                required: [error, code]
-              example:
-                error: knowledge carries no rejection to withdraw
-                code: no_rejection
         "413": { $ref: "#/components/responses/Error" }
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
@@ -2162,7 +2082,6 @@ paths:
                       total: 128
                       status: { draft: 31, stable: 92, deprecated: 5 }
                       trust: { unverified: 42, machine-confirmed: 19, human-reviewed: 67 }
-                      rejected: 3
                       created: 12
                     queues:
                       drafts: 31
@@ -2510,9 +2429,9 @@ components:
       description: >
         Error. `error` is a sentence for a person and may be reworded in
         any release (docs/compatibility.md); `code` is the part a client
-        branches on. Three conditions answer 409 — `already_exists`,
-        `not_deleted`, `no_rejection` — and telling them apart used to
-        mean matching the prose. Where the status already determines the
+        branches on. Two conditions answer 409 — `already_exists` and
+        `not_deleted` — and telling them apart used to mean matching the
+        prose. Where the status already determines the
         condition the code repeats it, so a client never has to ask
         whether this particular failure carries one.
       headers:
@@ -2532,7 +2451,6 @@ components:
                     internal,
                     invalid,
                     method_not_allowed,
-                    no_rejection,
                     not_deleted,
                     not_found,
                     precondition_failed,
@@ -2738,8 +2656,8 @@ components:
         §5.3 puts that in `verified`, and ochakai keeps it in the
         verifications ledger, so a draft may be verified and a stable
         concept unverified (design doc 0075 §4.1). "Was never accepted" is
-        likewise not a lifecycle value but a ruling, in `rejection`
-        (design doc 0068 §4).
+        likewise not a lifecycle value: it is a ruling, and a rejected
+        concept is a deleted one (design doc 0135).
         A document that names no status is stable — SPEC §5.4's default.
         ochakai does not write a key its writer left out, so what comes
         back here is the value a reader reads, while the document keeps
@@ -2780,28 +2698,6 @@ components:
       properties:
         by: { $ref: "#/components/schemas/Actor" }
         at: { type: string, format: date-time }
-      required: [by, at]
-    Rejection:
-      type: object
-      description: >
-        This instance's ruling that a concept was not accepted — the memory
-        that stops an agent re-proposing knowledge a human already turned
-        down. One live ruling per concept; POST /api/v1/review/{id} records
-        it with ruling: rejected and lifts it with ruling: withdrawn.
-        It is not a lifecycle value: a rejection is a judgment about the
-        concept rather than a stage of it, and it could not round-trip as
-        a status because export had to fold it onto deprecated, which
-        asserts the opposite thing about the concept (design doc 0068 §4).
-        A bundle does not carry it (design doc 0009).
-      properties:
-        by: { $ref: "#/components/schemas/Actor" }
-        at: { type: string, format: date-time }
-        note:
-          description: >
-            Why it was not accepted. The rejecter's words, distinct from
-            the concept's own status_note, which belongs to whoever wrote
-            the concept.
-          type: string
       required: [by, at]
     Actor:
       type: object
@@ -2865,7 +2761,7 @@ components:
         the concept says, and this is an index over it. A client that needs
         a key not listed here reads the document; the projection carries
         what listing surfaces sort and filter by, and stops there.
-      required: [id, type, status, trust, rejected, content_hash, created_at, updated_at]
+      required: [id, type, status, trust, content_hash, created_at, updated_at]
       properties:
         id:
           type: string
@@ -2934,11 +2830,6 @@ components:
             When the newest confirmation was recorded, absent when there
             is none. A row carries it because it is what sort=verified_at
             ranks by — a reviewer reading that feed is reading these times.
-        rejected:
-          type: boolean
-          description: >
-            Whether a live rejection stands against the concept. The ruling
-            itself — by whom, when, and why — is in observed.rejection.
         links:
           type: array
           items: { $ref: "#/components/schemas/Link" }
@@ -3001,12 +2892,6 @@ components:
             instance ledger, and
             import reads only whether a bundle's `verified` key was
             present (design docs 0009, 0075 §4.1).
-        rejection:
-          allOf: [{ $ref: "#/components/schemas/Rejection" }]
-          description: >
-            The live ruling, absent when there is none. Written by
-            POST /api/v1/review/{id} with ruling: rejected, and cleared
-            by ruling: withdrawn.
       required: [created_by, generated]
     View:
       type: object
@@ -3272,14 +3157,8 @@ components:
                 State: live concepts per trust tier (SPEC §5.3), every tier
                 present. This is the tally behind "is the confirmed share
                 growing".
-            rejected:
-              type: integer
-              description: >
-                State: live concepts carrying this instance's rejection. They
-                are counted in status and trust as well — a rejection is a
-                ruling beside the lifecycle value, not one of them.
             created: { type: integer, description: "Flow: live concepts created in the window." }
-          required: [total, status, trust, rejected, created]
+          required: [total, status, trust, created]
         queues:
           allOf: [ { $ref: "#/components/schemas/QueueCounts" } ]
           description: >
@@ -3481,8 +3360,8 @@ components:
             well as a sort, which is why this one keeps a name of its own
             (design doc 0069 §5.2). Verifying does not empty it:
             confirming and publishing are different acts, so a draft
-            leaves when it is edited to another status or rejected
-            (design doc 0069 §2).
+            leaves when it is edited to another status, or when it is
+            turned down and removed (design doc 0135).
         failed:
           type: integer
           description: >
@@ -3672,12 +3551,13 @@ components:
             What happened, as one word. **An open set: treat a value you
             do not know as an event you have nothing special to render
             for, and do not fail on it.** Today's rows carry `create`,
-            `update`, `verify`, `reject`, `withdraw`, `delete`, `move`,
+            `update`, `verify`, `reject`, `delete`, `move`,
             `add_file`, `remove_file`, and that list is the ledger's
             vocabulary rather than the wire's promise — it has moved
-            twice already (`unreject` became `withdraw`, `attach` and
-            `detach` became `add_file` and `remove_file`, each with a
-            migration rewriting the stored rows). The last two sit on
+            three times already (`unreject` became `withdraw` and then
+            went with the ruling it lifted, `attach` and `detach` became
+            `add_file` and `remove_file`, each with a migration
+            rewriting the stored rows). The last two sit on
             historical rows only: they date from when a file event was a
             revision of its concept, and since a file became an object
             at its own path (design doc 0075 §5) a new file event is
@@ -3688,6 +3568,17 @@ components:
             VOCAB, where adding one is a decision that shows in a diff.
         changed_by: { $ref: "#/components/schemas/Actor" }
         changed_at: { type: string, format: date-time }
+        note:
+          type: string
+          description: >
+            Why the change was made. Only a rejection carries one: a
+            delete with a reason is the ruling that a concept was not
+            accepted (design doc 0135), and the reason belongs to that
+            event rather than to a concept that is no longer there. The
+            generated `log.md` prints it after the actor, which is where
+            the ruling travels — OKF SPEC §9 records events, and an event
+            is the only thing the format can say about something that is
+            gone.
       required: [path, change, changed_by, changed_at]
     ObjectHistory:
       type: object
@@ -3714,12 +3605,13 @@ components:
             What happened, as one word. **An open set: treat a value you
             do not know as an event you have nothing special to render
             for, and do not fail on it.** Today's rows carry `create`,
-            `update`, `verify`, `reject`, `withdraw`, `delete`, `move`,
+            `update`, `verify`, `reject`, `delete`, `move`,
             `add_file`, `remove_file`, and that list is the ledger's
             vocabulary rather than the wire's promise — it has moved
-            twice already (`unreject` became `withdraw`, `attach` and
-            `detach` became `add_file` and `remove_file`, each with a
-            migration rewriting the stored rows). The last two sit on
+            three times already (`unreject` became `withdraw` and then
+            went with the ruling it lifted, `attach` and `detach` became
+            `add_file` and `remove_file`, each with a migration
+            rewriting the stored rows). The last two sit on
             historical rows only: they date from when a file event was a
             revision of its concept, and since a file became an object
             at its own path (design doc 0075 §5) a new file event is
@@ -3741,4 +3633,15 @@ components:
             reads. The keys this instance owns are included — a revision
             records what the concept was, and who had confirmed it then is
             part of that.
+        note:
+          type: string
+          description: >
+            Why the change was made. Only a rejection carries one: a
+            delete with a reason is the ruling that a concept was not
+            accepted (design doc 0135), and the reason belongs to that
+            event rather than to a concept that is no longer there. The
+            generated `log.md` prints it after the actor, which is where
+            the ruling travels — OKF SPEC §9 records events, and an event
+            is the only thing the format can say about something that is
+            gone.
       required: [rev, change, changed_by, changed_at, document]

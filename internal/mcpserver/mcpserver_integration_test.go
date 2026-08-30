@@ -168,7 +168,7 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 
 	id := testdb.Unique(t, "mcpput") + "/revenue"
 	defer func() {
-		_ = svc.Delete(context.Background(), id, domain.Actor{Kind: domain.ActorHuman, Name: "t"}, nil)
+		_ = svc.Delete(context.Background(), id, domain.Actor{Kind: domain.ActorHuman, Name: "t"}, nil, "")
 	}()
 
 	put := func(t *testing.T, doc string) *mcp.CallToolResult {
@@ -303,7 +303,7 @@ func TestIntegrationMCPAgentSeesTheRulingOnItsDraft(t *testing.T) {
 	original, replacement := run+"/metrics/revenue", run+"/metrics/revenue-net"
 	defer func() {
 		for _, id := range []string{original, replacement} {
-			_ = svc.Delete(context.Background(), id, human, nil)
+			_ = svc.Delete(context.Background(), id, human, nil, "")
 		}
 	}()
 
@@ -391,22 +391,67 @@ func TestIntegrationMCPAgentSeesTheRulingOnItsDraft(t *testing.T) {
 		t.Fatalf("the promotion is not visible in the ledger: %+v", promoted.Observed.Verified)
 	}
 
-	// And the memory of no: a rejected proposal is findable before the
-	// agent spends a write re-proposing it.
-	if _, err := svc.Reject(ctx, replacement, "duplicate of the original", human); err != nil {
+	// And the memory of no. A rejection is a deletion carrying its reason
+	// (design doc 0135), so what a curator turned down leaves every
+	// listing — and the id stays open, because a recorded reason is
+	// information rather than a wall.
+	turned := run + "/metrics/revenue-gross"
+	call(t, "put_concept", map[string]any{
+		"id":       turned,
+		"document": "---\ntype: Metric\ntitle: Gross revenue\n---\n\nOrder totals before refunds.\n",
+	})
+	if err := svc.Delete(ctx, turned, human, nil, "duplicate of the original"); err != nil {
 		t.Fatal(err)
 	}
-	rejected := answerOf[searchOut](t, call(t, "search_concepts", map[string]any{
-		"query": "mcp loop", "rejected": true, "prefixes": []string{run},
+	gone := answerOf[searchOut](t, call(t, "search_concepts", map[string]any{
+		"query": "gross revenue", "prefixes": []string{run},
 	}))
-	seen := false
-	for _, h := range rejected.Hits {
-		if h.ID == replacement {
-			seen = true
+	for _, h := range gone.Hits {
+		if h.ID == turned {
+			t.Errorf("a rejected proposal is still in the results: %+v", gone.Hits)
 		}
 	}
-	if !seen {
-		t.Errorf("a rejected proposal is not findable with rejected=true: %+v", rejected.Hits)
+	// The agent may propose there again — even from this surface, which
+	// has no precondition to offer.
+	call(t, "put_concept", map[string]any{
+		"id":       turned,
+		"document": "---\ntype: Metric\ntitle: Second try\n---\n\nThe same proposal again.\n",
+	})
+	again := conceptOf(t, call(t, "get_concept", map[string]any{"id": turned}))
+	if !strings.Contains(again.Document, "Second try") {
+		t.Errorf("the re-proposal did not land: %s", again.Document)
+	}
+	// The reason it was turned down is still readable, in the history the
+	// §9 log publishes.
+	revs, rerr := svc.Revisions(ctx, turned, 20)
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	reasonKept := false
+	for _, r := range revs {
+		if r.Change == "reject" && r.Note == "duplicate of the original" {
+			reasonKept = true
+		}
+	}
+	if !reasonKept {
+		t.Errorf("the reason is not in the history: %+v", revs)
+	}
+
+	// A verified concept that was deleted is a different case, and it
+	// stays guarded: the verification is the ruling there, not the
+	// removal (design doc 0015 §3.1).
+	if err := svc.Delete(ctx, replacement, human, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "put_concept", Arguments: map[string]any{
+		"id":       replacement,
+		"document": "---\ntype: Metric\ntitle: Over a verified tombstone\n---\n\nx\n",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.IsError {
+		t.Error("put_concept revived a verified tombstone")
 	}
 }
 
@@ -445,7 +490,7 @@ func TestIntegrationListWalksAFeedAndSearchRefusesTo(t *testing.T) {
 	ids := []string{run + "/metrics/a", run + "/metrics/b", run + "/metrics/c"}
 	defer func() {
 		for _, id := range ids {
-			_ = svc.Delete(context.Background(), id, human, nil)
+			_ = svc.Delete(context.Background(), id, human, nil, "")
 		}
 	}()
 	// Three verified concepts, so the verified_at feed has something to

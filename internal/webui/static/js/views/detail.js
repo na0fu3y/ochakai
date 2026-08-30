@@ -1,7 +1,7 @@
 // One concept, whole: the document, its provenance, its files, its
 // history, and the actions a reader can take on it.
 
-import { applyStatus, liftRejection, moveEntry, rejectEntry, verifyEntry } from '../actions.js';
+import { applyStatus, moveEntry, rejectEntry, verifyEntry } from '../actions.js';
 import { BASE, FILES_VARIABLE, api, toast } from '../api.js';
 import { hitCard } from '../cards.js';
 import { copyText } from '../clipboard.js';
@@ -143,7 +143,6 @@ export async function viewDetail(id, heading = '') {
       ? `検証 ${fmtDate(lastVerification(observed).at)} ${actorStr(lastVerification(observed).by)}`
         + ((observed.verified || []).length > 1 ? `(計 ${observed.verified.length} 件)` : '')
       : '',
-    observed.rejection ? `却下 ${fmtDate(observed.rejection.at)} ${actorStr(observed.rejection.by)}` : '',
     // updated_by is OKF's generated.by: who the content stands by now,
     // which is not always who created it (design doc 0036 §3.3).
     entry.updated_at && entry.updated_at !== entry.created_at
@@ -185,7 +184,6 @@ export async function viewDetail(id, heading = '') {
         </select>
       </span>
       ${isVerified(entry) ? `<span class="badge verified-mark" title="検証台帳から OKF が導く trust の段です(SPEC §5.3)">✓ ${trustOf(entry)}</span>` : ''}
-      ${entry.rejected ? '<span class="badge rejected-mark" title="人がレビューして却下しました">rejected</span>' : ''}
       ${tags}
       <span class="actions write-only">
         <a class="btn small" href="#/edit/${idPath(entry.id)}">編集</a>
@@ -195,9 +193,7 @@ export async function viewDetail(id, heading = '') {
             <button id="act-verify" title="${isVerified(entry)
               ? '検証を追記します。再検証のフィードはこれで解消します'
               : 'あなたによる検証として記録します'}">${isVerified(entry) ? '再検証' : '検証'}</button>
-            ${entry.rejected
-              ? `<button id="act-withdraw" title="裁定を取り下げ、通常の扱いに戻します">却下の取り下げ</button>`
-              : `<button class="danger" id="act-reject" title="検索から隠し、理由を次のエージェントのために残します">却下…</button>`}
+            <button class="danger" id="act-reject" title="理由を残して削除します。エージェントは同じ id に書き戻せなくなります">却下…</button>
             <button id="act-move" title="別のパスへ移します(参照は自動で書き換わります)">移動…</button>
             <button class="danger" id="act-delete">削除…</button>
           </div>
@@ -205,8 +201,6 @@ export async function viewDetail(id, heading = '') {
       </span>
     </div>
     <div class="provenance">${esc(prov)}</div>
-    ${observed.rejection && observed.rejection.note
-      ? `<div class="status-note">却下の理由: ${esc(observed.rejection.note)}</div>` : ''}
     <div id="move-panel" style="display:none;margin-top:.7rem">
       <div class="toolbar" style="margin-bottom:0">
         <input type="text" id="move-to" class="mono" list="move-dirs" value="${esc(entry.id)}"
@@ -424,6 +418,7 @@ export async function viewDetail(id, heading = '') {
           <td>
             <div><strong>${esc(r.change)}</strong> · ${esc(actorStr(r.changed_by))} · ${esc(fmtDate(r.changed_at))}
               <span class="diffstat"><span class="add">+${stats.added}</span> <span class="del">−${stats.removed}</span></span></div>
+            ${r.note ? `<div class="status-note">理由: ${esc(r.note)}</div>` : ''}
             ${diff
               ? `<details${i === 0 ? ' open' : ''}><summary style="cursor:pointer;color:var(--muted);font-size:.84rem">差分</summary>${diff}</details>`
               : `<div class="provenance">ドキュメントに変更はありません。</div>`}
@@ -551,23 +546,14 @@ export async function viewDetail(id, heading = '') {
   });
   $('#act-reject')?.addEventListener('click', async () => {
     closeMenu();
-    const note = prompt('却下の理由をご記入ください。裁定として残るため、エージェントは同じ提案を繰り返さなくなります。', '');
-    if (note === null) return;
+    const note = prompt('却下の理由をご記入ください。このナレッジは削除され、理由が裁定として残ります(履歴は残ります)。', '');
+    if (note === null || note.trim() === '') return;
     try {
       await rejectEntry(entry.id, note);
       toast('却下しました。');
-      refreshTree(); // the tree hides rejected entries
-      viewDetail(entry.id);
-    } catch (e) { toast('却下できませんでした: ' + e.message); }
-  });
-  $('#act-withdraw')?.addEventListener('click', async () => {
-    closeMenu();
-    try {
-      await liftRejection(entry.id);
-      toast('却下を取り下げました。');
       refreshTree();
-      viewDetail(entry.id);
-    } catch (e) { toast('却下を取り下げられませんでした: ' + e.message); }
+      location.hash = '#/';
+    } catch (e) { toast('却下できませんでした: ' + e.message); }
   });
   $('#act-move').addEventListener('click', () => {
     closeMenu();

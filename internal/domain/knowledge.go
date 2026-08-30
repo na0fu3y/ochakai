@@ -475,24 +475,35 @@ func ValidOutcome(o string) bool {
 	return slices.Contains(Outcomes, o)
 }
 
-// Rulings are the values POST /api/v1/review/{id} accepts in its body
-// (design doc 0055 §3.2): append a verification, stand up a rejection,
-// take a live rejection back. The single source for the surfaces'
-// validation and their refusal messages.
+// Rulings are the values POST /api/v1/review/{id} accepts in its body.
+// The single source for the surfaces' validation and their refusal
+// messages.
+//
+// One value, because a rejection is a deletion (design doc 0135): the
+// review face appends a verification, and the other ruling a curator
+// makes is spelled `DELETE ... ?note=`, where the note is the ruling.
+// The list stays a list so the refusal message and the validation keep
+// reading from one place, and so that adding a second ruling is an edit
+// here rather than a new shape.
 //
 // Distinct from the Ruling type below, which is what an entry's ledger
 // *says* after the fact rather than what a caller asks for: "deprecated"
-// is a lifecycle value nobody posts here, and "withdrawn" leaves no
-// ruling behind at all.
-var Rulings = []string{"verified", "rejected", "withdrawn"}
+// is a lifecycle value nobody posts here, and "rejected" is now something
+// a tombstone carries rather than something a caller sends.
+var Rulings = []string{"verified"}
 
 // Changes are the values a revision's Change carries — what the product
 // calls each kind of write in an entry's history. They are the verb form
-// of what happened; a ruling posted as "withdrawn" is recorded here as
-// "withdraw", the way "verified" is recorded as "verify".
+// of what happened, the way "verified" is recorded as "verify".
+//
+// "reject" is the one a delete carrying a note writes instead of
+// "delete": the same removal, told apart because a stated reason is a
+// ruling and an unexplained removal is housekeeping (design doc 0135
+// §3). It is also the word the OKF SPEC §9 log renders, which is where a
+// rejection now travels.
 var Changes = []string{
 	"create", "update", "move", "delete",
-	"verify", "reject", "withdraw",
+	"verify", "reject",
 	"add_file", "remove_file",
 }
 
@@ -690,25 +701,6 @@ func ValidProducer(s string) bool {
 type Verification struct {
 	By Actor     `json:"by"`
 	At time.Time `json:"at"`
-}
-
-// Rejection is this instance's ruling that an entry was not accepted —
-// the memory that stops an agent re-proposing knowledge a human already
-// turned down (design doc 0081 §4).
-//
-// It is a ledger rather than a status because it is not a lifecycle
-// value: OKF's three statuses say how ready a concept is, and "we said
-// no" is a judgment about the concept, not a stage of it. As a status it
-// also could not round-trip — export had to fold it onto deprecated,
-// which claims the opposite thing ("was correct, no longer current")
-// about the entry (design doc 0043 §3.3).
-//
-// Note is the reason, and belongs to the rejecter. It is distinct from
-// the entry's own status_note, which belongs to whoever wrote the entry.
-type Rejection struct {
-	By   Actor     `json:"by"`
-	At   time.Time `json:"at"`
-	Note string    `json:"note,omitempty"`
 }
 
 // ValidActorKind reports whether kind is one ochakai records.
@@ -912,12 +904,11 @@ type Knowledge struct {
 	Attester    *Attester   `json:"attester,omitempty"`
 	CreatedBy   Actor       `json:"created_by"`
 	UpdatedBy   Actor       `json:"updated_by"` // who last changed the content — OKF's generated.by (design doc 0036 §3.3)
-	// Verifications and Rejection are this instance's ledgers, not fields
-	// of the document: read-only on every surface, never accepted from a
-	// payload, and written only by verify and reject (design doc 0043
-	// §§3.2-3.3). Oldest verification first.
+	// Verifications is this instance's ledger, not a field of the
+	// document: read-only on every surface, never accepted from a
+	// payload, and written only by verify (design doc 0043 §3.2). Oldest
+	// verification first.
 	Verifications []Verification `json:"verifications,omitempty"`
-	Rejection     *Rejection     `json:"rejection,omitempty"`
 	Links         []Link         `json:"links,omitempty"`
 	Attrs         map[string]any `json:"attrs,omitempty"`
 	Body          string         `json:"body,omitempty"`
@@ -1047,22 +1038,20 @@ func (k *Knowledge) LastVerified() *Verification {
 // belonged, since what it means is "did somebody decide something about
 // this", not "what stage is it at".
 //
-// A rejection outranks a verification when an entry carries both: Verify
-// clears a rejection but Reject keeps the verifications, so the pair
-// means somebody vouched for this and somebody later ruled against it,
-// and the later ruling is the one in force.
+// Turning a concept down is not among them: a rejection is a deletion
+// carrying its reason (design doc 0135), and the reason is a property of
+// that event rather than a state the concept is left in. So it gates
+// nothing here — the same id can be written again from any surface, and
+// what the next writer meets is the log.
 type Ruling string
 
 const (
-	RulingRejected   Ruling = "rejected"
 	RulingVerified   Ruling = "verified"
 	RulingDeprecated Ruling = "deprecated"
 )
 
 func (k *Knowledge) Ruling() Ruling {
 	switch {
-	case k.Rejection != nil:
-		return RulingRejected
 	case k.Verified():
 		return RulingVerified
 	case k.Status == StatusDeprecated:
@@ -1197,6 +1186,11 @@ type Revision struct {
 	Change    string    `json:"change"` // one of Changes
 	ChangedBy Actor     `json:"changed_by"`
 	ChangedAt time.Time `json:"changed_at"`
+	// Note is why the change was made, and only a rejection writes one:
+	// a delete carrying a reason is the ruling that a concept was not
+	// accepted (design doc 0135), and the reason belongs to that event.
+	// It is what the OKF SPEC §9 log renders beside the line.
+	Note string `json:"note,omitempty"`
 	// Document is the entry as it stood, as an OKF document (design doc
 	// 0043 §3.9). It replaced a JSON snapshot of the Go struct: a record
 	// whose shape depends on the reader knowing every past release is the
@@ -1301,9 +1295,11 @@ func ToStatuses(ss []string) []Status {
 // exists to remove. What is here is either an address (id), a signal a
 // caller ranks or filters on, or a ledger's answer reduced to a bool.
 //
-// Verified and Rejected are those answers. A row does not carry the
-// ledgers themselves: "has anyone confirmed this" is what a reader of a
-// list wants, and who and when is a question about one entry.
+// Trust and VerifiedAt are those answers. A row does not carry the
+// ledger itself: "has anyone confirmed this" is what a reader of a list
+// wants, and who and when is a question about one entry. There is no
+// rejected flag, because a rejected concept is a deleted one and no
+// listing carries it (design doc 0135).
 type Summary struct {
 	ID   string `json:"id"`
 	Type Type   `json:"type"`
@@ -1328,7 +1324,6 @@ type Summary struct {
 	// none. A row carries it because it is what the verification-age feed
 	// ranks by — a reviewer reading that feed is reading these times.
 	VerifiedAt  *time.Time `json:"verified_at,omitempty"`
-	Rejected    bool       `json:"rejected"`
 	Links       []Link     `json:"links,omitempty"`
 	ContentHash string     `json:"content_hash"`
 	CreatedAt   time.Time  `json:"created_at"`
@@ -1343,7 +1338,7 @@ func SummaryOf(k *Knowledge) Summary {
 	s := Summary{
 		ID: k.ID, Type: k.Type, Title: k.Title, Description: k.Description,
 		Resource: k.Resource, Tags: k.Tags, Status: k.Lifecycle(), StaleAfter: k.StaleAfter,
-		Trust: TrustOf(k.Verifications), Rejected: k.Rejection != nil, Links: k.Links,
+		Trust: TrustOf(k.Verifications), Links: k.Links,
 		ContentHash: k.ContentHash, CreatedAt: k.CreatedAt, UpdatedAt: k.UpdatedAt,
 	}
 	if v := k.LastVerified(); v != nil {
@@ -1373,7 +1368,9 @@ type Observed struct {
 	CreatedBy Actor          `json:"created_by"`
 	Generated Generated      `json:"generated"`
 	Verified  []Verification `json:"verified,omitempty"`
-	Rejection *Rejection     `json:"rejection,omitempty"`
+	// No rejection: a rejection is a deletion (design doc 0135), so no
+	// read that reaches a caller has one to carry. The ruling lives on
+	// the tombstone, which only the revival guard reads.
 }
 
 func ObservedOf(k *Knowledge) Observed {
@@ -1387,7 +1384,6 @@ func ObservedOf(k *Knowledge) Observed {
 		// document rendered beside it (design doc 0064).
 		Generated: Generated{By: k.UpdatedBy, At: k.ContentChangedAt},
 		Verified:  k.Verifications,
-		Rejection: k.Rejection,
 	}
 }
 

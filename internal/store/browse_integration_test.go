@@ -30,7 +30,6 @@ func TestIntegrationBrowse(t *testing.T) {
 	for _, del := range []string{
 		`DELETE FROM object WHERE starts_with(id, 'it-br')`,
 		`DELETE FROM knowledge_revision WHERE starts_with(id, 'it-br')`,
-		`DELETE FROM knowledge_rejection WHERE starts_with(id, 'it-br')`,
 		`DELETE FROM knowledge_verification WHERE starts_with(id, 'it-br')`,
 	} {
 		if _, err := s.pool.Exec(ctx, del); err != nil {
@@ -49,9 +48,10 @@ func TestIntegrationBrowse(t *testing.T) {
 	mk(domain.TypeComputations, "it-br-sales/regions/apac", domain.StatusDraft)
 	mk(domain.TypeComputations, "it-br-top", domain.StatusDraft)
 	mk(domain.TypeComputations, "it-br-rejected", domain.StatusDraft)
-	// A rejection is a ledger row, not a status (design doc 0043 §3.3),
-	// so browse has to consult the ledger to keep hiding it.
-	if _, err := s.Reject(ctx, "it-br-rejected", actor, "duplicate"); err != nil {
+	// A rejection is a deletion carrying its reason (design doc 0135), so
+	// browse keeps it out for the same reason it keeps out anything
+	// deleted.
+	if err := s.SoftDelete(ctx, "it-br-rejected", actor, nil, "duplicate"); err != nil {
 		t.Fatal(err)
 	}
 	// "_" in the prefix must match literally, not as a LIKE wildcard:

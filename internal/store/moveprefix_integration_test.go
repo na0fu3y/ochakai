@@ -37,10 +37,13 @@ func TestMovePrefixMovesTheWholeDirectoryIntegration(t *testing.T) {
 	// Outside, pointing in: this one did not move and its body changes,
 	// so it is the one that takes an "update" revision.
 	mkPrefixConcept(t, ctx, s, actor, run+"/outside", fmt.Sprintf("外から [a](/%s/a.md) を指す。", old))
-	if _, err := s.Reject(ctx, old+"/rejected", actor, "no"); err != nil {
+	// A rejection is a deletion carrying its reason (design doc 0135), so
+	// this one is a tombstone whose revision holds the ruling — and the
+	// move has to carry that history, not just the row.
+	if err := s.SoftDelete(ctx, old+"/rejected", actor, nil, "no"); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SoftDelete(ctx, old+"/gone", actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, old+"/gone", actor, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	// A file sitting loose in the directory — under no concept's
@@ -56,18 +59,30 @@ func TestMovePrefixMovesTheWholeDirectoryIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Four concepts (live, live, rejected, deleted) and one file. The
-	// same-named concept is not one of them.
+	// Four concepts (two live, two tombstones — one of them a rejection)
+	// and one file. The same-named concept is not one of them.
 	if moved != 5 {
 		t.Errorf("moved %d objects, want 5", moved)
 	}
-	for _, id := range []string{dst + "/a", dst + "/b", dst + "/rejected"} {
+	for _, id := range []string{dst + "/a", dst + "/b"} {
 		if _, err := s.Get(ctx, id); err != nil {
 			t.Errorf("%s: %v", id, err)
 		}
 	}
-	if _, err := s.GetTombstone(ctx, dst+"/gone"); err != nil {
-		t.Errorf("the deleted concept did not move: %v", err)
+	for _, id := range []string{dst + "/gone", dst + "/rejected"} {
+		if _, err := s.GetTombstone(ctx, id); err != nil {
+			t.Errorf("the deleted concept did not move: %s: %v", id, err)
+		}
+	}
+	// The ruling moved with it: the reason lives on the revision that
+	// removed the concept, so a move that carried the rows but not the
+	// history would lose why it was turned down.
+	turned, err := s.ListRevisions(ctx, dst+"/rejected", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(turned) == 0 || turned[0].Change != "reject" || turned[0].Note != "no" {
+		t.Errorf("the rejection did not move with its reason: %+v", turned)
 	}
 	for _, id := range []string{old + "/a", old + "/b", old + "/rejected"} {
 		if _, err := s.Get(ctx, id); !errors.Is(err, ErrNotFound) {

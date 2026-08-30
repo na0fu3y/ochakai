@@ -198,7 +198,6 @@ func Sweep(t *testing.T, token string) {
 		`DELETE FROM object WHERE strpos(id, $1) > 0 OR strpos(path, $1) > 0`,
 		`DELETE FROM knowledge_revision WHERE strpos(id, $1) > 0 OR strpos(path, $1) > 0`,
 		`DELETE FROM knowledge_verification WHERE strpos(id, $1) > 0`,
-		`DELETE FROM knowledge_rejection WHERE strpos(id, $1) > 0`,
 		`DELETE FROM knowledge_purge WHERE strpos(id, $1) > 0`,
 		`DELETE FROM knowledge_usage WHERE strpos(knowledge_id, $1) > 0`,
 		`DELETE FROM knowledge_event WHERE strpos(knowledge_id, $1) > 0`,

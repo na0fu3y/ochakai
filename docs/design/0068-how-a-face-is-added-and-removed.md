@@ -11,7 +11,12 @@ Superseded にし、[0056](0056-one-question-one-command.md) を Superseded に
 [0067](0067-four-faces-and-what-they-decline.md) が持つ。
 §1「能力が二つならコマンドも二つ」の MCP への適用と、§2「ワイヤは一本の
 ままである」がその面に及ばないことは
-[0096](0096-a-listing-is-not-a-search-here-either.md) が決める(2026-08-10)
+[0096](0096-a-listing-is-not-a-search-here-either.md) が決める(2026-08-10)。
+§4 の裁定の語彙は
+[0135](0135-a-rejection-is-a-deletion.md) が改訂する(2026-08-28) —
+却下が削除になるので `ruling` は `verified` 一値になり、§1 の畳む規則が
+`ochakai reject` と `ochakai delete` の対に当たる(§1 が verify と reject を
+畳まなかった判断は、その二つについてのまま動かない)
 Date: 2026-08-02
 
 ## 0. この記録が決めたこと

@@ -178,10 +178,6 @@ type StatsConcepts struct {
 	// would be a second one.
 	Status map[string]int64 `json:"status"`
 	Trust  map[string]int64 `json:"trust"`
-	// Rejected is how many live entries carry this instance's rejection
-	// (design doc 0043 §3.3). They are counted in Status and Trust too —
-	// a rejection is a ruling beside the lifecycle value, not one of them.
-	Rejected int64 `json:"rejected"`
 	// Created is how many of the live entries were created in the window.
 	Created int64 `json:"created"`
 }

@@ -276,9 +276,10 @@ for what they still don't do:
   0080](docs/design/0080-search-and-how-a-deployment-embeds.md)).
 - **A write-back loop with a memory.** Agents write learnings back as
   drafts and a human promotes them, with provenance on every concept and
-  every change kept as a revision. Proposals that don't make it are kept
-  as `rejected` with the reason, so agents stop re-proposing them — a
-  memory of *no*. And the loop is measured: usage counts, a
+  every change kept as a revision. A proposal that doesn't make it is
+  deleted with the reason, and that reason is published in the bundle's
+  own `log.md` — a record of *no*, readable by whoever proposes next.
+  And the loop is measured: usage counts, a
   verification-age feed, and outcome reports from agents that acted on a
   concept and found it wrong ([the loop](docs/loop.md)).
 - **No forward-deployed engineers, by design.** Encoding what your data

@@ -64,8 +64,8 @@ func TestIntegrationSweepBlobs(t *testing.T) {
 	// Leave no live attachment behind for other packages' export scans,
 	// whatever this test's own fate. Runs before the deferred Close.
 	defer func() {
-		_ = s.SoftDelete(ctx, a.ID, actor, nil)
-		_ = s.SoftDelete(ctx, b.ID, actor, nil)
+		_ = s.SoftDelete(ctx, a.ID, actor, nil, "")
+		_ = s.SoftDelete(ctx, b.ID, actor, nil, "")
 	}()
 
 	blobRows := func() int {
@@ -86,7 +86,7 @@ func TestIntegrationSweepBlobs(t *testing.T) {
 
 	// One reference gone (purge takes the files under it-sweep-a/ with
 	// it), one still standing: still not orphaned.
-	if err := s.SoftDelete(ctx, a.ID, actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, a.ID, actor, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Purge(ctx, a.ID, actor); err != nil {
@@ -100,7 +100,7 @@ func TestIntegrationSweepBlobs(t *testing.T) {
 	}
 
 	// The last reference gone: the sweep takes the row and the bytes.
-	if err := s.SoftDelete(ctx, b.ID, actor, nil); err != nil {
+	if err := s.SoftDelete(ctx, b.ID, actor, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.Purge(ctx, b.ID, actor); err != nil {

@@ -64,7 +64,7 @@ func FuzzParse(f *testing.F) {
 		// doc 0009): whatever the document claimed, Parse must not have
 		// filled any of it in.
 		if k.CreatedBy != (domain.Actor{}) || k.UpdatedBy != (domain.Actor{}) ||
-			len(k.Verifications) != 0 || k.Rejection != nil {
+			len(k.Verifications) != 0 {
 			t.Errorf("Parse filled in provenance from the payload: %+v", k)
 		}
 		if len(k.Links) != 0 {

@@ -36,9 +36,9 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
                           markdown or JSON at <id>, or a file at its own path
                           (every change kept as a revision)
   verify <id>             record a verification (re-affirms a verified concept too)
-  reject <id>             record a rejection and why (--withdraw takes it back)
   delete <path>           remove one object: a concept by id (history retained)
-                          or a file by the path it lives at
+                          or a file by the path it lives at; --note makes the
+                          removal a ruling and says why it was not accepted
   purge <id>              hard-delete a soft-deleted concept, freeing its id
   reembed                 embed concepts missing a vector for the current model
   move <id> <new-id>      move (rename) a concept, or a whole directory with
@@ -141,8 +141,7 @@ Without an argument, the top-level directories with their concept
 counts; with a prefix, the subdirectories and concepts directly under
 it. Directories print as "name/	count", concepts as
 "segment	type	status	title", and the files in the directory as
-"name	file	media-type	bytes". Rejected concepts are hidden, as in
-search.
+"name	file	media-type	bytes".
 
 A level is a listing, so it pages: a page with more behind it prints
 the way on to stderr, and passing that back with --cursor reads the
@@ -199,15 +198,24 @@ filed off, so an argument carrying no filename extension is read as an
 id — spell a dotted id with its .md to reach it.
 With --if-match a concept is deleted only if it still has the version
 you read, and the delete fails instead of removing someone else's edit.
+With --note the removal is a ruling: it records that the concept was
+reviewed and not accepted, and why. A rejected id is not revived by an
+agent's write, so the next one to propose it reads the reason instead;
+`ochakai log` prints the rulings, and an exported bundle carries them as
+OKF SPEC §9 log entries. A person reuses the id by putting a concept
+back at it.
 
 Flags:
   -if-match version
     	delete only if the concept still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of deleting
+  -note string
+    	why it was not accepted — this removal is a ruling, and the next agent reads this before proposing the id again
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 
 Examples:
   ochakai delete terms/obsolete-kpi
+  ochakai delete metrics/bad-revenue --note "double-counts refunds; see policies/revenue-recognition"
   ochakai delete insights/reading-revenue/weekly.png
 ```
 
@@ -344,8 +352,6 @@ Flags:
     	only concepts whose body links at this id — what points at one concept (its backlinks)
   -prefix path
     	only concepts under this path, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)
-  -rejected
-    	only concepts a human turned down — how you check whether a proposal was already rejected. Without it, rejected concepts stay out of results
   -source resource
     	only concepts citing this resource (exact match against sources[].resource) — what derives from one piece of material
   -status value
@@ -588,7 +594,7 @@ Flags:
   -f string
     	input file (default: stdin)
   -if-match version
-    	write only if the concept still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting a concept does not move it: only an edit does
+    	write only if the concept still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying a concept does not move it: only an edit does
   -json
     	print the written object as JSON
   -only-if-new
@@ -627,36 +633,6 @@ Examples:
   ochakai reembed
   ochakai reembed --limit 50   # smaller passes, e.g. behind a short request timeout
   ochakai reembed --once       # one pass, then report what is left
-```
-
-## ochakai reject
-
-```
-Usage: ochakai reject [flags] <id>
-
-Record that a concept was reviewed and not accepted, with the reason.
-Rejected concepts are hidden from search unless asked for
-(`search --rejected`), which is how an agent checks whether a proposal
-was already turned down before making it again.
-It does not edit the concept: the lifecycle status and the ETag stay put.
-A rejection is this instance's ruling, so an exported bundle carries the
-concept's real status rather than folding the ruling onto deprecated.
-Use --withdraw to take one back — the wire calls that ruling
-`withdrawn`, and so does the revision it writes.
-
-Flags:
-  -json
-    	print the concept as JSON
-  -note string
-    	why it was not accepted — the next agent reads this before proposing again
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
-  -withdraw
-    	withdraw the live rejection instead of recording one
-
-Examples:
-  ochakai reject metrics/bad-revenue --note "double-counts refunds; see policies/revenue-recognition"
-  ochakai reject metrics/bad-revenue --withdraw
 ```
 
 ## ochakai report
@@ -906,7 +882,6 @@ both review feeds (`ochakai list verified_at`, `ochakai list failed`).
 It does not edit the concept: the lifecycle status and the ETag stay put,
 because confirming knowledge and publishing it are different acts. Use
 `put` to move a draft to stable.
-Verifying a rejected concept lifts the rejection.
 
 Flags:
   -json

@@ -37,7 +37,6 @@ var clientCommands = map[string]func(context.Context, []string) error{
 	"get":       cmdGet,
 	"put":       cmdPut,
 	"verify":    cmdVerify,
-	"reject":    cmdReject,
 	"delete":    cmdDelete,
 	"purge":     cmdPurge,
 	"reembed":   cmdReembed,
@@ -281,7 +280,6 @@ func parseRef(s string) (string, error) {
 type searchFilters struct {
 	types, statuses, tags, prefixes, trust, fm repeated
 	source, linksTo                            *string
-	rejected                                   *bool
 }
 
 func addSearchFilters(fs *flag.FlagSet) *searchFilters {
@@ -294,7 +292,6 @@ func addSearchFilters(fs *flag.FlagSet) *searchFilters {
 	f.linksTo = fs.String("links-to", "", "only concepts whose body links at this `id` — what points at one concept (its backlinks)")
 	fs.Var(&f.trust, "trust", "filter by who confirmed the concept: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	fs.Var(&f.fm, "fm", fmUsage)
-	f.rejected = fs.Bool("rejected", false, "only concepts a human turned down — how you check whether a proposal was already rejected. Without it, rejected concepts stay out of results")
 	return f
 }
 
@@ -310,7 +307,7 @@ func (f *searchFilters) params(query, sortBy, cursor string, limit int) (apiclie
 		Query: query, Types: f.types, Statuses: f.statuses, Tags: f.tags,
 		Source: *f.source, LinksTo: *f.linksTo, Prefixes: f.prefixes,
 		Sort: sortBy, Limit: limit, Trust: f.trust,
-		Rejected: optBool(*f.rejected), FM: pairs, Cursor: cursor,
+		FM: pairs, Cursor: cursor,
 	}, nil
 }
 
@@ -484,34 +481,12 @@ func printHits(page *apiclient.SearchResult, feed string) {
 		}
 		fmt.Println(line)
 	}
-	// A rejected row is spelled like any other: the columns are the
-	// concept's, and this instance's ruling is not one of them. So a
-	// reader who asked for --rejected — to find out whether a proposal
-	// was already turned down — got back rows that answered the question
-	// they had, and nothing about the one they were about to have.
-	// The reason lives on the concept, so this points at it rather than
-	// widening the row (design doc 0104).
-	rejected := 0
-	for i := range page.Hits {
-		if page.Hits[i].Rejected {
-			rejected++
-		}
-	}
-	if rejected > 0 {
-		were := "concept was"
-		if rejected > 1 {
-			were = "concepts were"
-		}
-		fmt.Fprintf(os.Stderr,
-			"%d %s turned down; `ochakai get <id>` prints who ruled and why, before proposing it again\n",
-			rejected, were)
-	}
 }
 
 func cmdBrowse(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"browse",
-		"Usage: ochakai browse [flags] [prefix]\n\nList one level of the ID hierarchy (the folder view of design doc\n0075 §2, the CLI counterpart of the web UI's Browse tab).\nWithout an argument, the top-level directories with their concept\ncounts; with a prefix, the subdirectories and concepts directly under\nit. Directories print as \"name/\tcount\", concepts as\n\"segment\ttype\tstatus\ttitle\", and the files in the directory as\n\"name\tfile\tmedia-type\tbytes\". Rejected concepts are hidden, as in\nsearch.\n\nA level is a listing, so it pages: a page with more behind it prints\nthe way on to stderr, and passing that back with --cursor reads the\nnext one. The subdirectories ride on the first page only — they are a\ngrouping rather than a run, so there is no position in them to resume\nfrom.",
+		"Usage: ochakai browse [flags] [prefix]\n\nList one level of the ID hierarchy (the folder view of design doc\n0075 §2, the CLI counterpart of the web UI's Browse tab).\nWithout an argument, the top-level directories with their concept\ncounts; with a prefix, the subdirectories and concepts directly under\nit. Directories print as \"name/\tcount\", concepts as\n\"segment\ttype\tstatus\ttitle\", and the files in the directory as\n\"name\tfile\tmedia-type\tbytes\".\n\nA level is a listing, so it pages: a page with more behind it prints\nthe way on to stderr, and passing that back with --cursor reads the\nnext one. The subdirectories ride on the first page only — they are a\ngrouping rather than a run, so there is no position in them to resume\nfrom.",
 		"  ochakai browse\n  ochakai browse queries\n  ochakai browse ga4/tables\n")
 	asJSON := fs.Bool("json", false, "print the raw JSON response")
 	cursor := fs.String("cursor", "", "resume a level where the last page ended: the `cursor` the previous page printed, for the same prefix")
@@ -565,26 +540,6 @@ func cmdBrowse(ctx context.Context, args []string) error {
 		fmt.Fprintf(os.Stderr, "note: more at this level — rerun with --cursor %s\n", res.Cursor)
 	}
 	return nil
-}
-
-// printRejection writes this instance's ruling against a concept, with
-// the reason it was given. Nothing is printed for a concept nobody
-// turned down.
-//
-// The reason is not decoration on the ruling: an agent about to propose
-// the same thing needs to know what would have to change, and a reader
-// who only learns *that* it was rejected has to ask a person (design doc
-// 0102). It rode on `ochakai context` and on --json alone until then,
-// which left `ochakai get` — the command a body link sends you to —
-// printing a draft that read as if nobody had ruled on it at all.
-func printRejection(w io.Writer, r *domain.Rejection) {
-	if r == nil {
-		return
-	}
-	fmt.Fprintf(w, "rejected by %s on %s\n", r.By.String(), r.At.Format("2006-01-02"))
-	if r.Note != "" {
-		fmt.Fprintf(w, "rejection note: %s\n", r.Note)
-	}
 }
 
 func cmdUsage(ctx context.Context, args []string) error {
@@ -702,7 +657,6 @@ func cmdStats(ctx context.Context, args []string) error {
 	for _, t := range domain.Trusts {
 		fmt.Printf("%s\t%d\n", t, st.Concepts.Trust[string(t)])
 	}
-	fmt.Printf("rejected\t%d\n", st.Concepts.Rejected)
 	// The three queues take a third field: the command that lists that
 	// queue, under the scope this call was made with. A number nobody can
 	// act on is a statistic, and these three exist to be emptied (design
@@ -856,8 +810,16 @@ func cmdRevisions(ctx context.Context, args []string) error {
 		return printJSON(map[string]any{"revisions": revs})
 	}
 	for _, r := range revs {
-		fmt.Printf("#%d\t%s\t%s\t%s\n", r.Rev, r.Change,
+		// The note is the reason a rejection was made, and no other
+		// change carries one (design doc 0135). It trails the row, after
+		// the fields a pipeline cuts, so `cut -f2` still reads the
+		// change and nothing before it moved.
+		fmt.Printf("#%d\t%s\t%s\t%s", r.Rev, r.Change,
 			r.ChangedBy, r.ChangedAt.Format(time.RFC3339))
+		if r.Note != "" {
+			fmt.Print(dim("\t— " + strings.Join(strings.Fields(r.Note), " ")))
+		}
+		fmt.Println()
 	}
 	return nil
 }
@@ -955,7 +917,6 @@ func cmdGet(ctx context.Context, args []string) error {
 		prov = fmt.Sprintf("verified by %s on %s; ", lv.By.String(), lv.At.Format("2006-01-02")) + prov
 	}
 	fmt.Fprintln(os.Stderr, prov)
-	printRejection(os.Stderr, k.Observed.Rejection)
 	if *download == "" {
 		for _, att := range k.Files {
 			fmt.Fprintf(os.Stderr, "file: %s (%s, %d bytes) — `ochakai get %s --download DIR` to save\n",
@@ -1006,7 +967,7 @@ func cmdPut(ctx context.Context, args []string) error {
 		"  ochakai put runbook/restore -f concept.md\n  ochakai get insights/revenue-seasonality | sed s/40%/45%/ | ochakai put insights/revenue-seasonality-v2 --only-if-new\n  ochakai put insights/reading-revenue/weekly.png -f weekly.png\n  for f in *.csv; do ochakai put \"tables/orders/$f\" -f \"$f\"; done\n")
 	file := fs.String("f", "", "input file (default: stdin)")
 	onlyIfNew := fs.Bool("only-if-new", false, "write only if the id is free; a taken id fails instead of being replaced")
-	ifMatch := fs.String("if-match", "", "write only if the concept still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying or rejecting a concept does not move it: only an edit does")
+	ifMatch := fs.String("if-match", "", "write only if the concept still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of overwriting. Verifying a concept does not move it: only an edit does")
 	asJSON := fs.Bool("json", false, "print the written object as JSON")
 	pos, err := parseArgs(fs, args)
 	if err != nil {
@@ -1279,7 +1240,7 @@ func (t *noteTally) report() {
 func cmdVerify(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"verify",
-		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the concept as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes a concept out of\nboth review feeds (`ochakai list verified_at`, `ochakai list failed`).\nIt does not edit the concept: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`put` to move a draft to stable.\nVerifying a rejected concept lifts the rejection.",
+		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the concept as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes a concept out of\nboth review feeds (`ochakai list verified_at`, `ochakai list failed`).\nIt does not edit the concept: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`put` to move a draft to stable.",
 		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'\n")
 	asJSON := fs.Bool("json", false, "print the verified concept as JSON")
 	id, _, err := idArgs(fs, args, 1)
@@ -1305,49 +1266,6 @@ func cmdVerify(ctx context.Context, args []string) error {
 	return nil
 }
 
-// cmdReject records the ruling that stops an agent re-proposing knowledge
-// a human already turned down (design doc 0081 §4). Like verify it is a
-// ruling and not an edit, so it does not touch the document (design doc
-// 0043 §3.3) — which is why it is its own command rather than a status.
-func cmdReject(ctx context.Context, args []string) error {
-	fs, url := newFlagSet(
-		"reject",
-		"Usage: ochakai reject [flags] <id>\n\nRecord that a concept was reviewed and not accepted, with the reason.\nRejected concepts are hidden from search unless asked for\n(`search --rejected`), which is how an agent checks whether a proposal\nwas already turned down before making it again.\nIt does not edit the concept: the lifecycle status and the ETag stay put.\nA rejection is this instance's ruling, so an exported bundle carries the\nconcept's real status rather than folding the ruling onto deprecated.\nUse --withdraw to take one back — the wire calls that ruling\n`withdrawn`, and so does the revision it writes.",
-		"  ochakai reject metrics/bad-revenue --note \"double-counts refunds; see policies/revenue-recognition\"\n  ochakai reject metrics/bad-revenue --withdraw\n")
-	note := fs.String("note", "", "why it was not accepted — the next agent reads this before proposing again")
-	withdraw := fs.Bool("withdraw", false, "withdraw the live rejection instead of recording one")
-	asJSON := fs.Bool("json", false, "print the concept as JSON")
-	id, _, err := idArgs(fs, args, 1)
-	if err != nil {
-		return err
-	}
-	if *withdraw && *note != "" {
-		return fmt.Errorf("--withdraw takes back a rejection; it takes no --note")
-	}
-	c, err := newClient(ctx, *url)
-	if err != nil {
-		return err
-	}
-	var k *domain.View
-	if *withdraw {
-		k, err = c.WithdrawRejection(ctx, id)
-	} else {
-		k, err = c.Reject(ctx, id, *note)
-	}
-	if err != nil {
-		return err
-	}
-	if *asJSON {
-		return printJSON(k)
-	}
-	if *withdraw {
-		fmt.Printf("rejection withdrawn on ochakai://%s\n", k.ID)
-		return nil
-	}
-	fmt.Printf("rejected ochakai://%s by %s\n", k.ID, k.Observed.Rejection.By.String())
-	return nil
-}
-
 // cmdDelete removes one object of the bundle, whichever kind is at the
 // address. `ochakai detach` was the second command for the file half,
 // addressing it by <concept id> <name> instead of by the path it lives
@@ -1355,9 +1273,10 @@ func cmdReject(ctx context.Context, args []string) error {
 func cmdDelete(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"delete",
-		"Usage: ochakai delete [flags] <path>\n\nRemove one object of the bundle: a knowledge concept, named by its id\n(soft-delete — history is retained server-side), or a file, named by\nthe path it lives at (the removal is kept as a revision of the concept\nthat linked it; content-addressed bytes stay referenced by history).\nA concept's address is <id>.md and an id is that path with the .md\nfiled off, so an argument carrying no filename extension is read as an\nid — spell a dotted id with its .md to reach it.\nWith --if-match a concept is deleted only if it still has the version\nyou read, and the delete fails instead of removing someone else's edit.",
-		"  ochakai delete terms/obsolete-kpi\n  ochakai delete insights/reading-revenue/weekly.png\n")
+		"Usage: ochakai delete [flags] <path>\n\nRemove one object of the bundle: a knowledge concept, named by its id\n(soft-delete — history is retained server-side), or a file, named by\nthe path it lives at (the removal is kept as a revision of the concept\nthat linked it; content-addressed bytes stay referenced by history).\nA concept's address is <id>.md and an id is that path with the .md\nfiled off, so an argument carrying no filename extension is read as an\nid — spell a dotted id with its .md to reach it.\nWith --if-match a concept is deleted only if it still has the version\nyou read, and the delete fails instead of removing someone else's edit.\nWith --note the removal is a ruling: it records that the concept was\nreviewed and not accepted, and why. A rejected id is not revived by an\nagent's write, so the next one to propose it reads the reason instead;\n`ochakai log` prints the rulings, and an exported bundle carries them as\nOKF SPEC §9 log entries. A person reuses the id by putting a concept\nback at it.",
+		"  ochakai delete terms/obsolete-kpi\n  ochakai delete metrics/bad-revenue --note \"double-counts refunds; see policies/revenue-recognition\"\n  ochakai delete insights/reading-revenue/weekly.png\n")
 	ifMatch := fs.String("if-match", "", "delete only if the concept still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of deleting")
+	note := fs.String("note", "", "why it was not accepted — this removal is a ruling, and the next agent reads this before proposing the id again")
 	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
 		return err
@@ -1376,20 +1295,24 @@ func cmdDelete(ctx context.Context, args []string) error {
 	// there can be shadowed by the fallback, and both an id with a dot in
 	// it and a file whose name has no extension stay reachable.
 	first, second := deleteAddresses(arg)
-	err = c.Delete(ctx, first, *ifMatch)
+	err = c.Delete(ctx, first, *ifMatch, *note)
 	if second != "" && isNotFound(err) {
-		if fallback := c.Delete(ctx, second, *ifMatch); !isNotFound(fallback) {
+		if fallback := c.Delete(ctx, second, *ifMatch, *note); !isNotFound(fallback) {
 			first, err = second, fallback
 		}
 	}
 	if err != nil {
 		return err
 	}
+	verb := "deleted"
+	if *note != "" {
+		verb = "rejected"
+	}
 	if id, ok := strings.CutSuffix(first, ".md"); ok {
-		fmt.Printf("deleted ochakai://%s\n", id)
+		fmt.Printf("%s ochakai://%s\n", verb, id)
 		return nil
 	}
-	fmt.Printf("deleted %s\n", first)
+	fmt.Printf("%s %s\n", verb, first)
 	return nil
 }
 

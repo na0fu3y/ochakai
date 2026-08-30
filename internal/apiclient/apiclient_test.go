@@ -305,7 +305,7 @@ func TestPutSendsADocumentAndDelete204(t *testing.T) {
 	}
 	// Delete takes the bundle path, so a concept is named the way the
 	// address spells it: "<id>.md" (design doc 0064 §5).
-	if err := c.Delete(context.Background(), "metrics/revenue.md", ""); err != nil {
+	if err := c.Delete(context.Background(), "metrics/revenue.md", "", ""); err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 }
@@ -429,7 +429,7 @@ func TestDeleteHitsTheBundlePathItIsGiven(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 	for _, p := range []string{"insights/reading/weekly.png", "metrics/revenue.md"} {
-		if err := c.Delete(context.Background(), p, ""); err != nil {
+		if err := c.Delete(context.Background(), p, "", ""); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -193,7 +193,6 @@ func ownedSchemas() map[string]any {
 		"Actor":                 domain.Actor{},
 		"Link":                  domain.Link{},
 		"Verification":          domain.Verification{},
-		"Rejection":             domain.Rejection{},
 		"Generated":             domain.Generated{},
 		"Observed":              domain.Observed{},
 		"Revision":              domain.Revision{},

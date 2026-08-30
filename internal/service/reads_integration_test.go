@@ -85,13 +85,13 @@ func TestDeleteIntegration(t *testing.T) {
 		Type: domain.TypeTerms, ID: id, Title: "to delete"}, actor); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.Delete(ctx, id, actor, nil); err != nil {
+	if err := svc.Delete(ctx, id, actor, nil, ""); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	if _, err := svc.Get(ctx, id); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("deleted entry still readable: %v", err)
 	}
-	if err := svc.Delete(ctx, id, actor, nil); !errors.Is(err, store.ErrNotFound) {
+	if err := svc.Delete(ctx, id, actor, nil, ""); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("double delete: want ErrNotFound, got %v", err)
 	}
 }
@@ -119,8 +119,8 @@ func TestGetCarriesBacklinksIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := svc.Reject(ctx, spurned, "wrong baseline", actor); err != nil {
-		t.Fatalf("Reject: %v", err)
+	if err := svc.Delete(ctx, spurned, actor, nil, "wrong baseline"); err != nil {
+		t.Fatalf("rejecting: %v", err)
 	}
 
 	k, err := svc.Get(httpauth.WithActor(ctx, actor), metric)

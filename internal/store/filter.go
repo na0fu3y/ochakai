@@ -39,13 +39,14 @@ type Filter struct {
 	// Values arrive normalized by the service — NFC, no trailing slash.
 	Prefixes []string
 
-	// Trust and Rejected ask about the instance ledgers rather than the
-	// document (design docs 0043 §§3.2-3.3, 0046 §3.10). Trust is empty
-	// when the question is not asked, and OR-ed like Statuses when it is;
-	// Rejected is tri-state, and nil still hides rejected entries — the
-	// default is not "no constraint" but "not the ones we said no to".
-	Trust    []domain.Trust
-	Rejected *bool
+	// Trust asks about the verification ledger rather than the document
+	// (design docs 0043 §3.2, 0046 §3.10). Empty when the question is not
+	// asked, and OR-ed like Statuses when it is.
+	//
+	// There is no rejected filter: a rejection is a deletion (design doc
+	// 0135), so what a curator turned down is excluded by deleted_at
+	// below, the same way as anything else that is gone.
+	Trust []domain.Trust
 
 	// Frontmatter narrows by a frontmatter key read out of the jsonb
 	// index, which is what keeps the query surface additive: a key OKF
@@ -67,10 +68,9 @@ type Filter struct {
 }
 
 // buildWhere renders filter conditions; prefix qualifies columns (e.g. "k.")
-// for joined queries and may be empty. Rejected entries are excluded unless
-// asked for: knowledge that was never accepted must not resurface in
-// answers, but remains queryable on request so agents can check whether a
-// proposal was already rejected.
+// for joined queries and may be empty. Knowledge a curator turned down is
+// out of every answer because it is deleted, and the reason it was turned
+// down is in the §9 log (design doc 0135).
 func (f Filter) buildWhere(prefix string) (string, []any) {
 	// A file is an object in the same table now (design doc 0046 §3.13),
 	// and it is not an entry: no type, no title, nothing to rank. The id
@@ -94,30 +94,16 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 		args = append(args, f.Statuses)
 		conds = append(conds, fmt.Sprintf("%sstatus = ANY($%d)", prefix, len(args)))
 	}
-	// Rejection and verification are ledgers now, so both are asked about
-	// independently of the lifecycle value (design doc 0043 §§3.2-3.3).
-	// The rejected default is "hide", which is where it has always been —
-	// but it used to fall out of the status filter, and a filter that
-	// named any status turned the exclusion off with it. It no longer
-	// does: "show me the drafts" never meant "including the ones we
-	// turned down".
-	//
-	// The outer id must be qualified even when nothing else here is: the
-	// ledger tables have an id column of their own, so a bare "id" inside
-	// the subquery binds to the ledger's, making the condition r.id = r.id
-	// — true for every row, which silently empties every unaliased query.
-	outer := prefix
-	if outer == "" {
-		outer = "object."
-	}
-	rejectedExists := fmt.Sprintf(
-		"EXISTS (SELECT 1 FROM knowledge_rejection r WHERE r.id = %sid)", outer)
-	if f.Rejected != nil && *f.Rejected {
-		conds = append(conds, rejectedExists)
-	} else {
-		conds = append(conds, "NOT "+rejectedExists)
-	}
 	if len(f.Trust) > 0 {
+		// The outer id must be qualified even when nothing else here is:
+		// the ledger table has an id column of its own, so a bare "id"
+		// inside the subquery binds to the ledger's, making the condition
+		// v.id = v.id — true for every row, which silently empties every
+		// unaliased query.
+		outer := prefix
+		if outer == "" {
+			outer = "object."
+		}
 		// SPEC §5.3's tiers as predicates over the ledger: a person makes
 		// an entry human-reviewed, any other confirmation
 		// machine-confirmed, none unverified. Asking for several ORs them,

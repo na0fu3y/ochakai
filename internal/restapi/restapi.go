@@ -340,17 +340,12 @@ func Handler(svc *service.Service) http.Handler {
 	mux.HandleFunc("GET /api/v1/search", func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		if err := rejectUnknownParams(q,
-			"limit", "rejected", "type", "status", "tag", "source", "links_to",
+			"limit", "type", "status", "tag", "source", "links_to",
 			"prefix", "trust", "q", "sort", "cursor", "fm."); err != nil {
 			writeError(w, err)
 			return
 		}
 		limit, err := queryInt(q, "limit")
-		if err != nil {
-			writeError(w, err)
-			return
-		}
-		rejected, err := queryTriBool(q, "rejected")
 		if err != nil {
 			writeError(w, err)
 			return
@@ -363,7 +358,6 @@ func Handler(svc *service.Service) http.Handler {
 			LinksTo:     q.Get("links_to"),
 			Prefixes:    q["prefix"],
 			Trust:       domain.ToTrusts(q["trust"]),
-			Rejected:    rejected,
 			Frontmatter: frontmatterFilter(q),
 		}
 		page, err := svc.SearchOrList(r.Context(), q.Get("q"), q.Get("sort"), q.Get("cursor"), f, limit)
@@ -658,7 +652,14 @@ func Handler(svc *service.Service) http.Handler {
 		// "unknown query parameter" would.
 		allowed := []string{"dry_run"}
 		if m == "DELETE" {
-			allowed = append(allowed, "purge")
+			// note is DELETE's too, and it is what makes the removal a
+			// ruling rather than housekeeping (design doc 0135): the
+			// reason a reviewer turned the concept down, kept against the
+			// tombstone and rendered by the §9 log. On the query string
+			// because DELETE bodies are dropped in transit by some
+			// proxies — the cost, said plainly, is that the reason reaches
+			// an access log on deployments that keep one.
+			allowed = append(allowed, "purge", "note")
 		}
 		mux.HandleFunc(m+" /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
 			path := r.PathValue("path")
@@ -727,6 +728,26 @@ func Handler(svc *service.Service) http.Handler {
 						return
 					}
 				}
+				// A note is a ruling on a concept, so the two places it
+				// cannot land say so rather than accepting it and doing
+				// nothing with it — the silent no-op issue #409 closed for
+				// `purge` on PUT, one parameter over. A purge destroys the
+				// tombstone the ruling would be written against, and a file
+				// has no tombstone at all.
+				if note := r.URL.Query().Get("note"); note != "" {
+					switch {
+					case purge:
+						writeError(w, service.Invalidf(
+							"note records why a concept was not accepted, and a purge destroys the "+
+								"tombstone that would hold it: delete with the note first, then purge"))
+						return
+					case !isMarkdown:
+						writeError(w, service.Invalidf(
+							"note records why a concept was not accepted; %s is a file, which carries "+
+								"no ruling", path))
+						return
+					}
+				}
 				switch {
 				case isMarkdown && purge:
 					// No If-Match here: purge is already the second,
@@ -742,7 +763,7 @@ func Handler(svc *service.Service) http.Handler {
 						writeError(w, perr)
 						return
 					}
-					err = svc.Delete(r.Context(), id, actor, ifMatch)
+					err = svc.Delete(r.Context(), id, actor, ifMatch, r.URL.Query().Get("note"))
 				default:
 					// Not a concept's address, so the object here is a
 					// file and DeleteFile is the whole of the answer. The
@@ -839,16 +860,13 @@ func Handler(svc *service.Service) http.Handler {
 	// value written. That is one operation with a parameter, spelled as
 	// three because they arrived at three different times.
 	//
-	// "withdrawn" is the DELETE, said as what it is: nothing is deleted.
-	// Verifications are an append-only ledger and a rejection is the one
-	// live ruling (0043 §3.3), so withdrawing it clears that ruling and
-	// leaves the history, recorded under the same word.
+	// One value is left. A rejection is a deletion carrying a reason
+	// (design doc 0135), so the other ruling a curator makes is spelled
+	// `DELETE ...?note=`, and "withdrawn" went with it: taking a ruling
+	// back is a person putting the concept where it was.
 	//
-	// The note belongs to "rejected" alone. Carrying one on a
-	// verification would be a new thing to say rather than the same three
-	// said once, and the default answer to that is no (docs/surface.md).
-	//
-	// "verified" is why a ruling face has to exist at all rather than
+	// The face survives the shrinking because of what "verified" is:
+	// it is why a ruling face has to exist at all rather than
 	// being sugar over PUT: re-affirming a concept that was already
 	// verified is the same act as verifying it the first time, and PUT
 	// writes nothing when the content is unchanged, which left both
@@ -877,26 +895,23 @@ func Handler(svc *service.Service) http.Handler {
 			if in.Note != "" {
 				writeError(w, service.Invalidf(
 					`a verification carries no note: "%s" says the concept is right as it stands, and `+
-						`anything to say about it belongs in the concept. Use ruling=rejected to record a reason`,
+						`anything to say about it belongs in the concept. To turn a concept down with a `+
+						`reason, DELETE its address with ?note=`,
 					in.Ruling))
 				return
 			}
 			k, err = svc.Verify(r.Context(), id, actor)
-		case "rejected":
-			k, err = svc.Reject(r.Context(), id, in.Note, actor)
-		case "withdrawn":
-			if in.Note != "" {
-				writeError(w, service.Invalidf(
-					`withdrawing a rejection carries no note: it removes a ruling rather than making one`))
-				return
-			}
-			k, err = svc.WithdrawRejection(r.Context(), id, actor)
 		default:
-			// The arms above are the vocabulary; domain.Rulings is what
+			// The arm above is the vocabulary; domain.Rulings is what
 			// every surface quotes it as, so the refusal cannot name a
 			// different set than the one the switch accepts.
+			hint := ""
+			if in.Ruling == "rejected" || in.Ruling == "withdrawn" {
+				hint = ". A rejection is a deletion now: DELETE the concept's " +
+					"address with ?note=<reason>, and undo one by putting the concept back"
+			}
 			writeError(w, service.Invalidf(
-				`ruling must be one of %s, not %q`, strings.Join(domain.Rulings, ", "), in.Ruling))
+				`ruling must be one of %s, not %q%s`, strings.Join(domain.Rulings, ", "), in.Ruling, hint))
 			return
 		}
 		if err != nil {
@@ -1327,6 +1342,10 @@ type change struct {
 	Change    string       `json:"change"`
 	ChangedBy domain.Actor `json:"changed_by"`
 	ChangedAt time.Time    `json:"changed_at"`
+	// Note is why the change was made — a rejection's reason, and no
+	// other change carries one (design doc 0135). The generated document
+	// prints it after the actor; this is the same value, unwrapped.
+	Note string `json:"note,omitempty"`
 }
 
 func asChanges(rows []store.LogRow) []change {
@@ -1334,7 +1353,7 @@ func asChanges(rows []store.LogRow) []change {
 	for _, r := range rows {
 		out = append(out, change{
 			Path: r.Path, Title: r.Title, Change: r.Change,
-			ChangedBy: r.ChangedBy, ChangedAt: r.ChangedAt,
+			ChangedBy: r.ChangedBy, ChangedAt: r.ChangedAt, Note: r.Note,
 		})
 	}
 	return out
@@ -1951,8 +1970,6 @@ func writeError(w http.ResponseWriter, err error) {
 		status, code = http.StatusConflict, domain.CodeAlreadyExists
 	case errors.Is(err, store.ErrNotDeleted):
 		status, code = http.StatusConflict, domain.CodeNotDeleted
-	case errors.Is(err, store.ErrNoRejection):
-		status, code = http.StatusConflict, domain.CodeNoRejection
 	case errors.As(err, &inputErr):
 		status, code = http.StatusBadRequest, domain.CodeInvalid
 	case errors.As(err, &unsupportedErr):
@@ -2159,21 +2176,6 @@ func queryBool(q url.Values, name string, def bool) (bool, error) {
 	default:
 		return false, service.Invalidf("invalid %s %q (want true or false)", name, q.Get(name))
 	}
-}
-
-// queryBool reads a tri-state flag: absent leaves the question unasked,
-// so the caller can tell "not mentioned" from "explicitly false" — which
-// is the difference between the rejected filter's default (hide them) and
-// an explicit rejected=false (also hide them, but said out loud).
-func queryTriBool(q url.Values, name string) (*bool, error) {
-	if q.Get(name) == "" {
-		return nil, nil
-	}
-	b, err := queryBool(q, name, false)
-	if err != nil {
-		return nil, err
-	}
-	return &b, nil
 }
 
 // mediaTypeHeader is a stored media type as a Content-Type header. Plain

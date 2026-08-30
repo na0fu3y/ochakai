@@ -292,8 +292,8 @@ func TestParseStatusMapping(t *testing.T) {
 			}
 			// The trust family is read for its presence only; the actors
 			// and times stay outside the payload (design doc 0009).
-			if len(d.Verifications) != 0 || d.Rejection != nil {
-				t.Errorf("a bundle must not set rulings: %v %v", d.Verifications, d.Rejection)
+			if len(d.Verifications) != 0 {
+				t.Errorf("a bundle must not set rulings: %v", d.Verifications)
 			}
 			for _, key := range []string{"verified", "generated", "status"} {
 				if _, ok := d.Attrs[key]; ok {

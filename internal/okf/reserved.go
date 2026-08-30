@@ -142,10 +142,15 @@ func humanSize(n int64) string {
 // LogLine is one recorded change, as log.md lists it.
 type LogLine struct {
 	At     time.Time
-	Change string // create | update | move | delete, the revision vocabulary
+	Change string // create | update | move | delete | reject, the revision vocabulary
 	Path   string // the object's bundle path — a concept's or a file's
 	Title  string
 	By     domain.Actor
+	// Note is why the change was made — a rejection's reason, and no
+	// other change carries one (design doc 0135). This is where a
+	// ruling travels: §9 records events, and an event is the only thing
+	// the format can say about a concept that is no longer there.
+	Note string
 }
 
 // LogDocument renders a log.md (SPEC §9): date-grouped, newest first,
@@ -157,6 +162,13 @@ type LogLine struct {
 // rides at the end because an update history whose entries do not say
 // who is a history nobody can act on, and because the spec leaves the
 // prose to the producer.
+//
+// A reject line carries its reason after the actor. §9 says entries are
+// prose, so there is nothing to declare and nothing for a consumer to
+// parse: the sentence that says why a concept was turned down is the
+// half of a ruling the next writer can act on, and this is the only
+// place OKF has to put it — the link beside it points at a concept that
+// is gone, which §6.1 requires consumers to tolerate.
 //
 // dir is the directory this document is written into, and the links are
 // relative to it — the way index.md's are (IndexDocument), and the way
@@ -181,8 +193,12 @@ func LogDocument(title, dir string, lines []LogLine) []byte {
 		if text == "" {
 			text = l.Path
 		}
-		fmt.Fprintf(&b, "* **%s**: [%s](%s) — %s\n",
+		fmt.Fprintf(&b, "* **%s**: [%s](%s) — %s",
 			strings.ToUpper(l.Change[:1])+l.Change[1:], text, relativeTo(dir, l.Path), l.By.String())
+		if l.Note != "" {
+			fmt.Fprintf(&b, ": %s", strings.Join(strings.Fields(l.Note), " "))
+		}
+		b.WriteString("\n")
 	}
 	return []byte(b.String())
 }

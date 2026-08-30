@@ -145,8 +145,8 @@ func TestScopeRefusesAWriteItAllowsAReadOfIntegration(t *testing.T) {
 		call func() error
 	}{
 		{"Verify", func() error { _, err := f.svc.Verify(f.readCt, f.shared, f.reader); return err }},
-		{"Reject", func() error { _, err := f.svc.Reject(f.readCt, f.shared, "no", f.reader); return err }},
-		{"Delete", func() error { return f.svc.Delete(f.readCt, f.shared, f.reader, nil) }},
+		{"Delete", func() error { return f.svc.Delete(f.readCt, f.shared, f.reader, nil, "") }},
+		{"Reject", func() error { return f.svc.Delete(f.readCt, f.shared, f.reader, nil, "no") }},
 	} {
 		if err := write.call(); !errors.Is(err, ErrForbidden) {
 			t.Errorf("%s on a readable, unwritable concept returned %v, want ErrForbidden", write.name, err)
@@ -162,7 +162,7 @@ func TestScopeRefusesAWriteItAllowsAReadOfIntegration(t *testing.T) {
 // human ruled on it — which is the read 0109 §4 answers with a 404.
 func TestScopeHidesARulingOutsideItIntegration(t *testing.T) {
 	f := newAccessFixture(t)
-	if _, err := f.svc.Reject(f.adminCtx, f.theirs, "not ours", f.admin); err != nil {
+	if _, err := f.svc.Verify(f.adminCtx, f.theirs, f.admin); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.svc.RefuseIfCurated(f.readCt, f.theirs, "replace"); !errors.Is(err, store.ErrNotFound) {
@@ -170,8 +170,9 @@ func TestScopeHidesARulingOutsideItIntegration(t *testing.T) {
 	}
 	// And again once the ruling is a tombstone, which is the other guard:
 	// GetTombstone reads a row Get cannot see, so it needs the check of
-	// its own.
-	if err := f.svc.Delete(f.adminCtx, f.theirs, f.admin, nil); err != nil {
+	// its own. A rejection is exactly that — a deletion carrying its
+	// reason (design doc 0135).
+	if err := f.svc.Delete(f.adminCtx, f.theirs, f.admin, nil, "not ours"); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.svc.RefuseIfRevivingCurated(f.readCt, f.theirs); !errors.Is(err, store.ErrNotFound) {

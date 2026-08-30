@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"go.yaml.in/yaml/v3"
 
@@ -651,11 +650,6 @@ func serverKeysFor(k *domain.Knowledge) *serverKeysOnly {
 		v := &k.Verifications[i]
 		own.Verified = append(own.Verified, actorEvent(&v.By, &v.At))
 	}
-	if k.Rejection != nil {
-		own.RejectedBy = text(k.Rejection.By.String())
-		own.RejectedAt = text(k.Rejection.At.UTC().Format(time.RFC3339))
-		own.RejectedNote = text(k.Rejection.Note)
-	}
 	return own
 }
 
@@ -664,12 +658,9 @@ func serverKeysFor(k *domain.Knowledge) *serverKeysOnly {
 // a writer-owned key to the renderer cannot silently start appending it
 // to every stored document.
 type serverKeysOnly struct {
-	Generated    *event  `yaml:"generated,omitempty"`
-	Verified     []event `yaml:"verified,omitempty"`
-	CreatedBy    text    `yaml:"created_by,omitempty"`
-	RejectedBy   text    `yaml:"rejected_by,omitempty"`
-	RejectedAt   text    `yaml:"rejected_at,omitempty"`
-	RejectedNote text    `yaml:"rejected_note,omitempty"`
+	Generated *event  `yaml:"generated,omitempty"`
+	Verified  []event `yaml:"verified,omitempty"`
+	CreatedBy text    `yaml:"created_by,omitempty"`
 }
 
 // ReplaceBody swaps a stored document's body, leaving its frontmatter

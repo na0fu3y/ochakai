@@ -77,12 +77,12 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - PARAM: 18
 - HEADER: 13
 - MCP: 6
-- MCP-BYTES: 13000
+- MCP-BYTES: 12500
 - MCP-BYTES-SLACK: 500
-- CLI: 25
-- FLAG: 29
+- CLI: 24
+- FLAG: 27
 - ENV: 15
-- VOCAB: 49
+- VOCAB: 45
 - DOC: 27
 - DOC-LINES: 8000
 - DOC-LINES-SLACK: 500
@@ -315,16 +315,22 @@ Web UI で概念を書く人が、`sources` を一件足すためにも
 - `history`
 - `limit`
 - `links_to`
+- `note`
 - `prefix`
 - `purge`
 - `q`
-- `rejected`
 - `sort`
 - `source`
 - `status`
 - `tag`
 - `trust`
 - `type`
+
+18 のまま、[0135](design/0135-a-rejection-is-a-deletion.md) が
+`rejected` を落として `note` を足した。**片方が消えて片方が増えたのは偶然
+ではない** — 却下された concept を絞り込む問いが消えたのは、却下が削除に
+なって一覧に居なくなったからであり、`note` はその削除が理由を運ぶための
+ものである。同じ決定の両端が、同じ数のまま入れ替わっている。
 
 ## HEADER (13)
 
@@ -517,7 +523,7 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 この面で天井が上がったのは初めてで、`MCP-BYTES` はそれを言うために
 在る。
 
-## CLI (25)
+## CLI (24)
 
 - `ochakai access`
 - `ochakai browse`
@@ -533,7 +539,6 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 - `ochakai purge`
 - `ochakai put`
 - `ochakai reembed`
-- `ochakai reject`
 - `ochakai report`
 - `ochakai revisions`
 - `ochakai search`
@@ -544,6 +549,13 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 - `ochakai use`
 - `ochakai verify`
 - `ochakai whoami`
+
+25 → 24 は [0135](design/0135-a-rejection-is-a-deletion.md) が退役させた
+却下のコマンドである。却下が削除になった以上**能力は一つ**で、裁定が
+記録されるかどうかは `--note` の有無で表せる。0068 §1 が verify と reject を
+畳まなかったのは*その二つ*についての判断であって、reject と delete の対の
+判断ではなかった。決め手は綴りのほうにある: 却下が削除になった後も
+`reject` を残すと、**打った人は concept が消えると思わない**。
 
 24 → 25 は [0109](design/0109-a-directory-has-readers-and-writers.md) の
 `ochakai access` である。**天井を上げる決定**であり、そう言って上げている。
@@ -597,7 +609,7 @@ CLI は完全性の面なので既定は yes(0067 §1)だが、ここで書い�
 なった以上(0075 §5)、誰もリンクしないファイルは誰にも見つからない。
 `--name` は `ochakai use` にも付いているので FLAG は 28 のままである。
 
-## FLAG (29)
+## FLAG (27)
 
 コマンド数を数えることは、**REST で操作数だけを数えていたのと同じ形の
 見落とし**だった。PARAM の節が書いているとおり、操作をパラメータに畳めば
@@ -662,7 +674,6 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 - `port`
 - `prefix`
 - `project`
-- `rejected`
 - `source`
 - `status`
 - `strict`
@@ -670,7 +681,12 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 - `trust`
 - `type`
 - `url`
-- `withdraw`
+
+29 → 27 は [0135](design/0135-a-rejection-is-a-deletion.md) の
+`--withdraw` と `--rejected` である。取り消すものが無くなり(裁定は何も
+塞がない)、隠れているものも無くなった(却下された concept は消えている)。
+`--note` は増えていない — `report` と `reject` が既に持っていた語を
+`delete` が受け継いだだけで、**既存の語彙を使い回すのは無料**である。
 
 ## ENV (15)
 
@@ -760,7 +776,7 @@ ochakai が定義した変数ではなく、**既にある綴りを読んだ**�
 - `OCHAKAI_URL`
 - `PORT`
 
-## VOCAB (49)
+## VOCAB (45)
 
 八つ目の次元は**語**である。上の七つが数えているのは機構 — 呼べるもの、
 設定できるもの — であって、**キュレーターが頭に入れておくもの**は一つも
@@ -832,13 +848,11 @@ enum は凍結された契約に書いてあり、`ochakai import` はこの三�
 - `change.remove_file`
 - `change.update`
 - `change.verify`
-- `change.withdraw`
 - `error.already_exists`
 - `error.forbidden`
 - `error.internal`
 - `error.invalid`
 - `error.method_not_allowed`
-- `error.no_rejection`
 - `error.not_deleted`
 - `error.not_found`
 - `error.precondition_failed`
@@ -851,9 +865,7 @@ enum は凍結された契約に書いてあり、`ochakai import` はこの三�
 - `plan.unchanged`
 - `plan.updated`
 - `queue.drafts`
-- `ruling.rejected`
 - `ruling.verified`
-- `ruling.withdrawn`
 - `sort.failed`
 - `sort.stale_after`
 - `sort.usage`
@@ -873,6 +885,13 @@ enum は凍結された契約に書いてあり、`ochakai import` はこの三�
 - `type.Policy`
 - `type.Reference`
 - `type.Skill`
+
+49 → 45 は [0135](design/0135-a-rejection-is-a-deletion.md) の
+`ruling.rejected` / `ruling.withdrawn` / `change.withdraw` /
+`error.no_rejection` である。`ruling` が一値になり、取り消しが人の書き戻しに
+なり、却下が削除になったので、四つとも**指すものが無くなった**。
+`change.reject` は残る — それが OKF SPEC §9 の log が刷るイベントの語だから
+である。
 
 ## DOC (27)
 

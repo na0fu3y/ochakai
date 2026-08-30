@@ -81,7 +81,6 @@ _ochakai() {
     'get:print one concept as an OKF document'
     'put:write one object of the bundle: a concept from OKF markdown or JSON, or a file'
     'verify:append a verification (also re-affirms a verified concept)'
-    'reject:record that a concept was reviewed and not accepted'
     'delete:remove one object: a concept by id, or a file by its bundle path'
     'purge:hard-delete a soft-deleted concept, freeing its id'
     'reembed:embed concepts that have no vector for the configured model'
@@ -120,7 +119,6 @@ _ochakai() {
         '--links-to[only concepts whose body links at this concept]:links-to:' \
         '*--trust[filter by who confirmed the concept (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
         '*--fm[filter by an OKF frontmatter key=value]:fm:' \
-        '--rejected[only concepts a human turned down]' \
         '--limit[max results]:limit:' \
         '--json[print the raw JSON response]' \
         '--url[server URL]:url:'
@@ -135,7 +133,6 @@ _ochakai() {
         '--links-to[only concepts whose body links at this concept]:links-to:' \
         '*--trust[filter by who confirmed the concept (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
         '*--fm[filter by an OKF frontmatter key=value]:fm:' \
-        '--rejected[only concepts a human turned down]' \
         '--limit[max results]:limit:' \
         '--cursor[resume a listing where the last page ended]:cursor:' \
         '--json[print the raw JSON response]' \
@@ -181,11 +178,8 @@ _ochakai() {
     verify)
       _arguments '--json[print the concept as JSON]' '--url[server URL]:url:'
       ;;
-    reject)
-      _arguments '--note[why it was not accepted]:note:' '--withdraw[take back the rejection]' '--json[print the concept as JSON]' '--url[server URL]:url:'
-      ;;
     delete)
-      _arguments '--if-match[delete only if the concept still has this version]:version:' '--url[server URL]:url:'
+      _arguments '--if-match[delete only if the concept still has this version]:version:' '--note[why it was not accepted]:note:' '--url[server URL]:url:'
       ;;
     purge)
       _arguments '--url[server URL]:url:'
@@ -242,7 +236,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search list browse get put verify reject delete purge reembed move usage stats access report revisions export import seed use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search list browse get put verify delete purge reembed move usage stats access report revisions export import seed use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -254,13 +248,13 @@ _ochakai() {
   esac
 
   case $cmd in
-    search)        opts="--type --status --tag --prefix --source --links-to --trust --fm --rejected --limit --json --url" ;;
+    search)        opts="--type --status --tag --prefix --source --links-to --trust --fm --limit --json --url" ;;
     list)
       if [[ $prev != -* && $COMP_CWORD -eq 2 && $cur != -* ]]; then
         COMPREPLY=($(compgen -W "verified_at usage failed stale_after" -- "$cur"))
         return
       fi
-      opts="--type --status --tag --prefix --source --links-to --trust --fm --rejected --limit --cursor --json --url" ;;
+      opts="--type --status --tag --prefix --source --links-to --trust --fm --limit --cursor --json --url" ;;
     browse)        opts="--cursor --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
@@ -276,8 +270,7 @@ _ochakai() {
       opts="--note --json --url" ;;
     put)           opts="-f --only-if-new --if-match --json --url" ;;
     verify)        opts="--json --url" ;;
-    reject)        opts="--note --withdraw --json --url" ;;
-    delete)        opts="--if-match --url" ;;
+    delete)        opts="--if-match --note --url" ;;
     purge)         opts="--url" ;;
     move)          opts="--directory --url" ;;
     reembed)       opts="--limit --once --json --url" ;;
@@ -316,7 +309,6 @@ complete -c ochakai -n __fish_use_subcommand -a browse -d 'list one level of the
 complete -c ochakai -n __fish_use_subcommand -a get -d 'print one concept as an OKF document'
 complete -c ochakai -n __fish_use_subcommand -a put -d 'write one object of the bundle: a concept from OKF markdown or JSON, or a file'
 complete -c ochakai -n __fish_use_subcommand -a verify -d 'append a verification (also re-affirms a verified concept)'
-complete -c ochakai -n __fish_use_subcommand -a reject -d 'record that a concept was reviewed and not accepted'
 complete -c ochakai -n __fish_use_subcommand -a delete -d 'remove one object: a concept by id, or a file by its bundle path'
 complete -c ochakai -n __fish_use_subcommand -a purge -d 'hard-delete a soft-deleted concept, freeing its id'
 complete -c ochakai -n __fish_use_subcommand -a reembed -d 'embed concepts that have no vector for the configured model'
@@ -340,13 +332,13 @@ complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web 
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 complete -c ochakai -n __fish_use_subcommand -a help -d 'print the command list'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify reject delete purge reembed move usage stats access report revisions log export import whoami ui mcp-stdio' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify delete purge reembed move usage stats access report revisions log export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from move' -l directory -d 'move a whole directory: both arguments are paths'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify reject reembed usage stats access report revisions whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify reembed usage stats access report revisions whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l days -x -d 'flow window in days, 1-180'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l prefix -x -d 'measure only this subtree'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
@@ -362,11 +354,9 @@ complete -c ochakai -n '__fish_seen_subcommand_from search list' -l source -x -d
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l links-to -x -d 'only concepts whose body links at this concept'
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l trust -x -a '@TRUSTS@' -d 'filter by who confirmed the concept (OKF SPEC §5.3)'
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l fm -x -d 'filter by an OKF frontmatter key=value'
-complete -c ochakai -n '__fish_seen_subcommand_from search list' -l rejected -d 'only concepts a human turned down'
 complete -c ochakai -n '__fish_seen_subcommand_from list' -l cursor -x -d 'resume a listing where the last page ended'
 complete -c ochakai -n '__fish_seen_subcommand_from browse' -l cursor -x -d 'resume a level where the last page ended'
-complete -c ochakai -n '__fish_seen_subcommand_from reject' -l note -x -d 'why it was not accepted'
-complete -c ochakai -n '__fish_seen_subcommand_from reject' -l withdraw -d 'take back the rejection'
+complete -c ochakai -n '__fish_seen_subcommand_from delete' -l note -x -d 'why it was not accepted'
 complete -c ochakai -n '__fish_seen_subcommand_from search list revisions log' -l limit -x -d 'max results'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l limit -x -d 'max concepts per pass'
 complete -c ochakai -n '__fish_seen_subcommand_from reembed' -l once -d 'a single pass'

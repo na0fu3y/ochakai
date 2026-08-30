@@ -207,17 +207,16 @@ type SearchParams struct {
 	// (design doc 0041). Repeatable and OR-ed, matched on segment
 	// boundaries. Composes with Query and with any Sort.
 	Prefixes []string
-	// Trust and Rejected ask about the instance ledgers rather than the
-	// document (design doc 0043 §§3.2-3.3), independently of Statuses.
-	// Both are tri-state: nil leaves the question unasked. Nil Rejected
-	// still hides rejected entries — asking for them is opt-in, which is
-	// how an agent checks whether a proposal was already turned down.
+	// Trust asks about the verification ledger rather than the document
+	// (design doc 0043 §3.2), independently of Statuses. Empty leaves the
+	// question unasked. There is no rejected filter: a rejection is a
+	// deletion, so what a curator turned down is not in any listing
+	// (design doc 0135).
 	Trust []string
 	// FM narrows by an OKF frontmatter key, sent as fm.<key>=<value>.
 	// Which keys those are is the server's answer (design doc 0047).
-	FM       map[string]string
-	Rejected *bool
-	Limit    int
+	FM    map[string]string
+	Limit int
 	// Cursor resumes a listing where the previous page ended: pass back
 	// the Cursor of that page, with the same Sort and filters (design doc
 	// 0050 §2.1). The server refuses it beside a Query — a search is
@@ -269,9 +268,6 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, err
 	}
 	for k, v := range p.FM {
 		q.Set("fm."+k, v)
-	}
-	if p.Rejected != nil {
-		q.Set("rejected", strconv.FormatBool(*p.Rejected))
 	}
 	if p.Limit > 0 {
 		q.Set("limit", strconv.Itoa(p.Limit))
@@ -517,12 +513,20 @@ func etagValue(v string) string {
 // takes: the delete lands only if the concept still has that version,
 // and a stale one fails with a conflict instead of deleting someone
 // else's edit (design doc 0064). "" means unconditional, as before.
-func (c *Client) Delete(ctx context.Context, path, ifMatch string) error {
+// A non-empty note makes the removal a rejection (design doc 0135): the
+// reason a reviewer turned the concept down, kept against the tombstone
+// and rendered by the OKF SPEC §9 log. Without it the removal is
+// housekeeping and the id stays revivable.
+func (c *Client) Delete(ctx context.Context, path, ifMatch, note string) error {
 	hdr := http.Header{}
 	if ifMatch != "" {
 		hdr.Set("If-Match", etagValue(ifMatch))
 	}
-	resp, err := c.doRaw(ctx, http.MethodDelete, bundlePath(path), nil, "", hdr, nil)
+	var q url.Values
+	if note != "" {
+		q = url.Values{"note": {note}}
+	}
+	resp, err := c.doRaw(ctx, http.MethodDelete, bundlePath(path), q, "", hdr, nil)
 	if err != nil {
 		return err
 	}
@@ -530,11 +534,11 @@ func (c *Client) Delete(ctx context.Context, path, ifMatch string) error {
 }
 
 // review records one human ruling on the entry (POST
-// /api/v1/review/{id}) — the one face that used to be three (design doc
-// 0055 §3.1). None of the three rulings edits the entry: the document,
-// its lifecycle status and its ETag all stay put, because ruling on
-// knowledge and publishing it are different acts (design doc 0043
-// §§3.2-3.3).
+// /api/v1/review/{id}). It does not edit the entry: the document, its
+// lifecycle status and its ETag all stay put, because ruling on
+// knowledge and publishing it are different acts (design doc 0043 §3.2).
+// The other ruling a curator makes is a Delete carrying a note (design
+// doc 0135).
 func (c *Client) review(ctx context.Context, id, ruling, note string) (*domain.View, error) {
 	var k domain.View
 	body := struct {
@@ -553,20 +557,6 @@ func (c *Client) review(ctx context.Context, id, ruling, note string) (*domain.V
 // Update cannot do it.
 func (c *Client) Verify(ctx context.Context, id string) (*domain.View, error) {
 	return c.review(ctx, id, "verified", "")
-}
-
-// Reject records that the entry was turned down, with an optional reason.
-// The entry drops out of searches that did not ask for rejected ones
-// (design doc 0043 §3.3).
-func (c *Client) Reject(ctx context.Context, id, note string) (*domain.View, error) {
-	return c.review(ctx, id, "rejected", note)
-}
-
-// WithdrawRejection withdraws a rejection. A 404 when the entry carries none:
-// lifting nothing is a mistake worth reporting. Nothing is deleted — the
-// verifications stay, and the withdrawal is its own row in the history.
-func (c *Client) WithdrawRejection(ctx context.Context, id string) (*domain.View, error) {
-	return c.review(ctx, id, "withdrawn", "")
 }
 
 // Purge hard-deletes an entry that is already soft-deleted, freeing its
