@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-08-31
+
 ### Fixed
 
 - **Every surface said `--note` closes the address; 0.28.0 decided it
@@ -6117,7 +6119,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.1...HEAD
+[0.28.1]: https://github.com/na0fu3y/ochakai/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/na0fu3y/ochakai/compare/v0.27.6...v0.28.0
 [0.27.6]: https://github.com/na0fu3y/ochakai/compare/v0.27.5...v0.27.6
 [0.27.5]: https://github.com/na0fu3y/ochakai/compare/v0.27.4...v0.27.5
