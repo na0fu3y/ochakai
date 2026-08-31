@@ -72,7 +72,7 @@ MCP からはできない。削除はそもそもツールですらない — �
 [0076](design/0076-two-tools-leave-mcp.md) が `delete_concept` をこの面
 から降ろした。ナレッジを消すことは裁定であり、MCP は取り消せる裁定さえ
 運んでいないからである。`put_concept` は人が裁定した concept —
-verified・rejected・deprecated — を拒み、拒否は代わりに何をすべきかを
+verified・deprecated — を拒み、拒否は代わりに何をすべきかを
 言う:
 
 > cannot replace metrics/revenue from this surface: it is verified, and
@@ -100,7 +100,7 @@ tombstone を `put_concept` で復活させることが MCP で拒まれるの�
 で、本文にも `summary.content_hash` として載る — を返し、古い値の
 `If-Match` を付けた `PUT` は `412` になり何も書かない(設計ドキュメント
 0030、0075 §3.2)。内容だけのハッシュなので、concept を verify したり
-reject したり、ファイルを添えたりしても precondition は有効なままで
+利用を報告したり、ファイルを添えたりしても precondition は有効なままで
 ある — 無効にするのは編集だけである。MCP は version フィールドを外に
 出さないが、裁定済み concept を守るために内部で同じ仕組みを使う。
 

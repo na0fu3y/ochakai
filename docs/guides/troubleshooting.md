@@ -86,9 +86,10 @@ teams/growth`)。
   `verified:` は文書の主張として `received` に残るだけである
   ([merge は verify ではない](git-review.md#merge-は-verify-ではない))。
   `ochakai verify <id>` か Web UI の「検証」を一手打つ。
-- *保存されているはずの語が何にもマッチしない。* rejected と
-  soft-delete された concept は既定の検索から除外され、`--status` は
-  さらに絞り込む。concept が無いと結論する前にフィルタを外す。
+- *保存されているはずの語が何にもマッチしない。* soft-delete された
+  concept は既定の検索から除外され(却下されたものはそこにも無い —
+  却下は削除である)、`--status` はさらに絞り込む。concept が無いと
+  結論する前にフィルタを外す。
 - *embeddings は on なのにランキングが変わらない。* vector は concept
   が書かれたときに書かれるので、その設定より前からある concept には
   ベクトルが無い。`ochakai reembed` を実行する。
@@ -101,12 +102,15 @@ hybrid のモード間で比較できない。返る件数を絞るには、ス�
 ## concept の書き込み
 
 **`put --only-if-new` で 412。** その id はすでに live な concept が
-持っている — `rejected` のものも含む。`--only-if-new` を外すか、別の
-id を選ぶ。*soft-delete* された concept への書き込みは、それ以前の
-履歴を保ったまま蘇らせる。MCP 経由では、削除前に verified・rejected・
-deprecated だったものを蘇らせることは拒否される — 記録済みの判断が
-あった場所に真新しい draft を置くことになるからである。REST と CLI
-はその蘇りを許す: どちらも人間がキュレーションする面である。
+持っている。`--only-if-new` を外すか、別の id を選ぶ。*soft-delete*
+された concept への書き込みは、それ以前の履歴を保ったまま蘇らせる。
+MCP 経由では、削除前に verified・deprecated だったものを蘇らせること
+は拒否される — 記録済みの判断があった場所に真新しい draft を置くこと
+になるからである。REST と CLI はその蘇りを許す: どちらも人間が
+キュレーションする面である。**却下された id はこれに当たらない**:
+却下は削除であり、その墓標は普通の墓標なので、MCP からも書き直せる
+(設計ドキュメント
+[0135](../design/0135-a-rejection-is-a-deletion.md) §3)。
 
 **`put --if-match` で 404。** `--if-match` は既存の concept を置き
 換えるものであり、新規作成はしない。

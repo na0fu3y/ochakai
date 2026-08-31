@@ -60,6 +60,33 @@ last entry.
   can write one. No migration, no new variable, and notes already
   written become readable where retention still holds them.
 
+### Fixed
+
+- **The pages that describe the model still described a rejection as a
+  state.** 0.28.1 swept the seven surfaces that promised `--note` closes
+  an address, but not the prose one level up:
+  [docs/architecture.md](docs/architecture.md) named a human's ruling as
+  「verified・rejected・deprecated」 and said a rejection is exported
+  beside the concept's real status as `rejected_by` / `rejected_at` /
+  `rejected_note`, which no export has written since 0.28.0;
+  [docs/faq.md](docs/faq.md) named the same three one sentence above the
+  paragraph that already corrected them; and the [troubleshooting
+  guide](docs/guides/troubleshooting.md) told a reader that search hides
+  rejected concepts and that a live one can be holding an id. A rejection
+  is a deletion ([design doc
+  0135](docs/design/0135-a-rejection-is-a-deletion.md)), so those now
+  name verified and deprecated only, and say what
+  [docs/faq.md](docs/faq.md) already said about the tombstone a rejection
+  leaves: it is an ordinary one, writable again from MCP.
+
+  Two neighbours were wrong for the same reason. The `ETag` paragraphs
+  listed rejecting a concept among the operations that leave a held
+  precondition valid — it removes the concept, so nothing is left to
+  match — and the [Git review guide](docs/guides/git-review.md) said the
+  bundle does not carry revision history. It does, as each directory's
+  `log.md`, and that is exactly where a rejection's reason travels.
+  **No behaviour changed** — this moves only words.
+
 ## [0.28.1] - 2026-08-31
 
 ### Fixed
