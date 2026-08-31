@@ -419,7 +419,7 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 ある)。**能力を他の面に残さずに降ろすことは、この規則の外である。**
 
 降ろす理由は二本で違う。削除は**裁定**であり、この面は
-`POST /api/v1/review/{id}`(verify / reject)を載せていない — 取り消せる
+`POST /api/v1/review/{id}`(verify)を載せていない — 取り消せる
 裁定を預けない面が、取り消せないほうを配っていた。利用回数はループの
 **人間側**([0069](design/0069-the-loop-and-what-measures-it.md))で、
 エージェントが頼ってよいかの判断に要る trust tier と `verified_at` は
