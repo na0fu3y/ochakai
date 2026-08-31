@@ -833,3 +833,52 @@ func TestOneWriteFace(t *testing.T) {
 		t.Errorf("tools = %d, want %d: %v", len(names), len(want), names)
 	}
 }
+
+// TestReportOutcomeCarriesNoNotes holds the line design doc 0137 §5 drew:
+// the notes callers write with their outcome reports are read on REST,
+// the CLI and the web UI, and never here.
+//
+// The tool answers with the concept's totals, and 0137 §5 keeps this
+// surface off the notes for two reasons at once — an agent that just
+// filed a report is not the reviewer who reads them, and handing one up
+// to ten other callers' paragraphs, with their names, spends the context
+// window this tool is paid from (0103) on the reverse lookup by reporter
+// that 0137 §6 declined.
+//
+// It is written against newUsageOut rather than the field, so a later
+// field arriving on domain.Usage does not reach MCP unconsidered: that
+// is the way this leaked in the first place, the tool result being built
+// from the shared totals with nothing asking what had grown on them.
+func TestReportOutcomeCarriesNoNotes(t *testing.T) {
+	full := &domain.Usage{
+		Worked: 3,
+		Failed: 1,
+		Reports: []domain.OutcomeReport{{
+			Outcome: domain.EventFailed,
+			By:      domain.Actor{Kind: "human", Name: "tanaka@example.co.jp"},
+			Note:    "double-counts split shipments",
+		}},
+	}
+	out := newUsageOut(full)
+	if out.Usage.Reports != nil {
+		t.Errorf("MCP result carries the notes: %+v", out.Usage.Reports)
+	}
+	// The totals it does answer with are untouched: this drops one field,
+	// it does not narrow the answer.
+	if out.Usage.Worked != full.Worked || out.Usage.Failed != full.Failed {
+		t.Errorf("totals = %+v, want worked %d failed %d", out.Usage, full.Worked, full.Failed)
+	}
+	// The caller's own value is not modified — the tool is handed the
+	// service's Usage, and clearing it in place would take the notes off
+	// a value the service may still be holding.
+	if full.Reports == nil {
+		t.Error("newUsageOut cleared its argument's reports rather than its copy's")
+	}
+	body, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "reports") {
+		t.Errorf("the marshalled result names reports: %s", body)
+	}
+}

@@ -514,7 +514,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 		if err != nil {
 			return nil, usageOut{}, err
 		}
-		return nil, usageOut{Usage: *u}, nil
+		return nil, newUsageOut(u), nil
 	}))
 
 	// A read-only deployment does not offer the write tools at all
@@ -704,6 +704,22 @@ type fileOut struct {
 
 type usageOut struct {
 	Usage domain.Usage `json:"usage"`
+}
+
+// newUsageOut is the totals without what the reports said (design doc
+// 0137 §5). The notes are the loop's human side: a reviewer working the
+// failed feed reads them, and an agent that just filed a report does not
+// — it would be handed up to ten other callers' paragraphs, and their
+// names, out of the context window it pays this tool from (0103), which
+// is also the reverse lookup by reporter 0137 §6 declined.
+//
+// Stripping here rather than giving this a shape of its own keeps one
+// definition of the totals; TestReportOutcomeCarriesNoNotes fails if a
+// later field arrives on Usage and reaches this surface unconsidered.
+func newUsageOut(u *domain.Usage) usageOut {
+	out := usageOut{Usage: *u}
+	out.Usage.Reports = nil
+	return out
 }
 
 type outcomeIn struct {
