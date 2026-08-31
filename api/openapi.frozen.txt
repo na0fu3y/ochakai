@@ -328,6 +328,13 @@ components/schemas/Usage.recent required=true type=object
 components/schemas/Usage.recent.days required=true type=integer
 components/schemas/Usage.recent.failed required=true type=integer
 components/schemas/Usage.recent.fetches required=true type=integer
+components/schemas/Usage.reports required=false type=array
+components/schemas/Usage.reports[] type=object
+components/schemas/Usage.reports[].at required=true type=string format="date-time"
+components/schemas/Usage.reports[].by required=true
+components/schemas/Usage.reports[].by/allOf/0 ref=Actor
+components/schemas/Usage.reports[].note required=true type=string
+components/schemas/Usage.reports[].outcome required=true type=string enum=["worked" "failed"]
 components/schemas/Usage.search_hits required=true type=integer
 components/schemas/Usage.worked required=true type=integer
 components/schemas/Verification type=object

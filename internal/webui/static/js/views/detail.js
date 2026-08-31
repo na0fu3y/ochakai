@@ -381,6 +381,32 @@ export async function viewDetail(id, heading = '') {
     }));
   }
 
+  // What the reports said (design doc 0137). The numbers above say how
+  // bad it is; this says what was wrong, in the words of the caller that
+  // ran it — which is the half a reviewer opening the failed feed came
+  // for.
+  //
+  // Only the reports carrying a note are here, so the heading says the
+  // count of notes rather than of reports: the tiles above are the
+  // report counts, and two numbers that look alike and mean different
+  // things is worse than one.
+  const reportsHTML = (reports) => {
+    if (!reports || !reports.length) return '';
+    const rows = reports.map(r => `
+      <li class="report ${r.outcome === 'failed' ? 'failed' : 'worked'}">
+        <div class="report-head">
+          <span class="badge ${r.outcome === 'failed' ? 'rejected-mark' : 'verified-mark'}">${r.outcome === 'failed' ? '失敗' : '成功'}</span>
+          <span>${esc(actorStr(r.by))}</span>
+          <span>${esc(fmtDate(r.at))}</span>
+        </div>
+        <p class="report-note">${esc(r.note)}</p>
+      </li>`).join('');
+    return `
+      <h3 class="report-title">報告された内容(${reports.length} 件)</h3>
+      <ul class="reports">${rows}</ul>
+      <p class="provenance">note の付いた報告だけを新しい順に最大 10 件。報告の件数は上の成功・失敗です。生の報告は 180 日で消えるので、それより古いものは残っていません。</p>`;
+  };
+
   const body = $('#tab-body');
   // Lazily loaded tabs: fetch once on first open, then re-render from the
   // cached template. A failed fetch shows in place and retries next open.
@@ -394,7 +420,8 @@ export async function viewDetail(id, heading = '') {
           <div class="tile"><div class="num">${u.worked ?? 0}</div><div class="lbl">成功</div></div>
           <div class="tile"><div class="num">${u.failed ?? 0}</div><div class="lbl">失敗</div></div>
         </div>
-        <p class="provenance">${u.last_used_at ? '最終利用日: ' + esc(fmtDate(u.last_used_at)) : 'まだ使われていません'}</p>`;
+        <p class="provenance">${u.last_used_at ? '最終利用日: ' + esc(fmtDate(u.last_used_at)) : 'まだ使われていません'}</p>
+        ${reportsHTML(u.reports)}`;
     },
     linked: async () => {
       const { hits: entries = [] } = await api('/api/v1/search?links_to=' + encodeURIComponent(entry.id) + '&limit=100');

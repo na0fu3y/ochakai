@@ -557,6 +557,42 @@ type Usage struct {
 	// Recent is the same activity inside a fixed recent window, and it is
 	// what the usage and failed feeds are ordered by.
 	Recent RecentUsage `json:"recent"`
+	// Reports are the outcome reports that carried a note, newest first.
+	// Absent when none of them did (design doc 0137).
+	Reports []OutcomeReport `json:"reports,omitempty"`
+}
+
+// OutcomeReportLimit is how many noted reports one read carries.
+//
+// Ten, for the reason stats caps its miss queries at ten: this is a list
+// a person reads to decide what to do next, and returning more than one
+// sitting's worth of it buys nothing. Nobody has asked for the eleventh
+// (design doc 0137 §6).
+const OutcomeReportLimit = 10
+
+// OutcomeReport is one worked/failed report that said something about
+// what it saw — the note a caller wrote with report_outcome, back out
+// where a reviewer can read it (design doc 0137).
+//
+// Only reports carrying a note are ever built into one, so the count of
+// these is not the count of reports: that is Usage.Worked and
+// Usage.Failed, and most reports carry no note at all.
+//
+// By is kind + name and nothing else, because that is all the raw event
+// rows hold. Design doc 0065 §4 left `via` and `producer` off this table
+// deliberately — a column nobody reads records nothing — and 0137 §4
+// keeps that decision while retiring its reason, since the note column
+// is now read. Under delegation Name is already the delegated end user,
+// so "whose report is this" still has an answer; what is missing is
+// which application and which software it came through.
+//
+// These rows are pruned with the raw events at 180 days, so this list
+// has a horizon the surfaces state rather than imply (0137 §3).
+type OutcomeReport struct {
+	Outcome string    `json:"outcome"` // worked | failed
+	At      time.Time `json:"at"`
+	By      Actor     `json:"by"`
+	Note    string    `json:"note"`
 }
 
 // RecentUsageDays is the window the feeds rank inside: how long a read or

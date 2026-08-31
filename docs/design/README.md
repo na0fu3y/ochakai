@@ -44,7 +44,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4([0093](0093-the-budget-governs-the-whole-response.md) が予算の側を改訂)。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
 | サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。**MCP の転送が stateless になり、プロトコルが 2026-07-28 になることは [0118](0118-a-call-carries-everything-it-needs.md)**(0067 §3 を改訂 — 面もツールも動かない)。一覧がいつまで持つかを自分で答えること(構築時に決まる三つの一覧だけ。concept の読みは 0 のまま)は同記録 §7。MCP のツール 7 本とその境界は [0076](0076-two-tools-leave-mcp.md) と、**7 本目を割った [0096](0096-a-listing-is-not-a-search-here-either.md)**。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0077](0077-one-address-for-a-file.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂)。**CLI の行の第一列が「読み手が並べてくれと言った鍵」だけになることは [0110](0110-the-first-column-is-the-key-you-asked-for.md)**(0068 §3 の CLI への適用。`search` と逆引きからスコア列が落ちる)。**その行に太字と dim が付くのは [0111](0111-weight-for-the-eye-and-only-for-an-eye.md)**(端末のときだけ。パイプが受け取るバイト列は変わらない) |
 | Web UI | [0130](0130-the-web-ui-and-the-fields-of-a-document.md) が現行(配信・ページの形・編集を一冊で。0072 / 0092 / 0126 を畳んだ)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**このデプロイができないことをページが出さなくなり、直せる呼び出し元にだけ案内を出すことは [0131](0131-a-deployment-says-what-it-cannot-do.md)** |
-| 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)**。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない) |
+| 検証ループと利用測定 | [0069](0069-the-loop-and-what-measures-it.md) が現行。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**二つのフィードが直近 90 日で並ぶことは [0090](0090-a-queue-ranks-on-what-happened-lately.md)**。**人間側のフローに時系列が加わることは [0095](0095-the-loop-has-a-shape.md)**。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない)。**結果報告の note に読む面が付くことは [0137](0137-a-report-says-what-it-saw.md)**(0069 §3 に読む側を足す — `usage` が note を持つ報告を新しい順に 10 件返し、180 日の地平線を面が言う) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂)。**却下が削除の一種であり、理由がリビジョンに載ることは [0135](0135-a-rejection-is-a-deletion.md)** — 墓標は塞がず、`knowledge_rejection` は畳まれた |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md)。**番号は領域の決定に与え、その内側の規則には与えないことと、この表の一行が挙げてよい記録の数の天井は [0128](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)**(0048 §2.1 / §2.2 を改訂) |
@@ -1195,6 +1195,37 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   DELETE の本文で送ること。**コマンド一つ・フラグ二つ・符号四つと
   テーブル一つが落ち、足すのは `--note`・クエリパラメータ `note`・
   応答の `note` だけである。**
+- [0137 報告は、何を見たかを言う](0137-a-report-says-what-it-saw.md)
+  — **Accepted**。0069 §3 が測ってきた結果報告に**読む面**を足す。
+  `--note` は最初から書けた — `POST /api/v1/usage/{id}` は 2,000 バイトまで
+  取り、`knowledge_event.note` に落ちる — のに、**その列を読む SQL がどこにも
+  無かった**。詰まるのは `ochakai list failed` を開いた人で、フィードは
+  「3 回誤りと報告された、未処理である」までを言い、次に要る「何が悪かったか」は
+  報告者が既に書いている。`GET /api/v1/usage/{id}` が `reports` を返す —
+  note を持つ報告だけを**新しい順に最大 10 件**、worked と failed の両方。
+  worked を落とさないのは、「回して締めと一致した」が draft を昇格させる
+  証拠だから(落とせばループの半分だけが声を持つ)。**failed 順にはしない**:
+  フィードが既に failed で並べて人を連れてきており、開いた先の二つ目の
+  並べ替えはどちらに従っているかを読めなくする。**件数は `worked` /
+  `failed` であって行数ではない**(大半の報告は note を持たない)。
+  欄名が `notes` でないのは `View.notes` が別のものだから(0113 / 0102)。
+  **180 日の刈り取りがここで初めて利用者に見える**ので面がそう言い、
+  記録は 180 に**導出が無い**ことも言う — 初出は 0001 §9.2 の一文で、
+  0090 §2 と 0069 §5 はそこ**から**導かれている。保持は動かさない
+  (動かせば 90 日の窓と `stats` の上限が一緒に動く)。報告者は
+  **kind + name だけ**で出る: `via` と `producer` はこれらの行に無く、
+  0065 §4 がそれを落とした理由(「読まれない列は何も記録しない」)は
+  この記録で古くなるが、**決定は動かさない**ので 0065 は現行のまま
+  据え置く(0133 が 0069 §2.2 に対して下したのと同じ判断)。認可は不変で、note を読める集合と書ける集合が一致する。
+  REST・CLI・Web UI(詳細ページの利用タブ)に載り MCP には載らない。
+  **0067 §5.4 と衝突しない** — あれが断ったのは worked / failed の**ボタン**
+  であって、読むことではない。**一覧のカードには載らない**: フィードの行は
+  一覧用の lateral が埋めており、note を足すと行ごとに問い合わせが一本増え、
+  一覧が最大 500 件の自由文を運ぶ(0093)。フィードは「どれを見るか」に、
+  開いた先が「何が書いてあったか」に答える。
+  却下した案: 絞り込みとページング、報告者での逆引き(監視の道具になる)、
+  note の編集・削除・返信、verify への note(0068 §4 が既に断っている)、
+  保持の延長、note を検索に入れること。
 - [0104 裁定は理由ごと運ばれる](0104-a-ruling-travels-with-its-reason.md) —
   **Superseded by 0135**。
 - [0050 一覧はカーソルでページングし、順位はしない](0050-listings-page-rankings-do-not.md) — **Superseded by 0068**。

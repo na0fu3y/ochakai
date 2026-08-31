@@ -545,7 +545,7 @@ func cmdBrowse(ctx context.Context, args []string) error {
 func cmdUsage(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"usage",
-		"Usage: ochakai usage [flags] <id>\n\nShow how often a concept was actually used: appeared in search results,\nfetched individually, reported worked or failed — and when it was last\nused. The measure of the write-back loop: evidence for promoting a\ndraft, and a staleness signal for verified concepts nobody uses.",
+		"Usage: ochakai usage [flags] <id>\n\nShow how often a concept was actually used: appeared in search results,\nfetched individually, reported worked or failed — and when it was last\nused. The measure of the write-back loop: evidence for promoting a\ndraft, and a staleness signal for verified concepts nobody uses.\n\nThe report lines are what those reports said: outcome, time, who, and\nthe note they wrote, newest first and at most 10. Only reports carrying\na note appear, so counting them is not counting reports — worked and\nfailed are — and they are pruned with the raw events after 180 days.\nA note is folded onto its one line; --json has it whole.",
 		"  ochakai usage queries/sales/monthly-revenue\n  ochakai usage metrics/revenue --json\n")
 	asJSON := fs.Bool("json", false, "print JSON")
 	id, _, err := idArgs(fs, args, 1)
@@ -574,7 +574,28 @@ func cmdUsage(ctx context.Context, args []string) error {
 	// anybody wants it now (design doc 0090).
 	fmt.Printf("recent_days\t%d\nrecent_fetches\t%d\nrecent_failed\t%d\n",
 		u.Recent.Days, u.Recent.Fetches, u.Recent.Failed)
+	// What the reports said, on the same key-then-fields shape the gap
+	// lines of `ochakai stats` use, so a list keeps composing with cut
+	// and grep the way the numbers above do (design doc 0137).
+	//
+	// These are only the reports that carried a note, which is why they
+	// are not a count: worked and failed above are. Printing them after
+	// the numbers keeps a caller reading the first two fields of every
+	// line unaffected by whether this concept has any.
+	for _, r := range u.Reports {
+		fmt.Printf("report\t%s\t%s\t%s\t%s\n",
+			r.Outcome, r.At.Format(time.RFC3339), r.By.String(), oneLine(r.Note))
+	}
 	return nil
+}
+
+// oneLine folds a note onto the single line its report occupies. A note
+// is free-form and a caller may well have written a paragraph; the
+// surrounding output is one record per line, and a note that breaks that
+// breaks every reader of it (design doc 0110's first column is only a
+// first column if there is one per line). The whole note is in --json.
+func oneLine(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }
 
 func cmdStats(ctx context.Context, args []string) error {

@@ -21,6 +21,45 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **A failure report's note is readable.** `--note` on `ochakai report`
+  has been writable since outcomes existed and **no surface ever read it
+  back** — `POST /api/v1/usage/{id}` took up to 2,000 bytes, wrote them
+  to a column, and no query in the tree ever selected it. The person
+  this stalled is whoever opens `ochakai list failed`: the feed says a
+  concept was reported wrong three times and is unanswered, and the next
+  thing they need — *what* was wrong — the reporter had already written.
+
+  `GET /api/v1/usage/{id}` now returns `reports`: the reports that
+  carried a note, **newest first and at most 10**, worked and failed
+  alike (a note on a worked report is the evidence that promotes a
+  draft). `ochakai usage <id>` prints them as `report` lines — outcome,
+  time, reporter, note — and the web UI's 利用 tab lists them under the
+  counts. **The length of that list is not a count of reports**; `worked`
+  and `failed` are, since most reports carry no note. A listing never
+  carries them: a feed row's `usage` comes from the listing's own
+  aggregate, so the feed answers which concept to look at and the read it
+  opens answers what was written about it. MCP does not carry them
+  ([design doc 0137](docs/design/0137-a-report-says-what-it-saw.md)).
+
+  Two things the record states rather than leaves to be discovered.
+  **The 180-day pruning of raw events becomes visible here** — until now
+  it was an implementation detail, because the running totals survive it
+  and `/usage`'s numbers stayed exact — so every surface says the notes
+  have that horizon; and **180 has no derivation**: it was placed once in
+  2026-07-16's first write-back-loop commit and everything since,
+  including the 90-day feed window and `stats`' `days` cap, derives
+  *from* it. Retention does not move. The reporter shows as **kind and
+  name only** — `via` and `producer` are not on these rows, which
+  [0065](docs/design/0065-identity-and-provenance.md) §4 chose
+  deliberately and 0137 §4 keeps while retiring its reason ("a column
+  nobody reads records nothing" stops being true once the column is
+  read). Authorization is unchanged: reporting an outcome already took
+  only a read grant, so the set who can read a note equals the set who
+  can write one. No migration, no new variable, and notes already
+  written become readable where retention still holds them.
+
 ## [0.28.1] - 2026-08-31
 
 ### Fixed

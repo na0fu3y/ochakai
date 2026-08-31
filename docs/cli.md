@@ -838,6 +838,12 @@ fetched individually, reported worked or failed — and when it was last
 used. The measure of the write-back loop: evidence for promoting a
 draft, and a staleness signal for verified concepts nobody uses.
 
+The report lines are what those reports said: outcome, time, who, and
+the note they wrote, newest first and at most 10. Only reports carrying
+a note appear, so counting them is not counting reports — worked and
+failed are — and they are pruned with the raw events after 180 days.
+A note is folded onto its one line; --json has it whole.
+
 Flags:
   -json
     	print JSON
