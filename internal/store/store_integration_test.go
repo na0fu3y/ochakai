@@ -226,14 +226,54 @@ func TestIntegration(t *testing.T) {
 	if usage.Worked < 1 || usage.Failed < 1 {
 		t.Errorf("outcome totals wrong: %+v", usage)
 	}
-	var note string
-	if err := s.pool.QueryRow(ctx,
-		`SELECT note FROM knowledge_event WHERE knowledge_id = $1 AND event = $2`,
-		k.ID, domain.EventFailed).Scan(&note); err != nil {
-		t.Fatalf("read outcome note: %v", err)
+	// The note comes back where a reviewer can read it (design doc 0137).
+	// Only the report that carried one is here — the worked report above
+	// wrote an empty note and must not pad the list, which is why the
+	// length of Reports is not the count of reports.
+	if len(usage.Reports) != 1 {
+		t.Fatalf("want 1 noted report, got %d: %+v", len(usage.Reports), usage.Reports)
 	}
-	if note != "joins dropped 2024 rows" {
-		t.Errorf("outcome note did not round-trip: %q", note)
+	report := usage.Reports[0]
+	if report.Note != "joins dropped 2024 rows" {
+		t.Errorf("outcome note did not round-trip: %q", report.Note)
+	}
+	if report.Outcome != domain.EventFailed {
+		t.Errorf("report outcome = %q, want %q", report.Outcome, domain.EventFailed)
+	}
+	if report.By.Kind != actor.Kind || report.By.Name != actor.Name {
+		t.Errorf("report actor = %+v, want kind %q name %q", report.By, actor.Kind, actor.Name)
+	}
+	// Design doc 0065 §4 keeps `via` and `producer` off these rows and
+	// 0137 §4 leaves that alone, so the read must not invent them.
+	if report.By.Via != "" || report.By.Producer != "" {
+		t.Errorf("report actor carries via/producer, which the event rows do not hold: %+v", report.By)
+	}
+	if report.At.IsZero() {
+		t.Error("report carries no time")
+	}
+
+	// Newest first, and bounded. Reports past the limit are dropped from
+	// the tail, not the head: the list is what happened lately.
+	for i := range domain.OutcomeReportLimit + 2 {
+		if err := s.RecordOutcome(ctx, domain.EventFailed, actor, k.ID, fmt.Sprintf("later note %d", i)); err != nil {
+			t.Fatalf("RecordOutcome: %v", err)
+		}
+	}
+	usage, err = s.Usage(ctx, k.ID)
+	if err != nil {
+		t.Fatalf("Usage: %v", err)
+	}
+	if len(usage.Reports) != domain.OutcomeReportLimit {
+		t.Errorf("want %d reports, got %d", domain.OutcomeReportLimit, len(usage.Reports))
+	}
+	for i := 1; i < len(usage.Reports); i++ {
+		if usage.Reports[i].At.After(usage.Reports[i-1].At) {
+			t.Errorf("reports are not newest first at %d: %v then %v",
+				i, usage.Reports[i-1].At, usage.Reports[i].At)
+		}
+	}
+	if last := usage.Reports[len(usage.Reports)-1]; last.Note == "joins dropped 2024 rows" {
+		t.Error("the oldest note survived the limit; the tail should be dropped, not the head")
 	}
 
 	// ListByVerifiedAt: oldest verification first, deleted excluded by

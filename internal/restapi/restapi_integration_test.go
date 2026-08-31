@@ -1072,6 +1072,27 @@ func TestRESTIntegrationUsageBacklinksAndMove(t *testing.T) {
 	if usage.Worked != 1 {
 		t.Errorf("usage after one worked report = %+v", usage)
 	}
+	// The note comes back on the read, on a worked report as much as on
+	// a failed one — the evidence that promotes a draft is the same
+	// mechanism as the evidence that demotes trust (design doc 0137).
+	if len(usage.Reports) != 1 || usage.Reports[0].Note != "ran it against last quarter" {
+		t.Errorf("reports after one noted worked report = %+v", usage.Reports)
+	}
+	if len(usage.Reports) == 1 && usage.Reports[0].Outcome != "worked" {
+		t.Errorf("report outcome = %q, want worked", usage.Reports[0].Outcome)
+	}
+	// A listing fills usage from its own aggregate, so the feed carries
+	// the counts and not the notes (0137 §2). A hit that grew a reports
+	// array would be a per-row query nobody asked for.
+	var feed struct {
+		Hits []domain.SearchHit `json:"hits"`
+	}
+	getJSON(t, srv.URL+"/api/v1/search?sort=usage&limit=50", &feed)
+	for _, h := range feed.Hits {
+		if h.Usage != nil && len(h.Usage.Reports) > 0 {
+			t.Errorf("listing hit %s carries notes: %+v", h.ID, h.Usage.Reports)
+		}
+	}
 
 	// Move, and check the insight's link came along (design doc 0021).
 	// The destination is registered for removal as well: the id the move

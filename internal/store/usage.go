@@ -339,5 +339,42 @@ func (s *Store) Usage(ctx context.Context, id string) (*domain.Usage, error) {
 		id, recentWindow()).Scan(&u.Recent.Fetches, &u.Recent.Failed); err != nil {
 		return nil, err
 	}
+	reports, err := s.outcomeReports(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	u.Reports = reports
 	return u, nil
+}
+
+// outcomeReports reads back the notes callers wrote with their outcome
+// reports, newest first and bounded (design doc 0137).
+//
+// The rows this walks are the same ones the recent counts are taken over
+// and the same ones the daily prune drops at 180 days, so the list
+// answers only for the retention window — which the surfaces say rather
+// than leave to be discovered. Only noted reports are selected: a report
+// with nothing to say is already counted in the totals and would only
+// pad a list a person is meant to read.
+func (s *Store) outcomeReports(ctx context.Context, id string) ([]domain.OutcomeReport, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT event, at, actor_kind, actor_name, note
+		  FROM knowledge_event
+		 WHERE knowledge_id = $1 AND event IN ($2, $3) AND note <> ''
+		 ORDER BY at DESC
+		 LIMIT $4`,
+		id, domain.EventWorked, domain.EventFailed, domain.OutcomeReportLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []domain.OutcomeReport
+	for rows.Next() {
+		var r domain.OutcomeReport
+		if err := rows.Scan(&r.Outcome, &r.At, &r.By.Kind, &r.By.Name, &r.Note); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

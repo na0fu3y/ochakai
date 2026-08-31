@@ -1774,6 +1774,12 @@ paths:
         fetched individually, and how it was reported to have worked. The measure of
         the write-back loop — evidence for promoting drafts, and a staleness
         signal for verified concepts that stopped being used.
+
+
+        `reports` carries what those reports said: the notes their
+        callers wrote, newest first and at most 10 (design doc 0137). A
+        review feed brings a reviewer here to answer "how bad is it";
+        this is where "what was wrong" is written down.
       responses:
         "200":
           description: Usage totals.
@@ -1796,6 +1802,15 @@ paths:
                     worked: 23
                     failed: 2
                     last_used_at: "2026-07-26T23:58:07.336114Z"
+                    reports:
+                      - outcome: failed
+                        at: "2026-07-26T23:58:07.336114Z"
+                        by: { kind: process, name: "insightflow@acme.iam.gserviceaccount.com" }
+                        note: Double-counts orders split across two shipments since the 2026-07 fulfilment change.
+                      - outcome: worked
+                        at: "2026-07-19T04:11:20.882301Z"
+                        by: { kind: human, name: "tanaka@example.co.jp" }
+                        note: Ran it for FY2025; the total matched the finance close to the yen.
         "400": { $ref: "#/components/responses/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1831,7 +1846,12 @@ paths:
                 note:
                   type: string
                   maxLength: 2000
-                  description: What was run, what went wrong. Recorded with the raw event (pruned with it after 180 days).
+                  description: >
+                    What was run, what went wrong. Recorded with the raw
+                    event and read back as `reports` on this concept's
+                    usage, where a reviewer working the failed feed sees
+                    it (design doc 0137). Pruned with the event after
+                    180 days.
             examples:
               worked:
                 summary: The golden query gave the right answer
@@ -3055,6 +3075,67 @@ components:
             fetches: { type: integer, description: Times the concept's body was delivered in the window. }
             failed: { type: integer, description: Outcome reports of failure in the window. }
           required: [days, fetches, failed]
+        reports:
+          type: array
+          description: >
+            What the reports said, newest first and at most 10 — the
+            notes callers wrote with `POST /api/v1/usage/{id}`, back out
+            where a reviewer can read them (design doc 0137). A feed
+            says a concept was reported wrong and is unanswered; this is
+            where what was wrong is written down, by the caller who ran
+            it.
+
+
+            **Only the reports that carried a note are here, so the
+            length of this list is not a count of reports** — that is
+            `worked` and `failed`, and most reports carry no note at
+            all. Absent when none of them did.
+
+
+            Both outcomes appear: a note on a `worked` report ("ran it
+            for FY2025 and it matched the close to the yen") is the
+            evidence that promotes a draft, and keeping only failures
+            would give half the loop a voice. The order is by time and
+            not by outcome — the failed feed has already sorted by
+            failure to bring a reader here, and re-sorting at the
+            destination leaves it unreadable which order is in force.
+
+
+            **These rows are pruned with the raw events at 180 days**,
+            so this list answers only for that window; a report older
+            than the retention is gone the way a pruned search miss is
+            (design doc 0069 §4). The counters above are running totals
+            and survive pruning, so they keep answering when this list
+            no longer does.
+
+
+            **Only a read of one concept carries this.** A listing fills
+            `usage` from its own aggregate, so a hit in the failed feed
+            has the counts and not the notes: the feed answers which
+            concept to look at, and this answers what was written about
+            it.
+          items:
+            type: object
+            properties:
+              outcome:
+                type: string
+                enum: [worked, failed]
+                description: What the caller reported.
+              at: { type: string, format: date-time, description: When the report was written. }
+              by:
+                allOf: [ { $ref: "#/components/schemas/Actor" } ]
+                description: >
+                  Who reported it, as kind and name. **`via` and
+                  `producer` are never here**: the raw event rows hold
+                  the two columns and no more, which design doc 0065 §4
+                  chose deliberately and 0137 §4 keeps. Under delegation
+                  `name` is already the delegated end user, so whose
+                  report this is has an answer; which application and
+                  which software it came through does not.
+              note:
+                type: string
+                description: What was run, and what went wrong or went right, as the caller wrote it.
+            required: [outcome, at, by, note]
       required: [search_hits, fetches, worked, failed, recent]
     Stats:
       description: >
@@ -3417,6 +3498,8 @@ components:
                 Usage totals, present in the sort=usage listing (the draft
                 review feed) and the sort=failed listing (the re-verification
                 feed); absent for search results and the verified_at feed.
+                The counts only: `reports` is filled by a read of one
+                concept, never by a listing.
             files:
               type: array
               items: { $ref: "#/components/schemas/File" }

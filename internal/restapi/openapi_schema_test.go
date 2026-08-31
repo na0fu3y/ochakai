@@ -188,6 +188,7 @@ func ownedSchemas() map[string]any {
 		"SearchHit":             domain.SearchHit{},
 		"Backlink":              domain.Backlink{},
 		"Usage":                 domain.Usage{},
+		"Usage.reports[]":       domain.OutcomeReport{},
 		"QueueCounts":           domain.QueueCounts{},
 		"File":                  domain.File{},
 		"Actor":                 domain.Actor{},
