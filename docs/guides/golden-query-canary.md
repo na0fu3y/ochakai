@@ -99,6 +99,13 @@ ochakai は関与しない。
   か"`(REST: `POST /api/v1/usage/queries/<id>`、MCP:
   `report_outcome`)。worked と failed の合計は `/usage` に出るので、
   失敗が積み上がった検証済み concept を優先して再検証できる。
+  **`--note` に書いた内容もそこに出る** — `ochakai usage <id>` の
+  `report` 行、Web UI なら詳細ページの「利用」タブで、新しい順に最大
+  10 件。数は「どれを先に見るか」を決め、この一文が「何を直すか」を
+  決めるので、**次に読むのは人である**つもりで書く(設計ドキュメント
+  [0137](../design/0137-a-report-says-what-it-saw.md))。スタックトレース
+  ではなく、何を走らせて何が合わなかったかを一文で。生の報告は 180 日で
+  消えるので、それより古い note は残らない。
   **`sort=failed` の再検証フィード**(`ochakai list failed --trust
   human-reviewed`、REST: `GET /api/v1/search?sort=failed`、MCP:
   `list_concepts` に `sort: "failed"`)は、間違いだと報告された

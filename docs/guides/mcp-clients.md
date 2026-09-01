@@ -59,7 +59,7 @@ JSON のキー名が違うだけなので、[その他のクライアント](#�
 | `get_concept` | concept を一件、OKF ドキュメントとして取得する。ファイルのメタデータと、この concept を本文から指す concept の行(`linked_from` — metric の読み方を言う insight はここに出る)が付く |
 | `get_file` | concept に添付されたファイルを取得する(ダッシュボードのスクリーンショット、ER 図、seeds ファイルなど) |
 | `put_concept` | 学びを書き戻す — id が空いていれば作成し、埋まっていれば置き換える。変更はすべてリビジョンとして残る |
-| `report_outcome` | ナレッジをもとに行動した後、worked/failed を報告する — failed の報告は verified な concept を再検証フィードに乗せる |
+| `report_outcome` | ナレッジをもとに行動した後、worked/failed を報告する — failed の報告は verified な concept を再検証フィードに乗せる。`note` に何が起きたかを書けば、フィードを読む人がそれを読む(設計ドキュメント [0137](../design/0137-a-report-says-what-it-saw.md))。**返ってくるのは合計だけで、note の一覧は返らない** — 読むのは REST・CLI・Web UI の側である |
 
 これらはすべて知識に関する操作である。ochakai は SQL を実行せず、LLM も
 呼ばない。`compile_sql` — セマンティックモデルからの決定的な SQL 生成 —

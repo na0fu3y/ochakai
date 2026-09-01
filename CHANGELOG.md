@@ -40,8 +40,12 @@ last entry.
   and `failed` are, since most reports carry no note. A listing never
   carries them: a feed row's `usage` comes from the listing's own
   aggregate, so the feed answers which concept to look at and the read it
-  opens answers what was written about it. MCP does not carry them
-  ([design doc 0137](docs/design/0137-a-report-says-what-it-saw.md)).
+  opens answers what was written about it. MCP does not carry them:
+  `report_outcome` answers with the totals alone, because an agent
+  filing a report is not the reviewer who reads them and handing it up
+  to ten other callers' paragraphs would spend the context window that
+  tool is paid from ([design doc
+  0137](docs/design/0137-a-report-says-what-it-saw.md) §5).
 
   Two things the record states rather than leaves to be discovered.
   **The 180-day pruning of raw events becomes visible here** — until now

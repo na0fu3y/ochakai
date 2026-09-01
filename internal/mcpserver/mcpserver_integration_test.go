@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -121,6 +122,18 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 	}
 	if res.IsError {
 		t.Fatalf("report_outcome failed: %+v", res.Content)
+	}
+	// The result carries the totals and not what the reports said
+	// (design doc 0137 §5). The note this call just wrote is readable —
+	// on REST, the CLI and the web UI, where a reviewer works — and an
+	// agent filing a report is not that reviewer: handing it back up to
+	// ten callers' paragraphs and their names spends the context window
+	// this tool is paid from on the reverse lookup 0137 §6 declined.
+	if body := fmt.Sprint(res.Content); strings.Contains(body, "did not run") {
+		t.Errorf("report_outcome echoed the notes back to MCP: %s", body)
+	}
+	if strings.Contains(fmt.Sprint(res.Content), "reports") {
+		t.Errorf("report_outcome carries a reports field: %v", res.Content)
 	}
 	conn, err := pgx.Connect(context.Background(), dbURL)
 	if err != nil {
