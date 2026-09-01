@@ -21,6 +21,42 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The web UI shows what an imported bundle claimed about itself.** A
+  document can say who generated it and who confirmed it (OKF SPEC §5.2),
+  and `examples/demo` says exactly that — an agent wrote `metrics/revenue`
+  on 2026-07-25 and `human:tanaka@example.co.jp` confirmed it four days
+  later. **An import rules on nothing**: a merge is not a verification,
+  which comes down from `POST /api/v1/review/{id}` (design doc 0009
+  §3.2), so what the document asserted is kept beside the concept as
+  `received` (0046 §2.2) and the trust tier stays `unverified`. That is
+  correct, and it left the claim with **no face** — the only place a
+  reader could see it was as YAML in the ドキュメント tab, which is the
+  same gap the 出典 tab closed for `sources` in 0.28.2.
+
+  The header now draws it under the ledger's own line, ruled off and
+  labelled as the quoted thing it is:
+  `取り込み時の申告: 🤖 analysis_agent/claude-fable-5 が生成 2026年7月25日
+  · 👤 tanaka@example.co.jp が検証 2026年7月29日`. It is read the way the
+  line above it is read — an actor is named once, events grouped under
+  whoever did them — because it is the same reading of the other ledger.
+  A document spells an actor as text rather than as the shape a read
+  returns, and only the kinds ochakai names are read as kinds: a bare
+  producer string keeps its slashes and its colons, and anything that is
+  not a person draws as something running.
+
+  **The claim never moves the trust tier**, and a concept written here
+  rather than imported carries none, so the line stays away entirely —
+  a base nobody imported into looks exactly as it did. This is where the
+  distinction becomes legible instead of buried, which matters most on
+  `demo.ochak.ai`, where every concept arrives through the reset job's
+  import and had been reading as anonymous and unverified with the
+  bundle's own story one tab away. No endpoint, command, tool or variable
+  was added: the rows come from `POST /api/v1/frontmatter`, the face
+  0130 §3.3 added, on the request the 出典 tab was already making — the
+  two now share one, so opening 出典 draws immediately.
+
 ### Changed
 
 - **The web UI names an actor once on a concept's provenance line.** A

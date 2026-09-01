@@ -300,6 +300,21 @@ try {
   await check('a concept renders', await waitFor(`${textOf('#view')}.includes('Revenue')`), shown);
   await check('its body renders as markdown', await waitFor(`${countOf('#view .md *')} > 0`), shown);
 
+  // examples/demo is a bundle, so every concept in it arrived as one:
+  // the document claims an agent generated it and a person confirmed it,
+  // and an import rules on nothing (design doc 0009 §3.2), so the claim
+  // is kept beside the concept as `received` (0046 §2.2) while the trust
+  // tier stays unverified. Both halves are asserted, because a line that
+  // drew the claim *as* the ledger would be the bug worth catching.
+  //
+  // Asserted on the person the bundle names, which appears nowhere else
+  // on the page: the ledger's own line names whoever ran the import.
+  await check('an imported concept shows what its bundle claimed',
+    await waitFor(`${textOf('#received-line')}.includes('tanaka@example.co.jp')
+      && ${textOf('#received-line')}.includes('取り込み時の申告')`), shown);
+  await check('and the claim did not move the trust tier',
+    await waitFor(`!document.querySelector('#view .verified-mark')`), shown);
+
   // examples/demo's metrics/revenue cites a source with a footnote, which
   // is the notation `sources[].id` exists for. Two things have to be
   // true: it is drawn as a footnote, and following the marker stays on

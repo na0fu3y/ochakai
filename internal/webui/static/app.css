@@ -402,6 +402,10 @@ input[type=date]:not(:focus):invalid, input[type=date]:not(:focus):placeholder-s
 .menu-body button:hover { background: var(--accent-weak); color: var(--accent-strong); }
 .menu-body button.danger:hover { background: var(--rejected-bg); color: var(--rejected-fg); }
 .provenance { color: var(--muted); font-size: .84rem; margin: .45rem 0 0; }
+/* The claim an imported document made about itself, under the ledger's
+   own line. The rule marks it as the quoted thing it is: what the bundle
+   said, not what this instance saw or ruled. */
+.received-claim { margin-top: .25rem; border-left: 2px solid var(--border); padding-left: .55rem; }
 .status-note {
   margin-top: .7rem; border-left: 3px solid var(--border); padding: .1rem .8rem;
   color: var(--muted); font-size: .9rem;
