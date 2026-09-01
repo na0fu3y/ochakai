@@ -1482,6 +1482,69 @@ func TestUnknownCommandSaysWhatIsWrong(t *testing.T) {
 	}
 }
 
+// A confirmation is about the document that stood there when it was
+// made, and OKF SPEC §5.2 keeps `verified` independent of
+// `generated.at`: an edit does not cancel a confirmation, so the two
+// have to be read together. This line is where the CLI reads them —
+// before this it printed the confirmation alone, so a concept edited
+// after it was verified read exactly like one nobody had touched.
+func TestGetSaysWhenTheContentMovedAfterTheVerification(t *testing.T) {
+	verifiedAt := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name      string
+		changedAt time.Time
+		want      string
+		avoid     string
+	}{{
+		name:      "edited after the confirmation",
+		changedAt: verifiedAt.AddDate(0, 0, 19),
+		want:      "verified by human:na0 on 2026-08-01, then edited on 2026-08-20; created by",
+	}, {
+		name:      "confirmed after the last change",
+		changedAt: verifiedAt.AddDate(0, 0, -30),
+		want:      "verified by human:na0 on 2026-08-01; created by",
+		avoid:     "then edited",
+	}, {
+		// Verifying does not touch the document (design doc 0043 §3.2),
+		// so the two instants can be equal, and that is not an edit.
+		name:      "verified against the document as it stands",
+		changedAt: verifiedAt,
+		want:      "verified by human:na0 on 2026-08-01; created by",
+		avoid:     "then edited",
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, _ *http.Request) {
+				_ = json.NewEncoder(w).Encode(domain.View{
+					ID: "metrics/revenue", Document: "---\ntype: Metric\n---\n\nbody\n",
+					Observed: domain.Observed{
+						CreatedBy: domain.Actor{Kind: domain.ActorHuman, Name: "na0"},
+						Generated: domain.Generated{
+							By: domain.Actor{Kind: domain.ActorHuman, Name: "na0"},
+							At: tc.changedAt,
+						},
+						Verified: []domain.Verification{{
+							By: domain.Actor{Kind: domain.ActorHuman, Name: "na0"}, At: verifiedAt,
+						}},
+					},
+				})
+			})
+			srv := httptest.NewServer(mux)
+			defer srv.Close()
+
+			_, errOut := captureOutput(t, func() error {
+				return cmdGet(context.Background(), []string{"metrics/revenue", "--url", srv.URL})
+			})
+			if !strings.Contains(errOut, tc.want) {
+				t.Errorf("stderr does not say %q:\n%s", tc.want, errOut)
+			}
+			if tc.avoid != "" && strings.Contains(errOut, tc.avoid) {
+				t.Errorf("stderr must not say %q:\n%s", tc.avoid, errOut)
+			}
+		})
+	}
+}
+
 // TestGetDownloadRefusesAnEscapingName pins the one place a client writes
 // files where the server chose the names. A server holds every file name
 // to a single path segment, so this can only fire for an answer that did

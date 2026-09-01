@@ -23,6 +23,39 @@ last entry.
 
 ### Added
 
+- **A concept edited after it was confirmed says so.** OKF SPEC §5.2
+  keeps `verified` independent of `generated.at`: an edit does not
+  cancel a confirmation, and a confirmation does not claim the content
+  stayed put afterwards. Both instants have always been stored and
+  served — `observed.verified[].at` and `observed.generated.at`, the
+  last *meaningful* change, which a write that only reformats the
+  document does not move — and **no surface read them together**, so a
+  concept somebody verified in August and edited in September wore a
+  plain `✓ human-reviewed`.
+
+  The web UI's detail page now draws a **検証後に編集** chip beside the
+  trust one, whose tooltip names both instants with their clock times
+  (two events inside one day are one date, and this pair can land
+  minutes apart). `ochakai get` says
+  `verified by X on 2026-08-26, then edited on 2026-08-27` on the
+  provenance line it already wrote to stderr — that line printed the
+  confirmation alone, which made it the one face that actively misread
+  this. Nothing is invalidated: the ledger, the trust tier and the
+  search boost are exactly as they were, because expiring a
+  verification on an edit is a thing OKF does not do.
+
+  MCP is deliberately unchanged. Both instants already ride on every
+  `get_concept`, an agent cannot create this state (a surface with no
+  If-Match precondition may not replace curated knowledge), and a
+  sentence in a tool description is paid for out of the agent's context
+  window. No endpoint, flag, tool or variable was added, and there is no
+  fourth review queue: whoever made this state is the human who can
+  re-verify it, on the page that now says so.
+
+  The same page's 更新 line dates itself from `generated.at` rather than
+  `updated_at`, which moves for any write at all — it had been drawing
+  `generated.by` beside a date `generated` never claimed.
+
 - **The web UI shows what a concept derives from, and its two link tabs
   became one.** A `sources` row is the material behind the prose (OKF
   SPEC §5.1) — an address, who wrote it, when it last moved, how often it

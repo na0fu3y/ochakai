@@ -340,6 +340,11 @@ input[type=date]:not(:focus):invalid, input[type=date]:not(:focus):placeholder-s
    lifecycle badge rather than replacing it (design doc 0043 §3.2). */
 .badge.verified-mark { color: var(--verified-fg); background: var(--verified-bg); border-color: var(--verified-bd); }
 .badge.rejected-mark { color: var(--rejected-fg); background: var(--rejected-bg); border-color: var(--rejected-bd); }
+/* Content that moved after its newest confirmation. It sits beside the
+   ✓ rather than dimming it, because OKF does not expire a verification
+   on an edit (SPEC §5.2): what the reader needs is both facts at once,
+   and the draft palette is the one that already means "unsettled". */
+.badge.edited-mark { color: var(--draft-fg); background: var(--draft-bg); border-color: var(--draft-bd); }
 .badge.deprecated { color: var(--deprecated-fg); background: var(--deprecated-bg); border-color: var(--deprecated-bd); }
 /* The status badge doubles as its own picker: one control shows the
    status and changes it, where four transition buttons used to sit.
