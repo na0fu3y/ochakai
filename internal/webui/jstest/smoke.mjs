@@ -316,6 +316,35 @@ try {
     await waitFor(`location.hash.startsWith('#fn-')
       && !!document.querySelector('#view .md:not(.desc) .footnotes')`), shown);
 
+  // The other half of that citation. The footnote above carries the
+  // writer's own line; what the line stands on — the address, and when
+  // anybody last touched it — is `sources[].id`'s row, and the tab is
+  // where it is legible rather than as YAML in the document tab.
+  //
+  // Asserted on the address, because that is the part no other tab
+  // shows: the title is also the footnote's text, so a check on it would
+  // pass against a tab that drew nothing of its own. The row is read out
+  // of the document by POST /api/v1/frontmatter (design doc 0130 §3.3),
+  // so this is also the assertion that the page never parses YAML and
+  // still shows the fields.
+  const tab = t => `document.querySelector('#tabs button[data-tab=${json(t)}]').click()`;
+  await evalJS(tab('sources'));
+  await check('a source is drawn as a row, not as YAML',
+    await waitFor(`${textOf('#tab-body')}.includes('wiki.example.co.jp/finance/revenue-recognition')
+      && ${textOf('#tab-body')}.includes('[^rev-policy]')`), shown);
+
+  // Both directions of the graph under one tab: what this body points at
+  // (in hand, from the read that drew the page) and what points at it (a
+  // request, made when the tab is opened). A tab that lost one of them
+  // would still render, which is why each is asserted by its own row.
+  await evalJS(tab('links'));
+  await check('the links tab draws what this concept points at',
+    await waitFor(`!!document.querySelector('#tab-body table.kv a[href$="/insights/reading-revenue"]')`), shown);
+  await check('and, under its own heading, what points at it',
+    await waitFor(`${textOf('#linked-sec')}.includes('参照元')
+      && ${countOf('#linked-sec .card')} > 0`), shown);
+  await evalJS(tab('overview'));
+
   // The status picker, driven end to end. It is here because this is the
   // check that would have caught what the picker shipped broken from
   // v0.21.0 to v0.27.4: applyStatus threw a ReferenceError on its first
