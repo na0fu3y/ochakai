@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 import {
   actorStr, conceptURL, crumbTrail, daysSince, dirHash, displayTitle,
   editedSinceVerified, entryHash, fmtAge, fmtDateTime, fmtSize, headingHash,
-  isVerified, lastVerification, parseKPath, provenanceLine, trustOf,
+  isVerified, lastVerification, parseActorText, parseKPath, provenanceLine,
+  receivedLine, trustOf,
 } from '../static/js/format.js';
 import { esc } from '../static/js/escape.js';
 
@@ -189,4 +190,59 @@ test('escaping covers every character that could close a tag or an attribute', (
   assert.equal(esc(`<&>"'`), '&lt;&amp;&gt;&quot;&#39;');
   assert.equal(esc(null), '');
   assert.equal(esc(0), '0');
+});
+
+test('a document spells an actor as text, and only a named kind is a kind', () => {
+  // OKF writes `<kind>:<name>` (SPEC §7).
+  assert.deepEqual(parseActorText('human:tanaka@example.co.jp'),
+    { kind: 'human', name: 'tanaka@example.co.jp' });
+  assert.deepEqual(parseActorText('process:sa@p'), { kind: 'process', name: 'sa@p' });
+  // A bare producer string is the whole name — its slash is not a kind,
+  // and neither is a colon that happens to be inside one. Anything that
+  // is not a person is something running.
+  assert.deepEqual(parseActorText('analysis_agent/claude-fable-5'),
+    { kind: 'process', name: 'analysis_agent/claude-fable-5' });
+  assert.deepEqual(parseActorText('urn:x:y'), { kind: 'process', name: 'urn:x:y' });
+  // Nothing at all stays nothing, so the line drops the event instead of
+  // naming an actor that is not there.
+  assert.equal(parseActorText(''), null);
+  assert.equal(parseActorText('   '), null);
+  assert.equal(parseActorText(undefined), null);
+});
+
+test('a received claim is read like the ledger, and is empty when there is none', () => {
+  // The bundle said an agent wrote it and a person confirmed it. That is
+  // a claim (design doc 0046 §2.2) — the trust tier is not this line's
+  // business — but it is read the same way, with an actor named once.
+  const line = receivedLine({
+    generated: { by: 'analysis_agent/claude-fable-5', at: '2026-07-25T05:40:00Z' },
+    verified: [{ by: 'human:tanaka@example.co.jp', at: '2026-07-29T02:15:00Z' }],
+  });
+  assert.match(line, /^🤖 analysis_agent\/claude-fable-5 が生成 .+ · 👤 tanaka@example\.co\.jp が検証 .+$/);
+
+  // One actor that did both is named once, the same fold provenanceLine
+  // applies to the other ledger.
+  const same = receivedLine({
+    generated: { by: 'human:tanaka@example.co.jp', at: '2026-07-25T05:40:00Z' },
+    verified: [{ by: 'human:tanaka@example.co.jp', at: '2026-07-29T02:15:00Z' }],
+  });
+  assert.equal(same.split('tanaka@example.co.jp').length - 1, 1);
+  assert.match(same, /が生成 .+・検証 .+$/);
+
+  // The newest confirmation is the one shown, and the rest are counted —
+  // stored oldest-first, like the ledger's.
+  const many = receivedLine({
+    verified: [
+      { by: 'human:a@x', at: '2026-07-01T00:00:00Z' },
+      { by: 'human:b@x', at: '2026-07-29T00:00:00Z' },
+    ],
+  });
+  assert.match(many, /^👤 b@x が検証 .+\(計 2 件\)$/);
+
+  // A concept written here carries no claim, and the line it would fill
+  // stays away entirely rather than drawing an empty rule.
+  assert.equal(receivedLine(undefined), '');
+  assert.equal(receivedLine({}), '');
+  assert.equal(receivedLine({ verified: [] }), '');
+  assert.equal(receivedLine({ verified: [{}] }), '');
 });

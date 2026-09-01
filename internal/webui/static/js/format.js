@@ -69,6 +69,13 @@ export function provenanceLine(entry, observed) {
       : null,
   ].filter(Boolean);
 
+  return groupedByActor(events);
+}
+// The grouping both provenance lines share: events under the actor who
+// did them, in the order that actor first appears. Shared because the
+// claim a bundle carries is read the same way as the ledger this
+// instance keeps — one reading, two sources.
+function groupedByActor(events) {
   const groups = [];
   for (const e of events) {
     const who = actorStr(e.by);
@@ -77,6 +84,48 @@ export function provenanceLine(entry, observed) {
     else groups.push({ who, texts: [e.text] });
   }
   return groups.map(g => (g.who ? g.who + ' が' : '') + g.texts.join('・')).join(' · ');
+}
+// An actor as a *document* spells one, which is not the shape a read
+// hands back. OKF writes `<kind>:<name>` (SPEC §7), but a hand-written
+// bundle usually carries a bare producer string instead — `analysis_agent/
+// claude-fable-5` — and a colon inside one of those must not be mistaken
+// for a kind. Only the kinds ochakai names are read as kinds; everything
+// else is the name entire, and anything that is not a person is
+// something running, so the icon follows actorStr's rule rather than a
+// second one.
+export function parseActorText(s) {
+  if (typeof s !== 'string' || !s.trim()) return null;
+  const i = s.indexOf(':');
+  const kind = i > 0 ? s.slice(0, i) : '';
+  if (kind === 'human' || kind === 'process') return { kind, name: s.slice(i + 1) || s };
+  return { kind: 'process', name: s };
+}
+// What an imported document claimed about itself, which the store keeps
+// beside the concept as `received` (design doc 0046 §2.2).
+//
+// This is a claim and never a ruling: an import rules on nothing, so the
+// trust tier above is unmoved by anything here (design doc 0009 §3.2).
+// Drawing it is the whole point — the bundle says an agent wrote this
+// and a person confirmed it, and until now the only place a reader could
+// see that was the raw YAML one tab over.
+export function receivedLine(received) {
+  const r = received || {};
+  const gen = r.generated || {};
+  const vs = (Array.isArray(r.verified) ? r.verified : []).filter(v => v && (v.at || v.by));
+  const last = vs.length ? vs[vs.length - 1] : null;
+  const events = [
+    gen.at || gen.by
+      ? { text: gen.at ? `生成 ${fmtDate(gen.at)}` : '生成', by: parseActorText(gen.by) }
+      : null,
+    last
+      ? {
+        text: (last.at ? `検証 ${fmtDate(last.at)}` : '検証')
+          + (vs.length > 1 ? `(計 ${vs.length} 件)` : ''),
+        by: parseActorText(last.by),
+      }
+      : null,
+  ].filter(Boolean);
+  return events.length ? groupedByActor(events) : '';
 }
 // The ledgers a read carries beside the document (design doc 0043
 // §§3.2-3.3). Verification is plural and stored oldest-first, so the

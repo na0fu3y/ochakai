@@ -8,7 +8,7 @@ import { copyText } from '../clipboard.js';
 import { diffHTML, diffLines, diffStats } from '../diff.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
-import { actorStr, conceptURL, crumbTrail, displayTitle, editedSinceVerified, fmtDate, fmtDateTime, fmtSize, idPath, isVerified, lastVerification, parseKPath, provenanceLine, trustOf } from '../format.js';
+import { actorStr, conceptURL, crumbTrail, displayTitle, editedSinceVerified, fmtDate, fmtDateTime, fmtSize, idPath, isVerified, lastVerification, parseKPath, provenanceLine, receivedLine, trustOf } from '../format.js';
 import { checkTargets } from '../links.js';
 import { descHTML, md } from '../markdown.js';
 import { headingAnchors, permalinks, tocHTML } from '../outline.js';
@@ -163,6 +163,20 @@ export async function viewDetail(id, heading = '') {
   const edited = editedSinceVerified(observed);
   const prov = provenanceLine(entry, observed);
 
+  // The document's own frontmatter, parsed once by the server and shared
+  // by everything on this page that needs a key out of it — the claim
+  // line below and the 出典 tab. One request either way: the tab used to
+  // make it on open, and now the header has already made it, so opening
+  // 出典 draws immediately.
+  //
+  // Posting the bytes rather than naming the concept is deliberate
+  // (design doc 0130 §3.3): there is no id, no ETag and nothing stored,
+  // the browser still parses no YAML, and a read-only deployment answers
+  // it.
+  let frontmatterOnce;
+  const frontmatter = () => (frontmatterOnce ??= api('/api/v1/frontmatter',
+    { method: 'POST', body: { document: document_ } }).catch(() => ({})));
+
   // A passed stale_after is a prompt to re-check, never a claim the entry
   // is wrong (OKF SPEC §5.5) — the comparison is a plain one against now.
   // A moment still in the future says nothing a reader needs yet, so
@@ -213,6 +227,7 @@ export async function viewDetail(id, heading = '') {
       </span>
     </div>
     <div class="provenance">${esc(prov)}</div>
+    <div class="provenance received-claim" id="received-line" hidden></div>
     <div id="move-panel" style="display:none;margin-top:.7rem">
       <div class="toolbar" style="margin-bottom:0">
         <input type="text" id="move-to" class="mono" list="move-dirs" value="${esc(entry.id)}"
@@ -236,6 +251,26 @@ export async function viewDetail(id, heading = '') {
       <button data-tab="history">${TAB_LABELS.history}</button>
     </div>
     <div id="tab-body"></div>`;
+
+  // A concept this instance received rather than wrote says who the
+  // bundle claimed made and confirmed it. The line stays hidden when
+  // there is no claim, which is every concept written here — so a base
+  // nobody imported into looks exactly as it did.
+  //
+  // It is drawn under the ledger's own line and says which one it is,
+  // because the two disagree by design: an import rules on nothing
+  // (design doc 0009 §3.2), so a document asserting a human confirmed it
+  // arrives, correctly, as unverified.
+  frontmatter().then(({ values = {} } = {}) => {
+    const line = receivedLine(values.received);
+    const el = $('#received-line');
+    if (!line || !el) return;
+    el.textContent = '取り込み時の申告: ' + line;
+    el.title = 'バンドルが自分について申告した内容です(設計ドキュメント 0046 §2.2)。'
+      + '取り込みは裁定をしないので、上の trust の段はこれでは動きません — '
+      + '数えるのは、この ochakai の上で人が行った検証だけです。';
+    el.hidden = false;
+  });
 
   // File paths and image resolution (design doc 0008). Body links
   // are OKF bundle references: relative to the entry document's directory
@@ -466,7 +501,7 @@ export async function viewDetail(id, heading = '') {
     // there is no id, no ETag and nothing stored, and a read-only
     // deployment answers it.
     sources: async () => {
-      const { values = {} } = await api('/api/v1/frontmatter', { method: 'POST', body: { document: document_ } });
+      const { values = {} } = await frontmatter();
       const rows = Array.isArray(values.sources) ? values.sources.filter(r => r && typeof r === 'object') : [];
       // The window the counts were counted over is the entry's, and a
       // source may name its own for itself — so the one below the table
