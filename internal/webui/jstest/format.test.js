@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import {
   actorStr, conceptURL, crumbTrail, daysSince, dirHash, displayTitle,
   editedSinceVerified, entryHash, fmtAge, fmtDateTime, fmtSize, headingHash,
-  isVerified, lastVerification, parseKPath, trustOf,
+  isVerified, lastVerification, parseKPath, provenanceLine, trustOf,
 } from '../static/js/format.js';
 import { esc } from '../static/js/escape.js';
 
@@ -78,6 +78,52 @@ test('an actor never loses who it was acting through', () => {
   assert.equal(actorStr({ kind: 'process', name: 'sa@p', producer: 'claude/1' }), '🤖 sa@p(claude/1 使用)');
   assert.equal(actorStr(null), '');
   assert.equal(actorStr({ kind: 'human' }), '');
+});
+
+test('the provenance line names an actor once, however many events it did', () => {
+  // The case that made the line unreadable: one person, writing through
+  // an embedded application, created a concept and later edited it. The
+  // delegation chain is two identities wide and is never dropped (design
+  // doc 0065 §3), so it filled a phone's header twice over.
+  const na0 = { kind: 'human', name: 'na0@x.jp', via: 'process:ui@p.iam.gserviceaccount.com' };
+  const line = provenanceLine(
+    { created_at: '2026-08-25T00:00:00Z', updated_at: '2026-08-31T00:00:00Z' },
+    { created_by: na0, generated: { by: na0, at: '2026-08-31T00:00:00Z' } });
+  assert.equal(line.split('process:ui@p.iam.gserviceaccount.com').length - 1, 1);
+  assert.match(line, /^👤 na0@x\.jp\(process:ui@p\.iam\.gserviceaccount\.com 経由\) が作成 .+・更新 .+$/);
+
+  // Two actors are two names: the fold is a repeat removed, not an
+  // identity dropped. Each group keeps the order it first appeared in.
+  const agent = { kind: 'process', name: 'sa@p', producer: 'claude/1' };
+  const two = provenanceLine(
+    { created_at: '2026-08-25T00:00:00Z', updated_at: '2026-08-31T00:00:00Z' },
+    {
+      created_by: agent,
+      verified: [{ by: na0, at: '2026-08-26T00:00:00Z' }],
+      generated: { by: agent, at: '2026-08-31T00:00:00Z' },
+    });
+  assert.match(two, /^🤖 sa@p\(claude\/1 使用\) が作成 .+・更新 .+ · 👤 na0@x\.jp\(.+ 経由\) が検証 .+$/);
+});
+
+test('the provenance line says only what the ledgers say', () => {
+  // Nothing was written after the creation, so there is no 更新 — and an
+  // updated_at that only moved for a reformat is not one either, because
+  // the date comes from generated.at (OKF SPEC §5.2).
+  const created = { created_at: '2026-08-25T00:00:00Z', updated_at: '2026-08-31T00:00:00Z' };
+  assert.match(provenanceLine(created, { created_by: { kind: 'human', name: 'a@b' }, generated: { at: '2026-08-25T00:00:00Z' } }),
+    /^👤 a@b が作成 [^·]+$/);
+  // Events nobody recorded an actor for are a group of their own: the
+  // dates still stand, with no name in front of them.
+  assert.match(provenanceLine(created, {}), /^作成 .+・更新 .+$/);
+  // Confirmed more than once, the newest is the one shown, and the line
+  // says how many there were.
+  const twice = provenanceLine(created, {
+    created_by: { kind: 'human', name: 'a@b' },
+    verified: [{ by: { kind: 'human', name: 'a@b' }, at: '2026-08-26T00:00:00Z' },
+      { by: { kind: 'human', name: 'a@b' }, at: '2026-08-27T00:00:00Z' }],
+    generated: { at: '2026-08-25T00:00:00Z' },
+  });
+  assert.match(twice, /^👤 a@b が作成 .+・検証 .+\(計 2 件\)$/);
 });
 
 test('trust defaults to unverified, and the newest verification wins', () => {
