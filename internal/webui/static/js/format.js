@@ -35,6 +35,49 @@ export function actorStr(a) {
   return (a.kind === 'human' ? '👤 ' : '🤖 ') + a.name +
     (notes.length ? '(' + notes.join('・') + ')' : '');
 }
+// The header's provenance line: when this concept was written,
+// confirmed and last changed, and who each of those was.
+//
+// An actor is named once. A delegated identity is two identities wide —
+// the caller is kept beside the person it acted for, never dropped
+// (design doc 0065 §3) — so a concept somebody created and later edited
+// through the same embedded application printed that pair twice, and
+// filled a phone's header with one name repeated. Nothing is dropped
+// here either: the events are grouped under the actor who did them, in
+// the order that actor first appears, and an event whose actor is
+// unknown groups with the others that have none.
+export function provenanceLine(entry, observed) {
+  const o = observed || {};
+  const lv = lastVerification(o);
+  // The 更新 date is generated.at — when the content last meaningfully
+  // changed (OKF SPEC §5.2) — rather than updated_at, which moves for a
+  // write that only reformatted the document; drawing generated.by
+  // beside updated_at named a date generated never claimed (design doc
+  // 0064 fixed the same mismatch in the JSON).
+  const changedAt = (o.generated || {}).at || entry.updated_at;
+  const events = [
+    { text: `作成 ${fmtDate(entry.created_at)}`, by: o.created_by },
+    lv
+      ? {
+        text: `検証 ${fmtDate(lv.at)}`
+          + ((o.verified || []).length > 1 ? `(計 ${o.verified.length} 件)` : ''),
+        by: lv.by,
+      }
+      : null,
+    changedAt && changedAt !== entry.created_at
+      ? { text: `更新 ${fmtDate(changedAt)}`, by: (o.generated || {}).by }
+      : null,
+  ].filter(Boolean);
+
+  const groups = [];
+  for (const e of events) {
+    const who = actorStr(e.by);
+    const g = groups.find(x => x.who === who);
+    if (g) g.texts.push(e.text);
+    else groups.push({ who, texts: [e.text] });
+  }
+  return groups.map(g => (g.who ? g.who + ' が' : '') + g.texts.join('・')).join(' · ');
+}
 // The ledgers a read carries beside the document (design doc 0043
 // §§3.2-3.3). Verification is plural and stored oldest-first, so the
 // newest is the last one.

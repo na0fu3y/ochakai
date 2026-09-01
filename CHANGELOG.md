@@ -21,6 +21,26 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The web UI names an actor once on a concept's provenance line.** A
+  delegated identity is two identities wide — the caller that acted is
+  kept beside the person it acted for, never dropped, because a
+  delegation nobody can tell apart from a direct write is a forgery
+  (design doc 0065 §3) — so a concept created and later edited through
+  the same embedded application printed that whole pair twice. On the
+  deployed web UI, whose service account is the caller for every edit
+  anybody makes through it, that filled two of the header's lines on a
+  desktop and six on a phone with one name repeated.
+
+  The line now groups the events under whoever did them, in the order
+  each actor first appears:
+  `👤 tanaka@example.co.jp(process:ui@proj.iam.gserviceaccount.com 経由)
+  が作成 2026年8月25日・更新 2026年8月31日`. Nothing is dropped and no
+  identity is abbreviated — two actors still print two names, and the
+  same header on a phone is three lines instead of six. `ochakai get`'s
+  provenance line on stderr is unchanged.
+
 ## [0.28.2] - 2026-09-01
 
 ### Added
