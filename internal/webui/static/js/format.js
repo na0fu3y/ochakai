@@ -10,6 +10,17 @@ export function fmtDate(s) {
   const d = new Date(s);
   return isNaN(d) ? s : d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
 }
+// The same instant with its clock time. Provenance is drawn by the day,
+// which is the right grain for a line a reader skims — but two events
+// inside one day then print as one date, and the pair the trust chip
+// hangs on (confirmed, then changed) is exactly a pair that can land
+// minutes apart. Where the order is the point, the order is shown.
+export function fmtDateTime(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  return isNaN(d) ? s : d.toLocaleString(undefined,
+    { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 // The delegating caller is part of the name, never dropped: an entry
 // written by a person through an embedded application must not read like
 // one they wrote themselves (design doc 0027). This is the curation
@@ -36,6 +47,24 @@ export function lastVerification(observed) {
 // §3.10).
 export function trustOf(e) { return e.trust || 'unverified'; }
 export function isVerified(e) { return trustOf(e) !== 'unverified'; }
+// When the content moved after the newest confirmation, this is the
+// instant it moved; otherwise the empty string.
+//
+// OKF SPEC §5.2 keeps `verified` independent of `generated.at` — an edit
+// never cancels a confirmation, and a confirmation never claims the
+// content stayed put afterwards — so nothing here is a state the server
+// stores: it is the two ledgers read side by side, which is the reading
+// the spec leaves to the consumer. generated.at is the last *meaningful*
+// change, so a write that only reformatted the document does not raise
+// it and does not raise this (unlike updated_at, which moves for any
+// write at all).
+export function editedSinceVerified(observed) {
+  const v = lastVerification(observed);
+  const at = ((observed || {}).generated || {}).at;
+  if (!v || !at) return '';
+  const changed = Date.parse(at), confirmed = Date.parse(v.at);
+  return !isNaN(changed) && !isNaN(confirmed) && changed > confirmed ? at : '';
+}
 
 // Whole days since an ISO timestamp (null for unparseable input).
 export function daysSince(s) {

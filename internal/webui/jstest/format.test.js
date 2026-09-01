@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 
 import {
   actorStr, conceptURL, crumbTrail, daysSince, dirHash, displayTitle,
-  entryHash, fmtAge, fmtSize, headingHash, isVerified, lastVerification,
-  parseKPath, trustOf,
+  editedSinceVerified, entryHash, fmtAge, fmtDateTime, fmtSize, headingHash,
+  isVerified, lastVerification, parseKPath, trustOf,
 } from '../static/js/format.js';
 import { esc } from '../static/js/escape.js';
 
@@ -88,6 +88,37 @@ test('trust defaults to unverified, and the newest verification wins', () => {
   assert.equal(lastVerification({ verified: [] }), null);
   // Stored oldest-first, so the last one is the newest (design doc 0043).
   assert.deepEqual(lastVerification({ verified: [{ at: '1' }, { at: '2' }] }), { at: '2' });
+});
+
+test('an edit after the newest verification is read from the two ledgers', () => {
+  const verified = [{ at: '2026-08-01T00:00:00Z' }];
+  // The content moved afterwards: the answer is when it moved, so the
+  // page can say both dates.
+  assert.equal(
+    editedSinceVerified({ verified, generated: { at: '2026-08-20T00:00:00Z' } }),
+    '2026-08-20T00:00:00Z');
+  // Confirmed after the last change — the ordinary state of a verified
+  // concept, and nothing to say.
+  assert.equal(editedSinceVerified({ verified, generated: { at: '2026-07-01T00:00:00Z' } }), '');
+  // Verifying does not touch the document (design doc 0043 §3.2), so the
+  // instants can be equal and that is not an edit.
+  assert.equal(editedSinceVerified({ verified, generated: { at: '2026-08-01T00:00:00Z' } }), '');
+  // Nothing confirmed it, so there is no confirmation to be later than.
+  assert.equal(editedSinceVerified({ generated: { at: '2026-08-20T00:00:00Z' } }), '');
+  assert.equal(editedSinceVerified({ verified }), '');
+  assert.equal(editedSinceVerified(null), '');
+  assert.equal(editedSinceVerified({ verified, generated: { at: 'not a date' } }), '');
+});
+
+test('a date carries its clock time where the order of two events is the point', () => {
+  // Two instants inside one day are one date, which is the case the
+  // trust chip has to tell apart. The locale is the reader's, so what is
+  // pinned is that the time is there and a bad value survives whole.
+  const shown = fmtDateTime('2026-08-27T08:14:07Z');
+  assert.match(shown, /\d{1,2}:\d{2}/);
+  assert.notEqual(shown, fmtDateTime('2026-08-27T00:08:04Z'));
+  assert.equal(fmtDateTime(''), '');
+  assert.equal(fmtDateTime('not a date'), 'not a date');
 });
 
 test('an age reads as a person would say it', () => {

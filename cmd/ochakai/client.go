@@ -935,7 +935,19 @@ func cmdGet(ctx context.Context, args []string) error {
 	// where the file hints already go.
 	prov := "created by " + k.Observed.CreatedBy.String()
 	if lv := k.Observed.LastVerified(); lv != nil {
-		prov = fmt.Sprintf("verified by %s on %s; ", lv.By.String(), lv.At.Format("2006-01-02")) + prov
+		conf := fmt.Sprintf("verified by %s on %s", lv.By.String(), lv.At.Format("2006-01-02"))
+		// The one thing a confirmation cannot say by itself: whether the
+		// content moved after it. OKF SPEC §5.2 keeps `verified`
+		// independent of `generated.at` — an edit never cancels a
+		// confirmation — so the line reports both instants rather than
+		// deciding between them. Without this it read "verified by X"
+		// over a document nobody had confirmed, which was the one place
+		// the four faces actively misled (the web UI prints both dates,
+		// and the JSON carries both keys).
+		if g := k.Observed.Generated.At; g.After(lv.At) {
+			conf += fmt.Sprintf(", then edited on %s", g.Format("2006-01-02"))
+		}
+		prov = conf + "; " + prov
 	}
 	fmt.Fprintln(os.Stderr, prov)
 	if *download == "" {

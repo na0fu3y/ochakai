@@ -8,7 +8,7 @@ import { copyText } from '../clipboard.js';
 import { diffHTML, diffLines, diffStats } from '../diff.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
-import { actorStr, conceptURL, crumbTrail, displayTitle, fmtDate, fmtSize, idPath, isVerified, lastVerification, parseKPath, trustOf } from '../format.js';
+import { actorStr, conceptURL, crumbTrail, displayTitle, editedSinceVerified, fmtDate, fmtDateTime, fmtSize, idPath, isVerified, lastVerification, parseKPath, trustOf } from '../format.js';
 import { checkTargets } from '../links.js';
 import { descHTML, md } from '../markdown.js';
 import { headingAnchors, permalinks, tocHTML } from '../outline.js';
@@ -155,6 +155,15 @@ export async function viewDetail(id, heading = '') {
     return (m ? m[1] : document_).trim();
   })();
 
+  // The pair the page is read by: generated is who the content stands by
+  // and when it last meaningfully changed (OKF SPEC §5.2), verified is
+  // who confirmed it and when. The 更新 line dates itself from
+  // generated.at rather than updated_at, which moves for a write that
+  // only reformatted the document — it used to draw generated.by beside
+  // a date generated never claimed (design doc 0064 fixed the same
+  // mismatch in the JSON).
+  const changedAt = (observed.generated || {}).at || entry.updated_at;
+  const edited = editedSinceVerified(observed);
   const prov = [
     observed.created_by && observed.created_by.name ? `作成 ${fmtDate(entry.created_at)} ${actorStr(observed.created_by)}` : `作成 ${fmtDate(entry.created_at)}`,
     lastVerification(observed)
@@ -163,10 +172,10 @@ export async function viewDetail(id, heading = '') {
       : '',
     // updated_by is OKF's generated.by: who the content stands by now,
     // which is not always who created it (design doc 0036 §3.3).
-    entry.updated_at && entry.updated_at !== entry.created_at
+    changedAt && changedAt !== entry.created_at
       ? ((observed.generated || {}).by && observed.generated.by.name
-          ? `更新 ${fmtDate(entry.updated_at)} ${actorStr(observed.generated.by)}`
-          : `更新 ${fmtDate(entry.updated_at)}`)
+          ? `更新 ${fmtDate(changedAt)} ${actorStr(observed.generated.by)}`
+          : `更新 ${fmtDate(changedAt)}`)
       : '',
   ].filter(Boolean).join(' · ');
 
@@ -202,6 +211,7 @@ export async function viewDetail(id, heading = '') {
         </select>
       </span>
       ${isVerified(entry) ? `<span class="badge verified-mark" title="検証台帳から OKF が導く trust の段です(SPEC §5.3)">✓ ${trustOf(entry)}</span>` : ''}
+      ${edited ? `<span class="badge edited-mark" title="${esc(fmtDateTime(lastVerification(observed).at))} の検証より後、${esc(fmtDateTime(edited))} に内容が変わっています。検証は編集で失効しません(OKF SPEC §5.2)ので ✓ はそのままです — 読み直して問題なければ再検証してください">検証後に編集</span>` : ''}
       ${tags}
       <span class="actions write-only">
         <a class="btn small" href="#/edit/${idPath(entry.id)}">編集</a>
