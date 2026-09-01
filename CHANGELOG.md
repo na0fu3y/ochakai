@@ -23,6 +23,36 @@ last entry.
 
 ### Added
 
+- **The web UI shows what a concept derives from, and its two link tabs
+  became one.** A `sources` row is the material behind the prose (OKF
+  SPEC §5.1) — an address, who wrote it, when it last moved, how often it
+  was exercised — and the only place the page showed one was as YAML in
+  the ドキュメント tab. The body cites a source by `sources[].id` in a
+  footnote whose text is the writer's own line, so `examples/demo`'s
+  `metrics/revenue` drew 「売上計上ポリシー (FY2026)」 under the body and
+  left the wiki address that line stands on, and the day somebody last
+  touched it, on the page and unreadable.
+
+  There is a **出典 tab** now, drawing those rows. It reads them through
+  `POST /api/v1/frontmatter` — the face [design doc
+  0130](docs/design/0130-the-web-ui-and-the-fields-of-a-document.md) §3.3
+  added so the editor could have fields — so the browser still parses no
+  YAML, no read's default shape is widened, and a read-only deployment
+  answers it. A key the row has no word for is drawn under its own name
+  rather than dropped, and `usage_count: 0` is drawn where an absent
+  count is not: the two say different things.
+
+  **リンク and 参照元 are one リンク tab**, with 「リンク先」 and
+  「参照元」 as its headings. They are one graph read in two directions,
+  and having them apart meant a reader had to know which of the two words
+  named the direction they wanted before they could look; each heading
+  now carries the count the tab bar used to. The tab bar is still seven
+  tabs — the fold is what the 出典 tab is paid for. Nothing else moved:
+  no endpoint, command, tool or variable, and
+  [docs/surface.md](docs/surface.md) does not count the Web UI, which
+  has no address space of its own and is a client of `/api/v1`
+  (0130 §2).
+
 - **A failure report's note is readable.** `--note` on `ochakai report`
   has been writable since outcomes existed and **no surface ever read it
   back** — `POST /api/v1/usage/{id}` took up to 2,000 bytes, wrote them

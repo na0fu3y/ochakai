@@ -36,16 +36,34 @@ export const windowText = w => w && (w.from || w.to) ? `${w.from || '…'} → $
 export const TAB_LABELS = {
   overview: '概要',
   document: 'ドキュメント',
+  sources: '出典',
   links: 'リンク',
   files: 'ファイル',
-  linked: '参照元',
   usage: '利用状況',
   history: '履歴',
 };
 
-// The material an entry derives from (OKF SPEC §5.1). ochakai shows the
-// signals as the writer recorded them and scores nothing: §5.1 leaves
-// weighing them to whoever is reading.
+// A source row's plain labelled pairs (OKF SPEC §5.1). The other keys
+// the spec gives a source are not here because each has a place of its
+// own: `resource` is the address the row leads with, `title` and `id`
+// name it, and `usage_count` carries the window it was counted over.
+//
+// SOURCE_KNOWN is every key that has one of those places, so that what
+// is left is a producer's own (SPEC §4.1) and can be drawn under its own
+// name rather than dropped — a reading of the document that showed less
+// than the document says would be worth less than the document.
+const SOURCE_FIELDS = [
+  ['author', '作成者'],
+  ['last_modified', '最終更新'],
+];
+const SOURCE_KNOWN = new Set(['resource', 'id', 'title', 'usage_count', 'usage_window',
+  ...SOURCE_FIELDS.map(([k]) => k)]);
+
+// A producer's own value, drawn as text. A scalar is what it says; a
+// nested shape is JSON, which is at least the shape it has — the
+// alternative is `[object Object]`, which is a value the reader cannot
+// tell from a bug.
+const scalarText = v => (v !== null && typeof v === 'object') ? JSON.stringify(v) : String(v);
 
 // The concepts this session has already found: a body that links to a
 // neighbour is usually one of several that do, and a concept that is
@@ -217,9 +235,9 @@ export async function viewDetail(id, heading = '') {
     <div class="tabs" id="tabs">
       <button data-tab="overview" class="active">${TAB_LABELS.overview}</button>
       <button data-tab="document">${TAB_LABELS.document}</button>
-      <button data-tab="links">${TAB_LABELS.links}${entry.links && entry.links.length ? ' (' + entry.links.length + ')' : ''}</button>
+      <button data-tab="sources">${TAB_LABELS.sources}</button>
+      <button data-tab="links">${TAB_LABELS.links}</button>
       <button data-tab="files">${TAB_LABELS.files}${atts.length ? ' (' + atts.length + ')' : ''}</button>
-      <button data-tab="linked">${TAB_LABELS.linked}</button>
       <button data-tab="usage">${TAB_LABELS.usage}</button>
       <button data-tab="history">${TAB_LABELS.history}</button>
     </div>
@@ -273,9 +291,6 @@ export async function viewDetail(id, heading = '') {
   };
 
   const tabs = {
-    // Sources sit under the prose they support rather than in a tab of
-    // their own: OKF's own model is body footnotes keyed to source ids, so
-    // whoever is reading the body is exactly who needs the list.
     overview: () => {
       // The body with its outline: ids on the headings, and a table of
       // contents when there are enough of them to need a map. The
@@ -296,18 +311,40 @@ export async function viewDetail(id, heading = '') {
     // the duplication document-first exists to remove, and the reason
     // design doc 0044 puts the format itself in front of the reader.
     document: () => `<pre class="mono">${esc(document_)}</pre>`,
-    // Read-only: links come from the body's markdown links (design doc
-    // 0024), so the body editor is where they are changed.
+    // What the document derives from (OKF SPEC §5.1), read out of the
+    // document by the server rather than by the page: the browser parses
+    // no YAML (design doc 0130 §3.3), and this is the same face the
+    // editor draws its fields from. The rows are shown as the writer
+    // recorded them and nothing is scored — §5.1 leaves weighing them to
+    // whoever is reading.
+    //
+    // They had been visible only as YAML in the document tab, while the
+    // body cites them by `sources[].id` in a footnote whose text is the
+    // writer's own line — so the address the citation stands on, and when
+    // anybody last touched it, were on the page and unreadable.
+    sources: () => '<div class="empty">…</div>',
+    // Both directions of one graph, in one tab. They were two, and the
+    // reader who wanted "what is this connected to" had to know which of
+    // two words named the direction they meant before they could look;
+    // the rows answer the same question and only the arrow differs, which
+    // a heading can say for a third of the tab bar's width.
+    //
+    // Outgoing is in hand: links come from the body's markdown links
+    // (design doc 0024), so the body editor is where they are changed.
+    // Incoming is a request, made when the tab is first opened.
     links: () => {
       const links = entry.links || [];
-      if (!links.length) return '<div class="empty">本文はまだ他のナレッジを指していません。</div>';
-      return '<table class="kv">' + links.map(l => {
+      const rows = links.map(l => {
         const target = String(l.target || '').replace(/^ochakai:\/\//, '');
         const href = target ? '#/k/' + idPath(target) : null;
         const text = l.text || target.split('/').pop() || target;
         return `<tr><td class="k">${esc(text)}</td>
           <td>${href ? `<a class="mono" href="${href}">${esc(target)}</a>` : `<span class="mono">${esc(target)}</span>`}</td></tr>`;
-      }).join('') + '</table>';
+      }).join('');
+      return `
+        <div class="section-title">リンク先${links.length ? ` (${links.length})` : ''}</div>
+        ${rows ? `<table class="kv">${rows}</table>` : '<div class="empty">本文はまだ他のナレッジを指していません。</div>'}
+        <div id="linked-sec">${linkedHTML || '<div class="section-title">参照元</div><div class="empty">…</div>'}</div>`;
     },
     // A deployment with no bucket holds markdown concepts only (design
     // doc 0075 §1), so everything that would add a file can only be
@@ -348,7 +385,6 @@ export async function viewDetail(id, heading = '') {
         <p class="provenance write-only files-only">本文から参照しておくと
         (<code>![alt](${esc(lastSeg)}/name.png)</code> または <code>[name](${esc(lastSeg)}/name.txt)</code>)、埋め込みできるようになります。</p>`;
     },
-    linked: () => '<div class="empty">…</div>',
     usage: () => '<div class="empty">…</div>',
     history: () => '<div class="empty">…</div>',
   };
@@ -407,6 +443,13 @@ export async function viewDetail(id, heading = '') {
       <p class="provenance">note の付いた報告だけを新しい順に最大 10 件。報告の件数は上の成功・失敗です。生の報告は 180 日で消えるので、それより古いものは残っていません。</p>`;
   };
 
+  // The incoming half of the links tab, once it has been fetched. It is
+  // held here rather than in the lazy table below because it is half of a
+  // tab: what the two directions cost is not the same, and a failure to
+  // reach the server about the backlinks must not take the outgoing links
+  // — which are already in hand, and are right — off the page with it.
+  let linkedHTML = '';
+  let asking = false;
   const body = $('#tab-body');
   // Lazily loaded tabs: fetch once on first open, then re-render from the
   // cached template. A failed fetch shows in place and retries next open.
@@ -423,11 +466,46 @@ export async function viewDetail(id, heading = '') {
         <p class="provenance">${u.last_used_at ? '最終利用日: ' + esc(fmtDate(u.last_used_at)) : 'まだ使われていません'}</p>
         ${reportsHTML(u.reports)}`;
     },
-    linked: async () => {
-      const { hits: entries = [] } = await api('/api/v1/search?links_to=' + encodeURIComponent(entry.id) + '&limit=100');
-      return () => (entries && entries.length)
-        ? entries.map(hitCard).join('')
-        : '<div class="empty">このナレッジを指しているものは、まだありません。</div>';
+    // The frontmatter as structure, from the one face that reads it
+    // (design doc 0130 §3.3). The document is already in hand, so this
+    // posts the bytes this page drew rather than naming the concept:
+    // there is no id, no ETag and nothing stored, and a read-only
+    // deployment answers it.
+    sources: async () => {
+      const { values = {} } = await api('/api/v1/frontmatter', { method: 'POST', body: { document: document_ } });
+      const rows = Array.isArray(values.sources) ? values.sources.filter(r => r && typeof r === 'object') : [];
+      // The window the counts were counted over is the entry's, and a
+      // source may name its own for itself — so the one below the table
+      // is the entry's and a row that overrides it says so in place.
+      const window_ = windowText(values.usage_window);
+      return () => {
+        if (!rows.length) return '<div class="empty">この文書は出典を挙げていません。</div>';
+        const trs = rows.map(r => {
+          const meta = [];
+          for (const [key, label] of SOURCE_FIELDS) {
+            if (r[key] !== undefined && r[key] !== null && r[key] !== '') meta.push(`${label} ${scalarText(r[key])}`);
+          }
+          if (r.usage_count !== undefined && r.usage_count !== null) {
+            const own = windowText(r.usage_window);
+            meta.push(`参照回数 ${scalarText(r.usage_count)}${own ? `(${own})` : ''}`);
+          }
+          for (const [key, v] of Object.entries(r)) {
+            if (!SOURCE_KNOWN.has(key)) meta.push(`${key} ${scalarText(v)}`);
+          }
+          // The name is the writer's title, and the id behind it when
+          // there is none: a source with neither is its address, which
+          // the value cell is already showing.
+          const name = r.title || r.id || '';
+          return `<tr>
+            <td class="k">${esc(name)}</td>
+            <td>${r.resource ? resourceHTML(r.resource) : '<span class="provenance">場所がありません</span>'}
+              ${meta.length ? `<div class="provenance">${esc(meta.join(' · '))}</div>` : ''}
+              ${r.id ? `<div class="provenance">本文からの参照: <code>[^${esc(r.id)}]</code></div>` : ''}
+            </td></tr>`;
+        }).join('');
+        return `<table class="kv">${trs}</table>
+          ${window_ ? `<p class="provenance">参照回数を数えた期間: ${esc(window_)}</p>` : ''}`;
+      };
     },
     history: async () => {
       // ?history is the object's own ledger, at the object's own address
@@ -457,6 +535,34 @@ export async function viewDetail(id, heading = '') {
       return () => `<table class="kv">${rows}</table>`;
     },
   };
+  // What links at this concept — the one question its own document cannot
+  // answer (design doc 0106). The read that drew this page carries the
+  // first rows of it; this asks search for the whole set, which is what a
+  // curator following an edge is after, and it asks once.
+  async function fillLinked() {
+    if (linkedHTML || asking) return;
+    asking = true;
+    let html;
+    try {
+      const { hits = [] } = await api('/api/v1/search?links_to=' + encodeURIComponent(entry.id) + '&limit=100');
+      html = linkedHTML = `<div class="section-title">参照元${hits.length ? ` (${hits.length})` : ''}</div>`
+        + (hits.length ? hits.map(hitCard).join('') : '<div class="empty">このナレッジを指しているものは、まだありません。</div>');
+    } catch (e) {
+      // Nothing is cached, so opening the tab again asks again.
+      html = `<div class="section-title">参照元</div>
+        <div class="error-banner" role="alert">参照元を読み込めませんでした: ${esc(e.message)}</div>`;
+    } finally {
+      asking = false;
+    }
+    // The reader may have walked on while the request was out; the
+    // section this answers is the one that asked.
+    const sec = $('#linked-sec');
+    if (sec) {
+      sec.innerHTML = html;
+      markDead();
+    }
+  }
+
   // Links to concepts that are not there, drawn as what they are. The
   // verdict is this render's, and the marking runs after every tab
   // render — a tab body is redrawn from its template each time it opens,
@@ -475,6 +581,7 @@ export async function viewDetail(id, heading = '') {
     document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
     body.innerHTML = tabs[name]();
     if (name === 'files') wireFiles();
+    if (name === 'links') fillLinked();
     if (lazy[name]) {
       try {
         tabs[name] = await lazy[name]();

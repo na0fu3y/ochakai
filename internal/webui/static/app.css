@@ -409,6 +409,11 @@ input[type=date]:not(:focus):invalid, input[type=date]:not(:focus):placeholder-s
 }
 .tabs button:hover { color: var(--text); }
 .tabs button.active { color: var(--accent-strong); border-bottom-color: var(--accent); }
+/* The links tab holds both directions of one graph, so its second
+   heading follows the first section's own last rule. The gap is the
+   heading's, not the table's: what separates the two is that the reader
+   has finished one question and is starting the other. */
+#linked-sec { display: block; margin-top: 1.7rem; }
 /* A revision's diff (diff.js): a line each, colored the way the page
    already colors states — additions in verified's green, deletions in
    rejected's red — and the elisions quiet, because they are the part
