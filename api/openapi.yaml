@@ -181,12 +181,15 @@ paths:
         - name: trust
           in: query
           description: >
-            Filter by who confirmed the concept — OKF's own trust tiers
-            (SPEC §5.3), derived from the verification ledger. Repeatable
-            and OR-ed, so "anything somebody confirmed" is two values.
-            Omit to leave the question unasked. Independent of status: a
-            draft may be human-reviewed and a stable concept unverified
-            (SPEC §§5.3-5.4).
+            Filter by who confirmed the concept as it reads now — OKF's
+            own trust tiers (SPEC §5.3), derived from the verifications
+            that stand: the ledger rows at or after the concept's last
+            meaningful change (design doc 0138). A concept edited or
+            moved since its last confirmation matches unverified.
+            Repeatable and OR-ed, so "anything somebody confirmed" is two
+            values. Omit to leave the question unasked. Independent of
+            status: a draft may be human-reviewed and a stable concept
+            unverified (SPEC §§5.3-5.4).
           schema: { type: array, items: { $ref: "#/components/schemas/Trust" } }
           explode: true
         - name: fm.{key}
@@ -2109,6 +2112,7 @@ paths:
                       drafts: 31
                       failed: 4
                       stale_after: 2
+                      edited: 3
                     review:
                       verifications: 7
                     outcomes:
@@ -2696,6 +2700,15 @@ components:
         which says whether the concept may be consumed (design doc 0075
         §4.1).
 
+        Only the verifications that stand count: the ledger rows at or
+        after the concept's last meaningful change, i.e. the ones that
+        confirmed the content as it reads now (design doc 0138). An edit
+        — or a move, which reassigns who the content stands by — returns
+        the tier to unverified until somebody confirms the new content;
+        the ledger itself keeps every row, and the `edited` queue lists
+        what lapsed this way. A reformat that changes no content lapses
+        nothing.
+
         The ledger it is derived from is **this instance's own**: the
         confirmations recorded here through
         `POST /api/v1/review/{id}` with `ruling: verified`. SPEC §5.3
@@ -3249,7 +3262,7 @@ components:
             doc 0069 §5 kept this place for the metrics beside it), and
             since 0069 §5 the only place it is answered — `prefix`
             scopes it like everything else here. When the question is only
-            "is there anything", `ochakai stats` prints these three with
+            "is there anything", `ochakai stats` prints these with
             the next step on each line, and its `--exit-code` is what a
             scheduled job goes red on.
         review:
@@ -3425,15 +3438,16 @@ components:
       type: object
       description: >
         The size of each queue a curator is meant to empty. Each one is a
-        feed that already exists, and every count has a way to be driven
-        to zero: rule on the draft, verify the concept that was reported
-        wrong, edit the one whose expiry passed.
+        listing that already exists, and every count has a way to be
+        driven to zero: rule on the draft, verify the concept that was
+        reported wrong, edit the one whose expiry passed, re-verify the
+        one that was edited after its confirmation.
 
 
         A queue is named after the `sort` that lists it, so the count and
         the way to see what it counts are one word (design doc 0069 §5.2).
-        `drafts` is the exception, and names itself, because no single
-        sort lists it.
+        `drafts` and `edited` are the exceptions, and name themselves,
+        because no single sort lists either.
       properties:
         drafts:
           type: integer
@@ -3458,7 +3472,15 @@ components:
             sort=stale_after. Verifying does not clear this one: the date
             is the writer's declaration, so the concept leaves when someone
             edits it (design doc 0069 §2.2).
-      required: [drafts, failed, stale_after]
+        edited:
+          type: integer
+          description: >
+            Concepts confirmed once but edited or moved since, so no
+            verification stands for what they say now and their trust
+            tier reads unverified (design doc 0138) — GET
+            /api/v1/search?sort=verified_at&trust=unverified, where they
+            precede the never-verified tail. Verifying takes one out.
+      required: [drafts, failed, stale_after, edited]
     SearchHit:
       description: >
         One search or listing result: the projection plus what ranked it.

@@ -104,22 +104,22 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 		if outer == "" {
 			outer = "object."
 		}
-		// SPEC §5.3's tiers as predicates over the ledger: a person makes
-		// an entry human-reviewed, any other confirmation
-		// machine-confirmed, none unverified. Asking for several ORs them,
-		// so "anything somebody confirmed" is two values rather than a
-		// second kind of filter.
-		anyVerification := fmt.Sprintf(
-			"EXISTS (SELECT 1 FROM knowledge_verification v WHERE v.id = %sid)", outer)
-		byHuman := fmt.Sprintf(
-			"EXISTS (SELECT 1 FROM knowledge_verification v WHERE v.id = %sid AND v.by_kind = 'human')", outer)
+		// SPEC §5.3's tiers as predicates over the verifications that
+		// stand — the rows at or after content_changed_at, the ones that
+		// confirmed the content as it reads now (design doc 0138): a
+		// person makes an entry human-reviewed, any other confirmation
+		// machine-confirmed, none — or none standing — unverified. Asking
+		// for several ORs them, so "anything somebody confirmed" is two
+		// values rather than a second kind of filter.
+		standing := standingVerification(outer, "")
+		byHuman := standingVerification(outer, domain.ActorHuman)
 		var tiers []string
 		for _, t := range f.Trust {
 			switch t {
 			case domain.TrustUnverified:
-				tiers = append(tiers, "NOT "+anyVerification)
+				tiers = append(tiers, "NOT "+standing)
 			case domain.TrustMachine:
-				tiers = append(tiers, anyVerification+" AND NOT "+byHuman)
+				tiers = append(tiers, standing+" AND NOT "+byHuman)
 			case domain.TrustHuman:
 				tiers = append(tiers, byHuman)
 			default:

@@ -23,10 +23,12 @@ export async function refreshQueues() {
     waiting = null; // a nudge that cannot load must not become an error banner
   }
   const badge = $('#nav-waiting');
-  const total = waiting ? waiting.drafts + waiting.failed + waiting.stale_after : 0;
+  const total = waiting
+    ? waiting.drafts + waiting.failed + waiting.stale_after + (waiting.edited || 0)
+    : 0;
   badge.textContent = total;
   badge.hidden = !total;
-  badge.title = total ? `未処理 ${total} 件(draft ${waiting.drafts}・再検証 ${waiting.failed}・期限切れ ${waiting.stale_after})` : '';
+  badge.title = total ? `未処理 ${total} 件(draft ${waiting.drafts}・再検証 ${waiting.failed}・期限切れ ${waiting.stale_after}・編集後未検証 ${waiting.edited || 0})` : '';
 }
 
 // The same three numbers as links into the feed each one counts. Zero is
@@ -43,6 +45,10 @@ export function queueStrip(counts = waiting) {
     ['#/review', counts.drafts, 'draft'],
     ['#/search/reported-wrong', counts.failed, '再検証'],
     ['#/search/stale', counts.stale_after, '期限切れ'],
+    // Confirmed once, then edited or moved: no verification stands for
+    // the current content, so the tier reads unverified until somebody
+    // re-confirms it (design doc 0138).
+    ['#/search/edited', counts.edited || 0, '編集後未検証'],
   ].map(([href, n, label]) =>
     `<a class="badge${n ? ' draft' : ''}" href="${href}">${label} ${n}</a>`).join(' ');
 }

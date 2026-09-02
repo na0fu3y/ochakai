@@ -86,6 +86,13 @@ teams/growth`)。
   `verified:` は文書の主張として `received` に残るだけである
   ([merge は verify ではない](git-review.md#merge-は-verify-ではない))。
   `ochakai verify <id>` か Web UI の「検証」を一手打つ。
+- *検証したはずの concept が unverified に戻っている。* tier に数え
+  られるのは**いまの内容**を確認した検証だけで、検証のあとの編集・
+  移動(rename は本文リンクの書き換えを伴う)で検証は立たなくなる
+  ([0138](../design/0138-a-verification-stands-until-the-content-moves.md))。
+  台帳は消えていない — `ochakai get` の `verified` に履歴はそのまま
+  ある。`ochakai list verified_at --trust unverified` がそういう
+  concept を先頭に並べるので、内容を確かめて verify し直す。
 - *保存されているはずの語が何にもマッチしない。* soft-delete された
   concept は既定の検索から除外され(却下されたものはそこにも無い —
   却下は削除である)、`--status` はさらに絞り込む。concept が無いと

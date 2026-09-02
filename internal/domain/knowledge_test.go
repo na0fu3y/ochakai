@@ -516,3 +516,31 @@ func TestActorString(t *testing.T) {
 		}
 	}
 }
+
+// A tier is derived from the verifications that stand — the rows at or
+// after the last meaningful change (design doc 0138). A confirmation of
+// content an edit has since replaced keeps its ledger row and loses its
+// claim; a later confirmation restores the tier it earns.
+func TestTrustOfCountsOnlyStandingVerifications(t *testing.T) {
+	edit := time.Date(2026, 8, 20, 0, 0, 0, 0, time.UTC)
+	before, after := edit.Add(-time.Hour), edit.Add(time.Hour)
+	human := Verification{By: Actor{Kind: ActorHuman, Name: "t"}, At: before}
+	machine := Verification{By: Actor{Kind: ActorProcess, Name: "sa"}, At: after}
+	for _, tc := range []struct {
+		name string
+		vs   []Verification
+		want Trust
+	}{
+		{"no ledger", nil, TrustUnverified},
+		{"human before the edit lapses", []Verification{human}, TrustUnverified},
+		{"machine after the edit stands", []Verification{human, machine}, TrustMachine},
+		{"human at the edit's own instant stands",
+			[]Verification{{By: Actor{Kind: ActorHuman, Name: "t"}, At: edit}}, TrustHuman},
+		{"human re-verification restores the tier",
+			[]Verification{human, {By: Actor{Kind: ActorHuman, Name: "t"}, At: after}}, TrustHuman},
+	} {
+		if got := TrustOf(tc.vs, edit); got != tc.want {
+			t.Errorf("%s: TrustOf = %s, want %s", tc.name, got, tc.want)
+		}
+	}
+}

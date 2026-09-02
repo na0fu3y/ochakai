@@ -556,7 +556,9 @@ const (
 )
 
 // SearchLexical ranks entries by how much of the query they contain and
-// by where it lands, verified entries boosted. The haystack is the
+// by where it lands, entries with a standing verification boosted —
+// a confirmation of the content as it reads now, not one an edit has
+// since replaced (design doc 0138). The haystack is the
 // search_text column (migration 0016): the id (design doc 0022 — with
 // title optional, the filename may be the entry's only name), the
 // envelope fields, the body, and the attachment filenames (design doc
@@ -692,17 +694,20 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	// corpus of a few thousand, spilling work_mem on the instance size
 	// this is meant to run on. The entries are fetched once the top N is
 	// known.
-	// Ties are broken by verification recency, then id. The score is a
-	// fraction over a handful of addends, so a short query leaves several
-	// concepts holding exactly the same number — and "whatever order the
-	// scan produced" decided what an agent reading top-N under a byte
-	// budget saw. When the text cannot tell two concepts apart, the
-	// loop's own signal can: the one somebody confirmed most recently
-	// goes first (the same recency sort=verified_at feeds on), and the id
-	// closes the order so equal-in-every-way concepts still arrive the
-	// same way twice. This breaks ties only — no weight, no addend — so
-	// it cannot outrank anything the text distinguishes (compare the
-	// named sort key in the service's fuse, which follows the same rule).
+	// Ties are broken by standing-verification recency, then id. The
+	// score is a fraction over a handful of addends, so a short query
+	// leaves several concepts holding exactly the same number — and
+	// "whatever order the scan produced" decided what an agent reading
+	// top-N under a byte budget saw. When the text cannot tell two
+	// concepts apart, the loop's own signal can: the one somebody most
+	// recently confirmed as it stands goes first, and the id closes the
+	// order so equal-in-every-way concepts still arrive the same way
+	// twice. This breaks ties only — no weight, no addend — so it cannot
+	// outrank anything the text distinguishes (compare the named sort key
+	// in the service's fuse, which follows the same rule). Both the boost
+	// and the tie-break read the one standing expression: a confirmation
+	// an edit has replaced neither lifts a score nor wins a tie (design
+	// doc 0138).
 	q := fmt.Sprintf(`
 		WITH scored AS (
 			SELECT w.id, w.last_verified,
@@ -716,7 +721,7 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 						CASE WHEN %[7]s
 							THEN 1 ELSE 0 END AS named,
 						(SELECT max(v.at) FROM knowledge_verification v
-							WHERE v.id = k.id) AS last_verified
+							WHERE v.id = k.id AND v.at >= k.content_changed_at) AS last_verified
 					FROM object k, LATERAL (SELECT `+foldedName+` AS name) nm
 					WHERE k.search_tsv @@ (%[8]s) AND %[9]s
 				) c

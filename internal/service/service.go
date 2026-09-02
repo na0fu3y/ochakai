@@ -471,6 +471,14 @@ func (s *Service) Plan(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 // Without that, its refusal was a read of somebody else's subtree: the
 // sentence names the id and says a human ruled on it, which is exactly
 // what a caller outside the scope is meant to receive a 404 for.
+//
+// The guard reads the ledger's presence, not the standing tier: a
+// concept edited after its verification reads unverified (design doc
+// 0138) and is still refused here, because what the guard protects is
+// the fact that a human ruled on this id — history, which no edit
+// unmakes — not the claim about the current content. The message says
+// "was verified" for the same reason: the trust tier beside it may
+// honestly read unverified.
 func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, error) {
 	id = domain.Normalize(id)
 	if err := s.mayWrite(ctx, id); err != nil {
@@ -492,8 +500,8 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, 
 	default:
 		return &k.ContentHash, nil
 	}
-	return nil, Invalidf("cannot %s %s from this surface: it is %s, and this surface has no "+
-		"If-Match precondition to replace curated knowledge safely. %s A human changes curated "+
+	return nil, Invalidf("cannot %s %s from this surface: a human ruled on it (%s), and this surface "+
+		"has no If-Match precondition to replace curated knowledge safely. %s A human changes curated "+
 		"concepts from the web UI or CLI.", op, id, ruling, instead)
 }
 

@@ -506,6 +506,12 @@ write links at it, the move is refused rather than performed without
 those rewrites — the links it skipped would point at an id that is gone
 — and an administrator can move it for you.
 
+A move rewrites content — links in the moved body and in every referrer
+— and reassigns who the content stands by, so a verification no longer
+stands for it and its trust tier returns to unverified until somebody
+confirms the moved content (`ochakai verify`). The `edited` queue in
+`ochakai stats` holds everything that lapsed this way.
+
 Flags:
   -directory
     	move a whole directory: both arguments are paths, and every object under the first one moves to the second (a concept whose id is exactly that path is a different address and stays)
@@ -772,14 +778,15 @@ grep one line out of it for a prompt or a dashboard. The gap lines are
 the questions that came back empty, most-asked first — the list of what
 to write next.
 
-The three queue lines — drafts waiting to be published or turned down,
+The queue lines — drafts waiting to be published or turned down,
 concepts whose failure reports are unanswered, concepts past the expiry
-their author declared — carry the command that lists that queue, with
-the scope you asked under, so the next step is the text on the line.
+their author declared, concepts edited or moved since they were last
+verified — carry the command that lists that queue, with the scope you
+asked under, so the next step is the text on the line.
 The verification-age feed is not one of them: it ranks every verified
 concept rather than holding the ones that need something, so its size is
 the size of the knowledge base and never reaches zero.
-With --exit-code the command exits 2 while any of the three is
+With --exit-code the command exits 2 while any queue is
 non-empty and 0 when all are, which is how a scheduled job goes red on
 work nobody has picked up. An error still exits 1, so "unreachable"
 cannot be read as "nothing to do".

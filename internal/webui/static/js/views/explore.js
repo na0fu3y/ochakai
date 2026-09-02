@@ -11,7 +11,7 @@ import { KNOWN_TYPES, STATUSES, icon } from '../vocab.js';
 // loaded and cursor are the listing walk: the hits already on screen and
 // where the next page resumes, both reset by any change that restarts the
 // listing (design doc 0050 §2.1).
-export const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, source: '', failedFeed: false, loaded: [], cursor: '', verified: false };
+export const explore = { q: '', types: new Set(), statuses: new Set(), tag: '', prefix: '', ageFeed: false, expiredFeed: false, editedFeed: false, source: '', failedFeed: false, loaded: [], cursor: '', verified: false };
 
 // If the viewport grows past the breakpoint while the filter disclosure is
 // collapsed, its summary disappears — reopen it so filters stay reachable.
@@ -52,6 +52,8 @@ export function viewExplore() {
         ? `<div class="feed-banner"><code>${esc(explore.source)}</code> を引用しているナレッジです。この資料から派生したものを、すべて表示しています。<a href="#/search">検索に戻る</a>。</div>`
         : explore.expiredFeed
         ? `<div class="feed-banner"><strong>期限切れのフィード</strong>です。書き手が宣言した <code>stale_after</code> を過ぎたナレッジを、超過の大きい順に並べています。<strong>このキューは検証しても解消しません。</strong>期限はサーバーが測った値ではなく書き手の宣言なので、内容を確かめたうえでナレッジを編集し、新しい期限を宣言する(または外す)必要があります。検索に戻るには「期限切れ」のチェックを外してください。</div>`
+        : explore.editedFeed
+        ? `<div class="feed-banner"><strong>編集後未検証のフィード</strong>です。検証は<strong>いまの内容</strong>に立ちます — 検証のあとに編集や移動が入ったナレッジは unverified に戻り、先頭からここに並びます(検証時刻の古い順)。内容を確かめて検証し直すと外れます。一度も検証されていないナレッジは検証時刻が空のまま末尾に続きます。検索に戻るには「編集後未検証」のチェックを外してください。</div>`
         : `<input type="text" id="q" placeholder="メトリクス・検証済みクエリ・知見・用語・テーブルを検索…"
                   value="${esc(explore.q)}" autocomplete="off">`}
       <a class="btn write-only" href="#/new" title="ナレッジを新規作成します">＋ ナレッジを作成</a>
@@ -75,6 +77,8 @@ export function viewExplore() {
           type="checkbox" id="f-failed" aria-label="再検証のフィード" ${explore.failedFeed ? 'checked' : ''}>再検証</label>
         <label class="chip" title="stale_after を過ぎたナレッジを並べます(編集すると解消します)"><input
           type="checkbox" id="f-expired" aria-label="期限切れのフィード" ${explore.expiredFeed ? 'checked' : ''}>期限切れ</label>
+        <label class="chip" title="検証のあとに編集・移動されたナレッジを並べます(検証し直すと解消します)"><input
+          type="checkbox" id="f-edited" aria-label="編集後未検証のフィード" ${explore.editedFeed ? 'checked' : ''}>編集後未検証</label>
       </div>
     </details>
     <div id="results"><div class="empty">…</div></div>
@@ -99,7 +103,7 @@ export function viewExplore() {
   $('#f-prefix').addEventListener('input', () => { explore.prefix = $('#f-prefix').value.replace(/^\/+|\/+$/g, '').trim(); debounce(rerun, 250); });
   // The three feeds are listing modes, not filters: each replaces the
   // query, so picking one clears the others.
-  const feeds = [['#f-age', 'ageFeed'], ['#f-failed', 'failedFeed'], ['#f-expired', 'expiredFeed']];
+  const feeds = [['#f-age', 'ageFeed'], ['#f-failed', 'failedFeed'], ['#f-expired', 'expiredFeed'], ['#f-edited', 'editedFeed']];
   for (const [sel, key] of feeds) {
     $(sel).addEventListener('change', () => {
       const on = $(sel).checked;
@@ -131,7 +135,7 @@ export async function runSearch(append = false) {
   const out = $('#results');
   if (!out) return;
   const p = new URLSearchParams();
-  const isFeed = explore.ageFeed || explore.failedFeed || explore.expiredFeed || !!explore.source;
+  const isFeed = explore.ageFeed || explore.failedFeed || explore.expiredFeed || explore.editedFeed || !!explore.source;
   // The query as the server and the messages below see it: a box holding
   // only spaces is no query, and saying `「  」に一致するナレッジが
   // 見つかりません` describes something the user did not ask.
@@ -142,6 +146,11 @@ export async function runSearch(append = false) {
   if (explore.ageFeed) p.set('sort', 'verified_at');
   else if (explore.failedFeed) p.set('sort', 'failed');
   else if (explore.expiredFeed) p.set('sort', 'stale_after');
+  // The edited queue is a combination, not a sort (design doc 0138):
+  // trust=unverified keeps only entries with no standing verification,
+  // and the verification-age order puts the lapsed ones — confirmed
+  // once, then edited — ahead of the never-verified tail.
+  else if (explore.editedFeed) { p.set('sort', 'verified_at'); p.append('trust', 'unverified'); }
   else if (q) p.set('q', explore.q);
   // Nothing selects a mode: the landing view lists by demand rather than
   // by address. A request carrying no mode at all is the plain
@@ -154,7 +163,9 @@ export async function runSearch(append = false) {
   for (const s of explore.statuses) p.append('status', s);
   // The filter asks SPEC §5.3's question — who confirmed this — rather
   // than a boolean the spec has no word for (design doc 0046 §3.10).
-  if (explore.verified) { p.append('trust', 'human-reviewed'); p.append('trust', 'machine-confirmed'); }
+  // The edited feed already speaks in trust (unverified); adding the
+  // confirmed tiers on top would OR the vocabulary back to everything.
+  if (explore.verified && !explore.editedFeed) { p.append('trust', 'human-reviewed'); p.append('trust', 'machine-confirmed'); }
   if (explore.tag) p.append('tag', explore.tag);
   // A path scope is a filter like tag, so it rides along with whatever
   // mode the chain above picked (design doc 0041 §2.1). The UI takes one

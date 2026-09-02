@@ -198,8 +198,37 @@ func ledgerCols(alias string) string {
 // lastVerifiedAt is the newest verification's timestamp for the entry
 // aliased by alias, or NULL when it has never been verified. The feeds
 // that used to read a verified_at column read this instead.
+//
+// Deliberately the ledger's newest row, standing or not (design doc
+// 0138): "when did somebody last look at this" is a fact about the
+// history, and the verification-age feed and the failed queue's exit
+// both ask that question. What the current content can claim is the
+// trust tier, and that reads standingVerification below.
 func lastVerifiedAt(alias string) string {
 	return `(SELECT max(v.at) FROM knowledge_verification v WHERE v.id = ` + alias + `.id)`
+}
+
+// standingVerification reports whether the entry aliased by prefix (a
+// dotted alias, "k." or "object.") holds a verification that stands: a
+// row at or after content_changed_at, i.e. one that confirmed the
+// content as it reads now (design doc 0138). kind narrows to one actor
+// kind; "" takes any. The trust filter, the stats tally, the edited
+// queue and the lexical boost all read the tier through this one
+// spelling, so it cannot come to mean four things.
+func standingVerification(prefix, kind string) string {
+	cond := ""
+	if kind != "" {
+		cond = ` AND v.by_kind = '` + kind + `'`
+	}
+	return `EXISTS (SELECT 1 FROM knowledge_verification v WHERE v.id = ` + prefix + `id
+		AND v.at >= ` + prefix + `content_changed_at` + cond + `)`
+}
+
+// anyVerification is the ledger's presence alone, standing or not: has
+// anybody ever confirmed this entry. With standingVerification negated it
+// is the edited queue's predicate — confirmed once, but not as it stands.
+func anyVerification(prefix string) string {
+	return `EXISTS (SELECT 1 FROM knowledge_verification v WHERE v.id = ` + prefix + `id)`
 }
 
 // unansweredFailure is what puts an entry in the re-verification feed: it
@@ -383,7 +412,7 @@ func knowledgeDestFor(k *domain.Knowledge, withDoc bool) (dests []any, finish fu
 	}
 	dests = append(dests, &k.ContentHash, &verifications)
 	finish = func() error {
-		defer func() { k.Trust = domain.TrustOf(k.Verifications) }()
+		defer func() { k.Trust = domain.TrustOf(k.Verifications, k.ContentChangedAt) }()
 		if staleAfter != nil {
 			k.StaleAfter = domain.FormatInstant(*staleAfter)
 		}
@@ -903,6 +932,15 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 // hide a report that arrived after the verification, or to keep one that
 // arrived before it — so both sides read the same clock, and RETURNING
 // hands back exactly what was stored.
+//
+// It is clamped to no earlier than the entry's content_changed_at, which
+// the write path stamps from the application clock (NowStored). The
+// standing comparison v.at >= content_changed_at (design doc 0138) reads
+// those two clocks against each other, and a database running behind the
+// application would otherwise record a verification of the current
+// content that does not stand for it. The clamp records what the act
+// means — a verification confirms the entry as it stands, so it is never
+// of a moment before the content it confirmed.
 func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
 	var k *domain.Knowledge
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
@@ -911,8 +949,8 @@ func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*dom
 		// statement, closing the race with a concurrent delete.
 		err := tx.QueryRow(ctx, `INSERT INTO knowledge_verification (id, seq, by_kind, by_name, by_via, by_producer, at)
 			SELECT $1, COALESCE((SELECT MAX(seq) FROM knowledge_verification WHERE id=$1), 0) + 1,
-				$2, $3, $4, $5, now()
-			WHERE EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)
+				$2, $3, $4, $5, GREATEST(now(), content_changed_at)
+			FROM object WHERE id=$1 AND deleted_at IS NULL
 			RETURNING at`,
 			id, actor.Kind, actor.Name, actor.Via, actor.Producer).Scan(&at)
 		if errors.Is(err, pgx.ErrNoRows) {

@@ -270,7 +270,7 @@ asia-northeast1 のデプロイなら `location=asia-northeast1` が出る。
 
 `ochakai stats` がその答えのすべてである(設計ドキュメント
 [0069](../design/0069-the-loop-and-what-measures-it.md) §5)。その中の行のうち、キュレー
-ターが空にする三つのキューは、それぞれ一覧表示するコマンドを添えて
+ターが空にする四つのキューは、それぞれ一覧表示するコマンドを添えて
 出てくる:
 
 ```console
@@ -279,16 +279,23 @@ $ ochakai stats
 drafts	12	ochakai list usage --status draft
 failed	1	ochakai list failed
 stale_after	0	ochakai list stale_after
+edited	2	ochakai list verified_at --trust unverified
 …
 ```
 
 それぞれのキューは、それを一覧表示する `sort` にちなんで名付けられて
 いるので、数とそれを見る方法は同じ一語である(設計ドキュメント
 [0069](../design/0069-the-loop-and-what-measures-it.md) §5.2)。`drafts`
-は例外で、単一の sort がそれを一覧表示することは無いからである。
+と `edited` は例外で、単一の sort がそれを一覧表示することは無いから
+である。`edited` は検証の**あとに**編集・移動された concept — 検証は
+いまの内容に立つので、これらは unverified に戻っている(設計ドキュメント
+[0138](../design/0138-a-verification-stands-until-the-content-moves.md))
+— を数え、内容を確かめて検証し直すと空になる。添えられた一覧では、
+一度も検証されていない concept が第一列(検証時刻)の空の行として
+後ろに続く。
 
 `--exit-code` はそれをスケジューラーが見張れるものに変える:
-**三つのうちどれかが空でない間は 2、すべて空なら 0** — そして 1 は
+**どれかのキューが空でない間は 2、すべて空なら 0** — そして 1 は
 これまで通りエラーのままなので、到達できないサーバーが「やることが
 無い」と読み違えられることは無い。`--prefix teams/growth` はそれを
 絞る、共有デプロイ上の一つのチームが自分たちのキューについて尋ねる方法

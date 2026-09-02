@@ -290,7 +290,13 @@ stale_after: "2026-12-31"      # 参考情報: この日以降に見直す
 はその内容の後ろに誰が立っているか、いつ最後に変わったかを言い、
 `verified` は誰がそれを確認したかを言う — 無ければ unverified を
 意味し、`human:` のエントリがあってはじめて human-reviewed になる
-(SPEC §5.3)。ochakai はこれらを spec が定義するとおりに保持する:
+(SPEC §5.3)。tier に数えられるのは**立っている**確認 — `at` が
+`generated.at` 以降、つまりいまの内容を確認したエントリ — だけで、
+検証のあとに編集・移動された concept は unverified に戻る(設計
+ドキュメント
+[0138](design/0138-a-verification-stands-until-the-content-moves.md)。
+台帳そのものは append-only のまま残る)。
+ochakai はこれらを spec が定義するとおりに保持する:
 `status` は lifecycle の値だけを持ち(`draft`、`stable`、
 `deprecated` — SPEC §5.4)、`verified` は確認のたびに追記される
 だけの ledger であり、この二つの信号は独立したまま保たれる。誰かが
