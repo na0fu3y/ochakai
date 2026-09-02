@@ -42,10 +42,11 @@ ochakai import kb/bundle   # 初回だけ。回すのは人(README の re-stamp 
 - **AI の書き込みは draft で入る。** レビューキューは
   `ochakai list usage --status draft`、未処理がある間
   `ochakai stats --exit-code` が 2 で終わる — cron に置くならこれ。
-- **人のレビュー。** `ochakai ui` で読んで Verify / Reject、または
-  `ochakai verify <id>` / `ochakai reject <id> --note <理由>`。
-  却下は消さずに台帳に残る — AI は起草前に `search --rejected` で
-  同種の提案が断られていないかを確かめられる。
+- **人のレビュー。** `ochakai ui` で読んで検証 / 却下、または
+  `ochakai verify <id>` / `ochakai delete <id> --note <理由>`。
+  却下は理由を添えた削除であり、理由はそれを記録したリビジョンと
+  OKF §9 の `log.md` に残る(設計ドキュメント 0135)。検索には残らない
+  ので、同じ id は書き直せる。
 
 ## kb/ への書き戻し
 

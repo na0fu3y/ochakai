@@ -678,9 +678,9 @@ func cmdStats(ctx context.Context, args []string) error {
 	for _, t := range domain.Trusts {
 		fmt.Printf("%s\t%d\n", t, st.Concepts.Trust[string(t)])
 	}
-	// The three queues take a third field: the command that lists that
+	// The four queues take a third field: the command that lists that
 	// queue, under the scope this call was made with. A number nobody can
-	// act on is a statistic, and these three exist to be emptied (design
+	// act on is a statistic, and these four exist to be emptied (design
 	// doc 0049) — so the next step is the text on the line. The key and
 	// the count stay in the first two fields, so the format still cuts.
 	// The scope the server says it counted, in preference to the one that
@@ -943,13 +943,14 @@ func cmdGet(ctx context.Context, args []string) error {
 	if lv := k.Observed.LastVerified(); lv != nil {
 		conf := fmt.Sprintf("verified by %s on %s", lv.By.String(), lv.At.Format("2006-01-02"))
 		// The one thing a confirmation cannot say by itself: whether the
-		// content moved after it. OKF SPEC §5.2 keeps `verified`
-		// independent of `generated.at` — an edit never cancels a
-		// confirmation — so the line reports both instants rather than
-		// deciding between them. Without this it read "verified by X"
-		// over a document nobody had confirmed, which was the one place
-		// the four faces actively misled (the web UI prints both dates,
-		// and the JSON carries both keys).
+		// content moved after it. The ledger keeps the row an edit made
+		// stale — what an edit takes away is the tier, which stands only
+		// on a verification of the current content (design doc 0138) —
+		// so the line reports both instants rather than deciding between
+		// them. Without this it read "verified by X" over a document
+		// nobody had confirmed, which was the one place the four faces
+		// actively misled (the web UI prints both dates, and the JSON
+		// carries both keys).
 		if g := k.Observed.Generated.At; g.After(lv.At) {
 			conf += fmt.Sprintf(", then edited on %s", g.Format("2006-01-02"))
 		}

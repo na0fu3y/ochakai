@@ -4,7 +4,7 @@
 import { api } from './api.js';
 import { $ } from './dom.js';
 
-// How much work the three queues hold, as one call rather than three
+// How much work the four queues hold, as one call rather than four
 // listings (design doc 0049). The web UI is where the reviewing happens,
 // so the count belongs on the tab that leads to it: a queue going quiet
 // and a queue being empty look identical until somebody opens it.
@@ -31,7 +31,7 @@ export async function refreshQueues() {
   badge.title = total ? `未処理 ${total} 件(draft ${waiting.drafts}・再検証 ${waiting.failed}・期限切れ ${waiting.stale_after}・編集後未検証 ${waiting.edited || 0})` : '';
 }
 
-// The same three numbers as links into the feed each one counts. Zero is
+// The same four numbers as links into the feed each one counts. Zero is
 // worth printing here (unlike on the tab): on the review page it is the
 // answer to "is there anything else", and it is an answer nothing gave
 // before.

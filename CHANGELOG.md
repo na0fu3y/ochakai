@@ -110,6 +110,40 @@ last entry.
   same header on a phone is three lines instead of six. `ochakai get`'s
   provenance line on stderr is unchanged.
 
+### Fixed
+
+- **The pages and files two sweeps did not reach now say what the code
+  does.** Neither is a behaviour change; both are prose that a reader
+  would have acted on.
+
+  [docs/loop.md](docs/loop.md) still carried the answer 0.28.2 gave
+  before design doc
+  [0138](docs/design/0138-a-verification-stands-until-the-content-moves.md)
+  replaced it — 「検証は編集で失効しない」 and 「四つ目のキューにも
+  入らない」 — which is now the opposite of what a reader gets: a
+  verification stands only for the content it confirmed, and the fourth
+  queue is exactly where a concept edited after its verification lands.
+  That section names the fourth feed and how it empties now, and the
+  three other places that counted the feeds — [docs/README.md](docs/README.md),
+  [docs/architecture.md](docs/architecture.md) and the weekly habit in
+  [最初のひと月](docs/guides/onboarding.md) — count four. **The web UI said
+  it too**, in the tooltip of the 検証後に編集 badge: 「検証は編集で失効
+  しませんので ✓ はそのままです」, under a header the same release had
+  stopped drawing a ✓ on. It now says where the tier went.
+
+  The bundled Claude Code write-back hook told an agent to search
+  `--rejected` before proposing, and this repository's own hook to pass
+  `rejected=true` to `search_concepts`; 0.28.0 removed both spellings
+  with the ledger they read (design doc
+  [0135](docs/design/0135-a-rejection-is-a-deletion.md)), so the
+  instruction named a flag that now fails the command. The same three
+  claims survived in [kb/](kb) and in the BigQuery catalog example,
+  whose sync job still read a `rejected` field the wire no longer
+  carries and described a rejection as a live ruling beside status and
+  trust. A rejection is a deletion: the entry is gone rather than
+  marked, and the next run of that job projects it again — which the
+  example now says, beside the three things that do take an entry out.
+
 ## [0.28.2] - 2026-09-01
 
 ### Added
