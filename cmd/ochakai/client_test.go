@@ -494,7 +494,7 @@ func TestVerifyJSONPrintsTheEntry(t *testing.T) {
 // exit status a scheduler can watch (design doc 0049).
 func TestStatsPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 	var gotPrefixes []string
-	counts := domain.QueueCounts{Drafts: 3, Failed: 1, StaleAfter: 0}
+	counts := domain.QueueCounts{Drafts: 3, Failed: 1, StaleAfter: 0, Edited: 2}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, r *http.Request) {
 		gotPrefixes = r.URL.Query()["prefix"]
@@ -526,6 +526,7 @@ func TestStatsPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 		"drafts\t3\tochakai list usage --status draft --prefix teams/growth\n",
 		"failed\t1\tochakai list failed --prefix teams/growth\n",
 		"stale_after\t0\tochakai list stale_after --prefix teams/growth\n",
+		"edited\t2\tochakai list verified_at --trust unverified --prefix teams/growth\n",
 	} {
 		if !strings.Contains(string(out), want) {
 			t.Errorf("output misses %q:\n%s", want, out)
@@ -562,7 +563,7 @@ func TestStatsPrintsEachQueueWithTheCommandThatListsIt(t *testing.T) {
 		}
 	})
 
-	// All three empty is the case the exit status exists to make
+	// Every queue empty is the case the exit status exists to make
 	// visible: it prints the zeros and exits 0, so a quiet queue and an
 	// empty one stop looking alike.
 	counts = domain.QueueCounts{}

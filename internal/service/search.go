@@ -237,10 +237,14 @@ func rrfFuse(query string, limit int, primary []domain.SearchHit, others ...[]do
 	}
 	ranked := make([]*entry, 0, len(byKey))
 	for _, e := range byKey {
-		// Any confirmation earns the nudge, whichever tier it is: the
-		// boost is about "somebody checked this", and weighting the tiers
-		// against each other would be a ranking decision no record makes
-		// (design docs 0033, 0046 §3.10).
+		// Any standing confirmation earns the nudge, whichever tier it
+		// is: the boost is about "somebody checked this, as it reads
+		// now" — Trust is derived from the verifications at or after the
+		// last content change (design doc 0138), so a concept edited
+		// since its last confirmation arrives here unverified and takes
+		// no nudge. Weighting the tiers against each other would be a
+		// ranking decision no record makes (design docs 0033, 0046
+		// §3.10).
 		if e.hit.Trust == domain.TrustHuman || e.hit.Trust == domain.TrustMachine {
 			e.score += verifiedBoost
 		}

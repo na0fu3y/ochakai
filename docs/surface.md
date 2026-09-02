@@ -82,7 +82,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - CLI: 24
 - FLAG: 27
 - ENV: 15
-- VOCAB: 45
+- VOCAB: 46
 - DOC: 27
 - DOC-LINES: 8000
 - DOC-LINES-SLACK: 500
@@ -776,7 +776,7 @@ ochakai が定義した変数ではなく、**既にある綴りを読んだ**�
 - `OCHAKAI_URL`
 - `PORT`
 
-## VOCAB (45)
+## VOCAB (46)
 
 八つ目の次元は**語**である。上の七つが数えているのは機構 — 呼べるもの、
 設定できるもの — であって、**キュレーターが頭に入れておくもの**は一つも
@@ -806,8 +806,15 @@ MCP ツール 5 本を改名したが、本数は 8 のままで、**変わっ�
 に改名したぶんで、`stats` が数える集合と `sort=` が並べる集合は**同じ
 一つ**だから、キューは自分の名前を持たない。ここで減ったのは機構では
 なく**覚える語そのもの**である — 数えていなければ、改名は「本数が動か
-ない変更」として通っていた。`queue.drafts` だけが残るのは、それが単一
+ない変更」として通っていた。`queue.drafts` が残るのは、それが単一
 の sort ではないからである(`sort=usage` + `status=draft`)。
+
+**45 → 46 は [0138](design/0138-a-verification-stands-until-the-content-moves.md)
+の `queue.edited` である。** `drafts` と同じ形の例外 — 単一の sort では
+なく `sort=verified_at` + `trust=unverified` の組合せ — なので、キューが
+自分の語を持ち、その瞬間に数に出た。検証済みだったのに編集や移動で
+検証が立たなくなった concept を空にできるキューとして数える器で、
+一覧そのものは既存の語彙で引ける。
 
 型は閉じた集合ではない([0038](design/0038-type-vocabulary-realignment.md):
 一行の値ならどれでも型になる)。ここで数えているのは**製品が教える
@@ -865,6 +872,7 @@ enum は凍結された契約に書いてあり、`ochakai import` はこの三�
 - `plan.unchanged`
 - `plan.updated`
 - `queue.drafts`
+- `queue.edited`
 - `ruling.verified`
 - `sort.failed`
 - `sort.stale_after`

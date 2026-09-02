@@ -14,9 +14,10 @@ sources:
 ---
 
 trust tier(`unverified` / `machine-confirmed` / `human-reviewed`)は
-検証台帳の actor の kind だけから導かれる — 台帳に `human:` の行が
+検証台帳のうち**立っている行**(`at` が内容の最終変更以降の行)の
+actor の kind から導かれる — いまの内容について `human:` の行が
 一つでもあれば human-reviewed である(OKF SPEC §5.3、設計ドキュメント
-0065 §6)。ところが dogfood インスタンスは `OCHAKAI_MODE=dev` で動き、
+0065 §6 を 0138 が改訂)。ところが dogfood インスタンスは `OCHAKAI_MODE=dev` で動き、
 そこでは**全員が `human:anonymous`** になる。素のままだと AI の書き込みも
 「human」として記録され、AI が verify を打てば human-reviewed が偽造
 できてしまう。

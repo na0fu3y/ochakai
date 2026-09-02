@@ -931,8 +931,22 @@ records are not cheaper than the split — 0109 §3's own sentence is why
 the split takes a record at all — and the ones still pooled there are the
 ones nobody has needed yet.
 
-    RECORD-CORPUS-LINES: 12000
+    RECORD-CORPUS-LINES: 12500
     RECORD-CORPUS-LINES-SLACK: 500
+
+**12,000 → 12,500 is 0138**, the record that makes the trust tier a
+claim about the current content: derived from the verifications that
+stand rather than from the whole ledger, with the lapsed concepts
+countable in a fourth queue. The boundary is worth the paragraph because
+the record settles a contradiction two earlier records were carrying
+between them — Create clears a tombstone's ledger so no verification
+vouches for content nobody verified, while Update kept the tier standing
+over exactly that — and because the alternative it declines is the one a
+requester actually asked for: a ranking penalty, which 0069 §7 and the
+searcheval history both argue against. Neither escape applies: no
+earlier record states this decision, and the record is one subject —
+the queue is the derivation's loop-side consequence, not a second
+decision.
 
 **11,500 → 12,000 is 0133 and 0134**, the two records of the OKF
 conformance pass. The boundary is worth the paragraph because of what the

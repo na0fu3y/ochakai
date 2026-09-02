@@ -598,7 +598,7 @@ func parseKnowledgeURI(uri string) (id string, ok bool) {
 type filters struct {
 	Types    []string `json:"types,omitempty" jsonschema:"filter by type, case-insensitive: Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type"`
 	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated — confirmation is a separate question, ask it with trusts"`
-	Trusts   []string `json:"trusts,omitempty" jsonschema:"filter by who confirmed it: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); several are OR-ed, omit to not ask. Independent of status"`
+	Trusts   []string `json:"trusts,omitempty" jsonschema:"filter by who confirmed it as it reads now: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); several are OR-ed, omit to not ask. Independent of status; a concept edited since its last verification is unverified again"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
 	Source   string   `json:"source,omitempty" jsonschema:"only concepts citing this resource, matched exactly against sources[].resource — \"this material changed, what derives from it?\""`
 	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes to a subtree (\"metrics\" covers metrics/ but not metrics-legacy/); several are OR-ed"`

@@ -19,7 +19,11 @@ Status: Accepted(2026-08-02)。**identity と provenance の現行ドキュメ�
 §4 の「無ければ initialize の `clientInfo` をフォールバックとして読む」は
 [0118](0118-a-call-carries-everything-it-needs.md) §3 が改訂する — 名乗りは
 毎回の呼び出しから読むようになり、2026-07-28 より前のクライアントでは
-フォールバックが届かなくなる。契約が `Ochakai-Producer` であることは動かない
+フォールバックが届かなくなる。契約が `Ochakai-Producer` であることは動かない。
+**§6 の「trust tier は検証台帳の `human:` だけから導かれる」は
+[0138](0138-a-verification-stands-until-the-content-moves.md) が改訂する** —
+導かれるのは台帳のうち**立っている行**(いまの内容を確認した行)からで、
+「判断は参照側が provenance を見て行う」は動かない
 Date: 2026-08-02
 
 ## 0. この記録が決めたこと

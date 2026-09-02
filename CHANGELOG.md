@@ -23,6 +23,19 @@ last entry.
 
 ### Added
 
+- **A fourth review queue, `edited`: concepts confirmed once but edited
+  or moved since**, so no verification stands for what they say now
+  (design doc
+  [0138](docs/design/0138-a-verification-stands-until-the-content-moves.md)).
+  Until now this state sat in no queue — failures need a report,
+  `stale_after` needs a declaration, drafts need a status — and
+  invisible work does not get done. The queue counts in `stats` (and in
+  `--exit-code`), lists via the existing
+  `ochakai list verified_at --trust unverified` combination (no new
+  sort), and appears in the web UI's queue strip and feed chips.
+  `ochakai move` prints the re-verify command on stderr when the moved
+  concept's verifications lapse.
+
 - **The web UI shows what an imported bundle claimed about itself.** A
   document can say who generated it and who confirmed it (OKF SPEC §5.2),
   and `examples/demo` says exactly that — an agent wrote `metrics/revenue`
@@ -58,6 +71,26 @@ last entry.
   two now share one, so opening 出典 draws immediately.
 
 ### Changed
+
+- **The trust tier is now a claim about the current content: it is
+  derived from the verifications that stand** — the ledger rows at or
+  after the concept's last meaningful change (`generated.at`) — instead
+  of from the whole ledger (design doc
+  [0138](docs/design/0138-a-verification-stands-until-the-content-moves.md)).
+  A concept edited or moved after its last verification reads
+  `unverified` again everywhere trust appears: the `trust` field, the
+  `--trust` filter, the stats tally, and the one-rank search boost,
+  which now simply has no standing confirmation to key off. A reformat
+  that changes no content lapses nothing, and the ledger itself never
+  shrinks — `verified_at`, the failed queue's predicate and the
+  MCP curation guard keep reading the history. On upgrade, concepts
+  edited after their verification drop out of `human-reviewed` /
+  `machine-confirmed` counts; `ochakai list verified_at --trust
+  unverified` lists them (lapsed first, never-verified tail after), and
+  re-verifying restores the tier. `Verify` timestamps are clamped to no
+  earlier than the content's own change time, so a database clock
+  running behind the application's cannot record a fresh verification
+  that does not stand.
 
 - **The web UI names an actor once on a concept's provenance line.** A
   delegated identity is two identities wide — the caller that acted is

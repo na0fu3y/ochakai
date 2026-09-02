@@ -93,10 +93,11 @@ export function route() {
     // directly. Both are entrances to the review loop, and the filter bar
     // was the only way in — a queue nobody can find stops being read as
     // surely as one nobody can empty (design doc 0025 §6).
-    if (rest[0] === 'reported-wrong' || rest[0] === 'verification-age' || rest[0] === 'stale') {
+    if (rest[0] === 'reported-wrong' || rest[0] === 'verification-age' || rest[0] === 'stale' || rest[0] === 'edited') {
       explore.failedFeed = rest[0] === 'reported-wrong';
       explore.ageFeed = rest[0] === 'verification-age';
       explore.expiredFeed = rest[0] === 'stale';
+      explore.editedFeed = rest[0] === 'edited';
       explore.source = '';
     } else if (rest[0] === 'in') {
       // Search scoped to a directory — where the tree's "Search here"
@@ -110,7 +111,7 @@ export function route() {
       // is a URI, so it travels as one encoded segment.
       explore.source = decodeURIComponent(rest.slice(1).join('/'));
       explore.q = '';
-      explore.failedFeed = explore.ageFeed = explore.expiredFeed = false;
+      explore.failedFeed = explore.ageFeed = explore.expiredFeed = explore.editedFeed = false;
     } else if (rest.length === 0) {
       explore.source = '';
     }

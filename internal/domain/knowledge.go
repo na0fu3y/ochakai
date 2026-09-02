@@ -307,12 +307,27 @@ func TrustsHint() string {
 	return strings.Join(names, ", ")
 }
 
-// TrustOf derives the tier from a verification ledger. SPEC §5.3 reads it
-// from the human: prefix alone: any person makes it human-reviewed, any
-// other confirmation machine-confirmed, none unverified.
-func TrustOf(vs []Verification) Trust {
+// TrustOf derives the tier from the verifications that stand: the rows at
+// or after contentChangedAt, which are the ones that confirmed the entry
+// as it reads now (design doc 0138). SPEC §5.3's ladder is unchanged —
+// any person makes it human-reviewed, any other confirmation
+// machine-confirmed, none unverified — but a confirmation of content an
+// edit has since replaced no longer climbs it: a tier that survived the
+// edit would have a verification vouch for content nobody verified, which
+// is the same wrong answer Create clears the ledger to avoid.
+//
+// contentChangedAt is generated.at (SPEC §5.2, "last meaningful change"),
+// so a reformat does not lapse a tier — SameContent keeps the timestamp
+// still — while an edit and a move both do (a move reassigns generated.by
+// to the mover, design doc 0036 §3.3, and the confirmation lapses with
+// the authorship). The ledger itself keeps every row: what lapses is the
+// claim about the current content, never the history.
+func TrustOf(vs []Verification, contentChangedAt time.Time) Trust {
 	tier := TrustUnverified
 	for i := range vs {
+		if vs[i].At.Before(contentChangedAt) {
+			continue
+		}
 		if vs[i].By.Kind == ActorHuman {
 			return TrustHuman
 		}
@@ -507,12 +522,12 @@ var Changes = []string{
 	"add_file", "remove_file",
 }
 
-// QueueCounts is how much work each review queue is holding — the three
+// QueueCounts is how much work each review queue is holding — the
 // listing feeds that a curator is meant to empty, counted rather than
 // listed (design doc 0049).
 //
 // A queue is keyed by the sort that lists it, so the count and the way to
-// see what it counts share one word (design doc 0059). Two of the three
+// see what it counts share one word (design doc 0059). Two of the four
 // once had names of their own — reported_wrong and past_expiry — and a
 // curator who wanted to work the queue `stats` had just named had to know
 // that it was spelled `failed` on the way to seeing it:
@@ -530,21 +545,32 @@ var Changes = []string{
 //     (design doc 0059 §2.2). Verifying does not empty it either —
 //     confirming and publishing are different acts (design doc 0043
 //     §3.2), so a draft leaves by an edit or a rejection.
+//   - edited — sort=verified_at with trust=unverified: entries somebody
+//     confirmed once, then somebody edited or moved, so no verification
+//     stands for what they say now (design doc 0138). Like drafts it is
+//     a combination rather than a sort, and like the others it can reach
+//     zero: it empties by a verification of the current content, or by
+//     the entry leaving. The listing carries the never-verified tail
+//     after it (their verified_at column is empty), which is why the
+//     count here is the precise predicate rather than the listing's
+//     length.
 //
-// The verification-age feed (sort=verified_at) is deliberately absent:
-// it ranks every verified entry rather than holding the ones that need
-// something, so a count of it is the size of the knowledge base and
-// never reaches zero. A number nobody can drive down is not a queue.
+// The verification-age feed (sort=verified_at) alone is deliberately
+// absent: it ranks every verified entry rather than holding the ones
+// that need something, so a count of it is the size of the knowledge
+// base and never reaches zero. A number nobody can drive down is not a
+// queue.
 type QueueCounts struct {
 	Drafts     int64 `json:"drafts"`
 	Failed     int64 `json:"failed"`
 	StaleAfter int64 `json:"stale_after"`
+	Edited     int64 `json:"edited"`
 }
 
-// Total is how much work is waiting across all three queues. An entry
+// Total is how much work is waiting across all the queues. An entry
 // can sit in more than one, so this counts places in queues rather than
 // distinct entries — which is what a reviewer works through anyway.
-func (q QueueCounts) Total() int64 { return q.Drafts + q.Failed + q.StaleAfter }
+func (q QueueCounts) Total() int64 { return q.Drafts + q.Failed + q.StaleAfter + q.Edited }
 
 // Usage aggregates how often a knowledge entry was actually used, and
 // how often users reported it worked or failed.
@@ -1379,7 +1405,7 @@ func SummaryOf(k *Knowledge) Summary {
 	s := Summary{
 		ID: k.ID, Type: k.Type, Title: k.Title, Description: k.Description,
 		Resource: k.Resource, Tags: k.Tags, Status: k.Lifecycle(), StaleAfter: k.StaleAfter,
-		Trust: TrustOf(k.Verifications), Links: k.Links,
+		Trust: TrustOf(k.Verifications, k.ContentChangedAt), Links: k.Links,
 		ContentHash: k.ContentHash, CreatedAt: k.CreatedAt, UpdatedAt: k.UpdatedAt,
 	}
 	if v := k.LastVerified(); v != nil {
@@ -1568,7 +1594,7 @@ type Backlink struct {
 func BacklinkOf(k *Knowledge) Backlink {
 	return Backlink{
 		ID: k.ID, Type: k.Type, Title: k.Title, Description: k.Description,
-		Status: k.Lifecycle(), Trust: TrustOf(k.Verifications),
+		Status: k.Lifecycle(), Trust: TrustOf(k.Verifications, k.ContentChangedAt),
 	}
 }
 

@@ -3462,7 +3462,11 @@ func TestIntegrationQueueCounts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QueueCounts: %v", err)
 	}
-	want := domain.QueueCounts{Drafts: 2, Failed: 2, StaleAfter: 1}
+	// Edited counts verified-broken: its verification is backdated to
+	// before the content's own change time, so it does not stand for the
+	// current content (design doc 0138) — the same entry sits in two
+	// queues, which Total() counts as two places to work.
+	want := domain.QueueCounts{Drafts: 2, Failed: 2, StaleAfter: 1, Edited: 1}
 	if got != want {
 		t.Errorf("QueueCounts = %+v, want %+v", got, want)
 	}

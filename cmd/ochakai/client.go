@@ -601,7 +601,7 @@ func oneLine(s string) string {
 func cmdStats(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"stats",
-		"Usage: ochakai stats [flags]\n\nShow the improvement loop as the instance sees it: what the knowledge\nbase is made of now, how much each queue is holding, what review did\nlately, what callers reported, and what they searched for and did not\nfind. `usage` measures one concept; this measures the base.\n\nA scope line says what the numbers cover whenever that is not the whole\nbundle — because a prefix was given, or because an access policy grants\nyou part of it. Then `misses` reads `withheld` rather than a count: an\nunanswered search carries no id, so it cannot be scoped, and the\ninstance's own list is an administrator's to read.\n\nOne line per number, so it composes: cron it and diff the output, or\ngrep one line out of it for a prompt or a dashboard. The gap lines are\nthe questions that came back empty, most-asked first — the list of what\nto write next.\n\nThe three queue lines — drafts waiting to be published or turned down,\nconcepts whose failure reports are unanswered, concepts past the expiry\ntheir author declared — carry the command that lists that queue, with\nthe scope you asked under, so the next step is the text on the line.\nThe verification-age feed is not one of them: it ranks every verified\nconcept rather than holding the ones that need something, so its size is\nthe size of the knowledge base and never reaches zero.\nWith --exit-code the command exits 2 while any of the three is\nnon-empty and 0 when all are, which is how a scheduled job goes red on\nwork nobody has picked up. An error still exits 1, so \"unreachable\"\ncannot be read as \"nothing to do\".",
+		"Usage: ochakai stats [flags]\n\nShow the improvement loop as the instance sees it: what the knowledge\nbase is made of now, how much each queue is holding, what review did\nlately, what callers reported, and what they searched for and did not\nfind. `usage` measures one concept; this measures the base.\n\nA scope line says what the numbers cover whenever that is not the whole\nbundle — because a prefix was given, or because an access policy grants\nyou part of it. Then `misses` reads `withheld` rather than a count: an\nunanswered search carries no id, so it cannot be scoped, and the\ninstance's own list is an administrator's to read.\n\nOne line per number, so it composes: cron it and diff the output, or\ngrep one line out of it for a prompt or a dashboard. The gap lines are\nthe questions that came back empty, most-asked first — the list of what\nto write next.\n\nThe queue lines — drafts waiting to be published or turned down,\nconcepts whose failure reports are unanswered, concepts past the expiry\ntheir author declared, concepts edited or moved since they were last\nverified — carry the command that lists that queue, with the scope you\nasked under, so the next step is the text on the line.\nThe verification-age feed is not one of them: it ranks every verified\nconcept rather than holding the ones that need something, so its size is\nthe size of the knowledge base and never reaches zero.\nWith --exit-code the command exits 2 while any queue is\nnon-empty and 0 when all are, which is how a scheduled job goes red on\nwork nobody has picked up. An error still exits 1, so \"unreachable\"\ncannot be read as \"nothing to do\".",
 		"  ochakai stats\n  ochakai stats --days 7\n  ochakai stats --prefix teams/growth       # our subtree only\n  ochakai stats --json | jq .queues.drafts\n  ochakai stats --exit-code                 # in CI: red while somebody owes a review\n")
 	days := fs.Int("days", 0, "how far back the flow numbers reach, 1-180 (default: 30; raw events are pruned after 180 days)")
 	var prefixes repeated
@@ -706,6 +706,12 @@ func cmdStats(ctx context.Context, args []string) error {
 		{"drafts", st.Queues.Drafts, "usage --status draft"},
 		{"failed", st.Queues.Failed, "failed"},
 		{"stale_after", st.Queues.StaleAfter, "stale_after"},
+		// The edited queue is a combination rather than a sort (design
+		// doc 0138): trust=unverified keeps only entries with no standing
+		// verification, and the verified_at order puts the ones that were
+		// confirmed once ahead of the never-verified tail, whose
+		// verified_at column prints empty.
+		{"edited", st.Queues.Edited, "verified_at --trust unverified"},
 	} {
 		fmt.Printf("%s\t%d\tochakai list %s%s\n", q.name, q.count, q.lists, scope.String())
 	}
@@ -1465,7 +1471,7 @@ func cmdReembed(ctx context.Context, args []string) error {
 func cmdMove(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"move",
-		"Usage: ochakai move [flags] <id> <new-id>\n       ochakai move --directory [flags] <old> <new>\n\nMove (rename) a knowledge concept to a new id. Revisions, usage, and\nfiles follow, and inbound references (link targets, and\na `model` key where a document carries one) are rewritten so nothing\nbreaks.\n\nWith --directory the two arguments are directories, and everything\naddressed under the old one moves: the concepts, the concepts that were\ndeleted and still hold their ids, and the files — including the ones no\nconcept's namespace covers. It moves whole or not at all, in one\ntransaction, so a refused move has changed nothing. Doing this by hand\ncannot be made to work: the last two are invisible to `ochakai list`,\nso a loop over it leaves them behind and the old directory never\nempties.\n\nThe flag is how you say which, and it is not sugar: a concept and a\ndirectory may share a name, so `metrics/revenue` addresses two things\nand only you know which was meant. The destination directory has to be\nempty.\n\nWhere the deployment has an access policy, a move runs when its whole\nrewrite fits inside what you may write: the concept, the destination,\nand everything that links at the concept — for a directory, everything\nthat links at anything in it. When something you cannot\nwrite links at it, the move is refused rather than performed without\nthose rewrites — the links it skipped would point at an id that is gone\n— and an administrator can move it for you.",
+		"Usage: ochakai move [flags] <id> <new-id>\n       ochakai move --directory [flags] <old> <new>\n\nMove (rename) a knowledge concept to a new id. Revisions, usage, and\nfiles follow, and inbound references (link targets, and\na `model` key where a document carries one) are rewritten so nothing\nbreaks.\n\nWith --directory the two arguments are directories, and everything\naddressed under the old one moves: the concepts, the concepts that were\ndeleted and still hold their ids, and the files — including the ones no\nconcept's namespace covers. It moves whole or not at all, in one\ntransaction, so a refused move has changed nothing. Doing this by hand\ncannot be made to work: the last two are invisible to `ochakai list`,\nso a loop over it leaves them behind and the old directory never\nempties.\n\nThe flag is how you say which, and it is not sugar: a concept and a\ndirectory may share a name, so `metrics/revenue` addresses two things\nand only you know which was meant. The destination directory has to be\nempty.\n\nWhere the deployment has an access policy, a move runs when its whole\nrewrite fits inside what you may write: the concept, the destination,\nand everything that links at the concept — for a directory, everything\nthat links at anything in it. When something you cannot\nwrite links at it, the move is refused rather than performed without\nthose rewrites — the links it skipped would point at an id that is gone\n— and an administrator can move it for you.\n\nA move rewrites content — links in the moved body and in every referrer\n— and reassigns who the content stands by, so a verification no longer\nstands for it and its trust tier returns to unverified until somebody\nconfirms the moved content (`ochakai verify`). The `edited` queue in\n`ochakai stats` holds everything that lapsed this way.",
 		"  ochakai move insights/revenue-seasonality insights/sales/revenue-seasonality\n  ochakai move --directory teams/growth teams/growth-archive\n")
 	directory := fs.Bool("directory", false,
 		"move a whole directory: both arguments are paths, and every object under the first one "+
@@ -1497,6 +1503,14 @@ func cmdMove(ctx context.Context, args []string) error {
 		return err
 	}
 	fmt.Printf("moved ochakai://%s -> %s\n", id, moved.URI())
+	// A move reassigns who the content stands by, so its verifications no
+	// longer stand and the trust tier is unverified again (design doc
+	// 0138). Said here, on stderr, because the mover is the one person
+	// who can re-confirm in the same breath — and the referrers the move
+	// rewrote are in the edited queue, which stats already points at.
+	if len(moved.Observed.Verified) > 0 {
+		fmt.Fprintf(os.Stderr, "its verifications no longer stand for the moved content; re-confirm with: ochakai verify %s\n", moved.ID)
+	}
 	return nil
 }
 

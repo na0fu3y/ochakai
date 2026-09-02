@@ -318,12 +318,13 @@ func (s *Store) ListByFailed(ctx context.Context, f Filter, after *After, limit 
 	return pgx.CollectRows(rows, scanUsageHit)
 }
 
-// QueueCounts counts the three review queues in one pass: how many
-// entries each of ListByUsage's draft feed, ListByFailed and
-// ListByStaleAfter would return (design doc 0049). A count and a listing
-// want different queries — measuring three feeds by fetching a thousand
-// rows from each is not measuring — but they must not want different
-// *predicates*: those are the feeds' own (unansweredFailure, pastExpiry),
+// QueueCounts counts the review queues in one pass: how many entries
+// each of ListByUsage's draft feed, ListByFailed, ListByStaleAfter and
+// the edited listing would return (design docs 0049, 0138). A count and
+// a listing want different queries — measuring the feeds by fetching a
+// thousand rows from each is not measuring — but they must not want
+// different *predicates*: those are the feeds' own (unansweredFailure,
+// pastExpiry, and for edited the trust filter's own standingVerification),
 // so a queue's depth cannot come to mean something other than the queue.
 //
 // The filter is the same one the feeds take, so a count is scoped by
@@ -334,12 +335,13 @@ func (s *Store) QueueCounts(ctx context.Context, f Filter) (domain.QueueCounts, 
 		SELECT
 			count(*) FILTER (WHERE k.status = 'draft'),
 			count(*) FILTER (WHERE `+unansweredFailure("k")+`),
-			count(*) FILTER (WHERE `+pastExpiry("k.")+`)
+			count(*) FILTER (WHERE `+pastExpiry("k.")+`),
+			count(*) FILTER (WHERE `+anyVerification("k.")+` AND NOT `+standingVerification("k.", "")+`)
 		FROM object k`+usageLateral+`
 		WHERE %[1]s`, where)
 	var c domain.QueueCounts
 	err := s.pool.QueryRow(ctx, q, args...).
-		Scan(&c.Drafts, &c.Failed, &c.StaleAfter)
+		Scan(&c.Drafts, &c.Failed, &c.StaleAfter, &c.Edited)
 	return c, err
 }
 
