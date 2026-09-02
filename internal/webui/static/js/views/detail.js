@@ -209,7 +209,7 @@ export async function viewDetail(id, heading = '') {
         </select>
       </span>
       ${isVerified(entry) ? `<span class="badge verified-mark" title="検証台帳から OKF が導く trust の段です(SPEC §5.3)">✓ ${trustOf(entry)}</span>` : ''}
-      ${edited ? `<span class="badge edited-mark" title="${esc(fmtDateTime(lastVerification(observed).at))} の検証より後、${esc(fmtDateTime(edited))} に内容が変わっています。検証は編集で失効しません(OKF SPEC §5.2)ので ✓ はそのままです — 読み直して問題なければ再検証してください">検証後に編集</span>` : ''}
+      ${edited ? `<span class="badge edited-mark" title="${esc(fmtDateTime(lastVerification(observed).at))} の検証より後、${esc(fmtDateTime(edited))} に内容が変わっています。検証はいまの内容には立たないので trust は unverified に戻っています(設計ドキュメント 0138)— 読み直して問題なければ再検証してください">検証後に編集</span>` : ''}
       ${tags}
       <span class="actions write-only">
         <a class="btn small" href="#/edit/${idPath(entry.id)}">編集</a>

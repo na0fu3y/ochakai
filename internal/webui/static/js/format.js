@@ -142,11 +142,12 @@ export function isVerified(e) { return trustOf(e) !== 'unverified'; }
 // When the content moved after the newest confirmation, this is the
 // instant it moved; otherwise the empty string.
 //
-// OKF SPEC §5.2 keeps `verified` independent of `generated.at` — an edit
-// never cancels a confirmation, and a confirmation never claims the
-// content stayed put afterwards — so nothing here is a state the server
-// stores: it is the two ledgers read side by side, which is the reading
-// the spec leaves to the consumer. generated.at is the last *meaningful*
+// The ledger keeps every confirmation, and a confirmation never claims
+// the content stayed put afterwards — what an edit takes away is the
+// tier, which stands only on a verification of the current content
+// (design doc 0138). So nothing here is a state the server stores: it is
+// the two ledgers read side by side, which is the reading the spec
+// leaves to the consumer. generated.at is the last *meaningful*
 // change, so a write that only reformatted the document does not raise
 // it and does not raise this (unlike updated_at, which moves for any
 // write at all).

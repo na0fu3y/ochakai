@@ -339,18 +339,20 @@ class Ochakai:
 def ruled_on(view: dict) -> str:
     """Why this entry is a person's now, or "" while it is still the sync's.
 
-    Three separate signals, because ochakai keeps them separate (design
-    doc 0075 §4.1): the **lifecycle** is what the writer declared, the
-    **trust tier** is what the verification ledger derives, and a
-    **rejection** is a live ruling beside both. Verifying an entry does
-    not move its status — a ruling and a publication are different acts —
-    so a sync that watched `status` alone would go on overwriting an entry
-    somebody had just confirmed, which is the one thing this guard exists
-    to prevent.
+    Two separate signals, because ochakai keeps them separate (design
+    doc 0075 §4.1): the **lifecycle** is what the writer declared, and the
+    **trust tier** is what the verification ledger derives. Verifying an
+    entry does not move its status — a ruling and a publication are
+    different acts — so a sync that watched `status` alone would go on
+    overwriting an entry somebody had just confirmed, which is the one
+    thing this guard exists to prevent.
+
+    A rejection is not a third signal: it is a deletion carrying a reason
+    (design doc 0135), so a rejected entry is gone rather than marked and
+    the next run projects it again. What takes an entry out for good is a
+    verification, an edit, or a status that is not `draft`.
     """
     summary = view.get("summary", {})
-    if summary.get("rejected"):
-        return "rejected"
     if summary.get("trust", "unverified") != "unverified":
         return summary["trust"]
     status = summary.get("status", "stable")

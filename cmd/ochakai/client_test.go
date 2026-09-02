@@ -1484,9 +1484,9 @@ func TestUnknownCommandSaysWhatIsWrong(t *testing.T) {
 }
 
 // A confirmation is about the document that stood there when it was
-// made, and OKF SPEC §5.2 keeps `verified` independent of
-// `generated.at`: an edit does not cancel a confirmation, so the two
-// have to be read together. This line is where the CLI reads them —
+// made, and the ledger keeps it after an edit — what the edit takes away
+// is the tier that stood on it (design doc 0138) — so the confirmation
+// and `generated.at` have to be read together. This line is where the CLI reads them —
 // before this it printed the confirmation alone, so a concept edited
 // after it was verified read exactly like one nobody had touched.
 func TestGetSaysWhenTheContentMovedAfterTheVerification(t *testing.T) {

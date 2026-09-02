@@ -115,15 +115,18 @@ written before the stamp existed carry no producer; for those, and only
 those, the last-writer account still decides, so the first run under the
 old identity re-stamps them and the rule converges.)
 
-"Nobody has ruled on it" is three separate questions, because ochakai
-keeps the three apart: the **lifecycle** is what the writer declared —
-`draft`, written into every projection, because a document that declares
-nothing reads as `stable` and this job would then skip its own work — the
-**trust tier** is what the verification ledger derives, and
-a **rejection** is a live ruling beside both. Verifying does not move the
-status — a ruling and a publication are different acts — so a sync
-watching `status` alone would go on overwriting an entry somebody had just
-confirmed. The job reads all three.
+"Nobody has ruled on it" is two separate questions, because ochakai keeps
+the two apart: the **lifecycle** is what the writer declared — `draft`,
+written into every projection, because a document that declares nothing
+reads as `stable` and this job would then skip its own work — and the
+**trust tier** is what the verification ledger derives. Verifying does not
+move the status — a ruling and a publication are different acts — so a
+sync watching `status` alone would go on overwriting an entry somebody had
+just confirmed. The job reads both.
+
+A rejection is not a third question. It is a deletion carrying a reason
+(design doc 0135), so a rejected entry is gone rather than marked, and the
+next run projects it again.
 
 A human takes an entry out of the sync by touching it, two ways that mean
 different things:

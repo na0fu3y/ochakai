@@ -4,7 +4,6 @@
     "deny": [
       "Bash(ochakai put:*)",
       "Bash(ochakai verify:*)",
-      "Bash(ochakai reject:*)",
       "Bash(ochakai delete:*)",
       "Bash(ochakai purge:*)",
       "Bash(ochakai move:*)",
