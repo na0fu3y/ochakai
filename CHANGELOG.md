@@ -23,6 +23,14 @@ last entry.
 
 ### Changed
 
+- **The positioning page carries the MCP surface's resident bytes, with
+  the date.** The semantica paragraph argued "bytes, not tool count"
+  without a number; it now has both sides measured — ochakai's six tools
+  at 12,290 bytes of `tools/list` including 1,179 of instructions
+  (2026-09-03, the same count the `MCP-BYTES` ceiling reads), semantica's
+  seventeen at 7,771 (2026-08-23) — and says tokens are not measured.
+  The last open half of #677's "publish the measurement".
+
 - **The positioning page says what the OKF ecosystem became, and where
   ochakai stands in it.** Two days after the Knowledge Catalog section
   was last checked against its sources, Google's catalog started
