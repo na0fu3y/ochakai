@@ -23,6 +23,39 @@ last entry.
 
 ### Changed
 
+- **The positioning page says what the OKF ecosystem became, and where
+  ochakai stands in it.** Two days after the Knowledge Catalog section
+  was last checked against its sources, Google's catalog started
+  ingesting OKF v0.2 bundles (2026-08-27: `kcmd push` maps every
+  concept to an Entry and the thirteen OKF fields, `verified` and
+  `stale_after` among them, to an aspect; `LookupContext` hands them to
+  agents). The section now says so, and says what the catalog does with
+  `verified` — copies the document's claim, as ochakai's own import
+  does, ruling on nothing — and which of the revisit conditions that
+  met (who-and-when per unit, as a claim) and which it did not (a
+  ruling recorded with the actor's identity, a rejection with its
+  reason, a whole-bundle exit). The vault section became the section
+  on OKF-native local tools: 135 repositories carry the format's topic
+  three months after the spec, almost all of them one file tree on one
+  machine, and two of them (kaut, okf-hub) hold the draft queue and
+  write gate this page used to say no file-based tool had — so the
+  "loop" bullet now names what is still missing rather than claiming
+  the whole loop. What that leaves as the difference is stated once,
+  on the README as well: ochakai is the format's ruling side, where a
+  `verified` entry is an event the instance observed from an
+  authenticated caller rather than a claim in a file. The repository
+  now carries the `open-knowledge-format` and `okf` topics.
+
+- **`ochakai export` passes two independent OKF validators, and the
+  positioning page says so with the date.** A 53-concept export of
+  this repository's own knowledge base and the 18-concept
+  `examples/demo` bundle were run through okfcli v0.5.0's `validate`
+  and okf-skills' §11 conformance checker on 2026-09-03: zero errors
+  from both, the warnings being links to files outside the bundle and
+  one past `stale_after`. C3 is now held by other people's checkers,
+  not only this repository's tests. Pushing the same bundle into
+  Knowledge Catalog has not been tried.
+
 - **The manual says the four things an adopter's review design gets
   wrong.** A review-operations design written by an adopter in
   2026-09 re-invented, without knowing it, mechanisms ochakai already

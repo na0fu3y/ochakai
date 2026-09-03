@@ -309,8 +309,13 @@ for what they still don't do:
   and the whole base round-trips through
   [OKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
   bundles — plain markdown + YAML frontmatter that lives happily in git,
-  with trust in the spec's own keys. MIT-licensed and self-hosted per
-  tenant: your knowledge is never a hostage.
+  with trust in the spec's own keys. Since 2026-08 that format is what
+  Google's own Knowledge Catalog ingests and what a ring of local tools
+  speaks, so speaking it is no longer the difference; ochakai is the
+  format's **ruling side** — a `verified` entry here is an event the
+  instance observed from an authenticated caller, never a claim typed
+  into a file — with the review loop around it. MIT-licensed and
+  self-hosted per tenant: your knowledge is never a hostage.
 
 Each of those has an alternative you may already run — a catalog, a
 memory layer, a markdown vault with an MCP server.

@@ -71,7 +71,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 | FDE 型オントロジー([Palantir Foundry Ontology](https://www.palantir.com/docs/foundry/ontology/overview)) | 組織のデジタルツイン — オブジェクトとリンク、Action と write-back、ライブデータへの接続、プラットフォーム内のガバナンス | 出口(オントロジーはプラットフォームのもの)、FDE 無しの立ち上げ、テナントごとの安価なセルフホスト | 約束は同じ、買い方を拒む — 下記参照 |
 | OSS の「Palantir 代替」([semantica](https://github.com/semantica-agi/semantica)) | 数十ソースの取り込みと自動抽出、ポリグロットなグラフ・ベクトルストア、OWL/SHACL、PROV-O、エージェントの決定の因果記録、セルフホスト | 人の裁定が中核であること(decision の記録は verify ではない)、secret-zero、単一形式の往復、キュレーションが買う小ささ | 約束の語彙は重なる、軸が違う — 下記参照 |
 | グラフ DB ネイティブのオントロジー基盤([NebulaGraph](https://nebula-graph.io/posts/ontology-and-graph-databases-enterprise-ai-from-theory-to-production-reality)、Neo4j + GraphRAG) | 型システムと書き込み時のスキーマ強制、型間のリレーション制約、数十億ノードへのスケール、多段トラバーサルとグラフアルゴリズム | 検証のループが中核であること(あちらでは成熟モデルの最終段)、markdown での出口、キュレーションされた規模が買う単純さ | 規模が前提から違う — 下記参照 |
-| **MCP サーバー付きの markdown vault(Obsidian、Logseq、ノートの git リポジトリ)** | markdown + frontmatter、リンク、ローカルな所有、エージェントが読めること | 生きた状態としての検証、ループ、複数書き手の identity、一台のマシンを越える到達 | 両立 — 下記参照 |
+| **OKF ネイティブのローカルツール群と、MCP サーバー付きの markdown vault**([okf-skills](https://github.com/scaccogatto/okf-skills)、[okfcli](https://github.com/okfcli/okf)、[serradura/okf](https://github.com/serradura/okf)、[kaut](https://github.com/yurgeno/kaut)、Obsidian、ノートの git リポジトリ) | 同じ OKF v0.2 の markdown + frontmatter、リンク、ローカルな所有、エージェントが読み書きすること、一部は draft キューと書き込みの門 | 認証された呼び出し元を観測する台帳としての検証、outcome と miss の計測、複数書き手の identity、一台のマシンを越える到達 | 両立 — 下記参照 |
 
 ### Google Cloud Knowledge Catalog(旧 Dataplex)
 
@@ -96,7 +96,22 @@ search と Context API と MCP でエージェントへ配る([AI agents 向け�
 **verified queries and semantic guardrails**(Preview)を挙げている —
 幻覚した join を検証済みのクエリで置き換えるという、ochakai の
 `Attested Computation` と同じ問題である。ここは「両立」で逃げられない
-(この節の事実は 2026-08-25 に原典を開いて確かめた)。
+(この節の事実は 2026-08-25 と 2026-09-03 に原典を開いて確かめた)。
+
+**そして 2026-08-27 から、あちらは OKF を読む。** リポジトリの `kcmd push`
+が OKF v0.2 のバンドルを concept ごとの Entry(`okf-bundle`)と二つの
+aspect — 本文と、`verified` / `stale_after` / `generated` / `attester` /
+`sources` / `status` を含む 13 欄の `okf` — に写し、`LookupContext` が
+エージェントに YAML で配る
+([発表](https://cloud.google.com/blog/products/data-analytics/scale-okf-bundles-across-an-organization-with-knowledge-catalog))。
+`ochakai export` のバンドルはその入口の形をしている(下の「export は
+第三者の検証器を通る」)。**あちらが写すのは主張である**: `verified` は
+文書の frontmatter から写され、カタログ自身は検証を行わず、行為者の
+identity で記録もしない — ochakai が import で `received` に置くもの
+(0009 §3.2、0046 §2.2)と同じ扱いで、逆向きも同じである。Knowledge
+Catalog から来た `verified` を ochakai は裁定として読まない。OKF への
+書き戻し、レビューキュー、却下、outcome の報告は記事に無い。concept が
+一つずつ Entry になるので、下で言う「二つ目の読み方」は OKF 経由なら並ぶ。
 
 違いは軸である: **あちらは生成して昇格させ、こちらは人が裁定する。**
 起点は機械で、data steward の仕事はあちらの use case の言葉で「AI が
@@ -137,8 +152,11 @@ Catalog はこの節の隣人であり、同じ名前のリポジトリにある
 
 **見直す条件を書いておく**: verified queries が Preview を出て、かつ
 「この一本を誰がいつ確かめたか」を単位ごとに持ち、丸ごと持ち出せる形が
-付いたとき。そうなればナレッジの置き場が Google Cloud の中で足りるので、
-BigQuery 一本のチームに対して ochakai が言えることはほとんど残らない。
+付いたとき。2026-08-27 で前半は主張としては満たされた。残るのは、
+カタログ自身が裁定を行為者の identity で記録すること、却下が理由ごと
+残ること、丸ごと OKF に戻ることの三つで、そうなればナレッジの置き場が
+Google Cloud の中で足りるので、BigQuery 一本のチームに対して ochakai が
+言えることはほとんど残らない。
 
 ### ウェアハウス native の semantic layer
 
@@ -335,25 +353,38 @@ AI が生んだ洞察を人が検証してオントロジーへ還流する閉�
 
 <a id="a-markdown-vault-with-an-mcp-server"></a>
 
-### MCP サーバー付きの markdown vault
+### OKF ネイティブのローカルツール群と、MCP サーバー付きの markdown vault
 
 最も安価な代替であり、2026 年には最も高い確率で既に持っているもので
 ある: YAML frontmatter を持つ markdown ノートの vault で、本文にリンク
-があり、コミュニティの MCP サーバー経由で Claude Code から 10 分ほどで
-届く — インフラは一切要らない。Obsidian は frontmatter を型付きの
-プロパティとして読み、Bases でその上にテーブル・カード・リスト・マップの
-ビューまで作る。データはノートの中に留まったままである。
+があり、MCP サーバー経由で Claude Code から 10 分ほどで届く — インフラは
+一切要らない。**そしてその vault は、2026 年の夏に OKF を話すようになった。**
+Google が OKF v0.2 を公開した 2026-07-25 から三か月で、GitHub の topic
+`open-knowledge-format` には 135 のリポジトリが付いた(2026-09-03)。大きい
+ものは全てローカルで、ファイルで、一台である — Claude Code プラグインと
+conformance checker と read-only MCP を持つ okf-skills、validate / lint /
+search の一本の Go バイナリ okfcli、MCP 14 ツールの serradura/okf。
+うち二つはこの節が長く「無い」と書いてきたものを持つ: kaut は書き込みの
+門と draft キューと freshness の判定を、okf-hub は「提案だけ受け、管理者役が
+統合する」レビューを、どちらも git を正本にして持つ。
 
 重なりは表面的ではない — **物理的な形が同じ**なのである。`ochakai
 export` のバンドルは YAML frontmatter を持つ markdown ファイルの
 ディレクトリで、その関係は普通の本文リンクである
 ([0136](design/0136-a-concept-is-addressed-not-labelled.md) §2)。
-つまり**それは vault として開く**。良いエディタとグラフビューで
+つまり**それはどのツールでも開く**。良いエディタとグラフビューで
 ナレッジベースを眺めたいのなら、それがその道具であり、ここにあるものは
-何も競合しない。(export のルート相対リンクが Obsidian のグラフで
-すべて解決するかは未検証である。)
+何も競合しない。
 
-vault が持たないのは、ファイル形式でないすべてである:
+**export は第三者の検証器を通る。** 2026-09-03、`ochakai export` した
+53 concept のバンドルと `examples/demo` の 18 concept を、okfcli v0.5.0 の
+`validate` と okf-skills の §11 conformance checker に通した。どちらも
+エラー 0 で、警告はバンドルの外のファイルを指すリンクと期限を過ぎた
+`stale_after` だけである。C3 は自分のテストではなく他人の検証器で守れる
+ようになった。Knowledge Catalog の `kcmd push` に同じバンドルを入れる
+ことは、まだ試していない。
+
+ファイルの側が持たないのは、ファイル形式でないすべてである:
 
 - **単位。** ノートは誰かが自分の理由で書いた文書である。ochakai の
   concept は、自分のライフサイクル・`verified` の台帳・provenance を
@@ -368,9 +399,10 @@ vault が持たないのは、ファイル形式でないすべてである:
   ファイルには観測者がいない。vault の中の何一つ、その台帳に追記も
   しなければ、そこから trust tier を導きも、それに反する書き込みを
   拒みも、最後の確認が古びた concept を浮かせもしない。
-- **ループ(C7)。** 対応するものが一つも無い — レビューキューも、
-  *no* の記憶も、利用回数も、検証の古さのフィードも、concept に基づいて
-  動いて間違いだったと分かったエージェントからの結果報告も
+- **ループ(C7)。** 大半には対応するものが無く、draft キューと書き込みの
+  門を持つ kaut と okf-hub にも無いものが残る — *no* の記憶、利用回数、
+  検証の古さのフィード、concept に基づいて動いて間違いだったと分かった
+  エージェントからの結果報告、答えの無かった問い
   ([ループ](loop.md)、
   [0069](design/0069-the-loop-and-what-measures-it.md) §1)。これが最も
   鋭い違いであり、これが製品である。
@@ -469,7 +501,8 @@ vault が持たないのは、ファイル形式でないすべてである:
   ハウス自身の semantic layer。
 - 足りないのがエージェントが*あなた*を覚えていること — 好み、進行中の
   文脈 — なら → メモリ層。
-- 一人、一台、自分で書くノートなら → vault と、その上の MCP サーバー。
+- 一人、一台、自分で書くノートなら → OKF ネイティブのローカルツールか
+  vault と、その上の MCP サーバー。
 - オントロジーの約束には頷くが、プラットフォームと FDE という買い方を
   断りたい — そして kinetic の実行(Action、write-back)をエージェントに
   任せられるなら → semantic の中核と kinetic の定義を最小に持つ、それが
