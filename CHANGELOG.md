@@ -23,6 +23,25 @@ last entry.
 
 ### Changed
 
+- **A per-caller rate limit is declined, and the operating guide says
+  where one goes.** The 2026-08 audit (#677) asked for the `public` and
+  `sandbox` postures to answer floods with a 429 before anything drew
+  traffic to them. The answer is that ochakai does not count callers:
+  who may reach a deployment is Cloud Run IAM's decision and lives
+  nowhere in this binary (C2), and how often they reach it is the same
+  layer's job for the same reason. Building it in would add a 429 to
+  `search` and the bundle operations the freeze holds still (0082 §2),
+  key on a client IP the API cannot see through its own web UI's
+  reverse proxy and cannot trust from `X-Forwarded-For` in a posture
+  that reads no identity, and make the number a release to change. The
+  [operating guide](docs/guides/operating.md)'s public-demo section now
+  says what the ceiling is today (`--max-instances=1`, and Cloud Run's
+  own 429 at saturation), what it does not buy (fairness between
+  visitors), and where that is bought when needed (an external HTTPS
+  load balancer with a Cloud Armor rate-limiting policy, at its fixed
+  monthly cost). [ROADMAP](ROADMAP.md) lists the refusal with the
+  condition for revisiting it.
+
 - **The positioning page carries the MCP surface's resident bytes, with
   the date.** The semantica paragraph argued "bytes, not tool count"
   without a number; it now has both sides measured — ochakai's six tools

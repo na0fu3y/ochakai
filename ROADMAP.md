@@ -185,3 +185,21 @@ it.
   0109 §3 foresaw; a change that breaks one of the four is the change that
   closes it, and fleet tooling belongs with the operator, not in this
   repository.
+- **A per-caller rate limit.** Who may reach a deployment is Cloud Run
+  IAM's decision and lives nowhere in this binary
+  ([0003](docs/design/0003-gcp-only.md),
+  [0065](docs/design/0065-identity-and-provenance.md)); how often they
+  reach it is the same layer's job for the same reason. A limiter inside
+  would add a 429 to the operations the freeze holds still
+  ([0082 §2](docs/design/0082-what-the-freeze-holds-still.md)), key on a
+  client IP the API cannot see through its own web UI's proxy, and make
+  the number a release to change. The `public` and `sandbox` postures
+  ([0066](docs/design/0066-four-postures-one-word.md),
+  [0087](docs/design/0087-a-sandbox-says-it-is-one.md)) are capped by
+  `--max-instances` and Cloud Run's own 429 at saturation; fairness
+  between visitors is bought, when it is needed, with an external load
+  balancer and Cloud Armor
+  ([operating guide](docs/guides/operating.md#公開デモ)). Revisited if a
+  self-verifying public posture ([0119 §5](docs/design/0119-an-operated-fleet-is-deployments-or-directories.md))
+  ships and an operator who cannot put a load balancer in front of it
+  actually appears.
