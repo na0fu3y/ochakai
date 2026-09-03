@@ -209,7 +209,7 @@ func (s *Service) explainOccupiedID(ctx context.Context, id string, err error) e
 	case domain.RulingVerified:
 		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
 			"re-verification feed. If you have something better, put_concept it at a " +
-			"different id and let a human judge it."
+			"different id, linking this one from its body, and let a human judge it."
 	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
 			"reviving, put_concept a draft at a different id that says why."
@@ -493,7 +493,8 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, 
 	switch ruling {
 	case domain.RulingVerified:
 		instead = "If it is wrong, say so with report_outcome failed — that puts it in the " +
-			"re-verification feed. If you have something better, put_concept a new draft."
+			"re-verification feed. If you have something better, put_concept a new draft at a " +
+			"different id, linking this one from its body so the reviewer sees both."
 	case domain.RulingDeprecated:
 		instead = "Deprecated means it was correct and is no longer recommended. If it is worth " +
 			"reviving, put_concept a draft that says why."
