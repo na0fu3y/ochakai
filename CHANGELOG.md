@@ -23,6 +23,23 @@ last entry.
 
 ### Changed
 
+- **The loop page walks the path from "an agent found this wrong" to "a
+  human sees both", which was the last thing the 2026-08 audit's
+  close-the-MCP-loop item asked for.** That item proposed a
+  `supersedes: <id>` key on `put_concept` and a "does a successor
+  exist" field on `get_concept`, on the grounds that the tool
+  descriptions instructed a behaviour an MCP-only agent could not
+  perform. Both halves have since arrived by another road and no key is
+  needed: links are derived from the body (0136 §2), so a draft written
+  at a different id that links the concept it would replace reaches
+  that concept's `linked_from` (0106), where the row carries the
+  draft's `status` and `trust`. What was missing was the sentence
+  saying so on the page a reader is on when they want it — the
+  reviewer's side. [The loop](docs/loop.md) now says it, and says why
+  there is no relationship type: which one is newer is `status`, and
+  what a draft means to supersede is the prose around the link, for the
+  reason 0136 §2 retired `rel`.
+
 - **A per-caller rate limit is declined, and the operating guide says
   where one goes.** The 2026-08 audit (#677) asked for the `public` and
   `sandbox` postures to answer floods with a 429 before anything drew
