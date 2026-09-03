@@ -75,12 +75,20 @@ MCP からはできない。削除はそもそもツールですらない — �
 verified・deprecated — を拒み、拒否は代わりに何をすべきかを
 言う:
 
-> cannot replace metrics/revenue from this surface: it is verified, and
-> this surface has no If-Match precondition to replace curated knowledge
-> safely. If it is wrong, say so with report_outcome failed — that puts it
-> in the re-verification feed. If you have something better,
-> put_concept a new draft. A human changes curated concepts from the
-> web UI or CLI.
+> cannot replace metrics/revenue from this surface: a human ruled on it
+> (verified), and this surface has no If-Match precondition to replace
+> curated knowledge safely. If it is wrong, say so with report_outcome
+> failed — that puts it in the re-verification feed. If you have
+> something better, put_concept a new draft at a different id, linking
+> this one from its body so the reviewer sees both. A human changes
+> curated concepts from the web UI or CLI.
+
+「別の id に、リンクして」が答えの本体である。検証済みのテーブル concept
+に業務説明を後から足したいなら、追記は別の concept として書き、本文から
+そのテーブルにリンクする — テーブルを取ったエージェントは `linked_from`
+でその追記に出会う(設計ドキュメント
+[0106](design/0106-a-read-carries-what-points-at-it.md))。検証は信頼の
+印であると同時に、この面に対する書き込みの門でもある。
 
 これは認可ではない — 同じデプロイに届く人間は、REST からも CLI からも
 Web UI からも何でも編集できる。これは面の規則である: MCP には、安全な

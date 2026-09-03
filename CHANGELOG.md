@@ -21,6 +21,73 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The positioning page says what the OKF ecosystem became, and where
+  ochakai stands in it.** Two days after the Knowledge Catalog section
+  was last checked against its sources, Google's catalog started
+  ingesting OKF v0.2 bundles (2026-08-27: `kcmd push` maps every
+  concept to an Entry and the thirteen OKF fields, `verified` and
+  `stale_after` among them, to an aspect; `LookupContext` hands them to
+  agents). The section now says so, and says what the catalog does with
+  `verified` — copies the document's claim, as ochakai's own import
+  does, ruling on nothing — and which of the revisit conditions that
+  met (who-and-when per unit, as a claim) and which it did not (a
+  ruling recorded with the actor's identity, a rejection with its
+  reason, a whole-bundle exit). The vault section became the section
+  on OKF-native local tools: 135 repositories carry the format's topic
+  three months after the spec, almost all of them one file tree on one
+  machine, and two of them (kaut, okf-hub) hold the draft queue and
+  write gate this page used to say no file-based tool had — so the
+  "loop" bullet now names what is still missing rather than claiming
+  the whole loop. What that leaves as the difference is stated once,
+  on the README as well: ochakai is the format's ruling side, where a
+  `verified` entry is an event the instance observed from an
+  authenticated caller rather than a claim in a file. The repository
+  now carries the `open-knowledge-format` and `okf` topics.
+
+- **`ochakai export` passes two independent OKF validators, and the
+  positioning page says so with the date.** A 53-concept export of
+  this repository's own knowledge base and the 18-concept
+  `examples/demo` bundle were run through okfcli v0.5.0's `validate`
+  and okf-skills' §11 conformance checker on 2026-09-03: zero errors
+  from both, the warnings being links to files outside the bundle and
+  one past `stale_after`. C3 is now held by other people's checkers,
+  not only this repository's tests. Pushing the same bundle into
+  Knowledge Catalog has not been tried.
+
+- **The manual says the four things an adopter's review design gets
+  wrong.** A review-operations design written by an adopter in
+  2026-09 re-invented, without knowing it, mechanisms ochakai already
+  has, and drifted in four places every next adopter will reach: it
+  drew status and trust as one ladder, planned a verification ledger of
+  its own, verified the projected skeleton first and meant to let agents
+  fill it in afterwards, and set out to empty the draft queue. None of
+  these needed a feature; each needed a paragraph in the place a reader
+  is when they make the decision. [The first
+  month](docs/guides/onboarding.md) now opens with who sits in which of
+  the three chairs (asking, writing, ruling) and which surface each
+  touches, says that a ledger kept elsewhere moves no ranking, that
+  status and trust are two measures, that there is no "confirmed twice"
+  tier and where a second verification is read instead, that a
+  verified skeleton cannot be appended to from MCP so the content goes
+  in before the verification or beside it as a linked concept, and that
+  "on hold" is a tag rather than a fourth status. [The
+  loop](docs/loop.md) says what ✓ 検証 does that `ochakai verify` does
+  not, the [operating guide](docs/guides/operating.md) says the queues
+  keep no depth history and how to keep one with the cron already
+  there, and the [FAQ](docs/faq.md)'s quoted refusal matches what the
+  server sends.
+
+- **The MCP refusal on a curated concept says where the better draft
+  goes.** `put_concept` against a verified concept still refuses; its
+  message now ends "put_concept a new draft at a different id, linking
+  this one from its body so the reviewer sees both" rather than
+  stopping at "a new draft", because the link is what puts the draft in
+  the curated concept's `linked_from` (design doc 0106) and an agent
+  told only to write a draft wrote one nobody reading the original
+  would meet. No endpoint, tool, command or variable changed.
+
 ## [0.28.3] - 2026-09-03
 
 ### Added
