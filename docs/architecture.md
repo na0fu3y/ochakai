@@ -140,7 +140,7 @@ verified・deprecated — を上書き・変更することを
 
 ## データモデル
 
-**concept とは [OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
+**concept とは [OKF](https://github.com/GoogleCloudPlatform/open-knowledge-format)
 v0.2 文書である** — YAML の frontmatter の後に markdown 本文が続く —
 そしてそれが保存形式であり、ワイヤ形式であり、export 形式でもある
 (設計ドキュメント [0075](design/0075-the-bundle-is-the-address-space.md) §3。

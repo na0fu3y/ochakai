@@ -1,5 +1,5 @@
 // Package okf exports the knowledge base as an Open Knowledge Format
-// bundle (https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf):
+// bundle (https://github.com/GoogleCloudPlatform/open-knowledge-format):
 // a directory of markdown files with YAML frontmatter, one concept per
 // knowledge entry at its id's path (the layout is the user's, design doc
 // 0017), with index.md files for progressive disclosure. Your knowledge

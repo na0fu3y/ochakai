@@ -71,7 +71,7 @@ concept と一緒に 2 つのファイルが旅をする。
 は computation そのものである。`# Computation` フェンスに貼り込むのでは
 なく concept の `computation` キーがファイルとして名指している —
 インラインに書くには長すぎる computation のために
-[OKF SPEC](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+[OKF SPEC](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md)
 §10.2 が与えている形である — そして concept と一緒にファイルとして旅を
 するので、`ochakai get jobs/sync-bigquery-catalog --download .` が契約と
 一緒にコードを持ち帰る。置かれているのは文書の隣、concept の名前の

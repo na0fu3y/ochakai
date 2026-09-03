@@ -307,7 +307,7 @@ for what they still don't do:
   each AI-analyst SaaS — each feeding only its own chat. The same
   knowledge here serves Claude Code, hosted MCP agents and CI jobs alike,
   and the whole base round-trips through
-  [OKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
+  [OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format)
   bundles — plain markdown + YAML frontmatter that lives happily in git,
   with trust in the spec's own keys. Since 2026-08 that format is what
   Google's own Knowledge Catalog ingests and what a ring of local tools

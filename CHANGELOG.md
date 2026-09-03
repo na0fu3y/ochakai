@@ -23,6 +23,16 @@ last entry.
 
 ### Changed
 
+- **Every link to the OKF specification points at the format's own
+  repository.** OKF moved to
+  [GoogleCloudPlatform/open-knowledge-format](https://github.com/GoogleCloudPlatform/open-knowledge-format)
+  on 2026-08-14, and the copy under `knowledge-catalog/okf` that the
+  README, the manual, the examples and the `okf` package's doc comment
+  linked as the spec now describes itself as a frozen snapshot that is
+  no longer maintained. Seven links moved; nothing else did. Design
+  records that cite the old path are immutable and keep it, which is
+  where the spec lived when they were written.
+
 - **A per-caller rate limit is declined, and the operating guide says
   where one goes.** The 2026-08 audit (#677) asked for the `public` and
   `sandbox` postures to answer floods with a 429 before anything drew

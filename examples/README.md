@@ -18,7 +18,7 @@
 Google の公開データセット
 [`bigquery-public-data.thelook_ecommerce`](https://console.cloud.google.com/marketplace/product/bigquery-public-data/thelook-ecommerce)
 (Looker が生成する架空の衣料品店)についての 18 concept を、
-[OKF](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf)
+[OKF](https://github.com/GoogleCloudPlatform/open-knowledge-format)
 v0.2 バンドルとして書いたものである。実在のデータセットなので、
 **`# Computation` フェンスの SQL はどれも実際に走る**。
 
