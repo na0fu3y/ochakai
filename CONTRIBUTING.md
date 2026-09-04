@@ -607,422 +607,37 @@ record is still carrying prose nobody rereads.
 
 ### How many records, and how much
 
-`RECORD-LINES` bounds one record's thickness. Nothing bounded how many
-records there are, and that turned out to be the number that moved: 19
-records at v0.10.0 against 78 today, 4.1x, while non-test Go grew 2.5x
-(7,938 → 19,527) and REST retreated from 19 operations to 11. **Lines are
-no longer the half that outruns the code** — the corpus is 2,536 → 5,121,
-2.0x, under Go's own growth — but that is the tombstone rule and the
-ceiling below doing their work, not the count slowing down: a record
-still arrives about as often, it just stops costing lines once something
-replaces it. Count is what to watch. Folding a surface leaves a record
-behind, and [docs/surface.md](docs/surface.md)'s DOC section already names
-that residue — an index entry in each language, an English summary, a
-paragraph in that file or this one — for the manual it counts. Records are
-the larger half of the same residue, and until now none of it was counted
-anywhere. 60 → 61 is the one addition that does not fold into that
-pattern: freezing REST at `/api/v1` (0064) is its own decision, not a
-restatement of anything the other 60 already say, so there was no
-existing record to fold it into. 8311 → 8339: issue
-[#408](https://github.com/na0fu3y/ochakai/issues/408) found that 0064,
-written the same week, stated two rules the implementation did not
-follow and left two questions the freeze needs answered (a bar for
-breaking it, whether DELETE is safe to retry) unwritten — 28 lines of
-correction and decision, not restatement. 8339 → 8377: issue
-[#411](https://github.com/na0fu3y/ochakai/issues/411) found that 0057
-§3.2's exclusion of the JSON field name `entries` did not hold in two
-of the three places it applied — 0064 §7 decides the question 0057
-deferred and renames `entries` to `concepts`, still unreleased so
-folded into 0064 rather than taking a new number. 8377 → 8378: issue
-[#420](https://github.com/na0fu3y/ochakai/issues/420)'s amends-both-ends
-check (`TestSupersessionIsRecordedAtBothEnds`) found that 0058, already
-released, had revised 0004's own CLI-table row for `--min-score` with no
-line in 0004 saying so — the one line 0004 gains points back at 0058, the
-sole deliberate exception to "not one line rewritten" this pass makes,
-since the record predates the check and cannot pass it any other way.
+`RECORD-LINES` bounds one record's thickness, and the tombstone rule
+bounds what a replaced one keeps. Nothing bounds the total any more, and
+what that gives up is worth stating plainly.
 
-220 → 222 is what recording an amendment at both ends costs the record
-doing the amending. 0064 sat at exactly 220 and revises four records now,
-not two: #435 found that it renames the two request headers 0027 and 0052
-decided and said so in neither place, so a reader opening either one met
-the retired spelling with nothing pointing forward. Two lines of header is
-what that back-link costs on the amending end; the ceiling says so rather
-than the record being squeezed to hide it.
+**The count is the number that moved**: 19 records at v0.10.0 against 137
+today, while non-test Go grew 2.5x and REST retreated from 19 operations
+to 11. Lines did not outrun the code — the corpus is under the code's own
+total — but that is the tombstone rule doing the work, not the count
+slowing down: a record still arrives about as often, it just stops costing
+lines once something replaces it. **Count is what to watch**, and nothing
+watches it. Folding a surface leaves a record behind, and
+[docs/surface.md](docs/surface.md)'s DOC section names the rest of that
+residue — an index entry in each language, an English summary, a paragraph
+in that file or this one.
 
-8,378 → 8,383 → 8,391 is more of the same kind. Reading the amendment
-by pattern hid two of them: 0062's header revises 0049 §3.4 and 0059's
-printed form in one clause, and the check read a header the way the file
-wraps rather than the way a sentence runs, so a line break inside 改訂す
-る hid one and the first match consumed the second. Both records now say
-so. The verb is still the only half read by pattern — 足す is not, because
-"add an entry to 0015 §3's list" and "take 0040's read-only as given and
-add a posture beside it" differ by which noun a に governs, and a guess
-there fails by blocking a PR that did nothing wrong. That one stays a
-reviewer's job.
+**`RECORD-CORPUS-LINES` was that ceiling and it is retired**, with
+`DOC-LINES` and `REST-LINES`; [docs/surface.md](docs/surface.md)'s 上限
+section holds the reasoning for all three. The short of it: the ceiling
+asked for a paragraph every time the corpus crossed a 500-line boundary,
+and those paragraphs — a crossing log, a grid rule, a slack number, and
+the two widenings that made the grid — became the largest thing the
+ceiling produced. What it was built to catch (fold a surface, then write
+a long explanation of the fold) it caught once or twice in ten crossings.
 
-222 → 253, 8,391 → 8,422: issue
-[#470](https://github.com/na0fu3y/ochakai/issues/470) found that §2's own
-decision — an unrecognized query parameter is a 400, naming it — had only
-half landed. A request body's unknown key was still a silent 200
-(`readJSON` never called `DisallowUnknownFields`), and
-`GET /api/v1/bundle/{path}` allowed `history`, `limit` and `files` for the
-whole address while reading each in only one or two of its modes, so a
-parameter sent to the wrong mode was ignored rather than refused — the
-same shape as the query-parameter gap 0064 already closed once. 0064 §2
-decides both, and §11 gains the two BREAKING bullets that follow from
-deciding them. 31 lines on the one record still unreleased enough to
-revise in place.
-
-253 → 313, 8,422 → 8,482 is the same issue's audit closing its third
-part: three places where `api/openapi.yaml` and the code it describes
-disagreed — `?history`'s `limit` stated one ceiling while the code
-enforced two, a concept's GET declared `If-None-Match` without ever
-answering 304, and a file `PUT` declared an `ETag` response header it
-never sent. None of the three change a stored shape or a wire
-identifier, so 0064 gains a new section rather than a new record (0048
-§2.3: still unreleased, so revised in place) — 60 more lines for three
-findings, each with the disagreement, the decision and which side
-moved.
-
-61 → 63 while 8,482 → 7,986 is the first consolidation, and it moves the
-two numbers in opposite directions on purpose. Seven records were current
-for identity and the posture at once — the opening table named all seven,
-so reaching that area's current state meant opening 928 lines — and 0065
-and 0066 replace them, leaving seven tombstones. **The count goes up by
-the two records added**: a tombstoned record keeps its number and its
-file, which is what makes every citation of 0002 still land somewhere,
-so a consolidation can only ever add. Read together the pair says what
-happened — two more records, five hundred fewer lines, and an area that
-now takes two records to read instead of seven. Neither number says that
-alone, and `RECORD-COUNT` rising is not this corpus growing.
-
-313 → 364, 7,986 → 8,037 is issue #470's third and last 0064 PR. §6
-retired `attachments`/`Attachment` from the wire but left its own
-change-verbs, `attach`/`detach`, behind, and three more places carried
-the same "named for the act, not the object" gap §7 closed for
-`entries`: `/context`'s redundant `truncated` count, a bundle listing
-row spelled `updated_at` where `created_at` was the only fact the
-underlying object actually held, and `reembed`'s `embedded`. Two new
-sections (§8, §9) carry the four decisions, one migration, and the
-scope boundary that keeps the CLI's `attach`/`detach` commands out of
-it — the same shape §7 itself used for the same reason.
-
-63 → 66 while 8,037 → 6,347 is the same consolidation reaching the two
-areas that had nine current records apiece. Fifteen records became three —
-0067 (what each surface is for), 0068 (the rules that add and retire a
-face) and 0069 (the loop and what measures it) — and the pattern that
-made an area-by-area pass impossible is worth recording: **four of those
-fifteen carried a general rule and a topical decision in one record**.
-0058 held "an entrance nobody arrives through comes down" beside removing
-`min_score`; 0062 held "two capabilities, two commands" beside adding
-`ochakai list`. A record cannot be split — it can only be superseded — so
-consolidating the surface area and the loop area separately would have
-left each pointing into the other's record. They were done as one pass.
-
-The other finding is what a consolidation is for. **Six of the fifteen
-were teaching spellings that no longer exist**: 0015's list of deliberate
-omissions was written entirely in `search_knowledge` / `get_attachment` /
-`POST /api/v1/knowledge`, 0049 taught `ochakai queues` and
-`queues.reported_wrong`, 0051 taught `OCHAKAI_PUBLIC_READ_ONLY`, and
-0058's compatibility note said an unknown query parameter is ignored —
-which 0064 §2 had since reversed. Every one of those records had a
-`Status:` header several revisions long, and none of the headers reached
-the prose. A record is immutable, so the only way its body stops lying is
-for something to supersede it.
-
-66 → 72 while 6,347 → 4,270 is the pass that reached everything left. Six
-records replace eighteen: 0070 (what was retired and the bar for it), 0071
-(the type vocabulary), 0072 (the web UI), 0073 (search and embeddings),
-0074 (the document and the vocabulary that asks it) and 0075 (the bundle
-as the address space).
-
-Two things this pass settled that the earlier ones only hinted at.
-**An area with two or three records is not automatically fine.** The
-first two passes went after areas with seven and nine current records and
-left the rest, on the theory that small areas are healthy. That was the
-wrong test: 0038 was 241 lines that the opening table already told nobody
-to read, and 0017 was 229 lines the table called superseded in substance
-while the file called itself current. **What matters is whether the area's
-current picture is in one place, not how many records the area has.**
-
-**And a record can outlive its own subject.** 0018's 233 lines were mostly
-the specification of a compile path 0028 removed; 0019's third section
-decided a model-resolution rule for the same removed feature; 0046's
-604 lines still listed an eight-operation wire that six later records had
-moved. None of it was wrong when written. **A record is immutable, so the
-only thing that can stop its body from describing a world that ended is
-something superseding it** — which is the whole argument for this program,
-now with numbers.
-
-4,500 → 5,000 is 0076, the first record to cross a boundary under the
-grid below. It takes two tools off MCP, and both halves of its cost land
-here: a record nothing supersedes, plus the lines 0067's `Status:` header
-grew to acknowledge the amendment. That is what the ceiling is for — the
-corpus grew because a decision was made, and the decision is named one
-line above the number.
-
-6,000 → 6,500 is two records that landed together, and they are the same
-record twice: 0088 (a renamed MCP tool or CLI command answers for one
-release) and 0089 (a half-embedded concept says so). Both say that a
-thing the product was already doing *silently* has to announce itself —
-a rename that left an agent's configuration pointing at nothing, and an
-embedding that took the front of a concept and dropped the rest while
-looking exactly like a success. Neither restates the other and neither
-compresses: the decision in each is what gets said and to whom, and the
-prose is where that lives. What the pair says about this corpus is that
-the expensive decisions right now are not new mechanisms but **the
-places where ochakai was quiet and should not have been** — which is
-C7's argument arriving in the record ceiling.
-
-5,500 → 6,000 is three records landing in one stretch of work, none of
-them large: 0083 (an error carries a code), 0084 (a hit says why it
-matched) and 0085 (the empty base, and what fills it). Each is a decision
-a user can observe and none restates another, which is the test this
-ceiling asks — what it catches is the case where the answer would have
-been "compress the prose", and it is not this one. Worth naming: two of
-the three record a *refusal* holding while the thing somebody wanted got
-built anyway (RFC 9457 declined but errors made machine-readable; a
-warehouse connector declined but the empty base filled), and a refusal
-that is only ever asserted is the kind that quietly stops being true.
-
-5,000 → 5,500 is 0079, the second crossing and the first by an ordinary
-new record rather than by lines an existing one grew into. It states
-where ochakai refused a document OKF SPEC §11 says a consumer must
-accept, and two of those refusals had cited the spec for a requirement
-the spec does not state — the kind of finding a record exists to correct
-rather than to compress away.
-
-6,500 → 7,000 is four records from one stretch of web-UI work, and what
-they have in common is that each **retracts or completes something an
-earlier record had left standing**: 0091 (a file's vector is keyed by its
-path — 0075 said the path is the address, and one table had not been
-told), 0092 (the page is modules, so it can be tested — 0072's "one
-self-contained file" was how it said "no build step", and only the file
-count changed), 0093 (the budget governs the whole response — 0067 §4 put
-`hits` outside it, on a reason that was true and not enough) and 0094
-(the page runs under a policy — 0092 §5 had listed CSP as made possible
-and not decided). None of them is a new mechanism. **The expensive
-records in this stretch are the ones that go back for a decision the
-product had outgrown**, which is a different pressure from the one the
-6,000 crossing named, and it is the healthier of the two: a corpus that
-can only grow forwards is one where the earlier records quietly stop
-being true.
-
-7,000 → 7,500 is five records — 0095, 0096, 0097, 0098 and 0099 — and the
-last two name a pressure the earlier crossings did not. Both were written
-because a **review** found a record wrong, not because a feature needed
-one: 0098 retracted 0064 §11's claim that no generator can produce a
-working client once somebody ran one, and 0099 amends 0031 §3.2 after the
-code had already reversed it — a purge reclaims the file bytes now, and
-the record still said it never would, with the implementation citing that
-same record as its authority. That is the failure mode a corpus of
-immutable records has: the code moves, the record cannot be edited, and
-nothing in the build compares the two, because `Status:` headers stay
-self-consistent while the decision underneath them stops being true. The
-6,500 crossing said the expensive records are the ones that go back for a
-decision the product had outgrown; this one says the *cheapest* place to
-find them is a release audit, and that the corpus grows when somebody
-reads it against what shipped rather than when somebody builds.
-
-7,500 → 8,000 is three records — 0100, 0101 and 0102 — and all three
-break the REST freeze, which is what this crossing is about. 0064 §11
-shipped with one reason a frozen contract may move (a security defect);
-these add two more (output that does not conform to OKF, and folding away
-a second spelling of something the format defines) and place two
-additions outside the freeze entirely (a response-only property was
-already there, an optional query parameter joins it). **A frozen contract
-does not stop generating records — it changes what they are about.**
-Before the freeze a record said what the wire would do next; after it, a
-record says why the wire may move at all, and that argument has to be
-written down at the length that makes it checkable, because the
-fingerprint cannot see two of these three changes. The 7,000 crossing
-said a corpus grows when somebody reads it against what shipped; this one
-says it also grows when the rule for changing something is worth more
-than the change.
-
-8,000 → 8,500 is three records again — 0106, 0107 and 0108 — and this
-crossing is about the freeze from the other side. 0100–0102 wrote down
-why a frozen line may move; these write down that the freeze was drawn
-around the wrong set — 0107 narrows the promise to the OKF core and is
-the first record to retract a published promise rather than reinterpret
-one, which is exactly the kind of argument that has to be on file at the
-length that makes it checkable. 0108 retires the context pack from every
-surface and 0106 completes the primitive read it leaves behind; both
-lean on 0107 and neither could be a PR description, because all three
-move what a user can observe.
-
-8,500 → 9,000 is 0109, 0110 and 0111, and the three of them are one
-subject seen three times: **what a face shows a person, as opposed to
-what it carries.** 0109 puts the access policy in front of a human who
-has to edit it, 0110 takes away a column whose number the product could
-not explain, and 0111 adds weight to the line 0110 left — none of them
-moves a byte of what a program receives, and all three had to argue that
-in writing, because "this only changes what it looks like" is precisely
-the claim that goes unchecked when it is made in a PR description. The
-8,500 crossing said a corpus grows when the rule for changing something
-is worth more than the change; this one says it also grows when the
-change is a rendering, since a rendering is the thing a reader is least
-able to reconstruct from the code.
-
-9,500 → 10,000 is 0118, which turns the MCP endpoint stateless so it can
-answer at protocol version 2026-07-28. The decision itself is one line of
-options in one constructor; what needed the room was that the upgrade is
-not free — an older client names itself only in the `initialize` a
-stateless deployment answers in a throwaway session, so its `clientInfo`
-stops reaching the producer field, and a record that only announced the
-new protocol would have left that to be discovered in a ledger. This
-crossing says a corpus grows when a change costs something a reader would
-not otherwise be told about, and that stating the cost is most of the
-record.
-
-10,000 → 10,500 is 0119, 0120 and 0121, and what they have in common is
-an order: one record written ahead of need, and two written because it
-sent somebody to look. 0119 says nothing new about the product — it
-writes down the shape one operator running ochakai for many
-organizations would use, and names the change that would close it — and
-then 0120 and 0121 are the first two pieces of homework it lists. **The
-second of those found a configuration that had been broken since the day
-0086 landed**: an OIDC deployment behind Cloud Run IAM answered 401 to
-every request, because the header precedence written for the
-Google-verified path was still applying to a path nothing verifies in
-front of. Nobody had reported it, because nobody had a reason to build
-that configuration until a record said what it was for. So this crossing
-names a pressure the earlier ones did not: **a corpus grows when a record
-written ahead of need sends somebody to read code nobody had a reason to
-run.** The 7,000 crossing said the cheapest place to find a record that
-stopped being true is a release audit; this one says the second cheapest
-is writing down a shape you have not built yet, because the writing is
-what makes the gap between the shape and the code legible.
-
-10,500 → 11,000 is 0125 and 0126, and both come from the same unusual
-place: **neither was reported, and neither decided anything new.** They
-came out of a survey that asked what recent recommendations this tree had
-not taken and what it should retire — and the answer to the second half
-was almost nothing, while the first half turned up two rules the project
-had already written down and only half kept. 0064 §2 said an undeclared
-body key is a 400 naming it, and `DisallowUnknownFields` reports the keys
-that match no field while saying nothing about a key that matches one it
-should not, so a spelling the contract never declared was answered 200.
-0072 §1.2 read the browser guard as a property of the loopback mode, and
-the deployed mode — the one where a browser holds a credential it did not
-have to be given — had none. In both cases the standard library had since
-grown the answer the tree was writing by hand, and **that is what made the
-gap visible**: comparing the code against a newer standard answer is a
-reason to re-read the rule, and re-reading is where a half-kept rule
-shows. So this crossing names a pressure the earlier ones did not: **a
-corpus grows when the toolchain catches up to a rule the project wrote
-itself.** The 10,000 crossing said a record written ahead of need sends
-somebody to read code nobody had a reason to run; this one says a standard
-that arrives late does the same thing to code somebody had every reason to
-trust, because it had a record behind it.
-
-11,000 → 11,500 is 0127 and 0129, and they are the same shape twice:
-**a refusal re-read years after the fear that put it there, and found to
-be aimed at a danger that had moved.** 0109 §3 pooled five whole-bundle
-operations on the administrator and said in the same paragraph that
-splitting them later was allowed; three have now been split, each by a
-record about a hundred lines long. So this crossing names a pressure the
-earlier ones did not: **a corpus grows when a record honours a promise an
-earlier record made about its own successors.** The 10,500 crossing said
-a half-kept rule shows when a newer standard answer arrives beside it;
-this one says the other thing that makes a rule legible again is somebody
-finally needing the case it was written broadly enough to cover. The
-records are not cheaper than the split — 0109 §3's own sentence is why
-the split takes a record at all — and the ones still pooled there are the
-ones nobody has needed yet.
-
-    RECORD-CORPUS-LINES: 12500
-    RECORD-CORPUS-LINES-SLACK: 500
-
-**12,000 → 12,500 is 0138**, the record that makes the trust tier a
-claim about the current content: derived from the verifications that
-stand rather than from the whole ledger, with the lapsed concepts
-countable in a fourth queue. The boundary is worth the paragraph because
-the record settles a contradiction two earlier records were carrying
-between them — Create clears a tombstone's ledger so no verification
-vouches for content nobody verified, while Update kept the tier standing
-over exactly that — and because the alternative it declines is the one a
-requester actually asked for: a ranking penalty, which 0069 §7 and the
-searcheval history both argue against. Neither escape applies: no
-earlier record states this decision, and the record is one subject —
-the queue is the derivation's loop-side consequence, not a second
-decision.
-
-**11,500 → 12,000 is 0133 and 0134**, the two records of the OKF
-conformance pass. The boundary is worth the paragraph because of what the
-pair cost against what they bought: the corpus grew by one net record —
-0134 absorbs 0127, which drops to a tombstone — for a change whose whole
-subject is that ochakai had been reading OKF v0.2 wrongly in two places
-and saying so in its own comments. 0133 is the larger of the two and most
-of it is §1 and §6: what the spec actually fixes, and why 0069 §2.2 and
-0074 §4.1 are amended rather than superseded. That second half is the
-paragraph this ceiling exists to make somebody write — the alternative
-was folding three area records into three replacements, roughly 600 lines
-of restatement, for a defect that moves neither area's decision.
-
-`RECORD-CORPUS-LINES` counts every record under `docs/design`, Superseded
-ones included: they still ship in the tree, and a reader following a
-`Status:` header still opens them. Counting only what is current would let
-a supersession buy headroom for the next addition — the file stays on disk
-either way, so that would be the next escape hatch rather than a saving.
-
-It is `DOC-LINES`'s argument applied to this corpus: a record that never
-crosses `RECORD-LINES` can still add to what a reader gets through, and
-enough of them doing it at once moves nothing else.
-
-**It is also `DOC-LINES`'s width, and for `DOC-LINES`'s reason.** This
-ceiling used to sit at the exact total with 15 lines of tolerance, beside
-a second one — `RECORD-COUNT` — that had to match the number of records
-exactly. Both are gone in favour of one number on a 500-line grid, after
-six records were written in parallel and every one of them had to rewrite
-the same two lines. [docs/surface.md](docs/surface.md) had already
-diagnosed this and prescribed the cure for the manual: **an alarm that
-sounds every time tells nobody anything**, and a line every concurrent PR
-edits is a line every concurrent PR conflicts on. A ceiling meant to make
-growth a sentence somebody writes cannot be a line somebody rewrites by
-reflex.
-
-So the ceiling is the corpus rounded up to the next 500, the slack is the
-same 500, and the two facts together make it a single derived number —
-which is what lets the check keep both directions. Growth still has to be
-said out loud; it just gets said when the corpus crosses a boundary worth
-a paragraph, roughly every third record, rather than on every record that
-lands.
-
-`RECORD-COUNT` is not replaced by anything, because it was never
-independent: a record has lines, so nothing can raise the count without
-raising the total. It was introduced for a shape a line total was thought
-not to see — 0054/0057 and 0055/0056, one subject apiece told across two
-numbers — but the fold that fixed those *lowered* the corpus by more than
-any record adds, and the grid sees that in the direction that matters.
-What is lost with it is the exact-match rule; what is bought is that
-adding a record touches no shared line at all.
-
-Every ceiling in this file and in [docs/surface.md](docs/surface.md) used
-to check only one direction: over the number fails, under it is free. That
-let headroom bank quietly — a fold could shrink what a ceiling measures
-and leave the ceiling where it was, and the next addition would spend the
-gap without moving a number anyone would see in the diff. It happened to
-`DOC-LINES` once: a PR that shortened the deploy guide raised the ceiling
-5,753 → 5,790 for room the fold needed, landed at 5,762, and left 28 lines
-nobody returned ([#376](https://github.com/na0fu3y/ochakai/issues/376)).
-`RECORD-CORPUS-LINES` is an amount, not a list, so it gets a stated
-tolerance: `RECORD-CORPUS-LINES-SLACK` is how far the ceiling may
-sit above the actual total before that gap is itself a failure, and the
-ceiling has to be a multiple of it — the same pair of rules
-`DOC-LINES` and `DOC-LINES-SLACK` already run under, so a fold that
-lowers the total still has to lower the ceiling once it crosses a
-boundary. Both are
-read back by `TestCeilings`, and both are
-checked the same way `RECORD-LINES` already was — one number in one file,
-raised or lowered in the PR that earns it.
-
-These live here, next to `RECORD-LINES`, rather than as an extra line in
-[docs/surface.md](docs/surface.md)'s 上限 section. A record is read by
-somebody changing ochakai, not somebody using it — that document's DOC
-section already excludes `docs/design` from the manual on that basis — and
-a ceiling for that same reader belongs beside the other ceiling for that
-reader, not split across two files that both happen to hold a number.
+What holds instead is what 0048 and 0128 already decide: a number is for
+a decision a user can observe, and for an area rather than a rule inside
+it. A corpus that grows because those two rules are being followed is a
+corpus growing correctly, and one that grows because they are not is a
+review problem rather than an arithmetic one. If that turns out to be
+wishful, the ceiling comes back and this paragraph is what it argues
+with.
 
 Most of that list is checked rather than remembered
 (`cmd/ochakai/designdocs_test.go`): a record needs an entry in both
@@ -1031,10 +646,8 @@ header about whether it is current or superseded, a supersession **or an
 amendment** has to be recorded at both ends — the new record naming what
 it retires or revises, and the older one saying so — a new record has to
 fit under its own
-ceiling, a Superseded one has to be a tombstone
-(`TOMBSTONE-LINES`), and the corpus as a whole has to
-fit under `RECORD-CORPUS-LINES`, with no more slack than
-`RECORD-CORPUS-LINES-SLACK` allows (`RECORD-CORPUS-LINES`).
+ceiling, and a Superseded one has to be a tombstone
+(`TOMBSTONE-LINES`).
 What no test can read is the judgment: whether the opening table's row still
 points at the doc somebody should actually read. That is where the attention goes.
 

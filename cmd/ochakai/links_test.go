@@ -63,7 +63,7 @@ func TestManualLinksResolve(t *testing.T) {
 	// userDocs names pages as a reader sees them (README.md); on disk
 	// they sit above this package.
 	const root = "../../"
-	named, _ := userDocs(t)
+	named := userDocs(t)
 	pages := make([]string, 0, len(named)+2)
 	for _, name := range named {
 		pages = append(pages, root+name)

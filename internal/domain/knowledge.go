@@ -113,6 +113,35 @@ var guide = map[Type]string{
 		"schema docs; resource is the original",
 }
 
+// brief says the same thing as guide in a clause, for the one face that
+// pays for the sentences by the turn. A tool schema is resident in every
+// agent's context on every turn (docs/surface.md, MCP-BYTES), while
+// `ochakai put -h` is read once by a person who asked for it — two
+// audiences, two lengths, one list of types, which is the split
+// packaging/mcpb/manifest.json already makes for its own two audiences.
+// What a brief keeps is what decides a choice between the nine; what it
+// drops is the detail a writer meets again in the document's own keys.
+var brief = map[Type]string{
+	TypeMetrics:      "what a number means and what it is called, not the SQL",
+	TypeComputations: "code others run instead of improvising; runtime required",
+	TypeSkills:       "how to run a computation in a given runtime",
+	TypeInsights:     "how to read a metric — baselines, seasonality, when to escalate",
+	TypePolicies:     "the rule that decides a number",
+	TypeTerms:        "one term of the shared vocabulary, defined once",
+	TypeDatasets:     "a dataset's catalog entry; resource is its URI",
+	TypeTables:       "a table's catalog entry; resource is its URI",
+	TypeReferences:   "a copy of material that lives outside; resource is the original",
+}
+
+// TypesBrief renders the vocabulary one clause per type, for MCP.
+func TypesBrief() string {
+	lines := make([]string, len(Types))
+	for i, t := range Types {
+		lines[i] = "- " + string(t) + ": " + brief[t]
+	}
+	return strings.Join(lines, "\n")
+}
+
 // TypesGuide renders the recommended vocabulary with what each type
 // holds, one per line, for the faces where somebody is choosing a type to
 // write rather than one to filter on. It has the same single home as

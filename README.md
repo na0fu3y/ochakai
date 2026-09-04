@@ -326,7 +326,7 @@ ochakai loses, and says who should pick something else.
 
 | ochakai has no… | because |
 |---|---|
-| LLM | it returns human-verified golden queries verbatim, and the definitions and caveats around them. Interpretation is the client agent's job. Embeddings are the exception in spirit and not in fact — an encoder is deterministic and produces no text |
+| LLM | it returns human-verified golden queries verbatim, and the definitions and caveats around them. Interpretation is the client agent's job. With semantic search on, concept bodies and the queries people type are sent to a Vertex AI embedding model in your own project and region — a deterministic encoder that returns vectors and writes no text. `OCHAKAI_EMBEDDINGS=off` is the switch |
 | SQL execution | it holds no warehouse credentials. Your agent executes |
 | connector ingestion | knowledge is curated, not harvested. Trust density over volume — and a harvester would need warehouse credentials the server does not hold, so a catalog projection runs as an ordinary client under your own service account ([example](examples/bigquery-catalog) (Japanese)) |
 | chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
