@@ -23,6 +23,71 @@ last entry.
 
 ### Changed
 
+- **The positioning page says what happens when an ochakai bundle meets
+  `kcmd push`, and that nothing needs to be added for it.** Knowledge
+  Catalog's own OKF mapping was read on 2026-09-04
+  (`toolbox/mdcode/demo/okf/okf.ts`): entry names mirror the file path,
+  which is a concept's id; `title`/`description`/`tags` go to the
+  Documents Layout, the eleven OKF signal keys to an `okf` aspect, `type`
+  to `okf_type`, `resource` to the entry's resource; and any key it does
+  not model is diverted to `extra` as a `[path, value]` pair that
+  `pull.ts` reassembles. Checked against the 22 top-level keys the 31
+  documents in `examples/demo`, `kb/bundle` and `examples/bigquery-catalog`
+  actually carry: 17 modeled, 5 in `extra`, none dropped, and the
+  frontmatter-less `index.md` and `log.md` travel as entries with their
+  bodies — so a rejection's reason reaches the catalog as prose. **The
+  push itself has not been run**; it needs a project with the Dataplex
+  API, and the page says so. Three things that do not travel are named:
+  non-`.md` files, body links (they stay markdown rather than becoming
+  catalog edges, so there is no `linked_from` there), and `synonyms`,
+  which is an indexed key here (0105) and a JSON blob in `extra` there.
+
+- **The MCP surface holds 10,485 resident bytes instead of 12,290, with
+  the same six tools.** What an agent pays for MCP is the tool list and
+  the instructions, held for the whole conversation on every turn
+  (`MCP-BYTES`), and the prose there had grown three copies of the same
+  things: the type vocabulary was named in the instructions, listed again
+  in the `types` filter of two tools, and spelled out in full a fourth
+  time by `domain.TypesGuide()` inside `put_concept`. The full guide now
+  goes only where a person asked for it — `ochakai put -h` and
+  [docs/cli.md](docs/cli.md) — and MCP gets `domain.TypesBrief()`, one
+  clause per type from the same list of types, the way
+  `packaging/mcpb/manifest.json` already keeps its own second wording for
+  its own audience. `put_concept`'s paragraph on a curated concept is
+  shorter because the refusal message says the same thing at the moment
+  it happens, "a list is OR-ed within itself" moved from four schema
+  strings to one comment, and five descriptions lost a sentence that
+  repeated the instructions. No tool, parameter, code or capability
+  moved. `MCP-BYTES` falls 12,500 → 10,900, which is the same ratchet
+  that makes a raise a decision, in the other direction.
+
+- **Three ceilings on an amount of prose are retired**: `DOC-LINES` (the
+  manual), `REST-LINES` (`api/openapi.yaml`) and `RECORD-CORPUS-LINES`
+  (all of `docs/design`), with the `-SLACK` numbers and the `grid` rule
+  in `cmd/ochakai/ceilings_test.go` that only they used. Each asked for a
+  paragraph whenever its total crossed a 500-line boundary, and those
+  paragraphs — a crossing log, a grid rule, a slack number, and the two
+  widenings that produced the grid — became the largest thing the
+  ceilings produced; [docs/surface.md](docs/surface.md)'s own account
+  says the escape hatch they were built for showed up once or twice in
+  ten crossings. **This reverses that document's "廃止も検討した"
+  paragraph, and says so where it stood.** Every ceiling that counts
+  *names* stays, and so does `MCP-BYTES` — the one amount whose payer is
+  an agent's context window on every turn rather than a person reading
+  once. `RECORD-LINES` and `TOMBSTONE-LINES` are untouched: a record's
+  own thickness, and a replaced record shrinking to a tombstone, are what
+  actually held the corpus under the code's line count.
+
+- **The README says what the embedding call sends.** The "no LLM" row of
+  *What it refuses* ended "embeddings are the exception in spirit and not
+  in fact", which is an argument rather than a fact a reader can check.
+  It now says what leaves: with semantic search on, concept bodies and
+  the queries people type go to a Vertex AI embedding model in your own
+  project and region, a deterministic encoder that returns vectors and
+  writes no text, and `OCHAKAI_EMBEDDINGS=off` is the switch (design doc
+  0080 §1.2). The claim is unchanged; what changed is that it can be
+  verified.
+
 - **The loop page walks the path from "an agent found this wrong" to "a
   human sees both", which was the last thing the 2026-08 audit's
   close-the-MCP-loop item asked for.** That item proposed a

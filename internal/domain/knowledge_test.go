@@ -466,6 +466,24 @@ func TestTypesGuideDescribesEveryBuiltin(t *testing.T) {
 	}
 }
 
+func TestTypesBriefDescribesEveryBuiltin(t *testing.T) {
+	b := TypesBrief()
+	for _, ty := range Types {
+		if brief[ty] == "" {
+			t.Errorf("no brief for %q: MCP would name a type it does not explain", ty)
+		}
+		if !strings.Contains(b, string(ty)) {
+			t.Errorf("TypesBrief() omits %q:\n%s", ty, b)
+		}
+	}
+	// The brief exists to be smaller; if it stops being, the two
+	// renderings have no reason to both exist.
+	if len(b) >= len(TypesGuide()) {
+		t.Errorf("TypesBrief() is %d bytes against TypesGuide()'s %d — the short form is not short",
+			len(b), len(TypesGuide()))
+	}
+}
+
 // SPEC §7's third actor form, as ochakai admits it: software and version,
 // told apart from the two identity forms by the slash it uses and the
 // colon it must not (design doc 0052 §3.2).

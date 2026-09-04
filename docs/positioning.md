@@ -318,10 +318,11 @@ Intelligence が記録するのはエージェントの決定の因果であり�
 あちらが多いのに、実測の常駐バイトはツールが書き方を教えるこちらの方が
 重い([0076](design/0076-two-tools-leave-mcp.md) が「代金は本数ではなく
 バイト」と言った当のトレードオフである)。数字を置いておく: ochakai は
-6 ツールで 12,290 バイト(2026-09-03、`tools/list` の応答を丸ごと数え、
-instructions の 1,179 を含む — [surface.md](surface.md) の `MCP-BYTES` が
+6 ツールで 10,485 バイト(2026-09-04、`tools/list` の応答を丸ごと数え、
+instructions の 1,037 を含む — [surface.md](surface.md) の `MCP-BYTES` が
 天井を置いている当の数)、semantica は 17 ツールで 7,771 バイト
-(2026-08-23)。トークン数は測っていない — 数えているのはバイトで、天井も
+(2026-08-23)。**こちらの数字は 12,290 から落ちている**: 同じ 6 ツールで、
+二度言っていた散文を削ったぶんである。トークン数は測っていない — 数えているのはバイトで、天井も
 バイトである。断片化した生データから
 統治されたグラフを機械で建てたいならあちらを使う。人が確かめた少数の
 ナレッジをエージェントに小さな契約で配りたいなら、それがこの枠である。
@@ -388,8 +389,37 @@ export` のバンドルは YAML frontmatter を持つ markdown ファイルの
 `validate` と okf-skills の §11 conformance checker に通した。どちらも
 エラー 0 で、警告はバンドルの外のファイルを指すリンクと期限を過ぎた
 `stale_after` だけである。C3 は自分のテストではなく他人の検証器で守れる
-ようになった。Knowledge Catalog の `kcmd push` に同じバンドルを入れる
-ことは、まだ試していない。
+ようになった。
+
+**`kcmd push` に入れたときに何が起きるかは、机上では全部たどれる**
+(2026-09-04、`toolbox/mdcode/demo/okf/okf.ts` を読んで確かめた)。入口は
+`.md` を再帰で拾い、**エントリ名はファイルパスそのもの**
+(`metrics/revenue.md` → `metrics/revenue`)で、それは ochakai の id である
+([0075](design/0075-the-bundle-is-the-address-space.md) §2)。`title` /
+`description` / `tags` は Documents Layout の上段へ、OKF の信号 11 キーは
+`okf` aspect へ、`type` は `okf_type`、`resource` はエントリの resource へ。
+**modeled でないキーは `extra` に `[path, value]` の対として退避され、
+`pull.ts` がそこから元の形を組み直す** — つまり往復は非可逆ではない。
+`examples/demo`・`kb/bundle`・`bigquery-catalog` の 31 文書に出る 22 の
+トップレベルキーを突き合わせると、**17 が modeled、5 が `extra`**
+(`created_by`・`question`・`grain`・`unit`・`synonyms`・`status_note`)で、
+落ちるキーは一つも無い。frontmatter を持たない `index.md` と `log.md` も
+本文ごとエントリになる — **却下の理由は、prose としてなら向こうへ渡る**。
+
+**だから足すものは無い。** 出口が OKF v0.2 のバンドルであることが、
+そのまま Knowledge Catalog への入口になっている(C3 が買っていたものの
+一つがこれである)。**実際に push してはいない** — GCP プロジェクトと
+Dataplex API が要るので、これは机上の確認である。
+
+**渡らないものを三つ書いておく。** `.md` でないファイルは残る(向こうの
+README がそう書いており、[0131](design/0131-a-deployment-says-what-it-cannot-do.md)
+のファイルはローカルのままになる)。本文のリンクは markdown のまま運ばれ、
+カタログのネイティブなエッジにはならないので、`linked_from`
+([0106](design/0106-a-read-carries-what-points-at-it.md))に当たるものは
+向こうに無い。そして **`synonyms` は `extra` の JSON に入る** — ochakai では
+索引が読む鍵([0105](design/0105-a-concept-answers-to-its-other-names.md))
+だが、向こうでは検索できる欄ではなくなる。C8 の機構は、バンドルと一緒には
+旅をしない。
 
 ファイルの側が持たないのは、ファイル形式でないすべてである:
 

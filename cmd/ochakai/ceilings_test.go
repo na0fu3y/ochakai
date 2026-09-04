@@ -16,29 +16,28 @@ import (
 // that growing cannot happen quietly: a PR that moves it says out loud
 // that it is making ochakai, or its manual, or its records, bigger.
 //
-// There used to be one test per ceiling, and the three that bound an
-// amount of prose — the manual, the contract, the design corpus — were
-// the same seventy lines three times, each with its own wording of the
-// same two failures. Seven mechanisms for one idea is how the eighth
-// gets written as a copy of the seventh. What differs between ceilings
-// is small enough to be data: the name, where it is declared, which of
-// three rules it follows, what it measures, and the sentence that tells
+// There used to be one test per ceiling, and each was the same seventy
+// lines with its own wording of the same failures. What differs between
+// ceilings is small enough to be data: the name, where it is declared,
+// which rule it follows, what it measures, and the sentence that tells
 // the author what to do. The table below holds that; the one test under
 // it holds the rule.
 //
-// Three rules:
+// Two rules, and the retired third is worth a line: `grid` held an amount
+// of prose — the manual, the contract, the design corpus — on multiples of
+// a stated slack. It is gone with the three ceilings that used it
+// (docs/surface.md's 上限 section says why), and what it measured is now a
+// reviewer's judgment. The one amount still capped is MCP-BYTES, which
+// internal/mcpserver measures against a real session because the thing
+// paying is an agent's context window rather than a reader.
+//
+// Two rules:
 //
 //   - exact: the declared number is the measured number. A list of names
 //     (REST, CLI, ENV …) carries no tolerance, because adding a name is
 //     already a visible diff; a fold that lowers the count lowers the
 //     number in the same PR, so headroom never banks. The same rule is a
 //     ratchet when the number may only move down (INDEX-ROW-RECORDS).
-//   - grid: an amount of prose, declared on multiples of a stated slack.
-//     The measurement may sit at most one slack under the ceiling: a
-//     ceiling fitted to today's count puts the next PR back on that line
-//     (and two PRs on that line is the conflict the grid was widened to
-//     stop — 474df51), while one left standing after a fold is budget
-//     nobody has to justify before spending (d28c3c8).
 //   - under: each of several things stays at or below the number. Per
 //     record, per tombstone: a ceiling on the one, not on the sum.
 //
@@ -55,7 +54,6 @@ type ceilingRule int
 
 const (
 	exact ceilingRule = iota
-	grid
 	under
 )
 
@@ -106,50 +104,6 @@ func one(what string, n int) []measurement { return []measurement{{what, n}} }
 // ceiling per "## NAME (n)" section, and surfaceCeilings below adds them
 // so that a new counted surface needs no row here.
 var ceilings = []ceiling{
-	{
-		name: "DOC-LINES", in: surfaceDoc, rule: grid,
-		measure: func(t *testing.T) []measurement {
-			_, lines := userDocs(t)
-			return one("the manual", lines)
-		},
-		advice: `What a reader has to get through is a cost like any other, and the manual
-is counted in lines because a page is read, not learned once the way a
-name is. Going past the ceiling is a decision: raise it in the same PR,
-having answered docs/surface.md's three questions — or find the pages that
-say the same thing twice.`,
-	},
-	{
-		name: "REST-LINES", in: surfaceDoc, rule: grid,
-		measure: func(t *testing.T) []measurement {
-			spec, err := os.ReadFile(openAPISpec)
-			if err != nil {
-				t.Fatalf("read %s: %v", openAPISpec, err)
-			}
-			return one("the contract (api/openapi.yaml)", strings.Count(strings.TrimRight(string(spec), "\n"), "\n")+1)
-		},
-		advice: `Prose in api/openapi.yaml is paid for by everybody who reads the contract
-and by every generator that has to carry it — and it was the one piece of
-prose no other ceiling reached. Raise it in the same PR, having answered
-docs/surface.md's three questions, or move the argument to the design
-record it is retelling, where the reasoning is already written down.`,
-	},
-	{
-		name: "RECORD-CORPUS-LINES", in: contributing, rule: grid,
-		measure: func(t *testing.T) []measurement {
-			records := designRecords(t)
-			total := 0
-			for _, r := range records {
-				total += strings.Count(r.body, "\n")
-			}
-			return one(fmt.Sprintf("docs/design (%d records, Superseded ones included)", len(records)), total)
-		},
-		advice: `A record can stay under RECORD-LINES on its own and still add to what a
-reader gets through if enough records do it at once, which is what this
-ceiling is for. Superseded records count — they ship in the tree and a
-Status: trail still opens them. Crossing a boundary upward is a decision
-to make in the same PR, and the paragraph saying why is the whole point
-of the number; falling back below one returns the budget the same way.`,
-	},
 	{
 		name: "RECORD-LINES", in: contributing, rule: under,
 		measure: func(t *testing.T) []measurement {
@@ -245,26 +199,6 @@ func TestCeilings(t *testing.T) {
 				}
 				t.Errorf("%s is %d; %s in %s says %d.\n\nThe number is exact. Set it to %d in the same PR that changed the count.\n\n%s",
 					m.what, m.n, c.name, c.in, limit, m.n, c.advice)
-			case grid:
-				slack := declaredNumber(t, c.in, c.name+"-SLACK")
-				if slack <= 0 || limit%slack != 0 {
-					t.Errorf("%s is %d in %s, which is not a multiple of its %d slack.\n\n"+
-						"The ceiling sits on a grid the width of the slack, so it is a derived number\n"+
-						"rather than one to negotiate: the measurement rounded up to the next boundary.\n"+
-						"Pinning it to the exact total leaves no room, and the next PR lands back on\n"+
-						"this line — the conflict the grid exists to stop.", c.name, limit, c.in, slack)
-					return
-				}
-				m := ms[0]
-				next := ((m.n / slack) + 1) * slack
-				switch headroom := limit - m.n; {
-				case headroom < 0:
-					t.Errorf("%s is %d lines, over the %s of %d in %s.\n\nIt has crossed a %d-line boundary: raise the ceiling to %d in the same PR and say why.\n\n%s",
-						m.what, m.n, c.name, limit, c.in, slack, next, c.advice)
-				case headroom > slack:
-					t.Errorf("%s is %d lines, %d under the %s of %d in %s — more than the %d slack allows.\n\nIt has fallen back below a boundary: lower the ceiling to %d in the same PR that shrank it.\n\n%s",
-						m.what, m.n, headroom, c.name, limit, c.in, slack, next, c.advice)
-				}
 			case under:
 				for _, m := range ms {
 					if m.n > limit {

@@ -195,11 +195,9 @@ func answer(res *mcp.CallToolResult, out any) (*mcp.CallToolResult, any, error) 
 // instructions is what a client holds for the whole conversation,
 // beside the tool list. It is counted with the tools rather than treated
 // as free (TestMCPStaysUnderItsResidentByteCap).
-const instructions = "ochakai serves human-curated knowledge for data work: metric definitions, " +
-	"attested computations (sanctioned SQL and other computations), interpretation " +
-	"knowledge (how to read a metric), glossary terms, dataset and table catalog " +
-	"entries, and references. Those types are recommendations; any single-line string " +
-	"is a type. It runs no SQL and no LLM.\n" +
+const instructions = "ochakai serves human-curated knowledge for data work: what a number means, " +
+	"the computations others sanctioned, how to read a metric, the vocabulary, and the " +
+	"catalog around them. It runs no SQL and no LLM.\n" +
 	"Before answering a data question, search_concepts, then get_concept the hits worth " +
 	"reading. A fetched concept carries linked_from — the concepts pointing at it, which " +
 	"is where the insight that says how to read a metric lives — so fetch those too " +
@@ -306,8 +304,8 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 		Annotations: readOnly,
 		Description: "Search the knowledge base; verified concepts rank higher. Filenames and file " +
 			"contents count too, and a hit is always the owning concept.\n" +
-			"Ranking, so it ends at limit and has no page two: a search that needs more is one " +
-			"that needs narrowing. To walk a whole feed instead, use list_concepts.\n" +
+			"Ranking, so it ends at limit and has no page two; to walk a whole feed, use " +
+			"list_concepts.\n" +
 			"degraded=true in the answer means the query could not be embedded and this ranking " +
 			"is lexical only: thin or odd results are the deployment, not your question.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in searchIn) (*mcp.CallToolResult, searchOut, error) {
@@ -344,8 +342,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			"- usage: by how often the concept was read — the draft review feed.\n" +
 			"- failed: reported wrong via report_outcome, worst first — the re-verification feed.\n" +
 			"- stale_after: past the author's declared expiry, most overdue first — verifying " +
-			"alone does not clear this feed, because the date is the writer's declaration and " +
-			"only an edit changes it.\n" +
+			"alone does not clear this feed, since the date is the writer's own.\n" +
 			"Omit sort with source set to list what derives from that material instead.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in listIn) (*mcp.CallToolResult, listOut, error) {
 		f := in.filter()
@@ -374,8 +371,7 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 		Description: "Get one concept by id: its full markdown body, structured attrs, links, the " +
 			"files its body references (fetch their bytes with get_file), and linked_from — " +
 			"rows for the concepts whose bodies link at this one, which is where the caveat " +
-			"that says how to read a metric lives. Fetch the linked_from rows that matter " +
-			"before trusting a number.",
+			"that says how to read a metric lives.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in getIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		k, err := svc.Get(ctx, in.ID)
 		if err != nil {
@@ -406,16 +402,16 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			"Write status: draft unless you are recording something already agreed. You are " +
 			"recorded as the author and the concept stays unverified until a person confirms it; " +
 			"confirming and rejecting are not on this surface.\n" +
-			"A concept a human has ruled on — verified or deprecated — cannot be " +
-			"replaced here: if a verified concept is wrong, report_outcome failed, otherwise put " +
-			"a better draft at a different id, linking the concept it would replace from its " +
-			"body so the reviewer sees both, and let a human promote it. An id whose concept " +
-			"was deleted can be reused, which revives it as your draft — including one a curator " +
-			"turned down, since a rejection is a deletion and its reason is a log entry rather " +
-			"than a wall; read it in the concept's log before proposing the id again.\n" +
+			"A concept a human has ruled on — verified or deprecated — is refused here, and the " +
+			"refusal says what to do instead: report_outcome failed, or a better draft at a " +
+			"different id that links the one it would replace, so the reviewer sees both. An id " +
+			"whose concept was deleted can be reused, which revives it as your draft — including " +
+			"one a curator turned down, since a rejection is a deletion and its reason is a log " +
+			"entry rather than a wall.\n" +
 			"Links are never a field: a markdown link to another concept's path in body — " +
 			"[revenue](/metrics/revenue.md) — becomes a link both ways.\n" +
-			"Pick the type by what the concept holds; any other single-line type works too:\n" + domain.TypesGuide(),
+			"Pick the type by what the concept holds; any other single-line type works too " +
+			"(ochakai put -h says more about each):\n" + domain.TypesBrief(),
 	}, tool(svc, func(ctx context.Context, actor domain.Actor, in writeIn) (*mcp.CallToolResult, knowledgeOut, error) {
 		write, notes, claimed, err := in.toKnowledge()
 		if err != nil {
@@ -461,9 +457,8 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 		Annotations: readOnly,
 		Description: "Fetch one file of the bundle by its path (get_concept lists a concept's files " +
 			"under \"files\": images, PDFs, plain-text data). Files are context-heavy — fetch one " +
-			"deliberately, when the body references something you need to see. ochakai never " +
-			"interprets files; if you learn something from one, write it into the concept's body " +
-			"with put_concept so the knowledge becomes searchable text.",
+			"deliberately, when the body references something you need to see. What you learn " +
+			"from one belongs in the concept's body, where it is searchable.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in fileIn) (*mcp.CallToolResult, fileOut, error) {
 		att, data, err := svc.GetFile(ctx, in.Path)
 		if err != nil {
@@ -500,11 +495,10 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "report_outcome",
 		Annotations: recordingWrite,
-		Description: "Report whether knowledge you acted on actually worked — the last edge of the " +
-			"write-back loop. After running an attested computation, or SQL you wrote from a " +
-			"metric definition, report worked, or failed with what went wrong in note: failed " +
-			"reports against verified concepts flag them for re-verification. Returns the " +
-			"concept's updated usage totals.",
+		Description: "Report whether knowledge you acted on actually worked. After running an " +
+			"attested computation, or SQL you wrote from a metric definition, report worked, or " +
+			"failed with what went wrong in note: failed reports against verified concepts flag " +
+			"them for re-verification. Returns the concept's updated usage totals.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in outcomeIn) (*mcp.CallToolResult, usageOut, error) {
 		id := strings.TrimPrefix(in.Target, uriScheme)
 		if !domain.ValidID(id) {
@@ -595,13 +589,21 @@ func parseKnowledgeURI(uri string) (id string, ok bool) {
 // the same question everywhere, and a schema written twice is a schema
 // that starts differing. get_context has its own contextIn instead,
 // without source.
+// A list-valued filter is OR-ed within itself and AND-ed with the others.
+// That rule is the same on all four, so it is here rather than repeated in
+// four schema strings an agent holds all conversation (MCP-BYTES).
 type filters struct {
-	Types    []string `json:"types,omitempty" jsonschema:"filter by type, case-insensitive: Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or any custom type"`
-	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated — confirmation is a separate question, ask it with trusts"`
-	Trusts   []string `json:"trusts,omitempty" jsonschema:"filter by who confirmed it as it reads now: unverified, machine-confirmed, human-reviewed (OKF SPEC §5.3); several are OR-ed, omit to not ask. Independent of status; a concept edited since its last verification is unverified again"`
+	// The spellings are here rather than behind domain.TypesHint(): a
+	// struct tag cannot call it, and an agent narrowing a search picks
+	// its value from this string (design doc 0038 §4.4,
+	// TestToolSchemasCarryTheTypeVocabulary). A trim that drops them
+	// leaves a filter nobody can aim.
+	Types    []string `json:"types,omitempty" jsonschema:"filter by type, case-insensitive: Metric, Attested Computation, Skill, Insight, Policy, Glossary Term, BigQuery Dataset, BigQuery Table, Reference, or a custom one"`
+	Statuses []string `json:"statuses,omitempty" jsonschema:"filter by lifecycle status: draft, stable, deprecated"`
+	Trusts   []string `json:"trusts,omitempty" jsonschema:"filter by who confirmed it as it reads now: unverified, machine-confirmed, human-reviewed. Independent of status; an edit since the last verification reads unverified again"`
 	Tags     []string `json:"tags,omitempty" jsonschema:"filter by tag"`
-	Source   string   `json:"source,omitempty" jsonschema:"only concepts citing this resource, matched exactly against sources[].resource — \"this material changed, what derives from it?\""`
-	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts under these paths, e.g. [\"teams/growth\", \"company\"] — an id is a path, so this scopes to a subtree (\"metrics\" covers metrics/ but not metrics-legacy/); several are OR-ed"`
+	Source   string   `json:"source,omitempty" jsonschema:"only concepts citing this resource, matched exactly against sources[].resource"`
+	Prefixes []string `json:"prefixes,omitempty" jsonschema:"only concepts under these paths — an id is a path, so this scopes to a subtree (\"metrics\" covers metrics/ but not metrics-legacy/)"`
 }
 
 func (f filters) filter() store.Filter {
@@ -758,7 +760,7 @@ func view(k *domain.Knowledge, notes []string, plan string) (knowledgeOut, error
 
 type writeIn struct {
 	ID       string `json:"id" jsonschema:"where the concept lives: its full path, / separated (e.g. metrics/revenue, 用語/売上). The last segment must not be \"index\" or \"log\""`
-	Document string `json:"document" jsonschema:"the concept as an OKF document: YAML frontmatter, then markdown.\nFrontmatter: type (required, one line; the description lists the recommended ones), title (the id's last segment names it without one), description, tags, resource (the underlying asset's URI), status (draft | stable | deprecated; omitted reads as stable), status_note, stale_after (RFC 3339, or a YYYY-MM-DD date), sources (list of {resource, id, title, ...} — the material this derives from), usage_window ({from, to}). An Attested Computation also takes runtime (required), parameters, computation, executor, attester.\nProducer-defined keys sit beside these and are kept as written. Server-owned keys (generated, verified, created_by, rejected_*) are never read as truth: a document read back from ochakai can be returned as-is, and one from elsewhere keeps them as its own claim under received, which nothing derives trust from"`
+	Document string `json:"document" jsonschema:"the concept as an OKF document: YAML frontmatter, then markdown.\nFrontmatter: type (required, one line; the description lists the recommended ones), title (the id's last segment names it without one), description, tags, resource (the underlying asset's URI), status (draft | stable | deprecated; omitted reads as stable), status_note, stale_after (RFC 3339, or a YYYY-MM-DD date), sources (list of {resource, id, title, ...} — the material this derives from), usage_window ({from, to}). An Attested Computation also takes runtime (required), parameters, computation, executor, attester.\nProducer-defined keys sit beside these and are kept as written. Provenance keys (generated, verified, created_by) are never read as truth — send a document back as it came and they are kept as its claim, not as a ruling"`
 }
 
 // toKnowledge parses the document. Notes — values read differently than

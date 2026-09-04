@@ -850,16 +850,17 @@ func TestSurfaceDocCountsVocabulary(t *testing.T) {
 // guide alone is longer than the CLI reference.
 //
 // It is the dimension that grew fastest. Between v0.10.0 and now the REST
-// contract went 19 → 11 while these pages grew from 2,971 lines toward the
-// DOC-LINES ceiling below: the folding was real, and the prose explaining
-// the folding outgrew what it folded. Every other counter would have called
-// that a pure win, which is the same shape of blind spot PARAM, FLAG and
-// VOCAB each closed.
+// contract went 19 → 11 while these pages roughly tripled from 2,971
+// lines: the folding was real, and the prose explaining the folding
+// outgrew what it folded. Every other counter would have called that a
+// pure win, which is the same shape of blind spot PARAM, FLAG and VOCAB
+// each closed. The DOC-LINES ceiling that used to measure it is retired
+// (docs/surface.md's 上限 section); what is counted here is pages.
 //
 // What counts as one of these pages is decided here rather than listed
 // twice: an exception nobody can see is a place to put a page.
 func TestSurfaceDocCountsUserDocs(t *testing.T) {
-	docs, _ := userDocs(t)
+	docs := userDocs(t)
 	if len(docs) == 0 {
 		t.Fatal("no user-facing documents found: this check now guards nothing")
 	}
@@ -867,7 +868,7 @@ func TestSurfaceDocCountsUserDocs(t *testing.T) {
 }
 
 // userDocs is the manual: every markdown page a reader is sent to in order
-// to evaluate, use or run ochakai, with the total number of lines in them.
+// to evaluate, use or run ochakai.
 //
 // Five things are markdown and are not the manual, and each is left out
 // for a reason docs/surface.md states:
@@ -889,7 +890,7 @@ func TestSurfaceDocCountsUserDocs(t *testing.T) {
 //     build, verified by a test, with no hand-written prose beyond a
 //     fixed header. docs/cli.md is the only file that qualifies today
 //     (TestCLIReferenceIsCurrent in clidocs_test.go, issue #371).
-func userDocs(t *testing.T) ([]string, int) {
+func userDocs(t *testing.T) []string {
 	t.Helper()
 	const root = "../.."
 	skipDirs := map[string]bool{
@@ -903,7 +904,6 @@ func userDocs(t *testing.T) ([]string, int) {
 		"docs/cli.md": true,
 	}
 	var docs []string
-	lines := 0
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -938,13 +938,12 @@ func userDocs(t *testing.T) ([]string, int) {
 			return nil // an OKF document: knowledge, not documentation
 		}
 		docs = append(docs, rel)
-		lines += strings.Count(string(content), "\n")
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("walk %s: %v", root, err)
 	}
-	return docs, lines
+	return docs
 }
 
 // extraTopLevelCommands are the words after "ochakai" that a reader can
@@ -1076,7 +1075,7 @@ func TestManualNamesNoCommandThatDoesNotExist(t *testing.T) {
 		valid[name] = true
 	}
 
-	docs, _ := userDocs(t)
+	docs := userDocs(t)
 	checked := 0
 	for _, rel := range docs {
 		if commandGuardExempt[rel] {
@@ -1438,7 +1437,7 @@ func TestManualCountsTheDemoBundle(t *testing.T) {
 		t.Fatalf("%s holds no concept: this check now guards nothing", bundle)
 	}
 
-	docs, _ := userDocs(t)
+	docs := userDocs(t)
 	checked := 0
 	for _, page := range docs {
 		body, err := os.ReadFile(filepath.Join("../..", page))

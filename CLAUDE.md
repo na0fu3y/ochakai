@@ -40,20 +40,20 @@ chains get a replacement instead). The bookkeeping half of it is checked:
 an index that disagrees with a record's `Status:` header about whether it
 is current, or a supersession recorded at only one end.
 
-**A record has a ceiling, and so does the corpus.** CONTRIBUTING.md
-declares `RECORD-LINES` for one record's length and
-`RECORD-CORPUS-LINES` for all of `docs/design` together, Superseded
-records included; the same test file reads both back. The corpus ceiling
-sits on a grid the width of its own slack, so adding a record usually
-moves no number at all — it moves when the corpus crosses a boundary,
-which is when the paragraph explaining it is worth reading. 0048 narrowed
-what earns a number, not how many pile up: records have grown 4.1x since
-v0.10.0 against non-test Go's 2.5x, and it is the tombstone rule, not a
-slowdown, that keeps their line total under the code's.
-Over a line usually means two decisions, or a record restating
-one that already exists — not a record that needs denser prose, and not a
-corpus whose answer is a bigger number rather than a look at what it is
-carrying.
+**A record has a ceiling; the corpus no longer does.** CONTRIBUTING.md
+declares `RECORD-LINES` for one record's length, and a Superseded record
+shrinks to a tombstone (`TOMBSTONE-LINES`); the same test file reads both
+back. Over a line usually means two decisions, or a record restating one
+that already exists — not a record that needs denser prose. **What is no
+longer counted is the total**: `RECORD-CORPUS-LINES` is retired, with
+`DOC-LINES` and `REST-LINES`, because the paragraphs those ceilings asked
+for became the largest thing they produced (docs/surface.md's 上限
+section). 0048 narrowed what earns a number and 0128 narrowed what a
+number is for; a corpus growing under those two rules is growing
+correctly, and one growing against them is a review problem rather than
+an arithmetic one. Records have grown 4.1x since v0.10.0 against non-test
+Go's 2.5x, and it is the tombstone rule that keeps their line total under
+the code's.
 
 ## Surface, and the default answer
 
@@ -65,8 +65,10 @@ the manual they have to read — not the code behind it.
 place, and `cmd/ochakai/surface_test.go` fails when the count and the
 build disagree, so an addition shows up as a heading moving from `(19)`
 to `(20)` instead of disappearing into a spec diff. **Prose is counted
-too**: the manual has a ceiling on its line count, so explaining a fold
-at length is a decision like any other.
+too**, in pages: adding one to the manual moves `DOC` from `(27)` to
+`(28)`. The line totals of the manual and the contract are no longer
+capped — those ceilings are retired and 上限 says why — so a page that
+grows without a new page appearing is caught by review, not by CI.
 
 That document opens with the **eight conditions** ochakai exists to
 satisfy — the knowledge stays the user's, secret-zero on Google Cloud,
