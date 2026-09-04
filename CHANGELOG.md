@@ -23,6 +23,25 @@ last entry.
 
 ### Changed
 
+- **The positioning page says what happens when an ochakai bundle meets
+  `kcmd push`, and that nothing needs to be added for it.** Knowledge
+  Catalog's own OKF mapping was read on 2026-09-04
+  (`toolbox/mdcode/demo/okf/okf.ts`): entry names mirror the file path,
+  which is a concept's id; `title`/`description`/`tags` go to the
+  Documents Layout, the eleven OKF signal keys to an `okf` aspect, `type`
+  to `okf_type`, `resource` to the entry's resource; and any key it does
+  not model is diverted to `extra` as a `[path, value]` pair that
+  `pull.ts` reassembles. Checked against the 22 top-level keys the 31
+  documents in `examples/demo`, `kb/bundle` and `examples/bigquery-catalog`
+  actually carry: 17 modeled, 5 in `extra`, none dropped, and the
+  frontmatter-less `index.md` and `log.md` travel as entries with their
+  bodies — so a rejection's reason reaches the catalog as prose. **The
+  push itself has not been run**; it needs a project with the Dataplex
+  API, and the page says so. Three things that do not travel are named:
+  non-`.md` files, body links (they stay markdown rather than becoming
+  catalog edges, so there is no `linked_from` there), and `synonyms`,
+  which is an indexed key here (0105) and a JSON blob in `extra` there.
+
 - **The MCP surface holds 10,485 resident bytes instead of 12,290, with
   the same six tools.** What an agent pays for MCP is the tool list and
   the instructions, held for the whole conversation on every turn
