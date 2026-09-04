@@ -143,12 +143,14 @@ system entry が一つ自動で建ち、自動で入る required aspect は編�
 隣に住み、却下されたものは理由ごと履歴に残る。**キュレーションが単位を
 文書にする理由がここにある**: 一つの資産についての知識は、一つの値ではない。
 
-**名前は紛らわしいが、指すものが二つある。** OKF v0.2 の参照バンドルは
-[GoogleCloudPlatform/knowledge-catalog](https://github.com/GoogleCloudPlatform/knowledge-catalog)
-にあり、ochakai の型語彙はそこに合わせてある
-([0036](design/0036-okf-schema-first.md))。製品としての Knowledge
-Catalog はこの節の隣人であり、同じ名前のリポジトリにある OKF はこちらが
-準拠している標準である — 競合と規格が同じ名前を持っている。
+**名前は紛らわしかったが、2026-08-14 に規格は自分のリポジトリを持った。**
+OKF の SPEC と参照バンドルは
+[GoogleCloudPlatform/open-knowledge-format](https://github.com/GoogleCloudPlatform/open-knowledge-format)
+にあり、ochakai の型語彙はその参照バンドルに合わせてある
+([0036](design/0036-okf-schema-first.md))。それまで置かれていた
+`knowledge-catalog/okf` は、その README 自身が「凍結スナップショットで
+保守しない」と書く写しである。製品としての Knowledge Catalog はこの節の
+隣人であり、規格はもう競合と名前を共有していない。
 
 **見直す条件を書いておく**: verified queries が Preview を出て、かつ
 「この一本を誰がいつ確かめたか」を単位ごとに持ち、丸ごと持ち出せる形が

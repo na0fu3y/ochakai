@@ -168,7 +168,7 @@ moves:
   they are one-way. There is no downgrade path.
 
 The OKF export format is the one part with an external anchor: it follows
-[OKF v0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/tree/main/okf),
+[OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format),
 so it changes when the spec does or when ochakai's reading of it does —
 `0.14.0` changed the key order in exported frontmatter, which is a diff in
 anything that stores bundles in git.
