@@ -46,7 +46,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false # same shared-key problem as in ci.yaml
-      - uses: github/codeql-action/init@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           languages: go
           # `security-extended` over the default `security`: this is not a
