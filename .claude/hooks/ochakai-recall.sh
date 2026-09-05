@@ -50,8 +50,14 @@ if [ -n "$session" ]; then
 	: >"${TMPDIR:-/tmp}/ochakai-up-$session" 2>/dev/null || true
 fi
 
-rows=$(printf '%s' "$hits" | jq -r '.hits[]? |
-	"- ochakai://\(.id) [\(.type), \(.trust)]\(if .description and .description != "" then " — " + .description elif .snippet and .snippet != "" then " — " + .snippet else "" end)"' 2>/dev/null) || exit 0
+# A row says whether the writer's re-check date has passed, because the
+# ranking does not: an expired concept is due for re-checking, not wrong,
+# so it is neither hidden nor demoted (design doc 0069 §7). Date
+# granularity, so both spellings of an OKF instant work (0139), and today
+# counts as passed: the date names the UTC midnight that opens it (0133).
+today=$(date -u +%Y-%m-%d)
+rows=$(printf '%s' "$hits" | jq -r --arg today "$today" '.hits[]? |
+	"- ochakai://\(.id) [\(.type), \(.trust)\(if (.stale_after // "") == "" then "" elif (.stale_after[:10] <= $today) then ", past stale_after" else "" end)]\(if .description and .description != "" then " — " + .description elif .snippet and .snippet != "" then " — " + .snippet else "" end)"' 2>/dev/null) || exit 0
 [ -z "$rows" ] && exit 0
 
 if [ -n "$session" ]; then
@@ -59,4 +65,4 @@ if [ -n "$session" ]; then
 		>>"${TMPDIR:-/tmp}/ochakai-recalled-$session"; } 2>/dev/null || true
 fi
 
-printf 'Knowledge in this repository'"'"'s ochakai instance that may bear on this request — pointers, not the knowledge itself. Fetch what you rely on with the ochakai MCP get_concept tool (never the CLI, per the identity policy); a fetched concept lists what links at it under linked_from. Trust verified concepts; judge drafts by created_by:\n\n%s\n' "$rows"
+printf 'Knowledge in this repository'"'"'s ochakai instance that may bear on this request — pointers, not the knowledge itself. Fetch what you rely on with the ochakai MCP get_concept tool (never the CLI, per the identity policy); a fetched concept lists what links at it under linked_from. Trust verified concepts; judge drafts by created_by. A row marked `past stale_after` is due for re-checking, not wrong:\n\n%s\n' "$rows"

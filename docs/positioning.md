@@ -65,7 +65,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 | **[Google Cloud Knowledge Catalog](https://cloud.google.com/products/knowledge-catalog)(旧 Dataplex)** | 同じ Google Cloud の IAM、立てるものが無いこと、自動収集、lineage、品質、用語集、Gemini が生成する説明と example query、Context API と remote MCP | 人の裁定が中核であること、却下の理由が履歴に残ること、OKF での丸ごとの出口、収集ではなくキュレーションであること、**一つのテーブルに二つ目の読み方を並べられること** | 同じ雲で正面から重なる — 下記参照 |
 | ウェアハウス native の semantic layer(dbt MCP、Cube、Lightdash、Snowflake Semantic Views、Databricks Metric Views)と、その標準([Apache Ossie](https://github.com/apache/ossie) — 旧 OSI) | メトリクス定義、ディメンション、コンパイルされた SQL | 解釈、用語集、書き戻し、ウェアハウスをまたぐもの、そして誰が確認したか | 両立 — 下記参照 |
 | 「コンテキスト層」になったカタログ(OpenMetadata、DataHub、Atlan) | 技術メタデータ、リネージ、オーナーシップ、大規模な収集 | キュレーションされた側が OSS であること — 解釈とレビューループは商用ティアに置かれがち | 両立、あるいは既に運用しているなら ochakai の代わりになる |
-| エージェントのメモリ層(mem0、Zep、Letta、[remnic](https://github.com/joshuaswarren/remnic)) | ユーザーごと・エージェントごとの記憶、自動抽出・自動注入。**remnic は人の承認の門と provenance と訂正ループとサーバーを持つ** | チームの所有、認証された呼び出し元を観測する台帳、secret を置かないこと(remnic は bearer token) | 両立 — 下記参照 |
+| エージェントのメモリ層(mem0、Zep / Graphiti、Letta、[MemPalace](https://github.com/mempalace/mempalace)、[remnic](https://github.com/joshuaswarren/remnic)) | ユーザーごと・エージェントごとの記憶、自動抽出・自動注入、チームで共有する形。**MemPalace は書き込みに LLM を使わず、Letta はメモリが git 管理の markdown + frontmatter、remnic は人の承認の門と provenance と訂正ループを持つ** | 認証された呼び出し元を観測する台帳としての裁定、secret を置かないこと(remnic は bearer token) | 両立 — 下記参照 |
 | 自分の文書に対する RAG | 他の理由で書かれた文書からの断片 | 単位としてのレビュー済みの主張、provenance、著者の向き | 両立 |
 | AI アナリスト製品に内蔵された検証済みクエリストア(Cortex Analyst の VQR、Genie) | 問い + 検証済み SQL、一つのベンダーのチャットの中で | 他のクライアント、出口 | 重なる、そしてロックインする |
 | FDE 型オントロジー([Palantir Foundry Ontology](https://www.palantir.com/docs/foundry/ontology/overview)) | 組織のデジタルツイン — オブジェクトとリンク、Action と write-back、ライブデータへの接続、プラットフォーム内のガバナンス | 出口(オントロジーはプラットフォームのもの)、FDE 無しの立ち上げ、テナントごとの安価なセルフホスト | 約束は同じ、買い方を拒む — 下記参照 |
@@ -218,17 +218,54 @@ ochakai が持つ資格情報では決してない。
 ### エージェントのメモリ層
 
 *メモリ層は起きたことを覚え、ochakai は正しいことをキュレーションする。*
-あちらは LLM で抽出し、監査を経ずに注入する: 何が記憶されたかを誰も
-レビューせず、間違った記憶は静かに残り続ける。データ分析において
-間違った記憶は間違った意思決定であり、監査されない想起の品質の天井は
-低い。ochakai は人の裁定の後ろにあるチーム共有のナレッジであり、却下は
-その理由を履歴に残すので、同じ提案をする前にエージェントが読めるものが
-ある。
+一行目は今も立つ。**その下にこの節が長く書いていた三つの前提は、崩れた**
+(2026-09-05 に原典を開いて確認)。
+
+- **「あちらは LLM で抽出する」はカテゴリ全体には言えない。** MemPalace は
+  書き込み時の LLM 呼び出しがゼロで — 分類も分割も正規表現と語彙スコア、
+  本文は逐語で保存する — その姿勢のまま LongMemEval R@5 96.6% を公表して
+  いる。批判論文はその数字を再現できるとしたうえで、効いているのは逐語
+  保存と既定の埋め込みであって階層の比喩ではないと書く
+  ([arXiv:2604.21284](https://arxiv.org/abs/2604.21284))。**LLM を持たない
+  ことは、もうこの節の差別化ではない。** ochakai がそれを持たない理由 —
+  人の検証への信頼の根拠
+  ([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md))— は
+  変わらないが、理由と差別化は同じものではない。
+- **「記憶は個体に属する」も言えない。** MemPalace は共有ハブを、Letta は
+  クラウドの共有メモリと git のリモートを、mem0 は `app_id` / `org_id` の
+  スコープを持つ。
+- **「誰もレビューしない」も一律には言えない。** Letta の dreaming は提案を
+  適用前に見せる門を任意で持ち、Zep は ABAC と保持期限と全リクエストの
+  監査証跡を売っている。
+
+**残る差は一つに絞れる**: 裁定が**インスタンス自身の観測**として台帳に残り、
+その行が**認証された呼び出し元**を名指すこと
+([0075](design/0075-the-bundle-is-the-address-space.md) §3.1)。人が確かめた
+のか機械かは、その台帳から導かれる tier が言い分ける — 中核に置いているのは
+`human-reviewed` の側である
+([0138](design/0138-a-verification-stands-until-the-content-moves.md))。mem0 の
+history は old / new と `user_id` を持つが行為者の名前を持たず、feedback
+(POSITIVE / NEGATIVE / VERY_NEGATIVE と理由)は蓄えて自社のチューニングに
+使うもので、人が読む面が無い。**mem0 自身の 2026 年の報告が、誰が記憶を
+検査できて・いつ消えるかは application-layer の未解決事項だと書いている。**
+ochakai は人の裁定の後ろにあるチーム共有のナレッジであり、却下は理由ごと
+リビジョンと `log.md` に残る — ただし**それが次の提案を止めるわけではない**。
+却下を削除にしたとき、塞ぐことはしないと決めている
+([0135](design/0135-a-rejection-is-a-deletion.md) §3)。
+
+**形も近づいた。** Letta は 2026-02 にメモリを git 管理の markdown +
+YAML frontmatter に作り直した(MemFS)— `system/` の下だけが毎ターン
+system prompt に載り、残りはファイル木だけ見せて必要なときに読ませる。
+OKF バンドルと同じ形であり、この節と下の vault 節の境目は消えつつある。
 
 あちらから学ぶ価値があるのは記憶の品質ではなく人間工学のほうである:
 本当の強みは、エージェントが覚えようと*決める*必要が無いことである。
 ochakai は Claude Code の[フック](../examples/claude-code)でそれに
 答える — 想起も書き戻しも習慣ではなく仕組みとして、しかも LLM 無しで。
+**期限切れの扱いは、そこで分かれる。** mem0 は期限の切れた記憶を検索から
+隠すが、ochakai の期限切れは「間違い」ではなく「再確認が要る」なので
+([0069](design/0069-the-loop-and-what-measures-it.md) §7)、隠さず、順位も
+動かさず、想起のポインタ行に印として出す。
 
 ### 自分の文書に対する RAG
 

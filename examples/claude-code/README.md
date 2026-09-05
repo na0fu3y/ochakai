@@ -10,13 +10,18 @@
    Claude Code 自身なので毎回必ず発火し、エージェントの判断は挟まらない
    — メモリ層が使っているのと同じ手を、LLM 抜きでやる:
    - `ochakai-recall.sh`(**UserPromptSubmit**)は `ochakai search
-     "<prompt>" --json` を実行し、返ってきた順位 — id・型・trust・説明の
-     ポインタ行 — をエージェントが作業を始める前にコンテキストへ差し込み、
+     "<prompt>" --json` を実行し、返ってきた順位 — id・型・trust・書き手が
+     宣言した期限を過ぎていればその印・説明のポインタ行 —
+     をエージェントが作業を始める前にコンテキストへ差し込み、
      何を指したかを下の Stop フックのために記録する。自動の想起である。
      ナレッジ本体は注入しない(設計ドキュメント
      [0108](../../docs/design/0108-the-context-pack-retires.md)):
      fetch はエージェント自身の選択で、`ochakai get` で取った concept は
-     自分を指す concept を `linked_from` として連れてくる。
+     自分を指す concept を `linked_from` として連れてくる。期限の印は
+     隠しも減点もしない — 期限切れは「間違い」ではなく「再確認が要る」
+     なので(設計ドキュメント
+     [0069](../../docs/design/0069-the-loop-and-what-measures-it.md) §7)、
+     順位を動かさずに伝えるのがこの一語である。
    - `ochakai-write-back.sh`(**Stop**)はデータ作業のセッションごとに
      一度、エージェントが止まる直前に割り込み、再利用できるクエリと
      メトリクスの気づきを保存するか(書き戻し)、想起で指された concept が
