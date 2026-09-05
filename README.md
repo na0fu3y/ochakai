@@ -297,11 +297,14 @@ for what they still don't do:
   because your agent already owns it
   ([positioning](docs/positioning.md), Japanese).
 - **Not a memory layer — the other half of one.** Memory layers (mem0,
-  Zep, Letta) auto-extract per-user memories with an LLM and inject them
-  back unaudited. ochakai is the opposite trade: team-shared knowledge
-  that passes through human review. *Memory layers remember what
-  happened; ochakai curates what's true.* They compose — preferences
-  there, verified data knowledge here.
+  Zep, Letta, MemPalace) auto-extract and auto-inject, and by 2026 some
+  do it with no LLM at write time, shared across a team, behind a gate
+  that reviews a proposal before it applies. What none of them holds is
+  the ruling side named above — a ledger row naming the authenticated
+  caller who confirmed this content, and a tier saying whether that
+  caller was a human. *Memory layers remember what happened; ochakai
+  curates what's true.* They compose — preferences there, verified data
+  knowledge here.
 - **Verified answers for any client, and an exit.** Verified-query stores
   exist inside Snowflake Cortex Analyst, inside Databricks Genie, inside
   each AI-analyst SaaS — each feeding only its own chat. The same
