@@ -985,7 +985,7 @@ type Knowledge struct {
 	UsageWindow *UsageWindow `json:"usage_window,omitempty"` // the range the sources' usage_counts were counted over
 	Status      Status       `json:"status"`
 	StatusNote  string       `json:"status_note,omitempty"` // free-form reason for the current status (why rejected/deprecated)
-	StaleAfter  string       `json:"stale_after,omitempty"` // YYYY-MM-DD; the entry is stale on and after this day (OKF SPEC §5.5, design doc 0036 §3.5)
+	StaleAfter  string       `json:"stale_after,omitempty"` // RFC 3339 on the way out, RFC 3339 or YYYY-MM-DD on the way in; the entry is stale from this instant (OKF SPEC §5.5, design doc 0139)
 	// The Attested Computation contract (OKF SPEC §10.2). These live in the
 	// envelope for every type — Go structs do not change shape per type, and
 	// ochakai enforces no per-type schema (design doc 0036 §5). What varies

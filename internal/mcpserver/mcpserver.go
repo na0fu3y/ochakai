@@ -400,9 +400,9 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			"kept as a revision, and the answer's plan says which of created / updated / " +
 			"unchanged this write turned out to be.\n" +
 			"Write status: draft unless you are recording something already agreed. You are " +
-			"recorded as the author and the concept stays unverified until a person confirms it; " +
+			"recorded as the author and the concept stays unverified until someone confirms it; " +
 			"confirming and rejecting are not on this surface.\n" +
-			"A concept a human has ruled on — verified or deprecated — is refused here, and the " +
+			"A concept that has been ruled on — verified or deprecated — is refused here, and the " +
 			"refusal says what to do instead: report_outcome failed, or a better draft at a " +
 			"different id that links the one it would replace, so the reviewer sees both. An id " +
 			"whose concept was deleted can be reused, which revives it as your draft — including " +

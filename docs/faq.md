@@ -66,22 +66,26 @@ AI を呼べるなら hybrid search を有効にする。埋め込みが効く�
 
 <a id="can-an-agent-overwrite-or-delete-knowledge-a-human-verified"></a>
 
-### エージェントは人が検証したナレッジを上書き・削除できるか
+### エージェントは裁定済みのナレッジを上書き・削除できるか
 
 MCP からはできない。削除はそもそもツールですらない — 設計ドキュメント
 [0076](design/0076-two-tools-leave-mcp.md) が `delete_concept` をこの面
 から降ろした。ナレッジを消すことは裁定であり、MCP は取り消せる裁定さえ
-運んでいないからである。`put_concept` は人が裁定した concept —
+運んでいないからである。`put_concept` は裁定の立った concept —
 verified・deprecated — を拒み、拒否は代わりに何をすべきかを
 言う:
 
-> cannot replace metrics/revenue from this surface: a human ruled on it
-> (verified), and this surface has no If-Match precondition to replace
-> curated knowledge safely. If it is wrong, say so with report_outcome
-> failed — that puts it in the re-verification feed. If you have
-> something better, put_concept a new draft at a different id, linking
-> this one from its body so the reviewer sees both. A human changes
-> curated concepts from the web UI or CLI.
+> cannot replace metrics/revenue from this surface: a ruling stands on
+> it (verified), and this surface has no If-Match precondition to
+> replace curated knowledge safely. If it is wrong, say so with
+> report_outcome failed — that puts it in the re-verification feed. If
+> you have something better, put_concept a new draft at a different id,
+> linking this one from its body so the reviewer sees both. Curated
+> concepts change from the web UI, the CLI or REST.
+
+裁定者の種類は問わない: CI のカナリアが `process:` として打った検証
+(machine-confirmed)も裁定であり、同じ拒否が出る。誰が確かめたかは
+`trust` が言う([下](#エージェントは検証できるか))。
 
 「別の id に、リンクして」が答えの本体である。検証済みのテーブル concept
 に業務説明を後から足したいなら、追記は別の concept として書き、本文から

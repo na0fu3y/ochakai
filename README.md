@@ -299,7 +299,8 @@ for what they still don't do:
 - **Not a memory layer — the other half of one.** Memory layers (mem0,
   Zep, Letta, MemPalace) auto-extract and auto-inject, and by 2026 some
   do it with no LLM at write time, shared across a team, behind a gate
-  that reviews a proposal before it applies. What none of them holds is
+  that reviews a proposal before it applies — usually another agent;
+  only remnic's gate is a person. What none of them holds is
   the ruling side named above — a ledger row naming the authenticated
   caller who confirmed this content, and a tier saying whether that
   caller was a human. *Memory layers remember what happened; ochakai
