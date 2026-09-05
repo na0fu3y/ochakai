@@ -23,6 +23,44 @@ last entry.
 
 ### Changed
 
+- **Three pages said an agent cannot verify. The wire has always let one,
+  and a fourth page documents the practice.** Nothing in the build
+  changes: `Service.Verify` does not branch on the actor's kind, so a
+  `process:` ruling lands in the ledger like any other and `TrustOf`
+  derives `machine-confirmed` from it (design doc 0138) — which is
+  exactly what the golden-query canary guide has told a CI service
+  account to do since it was written, under the heading *Write back — as
+  a record, not an approval*. The drift was in the prose around it.
+  `docs/loop.md` claimed the ruling is the one step "no agent will do for
+  you" while its own later paragraph said "a person or an agent
+  re-confirms it"; `docs/architecture.md` gave "rulings are handed down by
+  humans" as the reason MCP has no `verify` or `delete`, where the reason
+  0076 gives is that rulings stay off that surface — a face without the
+  reversible ruling has no business offering the irreversible one; and
+  `docs/faq.md` wrote that "the **human** who reaches the deployment" can
+  edit anything from REST, where the sentence is about any caller.
+
+  What replaces them separates two claims that had been reading as one.
+  **That a person's ruling is the core is the product's thesis and is
+  untouched** — it is what positioning is built on, and what
+  `human-reviewed` means. **That an agent is unable to rule was never
+  true.** The new FAQ entry *エージェントは検証できるか* is the one place
+  that answers it: MCP cannot, REST and the CLI can, the tier stops at
+  `machine-confirmed`, and search does not tell the two tiers apart —
+  the boost is for "somebody confirmed the content as it reads now",
+  weighted the same either way (0138 §2), so a reader who needs the
+  distinction reads `trust`, not rank, through `--trust human-reviewed`
+  and the `stats` trust breakdown. The entry closes on the reading a
+  deployment whose main writer is an agent has to do for itself: the
+  ledger keeps `created_by` beside the verifier, so whether a draft was
+  confirmed by its own author is legible, and judging it is the reading
+  side's job (0065 §1).
+
+  **No surface moved, and no record was needed.** The wire, the tiers and
+  the tool list are unchanged, so there is nothing a user can observe
+  that a numbered record would be recording (0048), and the correction is
+  a rule inside an area rather than the area's decision (0128).
+
 - **The positioning page says what an AIX bundle costs ochakai, and it was
   measured rather than argued.** `aix-format` calls itself upward
   compatible with OKF and adds four things, two of which ochakai declined

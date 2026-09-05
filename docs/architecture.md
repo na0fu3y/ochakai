@@ -348,8 +348,9 @@ REST、MCP、CLI、web UI は一つのルールに従う: 機能はこのすべ�
 `get_concept` の `linked_from` でそれを得る)、ファイルの書き込みも無く(tool の引数の中の
 base64 は token の無駄であり、エージェントの書き戻しは検索可能な
 テキストであるべきである)、一括の export も import も無く、
-`verify` も `delete` も無い — 裁定は人間が下すものだからである
-(設計ドキュメント [0076](design/0076-two-tools-leave-mcp.md))。
+`verify` も `delete` も無い — 裁定をこの面に置かないからである
+(取り消せる裁定を持たない面が、取り消せないほうを差し出す筋は無い。
+設計ドキュメント [0076](design/0076-two-tools-leave-mcp.md))。
 利用回数の合計も無い — それを読んで動くのは人である。web UI には
 outcome の報告が無い。SQL を実行できないサーフェスが worked/failed
 の報告を作っても、その裏に行動が無いからである。REST には SQL の
