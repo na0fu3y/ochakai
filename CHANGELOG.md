@@ -435,6 +435,31 @@ last entry.
   told only to write a draft wrote one nobody reading the original
   would meet. No endpoint, tool, command or variable changed.
 
+### Fixed
+
+- **README claimed three things about memory layers that the positioning
+  page had just stopped claiming.** #826 dated those premises against the
+  sources and corrected `docs/positioning.md`; the same sentence was still
+  standing on the front door, in English, where someone evaluating ochakai
+  meets it first — *"auto-extract per-user memories with an LLM and inject
+  them back unaudited"* packs all three into one line. By 2026 some
+  extract with no LLM at write time (MemPalace), some share across a team
+  (`app_id` / `org_id`, a shared hub, a git remote), and some gate a
+  proposal before it applies (Letta's dreaming). The bullet concedes those
+  and names the axis that survives — which is the one README already
+  states two bullets earlier: a `verified` entry is an event the instance
+  observed from an authenticated caller, never a claim typed into a file.
+
+- **`docs/positioning.md` said Letta has a review gate without saying who
+  stands in it.** The setting is *"Agent reviews before applying"* — a
+  second background conversation, with no human approval — so leaving the
+  reviewer unnamed overstated the neighbour *and* blunted the axis the
+  next paragraph claims. The bullet now separates the gate from who
+  reviews at it, and says that in this lineup only remnic has a human one,
+  which the neighbours table already credited it with. Same pass: mem0
+  hides an expired memory from search **by default**, `show_expired`
+  brings it back.
+
 ## [0.28.3] - 2026-09-03
 
 ### Added
