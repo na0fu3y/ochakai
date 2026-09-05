@@ -41,9 +41,13 @@ stable / deprecated)は書き手が置くライフサイクルの主張、trust
 (unverified / machine-confirmed / human-reviewed)は台帳から導かれる。
 draft のまま検証済みにもなり、stable のまま未検証にもなる。理由は履歴と
 `log.md` に残り、同じ id はまた書ける — 読めるところに置くのであって、
-読ませて止めるのではない(0135 §3)。**ここだけは、どのエージェント
-も代わりにやってくれない。** import も代わりにやらない: 取り込んだ
-バンドルの `verified:` は文書の主張のまま置かれるので、**裁定の台帳は
+読ませて止めるのではない(0135 §3)。**この一手を、繋いだエージェント
+がついでに済ませることはない** — MCP に裁定のツールが無いからである
+(0067 §6)。**そして human-reviewed になるのは、人が打った検証だけ
+である**(REST と CLI は `process:` の検証も受け取り、それは
+machine-confirmed で止まる — [FAQ](faq.md#エージェントは検証できるか))。
+import も代わりにやらない: 取り込んだバンドルの `verified:` は文書の
+主張のまま置かれるので、**裁定の台帳は
 最初の一手を誰かが打つまで空である**([Git をレビュー経路に
 する](guides/git-review.md#merge-は-verify-ではない))。デモを入れた
 直後なら `ochakai verify metrics/revenue` がその一手になる。

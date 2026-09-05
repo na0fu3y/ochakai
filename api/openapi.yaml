@@ -1598,7 +1598,7 @@ paths:
         schema: { type: string }
     post:
       operationId: reviewConcept
-      summary: Record a human's ruling on a concept
+      summary: Record the caller's ruling on a concept
       description: >
         One ruling on the concept as it stands, by the caller, now.
 
@@ -1617,11 +1617,21 @@ paths:
         things, and three faces that all leave the document alone are the
         same thing said three times.
 
-        Not an MCP tool: a ruling is what a person does, and it is the
-        human judgment the write-back loop turns on. An agent that finds
-        a verified concept wrong reports the outcome (`POST
-        /api/v1/usage/{id}`) or drafts a replacement (design doc 0067
-        §6).
+        Not an MCP tool: rulings stay off that surface (design doc 0076),
+        and a person's ruling is the judgment the write-back loop turns
+        on. An agent that finds a verified concept wrong reports the
+        outcome (`POST /api/v1/usage/{id}`) or drafts a replacement
+        (design doc 0067 §6).
+
+        **The caller is recorded as it stands, whichever kind it is.**
+        This operation does not branch on the actor: a ruling by a
+        `process:` caller — a CI canary re-running an attested
+        computation (docs/guides/golden-query-canary.md) — is appended to
+        the ledger like any other, and the tier derived from it stops at
+        `machine-confirmed`, since `human-reviewed` takes a standing
+        `human:` row (design doc 0138). What the tier says is who
+        confirmed it, and judging that is the reading side's (design doc
+        0065 §1).
 
         Lives at its own top-level path for the same reason `/usage`
         does — a suffix after the hierarchical id could be confused with
