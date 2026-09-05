@@ -71,7 +71,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 | FDE 型オントロジー([Palantir Foundry Ontology](https://www.palantir.com/docs/foundry/ontology/overview)) | 組織のデジタルツイン — オブジェクトとリンク、Action と write-back、ライブデータへの接続、プラットフォーム内のガバナンス | 出口(オントロジーはプラットフォームのもの)、FDE 無しの立ち上げ、テナントごとの安価なセルフホスト | 約束は同じ、買い方を拒む — 下記参照 |
 | OSS の「Palantir 代替」([semantica](https://github.com/semantica-agi/semantica)) | 数十ソースの取り込みと自動抽出、ポリグロットなグラフ・ベクトルストア、OWL/SHACL、PROV-O、エージェントの決定の因果記録、セルフホスト | 人の裁定が中核であること(decision の記録は verify ではない)、secret-zero、単一形式の往復、キュレーションが買う小ささ | 約束の語彙は重なる、軸が違う — 下記参照 |
 | グラフ DB ネイティブのオントロジー基盤([NebulaGraph](https://nebula-graph.io/posts/ontology-and-graph-databases-enterprise-ai-from-theory-to-production-reality)、Neo4j + GraphRAG) | 型システムと書き込み時のスキーマ強制、型間のリレーション制約、数十億ノードへのスケール、多段トラバーサルとグラフアルゴリズム | 検証のループが中核であること(あちらでは成熟モデルの最終段)、markdown での出口、キュレーションされた規模が買う単純さ | 規模が前提から違う — 下記参照 |
-| **OKF ネイティブのローカルツール群と、MCP サーバー付きの markdown vault**([okf-skills](https://github.com/scaccogatto/okf-skills)、[okfcli](https://github.com/okfcli/okf)、[serradura/okf](https://github.com/serradura/okf)、[kaut](https://github.com/yurgeno/kaut)、Obsidian、ノートの git リポジトリ) | 同じ OKF v0.2 の markdown + frontmatter、リンク、ローカルな所有、エージェントが読み書きすること、一部は draft キューと書き込みの門、**一部は rationale 付きの approve / reject の記録**([KL4A](https://github.com/CogniSwitch/KL4A)) | 認証された呼び出し元を**観測**する台帳としての検証(あちらの `verified` は誰かがタイプした一行である)、outcome と miss の計測 | 両立 — 下記参照 |
+| **OKF ネイティブのローカルツール群と、MCP サーバー付きの markdown vault**([okf-skills](https://github.com/scaccogatto/okf-skills)、[okfcli](https://github.com/okfcli/okf)、[serradura/okf](https://github.com/serradura/okf)、[kaut](https://github.com/yurgeno/kaut)、LLM Wiki 系の [llm-wiki-compiler](https://github.com/atomicstrata/llm-wiki-compiler)、Obsidian、ノートの git リポジトリ) | 同じ OKF v0.2 の markdown + frontmatter、リンク、ローカルな所有、エージェントが読み書きすること、一部は draft キューと書き込みの門、**一部は rationale 付きの approve / reject の記録**([KL4A](https://github.com/CogniSwitch/KL4A)) | 認証された呼び出し元を**観測**する台帳としての検証(あちらの `verified` は誰かがタイプした一行である)、outcome と miss の計測 | 両立 — 下記参照 |
 
 ### Google Cloud Knowledge Catalog(旧 Dataplex)
 
@@ -525,6 +525,60 @@ README がそう書いており、[0131](design/0131-a-deployment-says-what-it-c
 索引が読む鍵([0105](design/0105-a-concept-answers-to-its-other-names.md))
 だが、向こうでは検索できる欄ではなくなる。C8 の機構は、バンドルと一緒には
 旅をしない。
+
+**LLM Wiki にも入れた。** Karpathy が 2026-04 に gist で書いた LLM Wiki
+パターン — 「Obsidian が IDE、LLM がプログラマ、wiki がコードベース」、
+生の資料を LLM が wiki に*コンパイル*し、lint が矛盾と古い主張と孤立
+ページを拾う — は、この節が言う vault の中で最も速く増えた形であり、
+上の pi-llm-wiki と aws-samples/sample-okf-llm-wiki はその実装である。
+**前提が ochakai と正反対である**: 向こうは LLM が wiki を維持することが
+本体で、こちらは中に LLM を持たない
+([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md))。
+その代表実装 [llm-wiki-compiler](https://github.com/atomicstrata/llm-wiki-compiler)
+(2.0k、MIT、OKF の producer と consumer、レビューキュー、MCP サーバー)
+の v1.1.0 に、2026-09-05、`examples/demo` の 18 concept と `kb/bundle` の
+9 文書を `import --okf` で入れ、`lint` を通し、`export --target okf` で
+戻した。
+
+- **入口は LLM を呼ばず、既定で止まる。** import はファイル操作で、
+  18/18 と 9/9 が skipped 0 で入る。既定では live にならず
+  `.llmwiki/candidates/` に `imported-okf` の理由で積まれ、`review show`
+  は本文を「UNTRUSTED(prompt injection の可能性)、provenance は
+  unverified」と表示し、`review approve` が LLM を呼ばずに昇格する。
+  「import は裁定しない」(v0.22.0)と同じ判断を、向こうは**止める**こと
+  で実装している — こちらは書き込んで trust を unverified に置く。
+  **却下の理由は残らない**: `review reject` は候補の JSON を `archive/`
+  に移すだけで、reviewer も理由も裁定の時刻も書かず、中身は積まれた
+  ときのままである。
+- **`verified` は向こうでも一行になる。** OKF の `verified` /
+  `generated` / `sources` / `status` / `synonyms` は live ページの
+  `x-okf.originalFrontmatter` に畳まれ、ページ自身は
+  `provenanceState: imported` になる。Knowledge Catalog と同じ結果で、
+  台帳は文字列として渡る。向こうの信頼の単位は**生の資料の行範囲への
+  引用**であり、`lint` は 18 文書中 13 に「引用の無い推論段落」の警告を
+  出した — OKF §5.1 の `sources` と `[^id]` 脚注は引用として読まれない。
+  エラーは 0 で、`lint` も LLM を要らない(要るのは `compile` である)。
+- **戻りは壊れる。** 再 export の 18 文書のうち 13 で本文リンクが
+  `[text](/path)](/path)` に二重化し(35 か所、元は 104 リンク)、
+  `references/` が向こうの予約名なので `references/thelook-dataset.md`
+  は `concepts/` へ**動かされ**、それを指す 8 リンクは元の住所を指した
+  ままになった。0075 §2 の「住所はパスである」と
+  [0129](design/0129-a-move-runs-when-its-rewrite-fits.md) の「リンクが
+  収まらない move は動かない」が、向こうには無い。`timestamp:` は import
+  した時刻(2026-09-05)になり、文書は持たなかった時刻を得る。`index.md`
+  は `okf_version: "0.1"` を名乗る。**それでも ochakai の側は戻りを
+  18/18 で読む**: 二重化したリンクは本文のまま入り、`verified` と
+  `generated` と `timestamp` は 0009 §3.2 のとおり `received` に分かれ、
+  `x-llmwiki` は producer のキーとして残る。壊れたのは本文であって、
+  形式ではない。
+
+**この節にとって新しいのは軸である。** 裁定を持つものはもう増えた(上の
+KL4A と remnic)。LLM Wiki が持ち込むのは**コンパイラという役割**で —
+資料から wiki を LLM が作り、lint が矛盾と古さを機械的に拾う — その後半
+は ochakai の期限切れフィードと同型であり、前半は ochakai がエージェント
+の側に置いた仕事である。ochakai に LLM Wiki から足すものは無く、LLM
+Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測定どおり今日
+も開いている — 本文リンクを除いて。
 
 ファイルの側が持たないのは、ファイル形式でないすべてである:
 
