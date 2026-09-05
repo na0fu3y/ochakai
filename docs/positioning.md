@@ -65,13 +65,13 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 | **[Google Cloud Knowledge Catalog](https://cloud.google.com/products/knowledge-catalog)(旧 Dataplex)** | 同じ Google Cloud の IAM、立てるものが無いこと、自動収集、lineage、品質、用語集、Gemini が生成する説明と example query、Context API と remote MCP | 人の裁定が中核であること、却下の理由が履歴に残ること、OKF での丸ごとの出口、収集ではなくキュレーションであること、**一つのテーブルに二つ目の読み方を並べられること** | 同じ雲で正面から重なる — 下記参照 |
 | ウェアハウス native の semantic layer(dbt MCP、Cube、Lightdash、Snowflake Semantic Views、Databricks Metric Views)と、その標準([Apache Ossie](https://github.com/apache/ossie) — 旧 OSI) | メトリクス定義、ディメンション、コンパイルされた SQL | 解釈、用語集、書き戻し、ウェアハウスをまたぐもの、そして誰が確認したか | 両立 — 下記参照 |
 | 「コンテキスト層」になったカタログ(OpenMetadata、DataHub、Atlan) | 技術メタデータ、リネージ、オーナーシップ、大規模な収集 | キュレーションされた側が OSS であること — 解釈とレビューループは商用ティアに置かれがち | 両立、あるいは既に運用しているなら ochakai の代わりになる |
-| エージェントのメモリ層(mem0、Zep、Letta) | ユーザーごと・エージェントごとの記憶、自動抽出・自動注入 | チームの所有、人のレビュー、*no* の記録 | 両立 |
+| エージェントのメモリ層(mem0、Zep、Letta、[remnic](https://github.com/joshuaswarren/remnic)) | ユーザーごと・エージェントごとの記憶、自動抽出・自動注入。**remnic は人の承認の門と provenance と訂正ループとサーバーを持つ** | チームの所有、認証された呼び出し元を観測する台帳、secret を置かないこと(remnic は bearer token) | 両立 — 下記参照 |
 | 自分の文書に対する RAG | 他の理由で書かれた文書からの断片 | 単位としてのレビュー済みの主張、provenance、著者の向き | 両立 |
 | AI アナリスト製品に内蔵された検証済みクエリストア(Cortex Analyst の VQR、Genie) | 問い + 検証済み SQL、一つのベンダーのチャットの中で | 他のクライアント、出口 | 重なる、そしてロックインする |
 | FDE 型オントロジー([Palantir Foundry Ontology](https://www.palantir.com/docs/foundry/ontology/overview)) | 組織のデジタルツイン — オブジェクトとリンク、Action と write-back、ライブデータへの接続、プラットフォーム内のガバナンス | 出口(オントロジーはプラットフォームのもの)、FDE 無しの立ち上げ、テナントごとの安価なセルフホスト | 約束は同じ、買い方を拒む — 下記参照 |
 | OSS の「Palantir 代替」([semantica](https://github.com/semantica-agi/semantica)) | 数十ソースの取り込みと自動抽出、ポリグロットなグラフ・ベクトルストア、OWL/SHACL、PROV-O、エージェントの決定の因果記録、セルフホスト | 人の裁定が中核であること(decision の記録は verify ではない)、secret-zero、単一形式の往復、キュレーションが買う小ささ | 約束の語彙は重なる、軸が違う — 下記参照 |
 | グラフ DB ネイティブのオントロジー基盤([NebulaGraph](https://nebula-graph.io/posts/ontology-and-graph-databases-enterprise-ai-from-theory-to-production-reality)、Neo4j + GraphRAG) | 型システムと書き込み時のスキーマ強制、型間のリレーション制約、数十億ノードへのスケール、多段トラバーサルとグラフアルゴリズム | 検証のループが中核であること(あちらでは成熟モデルの最終段)、markdown での出口、キュレーションされた規模が買う単純さ | 規模が前提から違う — 下記参照 |
-| **OKF ネイティブのローカルツール群と、MCP サーバー付きの markdown vault**([okf-skills](https://github.com/scaccogatto/okf-skills)、[okfcli](https://github.com/okfcli/okf)、[serradura/okf](https://github.com/serradura/okf)、[kaut](https://github.com/yurgeno/kaut)、Obsidian、ノートの git リポジトリ) | 同じ OKF v0.2 の markdown + frontmatter、リンク、ローカルな所有、エージェントが読み書きすること、一部は draft キューと書き込みの門 | 認証された呼び出し元を観測する台帳としての検証、outcome と miss の計測、複数書き手の identity、一台のマシンを越える到達 | 両立 — 下記参照 |
+| **OKF ネイティブのローカルツール群と、MCP サーバー付きの markdown vault**([okf-skills](https://github.com/scaccogatto/okf-skills)、[okfcli](https://github.com/okfcli/okf)、[serradura/okf](https://github.com/serradura/okf)、[kaut](https://github.com/yurgeno/kaut)、Obsidian、ノートの git リポジトリ) | 同じ OKF v0.2 の markdown + frontmatter、リンク、ローカルな所有、エージェントが読み書きすること、一部は draft キューと書き込みの門、**一部は rationale 付きの approve / reject の記録**([KL4A](https://github.com/CogniSwitch/KL4A)) | 認証された呼び出し元を**観測**する台帳としての検証(あちらの `verified` は誰かがタイプした一行である)、outcome と miss の計測 | 両立 — 下記参照 |
 
 ### Google Cloud Knowledge Catalog(旧 Dataplex)
 
@@ -368,13 +368,42 @@ AI が生んだ洞察を人が検証してオントロジーへ還流する閉�
 があり、MCP サーバー経由で Claude Code から 10 分ほどで届く — インフラは
 一切要らない。**そしてその vault は、2026 年の夏に OKF を話すようになった。**
 Google が OKF v0.2 を公開した 2026-07-25 から三か月で、GitHub の topic
-`open-knowledge-format` には 135 のリポジトリが付いた(2026-09-03)。大きい
-ものは全てローカルで、ファイルで、一台である — Claude Code プラグインと
-conformance checker と read-only MCP を持つ okf-skills、validate / lint /
-search の一本の Go バイナリ okfcli、MCP 14 ツールの serradura/okf。
-うち二つはこの節が長く「無い」と書いてきたものを持つ: kaut は書き込みの
-門と draft キューと freshness の判定を、okf-hub は「提案だけ受け、管理者役が
-統合する」レビューを、どちらも git を正本にして持つ。
+`open-knowledge-format` には 136 のリポジトリが付いた(2026-09-05)。
+**この節の見出しが言う「ローカルツール群」は、もうカテゴリの全体では
+ない。** 大きいものの多くは今もローカルで、ファイルで、一台である —
+Claude Code プラグインと conformance checker と read-only MCP を持つ
+okf-skills(359)、validate / lint / search の一本の Go バイナリ
+okfcli、MCP 14 ツールの serradura/okf(153)、Obsidian 互換の
+pi-llm-wiki(555)。だが同じ topic には**サーバーもクラウドサービスも
+入った**: remnic(193)は HTTP + MCP のサーバーを配り、
+aws-samples/sample-okf-llm-wiki は S3 / Athena / Bedrock の上で OKF
+バンドルを MCP に出す。**OKF はもう Google Cloud の話ではない。**
+
+**そして「人の裁定」を持つものが増えた。** kaut は書き込みの門と draft
+キューと freshness の判定を、okf-hub は「提案だけ受け、管理者役が統合
+する」レビューを、どちらも git を正本にして持つ。ここに二つ加わる —
+**KL4A** は「nothing is marked `verified` until a human approves it」と
+書き、approve / reject / edit を**それぞれイベントとして、reviewer と
+rationale と before/after の diff ごとバンドルの中に**記録し、却下された
+ものを `include_rejected` で引けるように残す。**remnic** は
+「Agents propose; a human approves」を掲げ、エージェントの失敗から古い
+信念を割り出して置き換えを人の承認に掛け、古い側を superseded として
+残す。**この節が長く「無い」と書いてきたもの — *no* の記憶と、裁定の
+記録 — は、もう ochakai だけのものではない。**
+
+**そして規格の側に、二つの圧力が付いた。** 一つは上の「食い違い」が
+示した版の運用で、もう一つは**上位互換を名乗るフォーク**である —
+[aix-format](https://github.com/DavidROliverBA/aix-format) は「Every AIX
+bundle is also a valid OKF bundle」と書きつつ、**パスではない恒久的な
+`id`**(move と rename を跨いで生き残る)、**型付きのリレーション**
+(`depends-on`・`supersedes`・`contradicts` と逆向き)、`confidence`、
+namespace による federation、`manifest.aix.yaml` を足す。この四つのうち
+前二つは、ochakai が**明示的に断った**ものである — 住所はパスであり
+([0075](design/0075-the-bundle-is-the-address-space.md) §2)、`rel` は
+機械が一度も読まなかったので落ちた
+([0136](design/0136-a-concept-is-addressed-not-labelled.md) §2)。
+断り自体は今も筋が通っているが、**同じ穴を別の答えで埋める形式が出て
+きたこと**は、次にこの二つを問い直す人が読むべき事実である。
 
 重なりは表面的ではない — **物理的な形が同じ**なのである。`ochakai
 export` のバンドルは YAML frontmatter を持つ markdown ファイルの
@@ -414,13 +443,52 @@ prose としてなら本当に向こうへ渡る。残る 18 は YAML の引用�
 **一つ目 — `YYYY-MM-DD` の日付で push が落ちる。** aspect の
 `stale_after`・`sources[].last_modified`・`usage_window` は `datetime` 型
 で、`Text '2026-07-24' could not be parsed at index 10` で 400 になる。
-**こちらが広げた側である**: SPEC §5 はタイムスタンプ値を offset 付きの
-ISO 8601 で固定しており、日付も取ると決めたのは
-[0133](design/0133-an-okf-moment-is-an-instant.md) §3.1 で、しかも
-**来た綴りで戻す**。40 文書のうち 3 文書の 5 値がそれに当たり、RFC 3339 に
-直せば 40/40 が通った。**そして push はトランザクションではない** — 24
-エントリが出来たところで止まった。バンドルを丸ごと渡す相手が SPEC に
-厳密なら、`export` の出口は今のところ通らないことがある。
+40 文書のうち 3 文書の 5 値がそれに当たり、RFC 3339 に直せば 40/40 が
+通った。**そして push はトランザクションではない** — 24 エントリが
+出来たところで止まった。バンドルを丸ごと渡す相手が SPEC に厳密なら、
+`export` の出口は今のところ通らないことがある。
+
+**この節は「こちらが広げた側である」と書いていた。それは誤りだった
+(2026-09-05 に訂正)。** 広げたのは規格の側である。**v0.2 は公開後に
+normative な規則を変え、版番号を動かさなかった。**
+
+- **2026-07-24 に公開された v0.2** の §5.5 は `stale_after` を
+  「An absolute date (`YYYY-MM-DD`)」と定義し、比較を
+  `today >= stale_after` と書いていた。`sources[].last_modified` も
+  `usage_window` も日付だった。ochakai が日付だけを受けていたのは、
+  **そのときの SPEC がそう書いていたから**である。
+- **2026-08-21**、`knowledge-catalog` の #323 と
+  `open-knowledge-format` の #6 が同じ日に同じ変更を入れ、三つの鍵は
+  「offset 付きの ISO 8601 datetime」になった。両リポジトリの SPEC は
+  現在バイト等価で、**見出しは両方とも今も「Version 0.2」である。**
+- SPEC §12 は minor を「後方互換な追加」、major を「破壊的変更」と
+  定めている。**この変更はどちらでもない** — 妥当だった値が妥当で
+  なくなった。**それでも版は動いていない。**
+
+つまり [0133](design/0133-an-okf-moment-is-an-instant.md) §1 の
+「SPEC はそう言っていない」は、**書かれた時点の SPEC については正しく、
+ochakai の過去のコードについては誤っている**。あの規則は誤読ではなく、
+七日前まで規格そのものだった。**0133 の決定(二つの綴りを取る)は、
+理由が変わってむしろ強くなる** — 二つの状態の「v0.2」で書かれた
+バンドルを両方読める唯一の規則が、それだからである。
+
+**代金は出口の側に移った。** 0133 §3.1 の「来た綴りで戻す」は、UTC
+真夜中を日付に畳んで書く。**OKF 自身の参照エージェントは、その綴りを
+黙って落とす** — `is_stale()` は `"T"` を含まない値に対して常に
+`False` を返す。2026-09-05 に main の参照エージェントで実測した:
+
+| `stale_after` | 参照エージェントの `is_stale` |
+|---|---|
+| `2026-01-01`(既に過去) | **False** |
+| `2026-01-01T00:00:00Z`(同じ瞬間) | True |
+
+**これは仮定ではなく、いま出荷しているバンドルの話である。**
+`examples/demo/queries/sales/revenue-by-traffic-source.md` の
+`stale_after` は `2026-08-01` — ochakai の期限切れフィードは正しく
+上げるが、**OKF 適合の消費者は同じファイルを「期限切れでない」と
+読む。** 0133 §2 が「この製品が名指しで断ってきた形」と呼んだ
+**黙って値を落とす**が、読む面から出口の面へ移っただけで残っている。
+そこを直すかは決定であり、この節ではなく記録の仕事である。
 
 **二つ目 — 向こうが索引する `verified` 欄は、40 件すべてで空だった。**
 demo の 18 concept はどれもトップレベルの `verified:` を持たない。検証の
@@ -473,13 +541,15 @@ README がそう書いており、[0131](design/0131-a-deployment-says-what-it-c
   ファイルには観測者がいない。vault の中の何一つ、その台帳に追記も
   しなければ、そこから trust tier を導きも、それに反する書き込みを
   拒みも、最後の確認が古びた concept を浮かせもしない。
-- **ループ(C7)。** 大半には対応するものが無く、draft キューと書き込みの
-  門を持つ kaut と okf-hub にも無いものが残る — *no* の記憶、利用回数、
+- **ループ(C7)。** **この項は 2026-09 に狭くなった。** 大半には今も
+  対応するものが無いが、*no* の記憶は KL4A が rationale ごとバンドルに
+  持ち、失敗から訂正へ戻す経路は remnic が人の承認付きで持つ — どちらも
+  「これが最も鋭い違い」ではもう無い。残るのは**測る側**である: 利用回数、
   検証の古さのフィード、concept に基づいて動いて間違いだったと分かった
-  エージェントからの結果報告、答えの無かった問い
+  エージェントからの結果報告、そして**答えの無かった問い**
   ([ループ](loop.md)、
-  [0069](design/0069-the-loop-and-what-measures-it.md) §1)。これが最も
-  鋭い違いであり、これが製品である。
+  [0069](design/0069-the-loop-and-what-measures-it.md) §1)。裁定を持つ
+  ものは増えたが、**裁定の効き目を数で持つものは、まだ見ていない。**
 - **向き。** vault は人が人のために書き、エージェントは読み手である —
   最近は書き手でもあるが、監査もされず測られもしない。ochakai の賭けは
   逆で、エージェントが幅を下書きし、人が判断の要る中核を検証する。
