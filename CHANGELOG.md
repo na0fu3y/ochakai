@@ -24,23 +24,37 @@ last entry.
 ### Changed
 
 - **The positioning page says what happens when an ochakai bundle meets
-  `kcmd push`, and that nothing needs to be added for it.** Knowledge
-  Catalog's own OKF mapping was read on 2026-09-04
-  (`toolbox/mdcode/demo/okf/okf.ts`): entry names mirror the file path,
-  which is a concept's id; `title`/`description`/`tags` go to the
-  Documents Layout, the eleven OKF signal keys to an `okf` aspect, `type`
-  to `okf_type`, `resource` to the entry's resource; and any key it does
-  not model is diverted to `extra` as a `[path, value]` pair that
-  `pull.ts` reassembles. Checked against the 22 top-level keys the 31
-  documents in `examples/demo`, `kb/bundle` and `examples/bigquery-catalog`
-  actually carry: 17 modeled, 5 in `extra`, none dropped, and the
-  frontmatter-less `index.md` and `log.md` travel as entries with their
-  bodies — so a rejection's reason reaches the catalog as prose. **The
-  push itself has not been run**; it needs a project with the Dataplex
-  API, and the page says so. Three things that do not travel are named:
-  non-`.md` files, body links (they stay markdown rather than becoming
-  catalog edges, so there is no `linked_from` there), and `synonyms`,
-  which is an indexed key here (0105) and a JSON blob in `extra` there.
+  `kcmd push`, and it was measured rather than read.** On 2026-09-05 an
+  `ochakai export` of demo.ochak.ai — 18 concepts plus the 22 `index.md`
+  and `log.md` files `export` generates — was pushed into a throwaway
+  Dataplex entry group and pulled back. The mapping held: entry names
+  mirror the file path, which is a concept's id;
+  `title`/`description`/`tags` go to the Documents Layout, the eleven OKF
+  signal keys to an `okf` aspect, `type` to `okf_type`, `resource` to the
+  entry's resource; any key it does not model is diverted to `extra` as a
+  `[path, value]` pair that `pull.ts` reassembles. The round trip changed
+  no value and no body in any of the 40, and the 22 frontmatter-less files
+  came back byte-identical — a rejection's reason really does reach the
+  catalog as prose. Two things did not match the desk check. A bare
+  `YYYY-MM-DD` date is rejected by the aspect's `datetime` fields
+  (`stale_after`, `sources[].last_modified`, `usage_window`), and it is
+  ochakai that widened here: SPEC 5 fixes those as ISO 8601 with an
+  offset, and taking a date as well is 0133 §3.1, which also echoes back
+  the spelling it received — 3 of the 40 documents carry 5 such values,
+  and the push aborts partway rather than transactionally. And the
+  `verified` field the catalog models and indexes was empty for all 40,
+  because every demo concept carries its verification inside `received`
+  (0009 §3.2), which is unmodeled and lands in `extra` — the page says
+  why that is the sandbox's doing rather than the format's: `export`'s
+  `verified` is always this instance's ledger, so a base with rulings
+  puts them in the modeled field, and demo is a posture where nobody can
+  be a named human (0066 §3, 0087). What does not come off is that the
+  catalog copies whatever sits in `verified` and cannot tell an observed
+  ruling from a typed line. Three things that
+  do not travel are still named: non-`.md` files, body links (they stay
+  markdown rather than becoming catalog edges, so there is no
+  `linked_from` there), and `synonyms`, which is an indexed key here
+  (0105) and a JSON blob in `extra` there.
 
 - **The MCP surface holds 10,485 resident bytes instead of 12,290, with
   the same six tools.** What an agent pays for MCP is the tool list and

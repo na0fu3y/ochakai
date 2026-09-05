@@ -391,25 +391,62 @@ export` のバンドルは YAML frontmatter を持つ markdown ファイルの
 `stale_after` だけである。C3 は自分のテストではなく他人の検証器で守れる
 ようになった。
 
-**`kcmd push` に入れたときに何が起きるかは、机上では全部たどれる**
-(2026-09-04、`toolbox/mdcode/demo/okf/okf.ts` を読んで確かめた)。入口は
-`.md` を再帰で拾い、**エントリ名はファイルパスそのもの**
-(`metrics/revenue.md` → `metrics/revenue`)で、それは ochakai の id である
+**`kcmd push` に入れた。** 2026-09-05、`ochakai export` した
+demo.ochak.ai のバンドル(18 concept + `export` が生む 22 の
+`index.md` / `log.md` = 40 文書)を、`toolbox/mdcode/demo/okf` の
+`setup.ts` / `push.ts` / `pull.ts` で ochakai-example の us-central1 へ
+出し、引き戻し、entry group と型を消した。
+
+**入口は机上のとおりだった。** エントリ名はファイルパスそのもので
+(`.../entryGroups/ochakai_probe/entries/metrics/revenue`)、それは
+ochakai の id である
 ([0075](design/0075-the-bundle-is-the-address-space.md) §2)。`title` /
 `description` / `tags` は Documents Layout の上段へ、OKF の信号 11 キーは
 `okf` aspect へ、`type` は `okf_type`、`resource` はエントリの resource へ。
 **modeled でないキーは `extra` に `[path, value]` の対として退避され、
-`pull.ts` がそこから元の形を組み直す** — つまり往復は非可逆ではない。
-`examples/demo`・`kb/bundle`・`bigquery-catalog` の 31 文書に出る 22 の
-トップレベルキーを突き合わせると、**17 が modeled、5 が `extra`**
-(`created_by`・`question`・`grain`・`unit`・`synonyms`・`status_note`)で、
-落ちるキーは一つも無い。frontmatter を持たない `index.md` と `log.md` も
-本文ごとエントリになる — **却下の理由は、prose としてなら向こうへ渡る**。
+`pull.ts` がそこから元の形を組み直す。** 往復は 40/40 で値も本文も動かず、
+frontmatter を持たない 22 文書は**バイト一致で戻った** — 却下の理由は、
+prose としてなら本当に向こうへ渡る。残る 18 は YAML の引用符・キー順・
+行の折り方だけが違う。
+
+**食い違いは二つあった。**
+
+**一つ目 — `YYYY-MM-DD` の日付で push が落ちる。** aspect の
+`stale_after`・`sources[].last_modified`・`usage_window` は `datetime` 型
+で、`Text '2026-07-24' could not be parsed at index 10` で 400 になる。
+**こちらが広げた側である**: SPEC §5 はタイムスタンプ値を offset 付きの
+ISO 8601 で固定しており、日付も取ると決めたのは
+[0133](design/0133-an-okf-moment-is-an-instant.md) §3.1 で、しかも
+**来た綴りで戻す**。40 文書のうち 3 文書の 5 値がそれに当たり、RFC 3339 に
+直せば 40/40 が通った。**そして push はトランザクションではない** — 24
+エントリが出来たところで止まった。バンドルを丸ごと渡す相手が SPEC に
+厳密なら、`export` の出口は今のところ通らないことがある。
+
+**二つ目 — 向こうが索引する `verified` 欄は、40 件すべてで空だった。**
+demo の 18 concept はどれもトップレベルの `verified:` を持たない。検証の
+申告は `received` の中にあり
+([0009](design/0009-provenance-portability.md) §3.2)、`received` は
+modeled でないので `extra` の JSON 文字列に落ちる。
+
+**人の裁定を持つベースなら、向きは逆である。** export の `verified` は
+常にこのインスタンスの台帳であり、文書が持ち込んだ申告は
+`received.verified` に分かれている(0009 §3.2)。誰かが verify した
+ベースを push すれば、その行は向こうの modeled な `verified` 欄に入る。
+**測ったのは裁定が一つも無いベースである** — demo は
+[サンドボックス](design/0087-a-sandbox-says-it-is-one.md)で、
+[0066](design/0066-four-postures-one-word.md) §3 の下では誰も名前のある
+人間になれない。
+
+**そして削れないのはこちらである。** 向こうは `verified` に入っている
+ものを写すだけで、**観測された裁定と、誰かがタイプした一行を区別できない**。
+ochakai の中核は人の裁定が台帳に載ることだが、その区別は向こうの索引の
+上では消える。バンドルは渡るが、**バンドルを渡す先が裁定を裁定として
+扱うかは、渡した側が決められない**。
 
 **だから足すものは無い。** 出口が OKF v0.2 のバンドルであることが、
 そのまま Knowledge Catalog への入口になっている(C3 が買っていたものの
-一つがこれである)。**実際に push してはいない** — GCP プロジェクトと
-Dataplex API が要るので、これは机上の確認である。
+一つがこれである)。上の二つは足すものの話ではなく、**バンドルを渡した
+先で何が読めるかの話**である。
 
 **渡らないものを三つ書いておく。** `.md` でないファイルは残る(向こうの
 README がそう書いており、[0131](design/0131-a-deployment-says-what-it-cannot-do.md)
