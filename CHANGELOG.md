@@ -44,7 +44,13 @@ last entry.
   and the push aborts partway rather than transactionally. And the
   `verified` field the catalog models and indexes was empty for all 40,
   because every demo concept carries its verification inside `received`
-  (0009 §3.2), which is unmodeled and lands in `extra`. Three things that
+  (0009 §3.2), which is unmodeled and lands in `extra` — the page says
+  why that is the sandbox's doing rather than the format's: `export`'s
+  `verified` is always this instance's ledger, so a base with rulings
+  puts them in the modeled field, and demo is a posture where nobody can
+  be a named human (0066 §3, 0087). What does not come off is that the
+  catalog copies whatever sits in `verified` and cannot tell an observed
+  ruling from a typed line. Three things that
   do not travel are still named: non-`.md` files, body links (they stay
   markdown rather than becoming catalog edges, so there is no
   `linked_from` there), and `synonyms`, which is an indexed key here
