@@ -23,6 +23,49 @@ last entry.
 
 ### Changed
 
+- **A recall pointer says when a concept is past its re-check date.** The
+  bundled `UserPromptSubmit` hook
+  ([examples/claude-code](examples/claude-code)) printed each hit's type
+  and trust but never `stale_after`, so an agent choosing what to fetch
+  could not see that a row's own writer had declared it due for
+  re-checking — search had carried the field all along. The row now says
+  `past stale_after`, and the injected prose says in one clause what the
+  mark means. **It is a mark, not a filter and not a demotion**: an
+  expired concept is due for re-checking, not wrong, which is the answer
+  [0069](docs/design/0069-the-loop-and-what-measures-it.md) §7 already
+  gave — and the answer a memory layer gives differently, mem0 hiding an
+  expired memory from search by default. Compared at date granularity, so
+  both spellings of an OKF instant work
+  ([0139](docs/design/0139-ochakai-does-not-choose-a-spelling.md)) and the
+  declared day itself counts as passed
+  ([0133](docs/design/0133-an-okf-moment-is-an-instant.md)). No surface
+  moves: the field was already in the response, and the hook is an
+  example.
+
+- **The positioning page stops arguing against memory layers from three
+  premises that expired.** All three were checked against the sources on
+  2026-09-05. *"They extract with an LLM"* is not a claim about the
+  category: MemPalace makes zero LLM calls at write time and publishes
+  96.6% R@5 on LongMemEval, and the critique paper reproduces the number
+  while attributing it to verbatim storage rather than to the spatial
+  metaphor ([arXiv:2604.21284](https://arxiv.org/abs/2604.21284)).
+  *"Memory belongs to one agent"* is not either: MemPalace ships a shared
+  hub, Letta has shared memory and a git remote, mem0 has `app_id` /
+  `org_id`. Neither is *"nobody reviews"*: Letta's dreaming has an
+  optional gate before a proposal applies, and Zep sells ABAC, retention
+  and an audit trail. **What is left is one axis** — that the ruling is a
+  human the instance authenticated and observed into a ledger
+  ([0075](docs/design/0075-the-bundle-is-the-address-space.md) §3.1) —
+  and the page says that instead. Not having an LLM stays the *reason*
+  human verification can be trusted
+  ([0081](docs/design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md));
+  it has stopped being the difference.
+
+  The same section also claimed a rejection is something an agent reads
+  before re-proposing. **It is not, and deliberately so**:
+  [0135](docs/design/0135-a-rejection-is-a-deletion.md) §3 decided a
+  ruling blocks nothing, and that sentence had outlived it.
+
 - **Three pages said an agent cannot verify. The wire has always let one,
   and a fourth page documents the practice.** Nothing in the build
   changes: `Service.Verify` does not branch on the actor's kind, so a
