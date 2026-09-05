@@ -238,9 +238,12 @@ ochakai が持つ資格情報では決してない。
   適用前に見せる門を任意で持ち、Zep は ABAC と保持期限と全リクエストの
   監査証跡を売っている。
 
-**残る差は一つに絞れる**: 裁定するのが**認証された人**であり、その裁定を
-**インスタンス自身が観測して台帳に持つ**こと
-([0075](design/0075-the-bundle-is-the-address-space.md) §3.1)。mem0 の
+**残る差は一つに絞れる**: 裁定が**インスタンス自身の観測**として台帳に残り、
+その行が**認証された呼び出し元**を名指すこと
+([0075](design/0075-the-bundle-is-the-address-space.md) §3.1)。人が確かめた
+のか機械かは、その台帳から導かれる tier が言い分ける — 中核に置いているのは
+`human-reviewed` の側である
+([0138](design/0138-a-verification-stands-until-the-content-moves.md))。mem0 の
 history は old / new と `user_id` を持つが行為者の名前を持たず、feedback
 (POSITIVE / NEGATIVE / VERY_NEGATIVE と理由)は蓄えて自社のチューニングに
 使うもので、人が読む面が無い。**mem0 自身の 2026 年の報告が、誰が記憶を
