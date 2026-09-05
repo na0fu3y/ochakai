@@ -23,6 +23,54 @@ last entry.
 
 ### Changed
 
+- **The positioning page says what an AIX bundle costs ochakai, and it was
+  measured rather than argued.** `aix-format` calls itself upward
+  compatible with OKF and adds four things, two of which ochakai declined
+  by name: a permanent `id` that is not the path (0075 §2) and typed
+  relations, `rel` having been dropped because no code ever read it (0136
+  §2). On 2026-09-05 its `examples/` went through `ochakai import` and
+  back out through `ochakai export`. Four concepts in, four created, ten
+  files out — `index.md` and `log.md` are reserved names and are not
+  imported (SPEC §3.1). **All four documents came back byte-identical
+  outside provenance**: frontmatter values and bodies alike, the only
+  movement being the one 0009 §3.2 designs, where a document's declared
+  `generated`/`verified` separate under `received` and this instance's own
+  `generated` and `created_by` are appended.
+
+  **All four AIX additions survive verbatim** — the permanent `id`, four
+  `links[].rel` entries with their notes, `provenance.confidence`, and a
+  federation-qualified target — down to the YAML comments. What ochakai
+  declines to *model* it does not lose: OKF §4.1's producer keys already
+  fill that hole, which is what 0043 §3.6 promises. The relations reach a
+  reader the way SPEC and 0136 §2 say they do — all three `linked_from`
+  edges derive from body markdown, and "supersedes" is stated in the
+  prose. `fm.id` is refused, and the refusal's own wording is the
+  position.
+
+  Three small mismatches, recorded: a source written `uri` rather than
+  `resource` (SPEC §5.1) is dropped **from the index** while staying in
+  the document, so C1 holds and the non-conformance is the other side's;
+  `manifest.aix.yaml` is not markdown and needs `OCHAKAI_GCS_BUCKET`
+  (0075 §1); and **AIX's own example writes a bare `stale_after` date**,
+  against SPEC §5 since 2026-08-21 — which is the case 0139 §3.1 keeps
+  taking on input, so it read and returned unchanged. **Both declines
+  stand, now on a measurement rather than on an argument.**
+
+- **CONTRIBUTING.md says what to do when a record's premise turns out to
+  be wrong.** A record states what was decided and what was true when it
+  was decided; there were doors for the first (supersede, or amend by
+  replacing — 0128 §2.2) and none for the second, so a record whose
+  decision still stands had no way to say that one of its reasons does
+  not. 0133 is the case that found it, and the error propagated into the
+  English index summary, the CHANGELOG and `docs/positioning.md` before
+  one of the three was corrected. The rule: the correction is one
+  `Corrected(YYYY-MM-DD):` line in the `Status:` block, **the body is not
+  edited**, and the record's English summary row gets the same
+  correction. Immutability does not object, for the reason the tombstone
+  rule gives — it is a promise about *decisions* somebody could be
+  depending on, and a claim about the outside world is not one. Not a
+  numbered record, by 0128's own rule.
+
 - **`stale_after` reads back as an RFC 3339 datetime, always** — a UTC
   midnight no longer collapses to the bare date it used to (design doc
   [0139](docs/design/0139-ochakai-does-not-choose-a-spelling.md),

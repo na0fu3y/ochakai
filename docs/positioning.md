@@ -405,6 +405,44 @@ namespace による federation、`manifest.aix.yaml` を足す。この四つの
 断り自体は今も筋が通っているが、**同じ穴を別の答えで埋める形式が出て
 きたこと**は、次にこの二つを問い直す人が読むべき事実である。
 
+**そこで通した。** 2026-09-05、aix-format の `examples/` を
+`ochakai import` に入れ、`ochakai export` で引き戻した。6 文書のうち
+`index.md` と `log.md` は予約名なので取り込まれず(SPEC §3.1)、4 concept
+が 4/4 で入り、10 ファイルで出た。**4 文書とも、provenance 以外は
+frontmatter も本文もバイト一致で戻った。** 動いたのは 0009 §3.2 の
+とおり — 文書が申告した `generated` / `verified` が `received` の下へ分かれ、
+このインスタンス自身の `generated` と `created_by` が付いた。それだけである。
+
+**AIX が足した四つは、四つとも原文のまま出てきた。** 恒久的な
+`id: payment-service-v2`、4 本の `links[].rel`(`supersedes`・
+`depends-on` ×2・`authored-by`、`note` ごと、4 → 4)、
+`provenance.confidence`、federation で修飾した
+`to: data-eng/orders-events`。**YAML のコメント行(`# AIX additions`)
+まで残っている。** つまり **ochakai がモデル化を断ったものを、失っては
+いない** — OKF §4.1 の producer キーがその穴を既に埋めており、それは
+0043 §3.6 が約束していることである。
+
+**関係は本文から届く。** `linked from` は 3 件とも本文の markdown リンク
+から導出され、「supersedes」は散文が伝えていた — SPEC と 0136 §2 が
+そう言っているとおりである。`fm.id` は 400 で断られ、その文面が立場の
+説明になっている(「a producer's own key is stored and handed back
+exactly as written, not asked for」)。**恒久 id を足すことは、
+[0139](design/0139-ochakai-does-not-choose-a-spelling.md) がちょうど
+畳んだ「規格が綴りを定めているものの二つ目の綴り」を足し直すこと**でも
+ある — 住所を定めているのは SPEC §2 である。
+
+**食い違いは三つ、どれも小さい。** `sources[0]` は `resource` ではなく
+`uri` を書くので(SPEC §5.1)、**索引からは落ちる** — `?source=` で
+引けない。**文書には残っている**ので C1 は無事で、落ちたのは向こうの
+非適合のほうである。`manifest.aix.yaml` は markdown でないので
+`OCHAKAI_GCS_BUCKET` の無いデプロイでは保存できない(0075 §1)。そして
+**AIX 自身の例が `stale_after: 2026-11-20` と裸の日付を書いている** —
+2026-08-21 以降の SPEC §5 に反するが、0139 §3.1 が入りで日付を取り続ける
+と決めた理由がまさにこれで、そのまま読めてそのまま戻った。
+
+**だから断りは、測ったうえで有効である。** 型で分岐するコードが一つ出た
+日に `rel` のモデル化が値段に見合う、という 0136 §2 の反証条件も動かない。
+
 重なりは表面的ではない — **物理的な形が同じ**なのである。`ochakai
 export` のバンドルは YAML frontmatter を持つ markdown ファイルの
 ディレクトリで、その関係は普通の本文リンクである

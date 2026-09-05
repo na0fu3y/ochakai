@@ -605,6 +605,52 @@ maintenance than that — extended to the record it summarizes.
 `TOMBSTONE-LINES` and requires the commit link; going over it means the
 record is still carrying prose nobody rereads.
 
+### When a record's premise turns out to be wrong
+
+A record states two kinds of thing: what was decided, and what was true
+about the world when it was decided. There are doors for the first —
+supersede it, or amend it by replacing it (0128 §2.2) — and until now
+none for the second, which meant a record whose decision still stands had
+no way to say that one of its reasons does not.
+
+[0133](docs/design/0133-an-okf-moment-is-an-instant.md) is the case that
+found this. Its §1 read ochakai's old date-only code as having misquoted
+OKF; the code had in fact matched the spec as published, which changed a
+normative rule seven days before 0133 was written without moving its
+version. **The decision 0133 reached was right, and is still right** —
+which is exactly why there was nothing to do about the premise. The error
+then propagated: it was copied into the English index summary, into the
+CHANGELOG, and into `docs/positioning.md`, and the correction reached one
+of the three before the other two were noticed a week later.
+
+So: **a factual premise is corrected in the `Status:` block, and the body
+is not edited.** One line, naming what the body says, what is true, and
+where that was established. Had 0133's decision not also moved — it did,
+so 0139 superseded it and its body is a tombstone now — the line it would
+carry is the shape to copy:
+
+    Corrected(2026-09-05): §1 reads the old date-only rule as a misquote
+    of SPEC §5; it matched the spec as published on 2026-07-24, which
+    changed on 2026-08-21 without moving its version (0139 §1.1).
+
+Then apply the same correction to that record's row in
+[README.en.md](docs/design/README.en.md), which restates the record in the
+present tense and would otherwise keep repeating the error.
+
+**Immutability does not object**, for the reason the tombstone rule gives:
+it is a promise about *decisions* somebody could be depending on, and a
+claim about the outside world is not one. The `Status:` block is already
+the mutable part — 0064's carries a growing list of what later records
+revised in it — and this is that same block being asked one more question.
+
+**Do not reach for supersession here.** It requires restating the whole
+area, and it would then shrink a record that is still the current answer
+to a tombstone. If the decision moves too, that is an ordinary
+supersession and this rule is not needed.
+
+This is not a numbered record, by 0128's own rule: it is a rule inside an
+area, not an area's decision, and nothing a user of ochakai can observe.
+
 ### How many records, and how much
 
 `RECORD-LINES` bounds one record's thickness, and the tombstone rule
