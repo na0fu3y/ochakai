@@ -868,7 +868,12 @@ func TestUpdatedByFollowsContentIntegration(t *testing.T) {
 	if read.UpdatedBy != author {
 		t.Errorf("a no-op update re-attributed the content to %v", read.UpdatedBy)
 	}
-	if read.StaleAfter != "2026-12-31" {
+	// The update above sent the date and was still a no-op, which is the
+	// property worth pinning: the two spellings are one value, so
+	// re-sending a moment in the other one is not an edit. What comes
+	// back is the spelling SPEC §5 defines, the column holding an instant
+	// and not the text (design doc 0139 §3.2).
+	if read.StaleAfter != "2026-12-31T00:00:00Z" {
 		t.Errorf("stale_after = %q after a round-trip through the database", read.StaleAfter)
 	}
 

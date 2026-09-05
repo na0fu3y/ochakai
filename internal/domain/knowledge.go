@@ -469,19 +469,26 @@ func ValidInstant(s string) bool {
 // apart from each other.
 const InstantsHint = "an RFC 3339 datetime (2026-12-31T18:30:00Z) or a YYYY-MM-DD date"
 
-// FormatInstant is how a moment is rendered back into the envelope: as
-// the date alone when it is a UTC midnight, and as RFC 3339 otherwise.
+// FormatInstant is how a moment ochakai holds as a moment is spelled
+// back: RFC 3339, always.
 //
-// The collapse is what keeps the common case unchanged — a writer who
-// wrote 2026-12-31 reads 2026-12-31 back, rather than a datetime they did
-// not write — and it is lossless, midnight being the only moment a bare
-// date can mean.
+// This is the one spelling ochakai chooses for itself. Where it kept the
+// producer's text it returns that text unread (okf.keepTimestampText);
+// stale_after is the exception, held as an instant in a timestamptz
+// column (design doc 0139 §3.2), so there is no text left to return and
+// something has to be written. What gets written is what SPEC §5 defines
+// a timestamp to be — an ISO 8601 datetime with an explicit UTC offset.
+//
+// It used to collapse a UTC midnight to the bare date, on the reading
+// that a date was the tidier spelling of the same value. It was, until
+// the format stopped defining it: SPEC §5 fixed the type on 2026-08-21
+// without moving the version, and a bare date is now not a timestamp at
+// all — OKF's own reference agent reads one as no expiry rather than a
+// passed one. The collapse also ran the wrong way for the format's own
+// worked example, whose four moments are all UTC midnight: Appendix A
+// round-tripped through ochakai came back spelled in dates.
 func FormatInstant(t time.Time) string {
-	t = t.UTC()
-	if t.Hour() == 0 && t.Minute() == 0 && t.Second() == 0 && t.Nanosecond() == 0 {
-		return t.Format(DateLayout)
-	}
-	return t.Format(instantLayout)
+	return t.UTC().Format(instantLayout)
 }
 
 // ValidStaleAfter reports whether s can be a stale_after.

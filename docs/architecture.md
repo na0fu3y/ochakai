@@ -276,13 +276,13 @@ sources:
     resource: https://wiki.example/finance/revenue-recognition
     title: Revenue Recognition Policy (FY2026)
     author: human:jsmith@example.co.jp
-    last_modified: "2026-06-15"
-usage_window: { from: "2026-06-01", to: "2026-06-30" }
+    last_modified: "2026-06-15T00:00:00Z"
+usage_window: { from: "2026-06-01T00:00:00Z", to: "2026-06-30T00:00:00Z" }
 generated: { by: process:analyst@example.iam.gserviceaccount.com, producer: insightflow/1.4.0, at: 2026-07-26T04:12:00Z }
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-26T09:30:00Z }
 status: stable                 # draft | stable | deprecated
-stale_after: "2026-12-31"      # 参考情報: この日以降に見直す
+stale_after: "2026-12-31T00:00:00Z"   # 参考情報: この瞬間以降に見直す
 ```
 
 `sources` は concept が依拠する材料である — 一つに `id` を与えれば、

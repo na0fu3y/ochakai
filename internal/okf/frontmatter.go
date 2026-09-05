@@ -82,8 +82,8 @@ func StructureOf(raw []byte) (*Structure, error) {
 	out := &Structure{Keys: []string{}, Values: map[string]any{}}
 	// keepTimestampText for the reason it exists on the claim path: a
 	// date decoded to time.Time has lost the spelling its writer chose,
-	// and a form that redraws `stale_after: 2026-12-31` as an instant is
-	// one that edited a key nobody touched.
+	// and a form that redraws a timestamp in the other spelling is one
+	// that edited a key nobody touched.
 	for _, n := range pairs {
 		keepTimestampText(n)
 	}

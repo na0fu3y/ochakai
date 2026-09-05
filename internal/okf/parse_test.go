@@ -408,8 +408,12 @@ func TestParseStaleAfter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(canon), "stale_after: \"2026-12-31\"") {
-		t.Errorf("stale_after lost in the canonical form:\n%s", canon)
+	// The canonical form is ochakai composing rather than keeping, so the
+	// moment is spelled the way SPEC §5 defines one — while Document
+	// above kept the writer's bare date, its bytes being the writer's
+	// (design doc 0139 §3.2, §3.4).
+	if !strings.Contains(string(canon), "stale_after: \"2026-12-31T00:00:00Z\"") {
+		t.Errorf("stale_after not spelled as an instant in the canonical form:\n%s", canon)
 	}
 
 	// A malformed date is dropped with a note — the document still imports
@@ -463,14 +467,20 @@ usage_window: { from: 2026-06-01T00:00:00Z, to: 2026-06-30T23:59:59Z }
 	if k.UsageWindow == nil || k.UsageWindow.To != "2026-06-30T23:59:59Z" {
 		t.Errorf("usage_window = %+v, want both bounds kept", k.UsageWindow)
 	}
-	// A UTC midnight is the one moment a bare date can mean, so it reads
-	// back as the date — the spelling the common case writes.
-	k, _, err = Parse([]byte("---\ntype: Insight\nstale_after: 2026-12-31T00:00:00Z\n---\n"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if k.StaleAfter != "2026-12-31" {
-		t.Errorf("a UTC midnight read as %q, want the date alone", k.StaleAfter)
+	// Parsing reads the text the producer wrote, unquoted timestamps
+	// included: YAML resolves one to a time.Time, which no longer says
+	// which spelling it arrived in, so the node is retagged a string
+	// before it is decoded (frontmatterMap). Both spellings survive the
+	// read as written; choosing one is the store's job, on the way back
+	// out of the column that holds stale_after as an instant.
+	for _, written := range []string{"2026-12-31T00:00:00Z", "2026-12-31"} {
+		k, _, err = Parse([]byte("---\ntype: Insight\nstale_after: " + written + "\n---\n"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if k.StaleAfter != written {
+			t.Errorf("stale_after written %q read as %q", written, k.StaleAfter)
+		}
 	}
 	// An offset is what makes a datetime absolute; without one it is not
 	// a moment and is dropped the way "soon" is.
@@ -838,5 +848,28 @@ func TestZeroActorWritesNoCreatedBy(t *testing.T) {
 	}
 	if strings.Contains(string(out), "created_by:") {
 		t.Errorf("an actorless entry must write no created_by:\n%s", out)
+	}
+}
+
+// The fm. index says what the document says, timestamps included. YAML
+// resolves an unquoted date or date-time to a time.Time, and giving one a
+// spelling again is choosing a spelling the producer may not have
+// written — which is what the index cannot do, since `fm.stale_after` is
+// an exact match against the text a reader sees in the document (design
+// doc 0047, design doc 0074 §4.1).
+func TestFrontmatterIndexesTheSpellingTheDocumentWrote(t *testing.T) {
+	for _, written := range []string{
+		"2026-12-31",           // a bare date
+		"2026-12-31T00:00:00Z", // the midnight the collapse used to eat
+		"2026-12-31T18:30:00Z", // an instant with a clock
+		"2026-12-31T09:00:00Z", // another
+	} {
+		doc := []byte("---\ntype: Insight\nstale_after: " + written + "\nreviewed_on: " + written + "\n---\n\nbody\n")
+		fm := Frontmatter(doc)
+		for _, key := range []string{"stale_after", "reviewed_on"} {
+			if got := fm[key]; got != written {
+				t.Errorf("document wrote %s: %s, index holds %#v", key, written, got)
+			}
+		}
 	}
 }

@@ -396,7 +396,7 @@ paths:
                         resource: bigquery://example-analytics.shop.orders
                         tags: [finance, core]
                         status: stable
-                        stale_after: "2026-12-31"
+                        stale_after: "2026-12-31T00:00:00Z"
                         trust: human-reviewed
                         verified_at: "2026-07-14T02:33:41.019778Z"
                         links:
@@ -419,7 +419,7 @@ paths:
                         description: Why a December spike and a January drop are normal.
                         tags: [finance]
                         status: draft
-                        stale_after: "2027-01-31"
+                        stale_after: "2027-01-31T00:00:00Z"
                         trust: unverified
                         links:
                           - { target: metrics/revenue, text: Revenue }
@@ -441,7 +441,7 @@ paths:
                         description: Why a December spike and a January drop are normal.
                         tags: [finance]
                         status: draft
-                        stale_after: "2027-01-31"
+                        stale_after: "2027-01-31T00:00:00Z"
                         trust: unverified
                         links:
                           - { target: metrics/revenue, text: Revenue }
@@ -1544,7 +1544,7 @@ paths:
                           - finance
                           - core
                       status: stable
-                      stale_after: "2026-12-31"
+                      stale_after: "2026-12-31T00:00:00Z"
                       unit: JPY
                       grain: order
                       ---
@@ -1561,7 +1561,7 @@ paths:
                       resource: bigquery://example-analytics.shop.orders
                       tags: [finance, core]
                       status: stable
-                      stale_after: "2026-12-31"
+                      stale_after: "2026-12-31T00:00:00Z"
                       trust: human-reviewed
                       verified_at: "2026-07-14T02:33:41.019778Z"
                       links:
@@ -1701,7 +1701,7 @@ paths:
                       tags:
                           - finance
                       status: draft
-                      stale_after: "2027-01-31"
+                      stale_after: "2027-01-31T00:00:00Z"
                       ---
 
                       [Revenue](/metrics/revenue.md) is seasonal: December runs
@@ -1714,7 +1714,7 @@ paths:
                       description: Why a December spike and a January drop are normal.
                       tags: [finance]
                       status: draft
-                      stale_after: "2027-01-31"
+                      stale_after: "2027-01-31T00:00:00Z"
                       trust: human-reviewed
                       verified_at: "2026-07-27T00:41:12.905337Z"
                       links:
@@ -2843,13 +2843,17 @@ components:
             staleness is a plain comparison against now with no reference
             to when the concept was read.
 
-            Whichever spelling was written comes back, midnight aside: a
-            moment at UTC midnight reads back as the date alone, the two
-            being one value (design doc 0133). Advisory: nothing hides a
-            stale concept and search ranking never reads it — a passed
-            moment means due for a re-check, not wrong. The one surface
-            that reads it is sort=stale_after, the feed of concepts whose
-            declared moment has passed (design doc 0133 §3.3).
+            It always reads back as an RFC 3339 datetime, whichever of
+            the two spellings was written: what is held is the instant,
+            not the text, and a bare date is not one of SPEC §5's
+            timestamps (design doc 0139). The document's own bytes are
+            untouched, so a writer who wrote a date still reads that date
+            in the document and in an `fm.stale_after` filter. Advisory:
+            nothing hides a stale concept and search ranking never reads
+            it — a passed moment means due for a re-check, not wrong. The
+            one surface that reads it is sort=stale_after, the feed of
+            concepts whose declared moment has passed (design doc 0139
+            §3.3).
         trust:
           allOf: [{ $ref: "#/components/schemas/Trust" }]
           description: >

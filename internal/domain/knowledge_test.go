@@ -393,34 +393,50 @@ func TestValidStaleAfter(t *testing.T) {
 	}
 }
 
-// A moment goes back out in the spelling it arrived in, midnight aside:
-// a bare date is the UTC midnight opening it, so the two are one value
-// and the tidier spelling is the one a reader gets back.
-func TestFormatInstantRoundTrips(t *testing.T) {
-	for _, s := range []string{"2026-12-31", "2026-12-31T18:30:00Z"} {
-		got, ok := ParseInstant(s)
+// A moment ochakai holds as a moment is spelled back in the one form
+// SPEC §5 defines, whichever of the two it arrived in (design doc 0139
+// §3.1). Both spellings still go in; a bare date does not come out.
+func TestFormatInstantSpellsEveryMomentTheWaySpec5Does(t *testing.T) {
+	for _, c := range []struct{ in, want string }{
+		{"2026-12-31T18:30:00Z", "2026-12-31T18:30:00Z"},
+		// The collapse this replaces: a UTC midnight came back as the
+		// date alone, which SPEC §5 no longer defines as a timestamp.
+		{"2026-12-31T00:00:00Z", "2026-12-31T00:00:00Z"},
+		// A bare date is still read, as the UTC midnight opening it. It
+		// is the reading that survives; the spelling is not.
+		{"2026-12-31", "2026-12-31T00:00:00Z"},
+		// An offset is resolved rather than kept: what is held is the
+		// instant, and 09:00+09:00 is the midnight that opens the day.
+		{"2026-12-31T09:00:00+09:00", "2026-12-31T00:00:00Z"},
+	} {
+		at, ok := ParseInstant(c.in)
+		if !ok {
+			t.Fatalf("ParseInstant(%q) = false", c.in)
+		}
+		if got := FormatInstant(at); got != c.want {
+			t.Errorf("FormatInstant(ParseInstant(%q)) = %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// SPEC Appendix A writes all four of its moments at UTC midnight, which
+// is the case the collapse got wrong: the format's own worked example
+// round-tripped through ochakai came back spelled in a form the format
+// does not define, and OKF's reference agent reads that as no expiry.
+func TestSpecAppendixASurvivesTheRoundTrip(t *testing.T) {
+	for _, s := range []string{
+		"2026-12-31T00:00:00Z", // stale_after
+		"2026-04-02T00:00:00Z", // sources[0].last_modified
+		"2026-06-01T00:00:00Z", // usage_window.from
+		"2026-06-30T00:00:00Z", // usage_window.to
+	} {
+		at, ok := ParseInstant(s)
 		if !ok {
 			t.Fatalf("ParseInstant(%q) = false", s)
 		}
-		if back := FormatInstant(got); back != s {
-			t.Errorf("FormatInstant(ParseInstant(%q)) = %q", s, back)
+		if back := FormatInstant(at); back != s {
+			t.Errorf("Appendix A's %q reads back as %q", s, back)
 		}
-	}
-	at, ok := ParseInstant("2026-12-31T00:00:00Z")
-	if !ok {
-		t.Fatal("ParseInstant of a midnight instant = false")
-	}
-	if got := FormatInstant(at); got != "2026-12-31" {
-		t.Errorf("a UTC midnight reads back as %q, want the date alone", got)
-	}
-	// An offset is resolved rather than kept: what is stored is the
-	// instant, and 09:00+09:00 is the midnight that opens the same day.
-	at, ok = ParseInstant("2026-12-31T09:00:00+09:00")
-	if !ok {
-		t.Fatal("ParseInstant of an offset instant = false")
-	}
-	if got := FormatInstant(at); got != "2026-12-31" {
-		t.Errorf("an offset midnight reads back as %q, want the UTC date", got)
 	}
 }
 
