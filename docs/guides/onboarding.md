@@ -56,7 +56,7 @@
 |---|---|---|
 | 訊く人 | エージェントに問い、答えに使う。書き戻しはエージェントがする | Claude Code などの MCP クライアント、または `ochakai search` / `get` |
 | 書く人 | draft を書く。テーブルの注意書き、golden query、Insight | エージェント経由の `put_concept`、または `ochakai put` / Web UI の編集 |
-| 裁定する人 | verify する、理由を付けて却下する。**ここだけは人で、エージェントは代われない** | Web UI の「レビュー」、または `ochakai verify` / `ochakai delete --note` |
+| 裁定する人 | verify する、理由を付けて却下する。**繋いだエージェントはついでに済ませない** — MCP に裁定のツールが無く、human-reviewed になるのは人が打った検証だけである([FAQ](../faq.md#エージェントは検証できるか)) | Web UI の「レビュー」、または `ochakai verify` / `ochakai delete --note` |
 
 一人が三つに座ってよい。決めておくのは裁定の椅子に誰が座るかで、台帳に残る名
 前がその人になり、検索の順位を上げるのはその名前が積んだ検証だけだからである

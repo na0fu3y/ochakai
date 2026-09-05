@@ -102,20 +102,14 @@ what citing it is for. If it genuinely is that large, raise the number in
 the same PR and say why. Do not answer the ceiling by compressing the
 prose: a record nobody finishes costs more than a long one.
 
-CONTRIBUTING.md also caps the corpus as a whole: `RECORD-CORPUS-LINES`
-for how many lines its records total, counting every record, Superseded
-ones included, since they still ship in the tree and a reader following a
-`Status:` trail still opens them.
-The same test reads it back.
-
-**Usually you will not touch it.** The ceiling sits on a grid the width
-of `RECORD-CORPUS-LINES-SLACK`, so a record that fits inside the current
-boundary moves no number — which is deliberate, so that concurrent PRs do
-not all collide on one line. When your record *does* cross the boundary,
-raise the ceiling to the next multiple in the same PR and say why: the
-same two escapes apply, just visible only once the whole corpus is
-counted — this decision restates one already on file (cite it instead),
-or two subjects have been sharing one number and would read better split.
+**The corpus as a whole has no ceiling any more.** `RECORD-CORPUS-LINES`
+is retired (CONTRIBUTING.md, *How many records, and how much*, and the
+上限 section of docs/surface.md say why), so a new record moves no total
+and there is no number to raise. What still holds is the pair of rules
+the ceiling stood in for: a number is for a decision a user can observe
+(0048) and for an area rather than a rule inside it (0128). A record
+that restates one already on file is the case to catch by citing that
+record instead; two subjects sharing one number read better split.
 
 **4. Update the older docs' `Status:` headers.** Every doc the new one
 supersedes or amends gets a line pointing at the new number. See 0011 or

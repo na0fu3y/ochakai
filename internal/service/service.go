@@ -469,16 +469,19 @@ func (s *Service) Plan(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 //
 // It is a step of a write, so it is scoped like one (design doc 0109 §4).
 // Without that, its refusal was a read of somebody else's subtree: the
-// sentence names the id and says a human ruled on it, which is exactly
+// sentence names the id and says a ruling stands on it, which is exactly
 // what a caller outside the scope is meant to receive a 404 for.
 //
 // The guard reads the ledger's presence, not the standing tier: a
 // concept edited after its verification reads unverified (design doc
 // 0138) and is still refused here, because what the guard protects is
-// the fact that a human ruled on this id — history, which no edit
-// unmakes — not the claim about the current content. The message says
-// "was verified" for the same reason: the trust tier beside it may
-// honestly read unverified.
+// the fact that this id was ruled on — history, which no edit unmakes —
+// not the claim about the current content. The message says "was
+// verified" for the same reason: the trust tier beside it may honestly
+// read unverified. Nor does it say who ruled: Verify records a process:
+// caller like any other (a CI canary, docs/guides/golden-query-canary.md),
+// and a ruling that stops at machine-confirmed is a ruling this surface
+// must not replace either. The tier says who; the guard says that.
 func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, error) {
 	id = domain.Normalize(id)
 	if err := s.mayWrite(ctx, id); err != nil {
@@ -501,9 +504,9 @@ func (s *Service) RefuseIfCurated(ctx context.Context, id, op string) (*string, 
 	default:
 		return &k.ContentHash, nil
 	}
-	return nil, Invalidf("cannot %s %s from this surface: a human ruled on it (%s), and this surface "+
-		"has no If-Match precondition to replace curated knowledge safely. %s A human changes curated "+
-		"concepts from the web UI or CLI.", op, id, ruling, instead)
+	return nil, Invalidf("cannot %s %s from this surface: a ruling stands on it (%s), and this surface "+
+		"has no If-Match precondition to replace curated knowledge safely. %s Curated concepts "+
+		"change from the web UI, the CLI or REST.", op, id, ruling, instead)
 }
 
 // RefuseIfRevivingCurated reports an error when id names a soft-deleted

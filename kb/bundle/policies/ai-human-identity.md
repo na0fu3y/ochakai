@@ -36,7 +36,7 @@ dev モードは委譲を全呼び出し元に開いている[^httpauth]ので�
    (producer も clientInfo から自動で残る)。
 2. **AI は CLI で書かない。** dev インスタンスに対する CLI は匿名 =
    human として記録されるため、書き込み系コマンド(put / verify /
-   reject / delete / purge / move / reembed / import / report)は
+   delete / purge / move / reembed / import / report)は
    `.claude/settings.json` の deny に載せてある。
 3. **裁定は人の行為。** verify / reject は人が web UI か CLI から打つ。
    MCP に裁定の面はそもそも無い(設計ドキュメント 0067 §6)し、

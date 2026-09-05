@@ -368,7 +368,9 @@ last entry.
   at 12,290 bytes of `tools/list` including 1,179 of instructions
   (2026-09-03, the same count the `MCP-BYTES` ceiling reads), semantica's
   seventeen at 7,771 (2026-08-23) — and says tokens are not measured.
-  The last open half of #677's "publish the measurement".
+  The last open half of #677's "publish the measurement". (The page has
+  since been re-measured at 10,485 with 1,037 of instructions, dated
+  2026-09-04, after the resident-bytes entry above landed.)
 
 - **The positioning page says what the OKF ecosystem became, and where
   ochakai stands in it.** Two days after the Knowledge Catalog section
@@ -383,7 +385,7 @@ last entry.
   ruling recorded with the actor's identity, a rejection with its
   reason, a whole-bundle exit). The vault section became the section
   on OKF-native local tools: 135 repositories carry the format's topic
-  three months after the spec, almost all of them one file tree on one
+  three months after the spec (136 when re-counted on 2026-09-05), almost all of them one file tree on one
   machine, and two of them (kaut, okf-hub) hold the draft queue and
   write gate this page used to say no file-based tool had — so the
   "loop" bullet now names what is still missing rather than claiming
@@ -436,6 +438,44 @@ last entry.
   would meet. No endpoint, tool, command or variable changed.
 
 ### Fixed
+
+- **A pre-release read of this section found four places where a claim
+  an entry above retired was still standing, and one date.** Each is
+  prose or a message; no behaviour moves.
+  - *An agent cannot rule* — retired above, and still said by the
+    ruling row of the first-month guide's three-chairs table
+    (`docs/guides/onboarding.md`, added by the same batch) and by two
+    sentences of the golden-query canary guide, the one page that has a
+    CI service account ruling. Both now say what the FAQ says: the
+    connected agent does not do it in passing because MCP carries no
+    ruling tool, and `human-reviewed` takes a human's verification.
+  - **The refusal an MCP write meets on a curated concept said "a human
+    ruled on it", and it fires on any ruling.** `RefuseIfCurated` reads
+    the ledger's presence, not the actor's kind, so a concept a
+    `process:` canary verified — `machine-confirmed`, never touched by a
+    person — met the same sentence. It now says *a ruling stands on it*
+    and that curated concepts change from the web UI, the CLI or REST;
+    `put_concept`'s description and the FAQ's quotation follow. The
+    guard itself is unchanged: a ruling that stops at
+    `machine-confirmed` is still one this surface must not replace,
+    and which kind it was is `trust`'s answer, not the refusal's. The
+    FAQ heading drops "human" for the same reason and keeps its anchor.
+  - *The line ceilings* — retired above, and still a procedure in two
+    places written for someone acting rather than reading:
+    CONTRIBUTING.md's *Translating a manual page* told a translator to
+    round `DOC-LINES` up when `scripts/check core` failed, and the
+    `design-doc` skill told the next record's author to raise
+    `RECORD-CORPUS-LINES` at a grid boundary. Neither number exists;
+    both now say so and name what holds instead.
+  - The wire struct's comment on `stale_after` still read `YYYY-MM-DD`
+    (0139 spells it RFC 3339 on the way out), and the dogfood identity
+    policy still listed `reject` among the CLI writes on the deny list
+    (0135 folded it into `delete --note`).
+  - `docs/positioning.md` gave OKF v0.2's publication date as
+    2026-07-25 in one paragraph and 2026-07-24 in another;
+    `docs/compatibility.md` and 0139 hold 07-24. The README's memory
+    bullet gains the words the positioning page already has about who
+    stands in a memory layer's review gate — usually another agent.
 
 - **README claimed three things about memory layers that the positioning
   page had just stopped claiming.** #826 dated those premises against the

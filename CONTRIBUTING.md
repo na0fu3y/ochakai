@@ -758,21 +758,15 @@ Two pieces of bookkeeping, both easy to forget:
   take the markers off this page's own outbound links** to pages that are
   already Japanese: between two Japanese pages the mark says nothing, and
   the ones left behind are what a reader learns to stop trusting.
-- **`DOC-LINES` usually needs nothing.** The ceiling moves in fives of
-  hundreds (`DOC-LINES-SLACK: 500`), so most pages land inside the block
-  the manual is already in and the number is not touched — which is what
-  keeps nine translations from all conflicting on one line. Run
-  `scripts/check core`; if it fails, round the ceiling to the next five
-  hundred and write the paragraph, because crossing that grid line is
-  the moment the manual actually got bigger.
-
-  Expect it to grow rather than shrink where it moves at all. Japanese
-  puts no spaces between words, so a line was expected to carry more; a
-  full-width character takes two columns, so the same 70-column wrap
-  holds about half as many. `loop.md` 114 → 120, `configuration.md`
-  75 → 84 — but `docs/README.md` 101 → 96, because a page of one-line
-  summaries loses more to the wrap than it gains. Translation never
-  returns budget; only folding does.
+- **No line ceiling moves.** `DOC-LINES` used to cap the manual's total
+  and is retired (the 上限 section of [docs/surface.md](docs/surface.md)
+  says why); what `scripts/check core` still reads is the page count,
+  and a translation adds no page. Expect the page to grow rather than
+  shrink. Japanese puts no spaces between words, so a line was expected
+  to carry more; a full-width character takes two columns, so the same
+  70-column wrap holds about half as many. `loop.md` 114 → 120,
+  `configuration.md` 75 → 84 — but `docs/README.md` 101 → 96, because a
+  page of one-line summaries loses more to the wrap than it gains.
 
 - **Check the English before translating it.** A translation should be
   faithful, which means a description that has gone stale gets fixed in
