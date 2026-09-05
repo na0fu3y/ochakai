@@ -80,10 +80,12 @@ func TestDocumentFrontmatterAndBody(t *testing.T) {
 	// verified entry is stable plus a verification, not status: verified
 	// (design doc 0036 §3.4).
 	for key, want := range map[string]any{
-		"type":        "Insight",
-		"title":       "売上の季節性",
-		"status":      "stable",
-		"stale_after": "2026-12-31",
+		"type":   "Insight",
+		"title":  "売上の季節性",
+		"status": "stable",
+		// Composed by ochakai rather than handed to it, so the moment is
+		// spelled the way SPEC §5 defines one (design doc 0139 §3.2).
+		"stale_after": "2026-12-31T00:00:00Z",
 		"created_by":  "process:claude-code",
 	} {
 		if fm[key] != want {

@@ -55,14 +55,46 @@ type Doc struct {
 	Claimed []string
 }
 
-// yamlScalar renders decoded YAML timestamps back as text, recursing into
-// lists and mappings. YAML types an unquoted date, so `stale_after:
-// 2026-12-31` arrives as a time.Time — as do the envelope's other dates
-// (sources[].last_modified, the usage_window bounds) and any extension key
-// holding one. Left alone, such a value would be stored as JSON and come
-// back out as a full RFC 3339 timestamp, quietly turning the producer's
-// date into something it did not write. A value with no clock component
-// is a date; anything else keeps its instant.
+// frontmatterMap decodes a frontmatter block into the plain map the rest
+// of this package reads, with every timestamp kept as the text its
+// producer wrote.
+//
+// YAML resolves an unquoted date or date-time to a time.Time, and a
+// time.Time no longer says which spelling it arrived in — so a value had
+// to be given one again on the way out, and whichever one was chosen was
+// a spelling the producer had not necessarily written. Retagging the node
+// a string first is what keepTimestampText already does on the claim path
+// (design doc 0075 §3.1) and on the field editor's (design doc 0130); the
+// reason is the same here, and it is the reason a document's own bytes
+// are stored unread (design doc 0043 §3.1). ochakai does not choose a
+// spelling for a value it was handed.
+func frontmatterMap(fm []byte) (map[string]any, error) {
+	var n yaml.Node
+	if err := yaml.Unmarshal(fm, &n); err != nil {
+		return nil, err
+	}
+	keepTimestampText(&n)
+	var raw map[string]any
+	if n.Kind == 0 { // an empty block decodes to nothing, not to an error
+		return map[string]any{}, nil
+	}
+	if err := n.Decode(&raw); err != nil {
+		return nil, err
+	}
+	if raw == nil {
+		raw = map[string]any{}
+	}
+	return raw, nil
+}
+
+// yamlScalar renders decoded YAML values back as text, recursing into
+// lists and mappings.
+//
+// The timestamp case is a backstop rather than the path taken:
+// frontmatterMap retags every timestamp node a string before decoding, so
+// a value that reached here as a time.Time came from somewhere that did
+// not, and the one spelling ochakai chooses for itself is the one SPEC §5
+// defines (domain.FormatInstant).
 func yamlScalar(v any) any {
 	switch v := v.(type) {
 	case time.Time:
@@ -114,9 +146,9 @@ func scalarText(v any) (string, bool) {
 
 // Frontmatter returns a document's frontmatter as a plain map, which is
 // what the store indexes (design doc 0046 §3.11). Values come back the
-// way the rest of this package reads them — a date with no clock stays a
-// date rather than becoming an instant (yamlScalar) — so the index says
-// what the document says.
+// way the rest of this package reads them — a timestamp keeps the
+// spelling its producer wrote (frontmatterMap) — so the index says what
+// the document says, which is what `fm.stale_after` matches against.
 //
 // Server-owned keys are dropped: they are not in a stored document
 // (design doc 0043 §2.2), and a filter that could match on one would be
@@ -135,8 +167,8 @@ func Frontmatter(doc []byte) map[string]any {
 	if !ok || fm == "" {
 		return map[string]any{}
 	}
-	var raw map[string]any
-	if err := yaml.Unmarshal([]byte(fm), &raw); err != nil {
+	raw, err := frontmatterMap([]byte(fm))
+	if err != nil {
 		return map[string]any{}
 	}
 	out := make(map[string]any, len(raw))
@@ -204,8 +236,8 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 		return nil, "", nil, fmt.Errorf("not an OKF document: unterminated frontmatter")
 	}
 
-	var raw map[string]any
-	if err := yaml.Unmarshal([]byte(fmPart), &raw); err != nil {
+	raw, err := frontmatterMap([]byte(fmPart))
+	if err != nil {
 		return nil, "", nil, fmt.Errorf("invalid frontmatter: %w", err)
 	}
 	var notes []string

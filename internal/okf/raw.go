@@ -419,11 +419,15 @@ func MoveServerKeys(raw []byte) (doc []byte, claimed []string, claim map[string]
 // node YAML resolves to time.Time has to be given a spelling again on the
 // way out, and the value alone no longer says which one it arrived in.
 // So `at: 2026-07-01T00:00:00Z` came back out as the bare date
-// `2026-07-01` (yamlScalar reads a zero clock as a date, which is what
-// keeps `stale_after: 2026-12-31` a day rather than an instant), and
-// `at: 2026-07-01 09:30:00` came back out in the T form. Neither is what
-// the document said. Retagging costs nothing else: the node already holds
-// the written text, and a claim is stored as text anyway (textify).
+// `2026-07-01`, and `at: 2026-07-01 09:30:00` came back out in the T
+// form. Neither is what the document said. Retagging costs nothing else:
+// the node already holds the written text, and a claim is stored as text
+// anyway (textify).
+//
+// Every path that decodes a frontmatter block runs this now, not just
+// this one and the field editor's: frontmatterMap does it for the parse
+// and for the fm. index, which is what stopped ochakai choosing a
+// spelling on a producer's behalf anywhere (design doc 0139 §3.1).
 func keepTimestampText(n *yaml.Node) {
 	// !!timestamp is what YAML resolves an unquoted date or date-time to.
 	if n.Kind == yaml.ScalarNode && n.Tag == "!!timestamp" {

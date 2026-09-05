@@ -5,7 +5,7 @@ description: 売上を顧客の獲得チャネルで割ったもの(draft。セ�
 tags: [sales, revenue, marketing, bigquery]
 generated: { by: analysis_agent/claude-fable-5, at: 2026-07-27T09:45:00Z }
 status: draft
-stale_after: "2026-08-01"
+stale_after: "2026-08-01T00:00:00Z"
 runtime: bigquery
 parameters:
   - { name: from_date, type: DATE, required: true }

@@ -50,9 +50,9 @@ description: Raw orders            # BigQuery's own table description
 tags: [bigquery, shop, frequently-queried]
 sources:
   - resource: bigquery://my-project.shop.orders
-    last_modified: "2026-07-26"
+    last_modified: "2026-07-26T00:00:00Z"
     usage_count: 412
-usage_window: { from: "2026-06-27", to: "2026-07-27" }
+usage_window: { from: "2026-06-27T00:00:00Z", to: "2026-07-27T00:00:00Z" }
 ```
 
 with a body holding the columns (nested `RECORD` fields flattened to

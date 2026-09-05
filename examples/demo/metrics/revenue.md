@@ -8,7 +8,7 @@ sources:
     resource: https://wiki.example.co.jp/finance/revenue-recognition
     title: 売上計上ポリシー (FY2026)
     author: human:tanaka@example.co.jp
-    last_modified: "2026-07-24"
+    last_modified: "2026-07-24T00:00:00Z"
 generated: { by: analysis_agent/claude-fable-5, at: 2026-07-25T05:40:00Z }
 verified:
   - { by: human:tanaka@example.co.jp, at: 2026-07-29T02:15:00Z }

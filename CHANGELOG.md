@@ -23,6 +23,60 @@ last entry.
 
 ### Changed
 
+- **`stale_after` reads back as an RFC 3339 datetime, always** — a UTC
+  midnight no longer collapses to the bare date it used to (design doc
+  [0139](docs/design/0139-ochakai-does-not-choose-a-spelling.md),
+  superseding [0133](docs/design/0133-an-okf-moment-is-an-instant.md)).
+  **OKF v0.2 changed a normative rule after publication without moving
+  its version**: `stale_after`, `sources[].last_modified` and
+  `usage_window` were `YYYY-MM-DD` dates in the v0.2 published 2026-07-24
+  and became "an ISO 8601 datetime with an explicit UTC offset" on
+  2026-08-21, so the spelling 0133 chose to write back is one the format
+  no longer defines. **All four moments in the spec's own worked example
+  are UTC midnight**, so Appendix A round-tripped through ochakai came
+  back in that undefined spelling — and a conformant consumer drops it
+  without a word: OKF's reference agent returns `False` from `is_stale()`
+  for any value with no `T` in it. That was shipping in this repository —
+  `examples/demo/queries/sales/revenue-by-traffic-source.md` declared
+  `stale_after: 2026-08-01`, which ochakai's expiry feed raised and an OKF
+  consumer read as no expiry at all.
+
+  **Input is unchanged**: both spellings still go in, a bare date is still
+  the UTC midnight that opens it, and a datetime with no offset is still
+  refused. Bundles written against either normative state of "v0.2" are in
+  the wild, and SPEC §11 forbids a consumer rejecting one over this.
+
+  **What changed is that ochakai stops choosing a spelling on a
+  producer's behalf.** Where it kept the writer's text it now returns that
+  text: every frontmatter path retags timestamp nodes as strings before
+  decoding, which the claim path and the field editor already did and the
+  parse and the `fm.` index did not — so `fm.stale_after` matches the
+  spelling the document actually carries, midnight datetimes included.
+  `stale_after` is the one value with no text left to return, being held
+  as an instant in a `timestamptz` column, and RFC 3339 is what SPEC §5
+  defines. A document's own bytes are untouched either way. Imported
+  documents are **not** normalized: a base imported with dates exports
+  with dates, and the writer's own fix is `POST /api/v1/frontmatter`.
+
+  On the frozen contract this is [0102](docs/design/0102-one-history-in-one-spelling.md)
+  §3's door — folding a second spelling of something the format fixes a
+  spelling for. **Unlike 0133 this narrows**: a client parsing only dates
+  will not read the new value. No counted surface moves, and the MCP
+  schema is unchanged.
+
+- **ochakai's own bundles are written in the format's spelling.** The 10
+  date-only timestamps in `examples/demo`, `examples/bigquery-catalog` and
+  the worked example in `docs/architecture.md` are RFC 3339 now. **No
+  value moved** — a date was already the UTC midnight opening it, so
+  `2026-08-01` is `2026-08-01T00:00:00Z`.
+
+- **C3 is pinned to a commit rather than to "v0.2"**, because v0.2 does
+  not name one document (`open-knowledge-format@0b87c52`;
+  [docs/compatibility.md](docs/compatibility.md) holds the pin and
+  [docs/surface.md](docs/surface.md)'s C3 row cites it). Moving that line
+  is a change with a release note, the same as any other compatibility
+  entry.
+
 - **The positioning page says what happens when an ochakai bundle meets
   an LLM Wiki, and it was measured rather than read.** Karpathy's LLM
   Wiki pattern — an LLM compiles raw sources into a linked markdown wiki
@@ -67,11 +121,12 @@ last entry.
   came back byte-identical — a rejection's reason really does reach the
   catalog as prose. Two things did not match the desk check. A bare
   `YYYY-MM-DD` date is rejected by the aspect's `datetime` fields
-  (`stale_after`, `sources[].last_modified`, `usage_window`), and it is
-  ochakai that widened here: SPEC 5 fixes those as ISO 8601 with an
-  offset, and taking a date as well is 0133 §3.1, which also echoes back
-  the spelling it received — 3 of the 40 documents carry 5 such values,
-  and the push aborts partway rather than transactionally. And the
+  (`stale_after`, `sources[].last_modified`, `usage_window`) — 3 of the 40
+  documents carry 5 such values, and the push aborts partway rather than
+  transactionally. **It was the spec that widened, not ochakai** (design
+  doc 0139 §1.1): SPEC 5 defined those three as dates when v0.2 was
+  published and fixed them as ISO 8601 with an offset on 2026-08-21,
+  without moving the version. And the
   `verified` field the catalog models and indexes was empty for all 40,
   because every demo concept carries its verification inside `received`
   (0009 §3.2), which is unmodeled and lands in `extra` — the page says

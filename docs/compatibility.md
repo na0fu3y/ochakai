@@ -173,6 +173,27 @@ so it changes when the spec does or when ochakai's reading of it does —
 `0.14.0` changed the key order in exported frontmatter, which is a diff in
 anything that stores bundles in git.
 
+**"v0.2" does not name one document, so the anchor is a commit.** OKF v0.2
+was published on 2026-07-24 and changed a *normative* rule on 2026-08-21
+without moving its version: SPEC §5 had defined `stale_after`,
+`sources[].last_modified` and `usage_window` as `YYYY-MM-DD` dates, and
+now fixes every timestamp-valued key as "an ISO 8601 datetime with an
+explicit UTC offset". Values that were valid stopped being valid, which
+SPEC §12 calls neither a minor nor a major change — and both the heading
+and the filename still say v0.2. So a version string cannot say which
+spec a release was built against, and this is the pin instead:
+
+    OKF SPEC: GoogleCloudPlatform/open-knowledge-format@0b87c52
+              (SPEC.md as of 2026-08-21; the same bytes as
+              knowledge-catalog's okf/SPEC.md, which is now a frozen
+              snapshot and no longer the format's home)
+
+**Moving this line is a change with a release note**, the same as any
+other entry above. It is prose rather than a check: verifying it means
+reaching GitHub, and a test that fails when a network is unavailable
+teaches people to ignore it. What catches a drift is a sync that reads
+the spec, and the pin is what tells that sync where to diff from.
+
 ## What you get instead of stability
 
 Not a promise that nothing breaks. A promise that you are told what did:

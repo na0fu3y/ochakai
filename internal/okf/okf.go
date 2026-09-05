@@ -493,6 +493,16 @@ func Document(k *domain.Knowledge) ([]byte, error) {
 func Canonical(k *domain.Knowledge) ([]byte, error) { return render(k, false) }
 
 func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
+	// stale_after is spelled the way the column hands it back, so a
+	// document ochakai composed reads back byte-identical to what was
+	// stored and the index stays a derivation of it (design doc 0043
+	// §3.1). This is ochakai writing, not ochakai rewriting: a document
+	// it was handed keeps its own bytes and never reaches here
+	// (Document). Design doc 0139 §3.2.
+	staleAfter := k.StaleAfter
+	if at, ok := domain.ParseInstant(staleAfter); ok {
+		staleAfter = domain.FormatInstant(at)
+	}
 	fm := frontmatter{
 		Type:        text(k.Type),
 		Resource:    text(k.Resource),
@@ -503,7 +513,7 @@ func render(k *domain.Knowledge, serverKeys bool) ([]byte, error) {
 		UsageWindow: windowOut(k.UsageWindow),
 		Status:      text(string(k.Status)),
 		StatusNote:  text(k.StatusNote),
-		StaleAfter:  text(k.StaleAfter),
+		StaleAfter:  text(staleAfter),
 		Runtime:     text(k.Runtime),
 		Computation: text(k.Computation),
 	}
