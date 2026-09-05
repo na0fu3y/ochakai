@@ -24,6 +24,36 @@ last entry.
 ### Changed
 
 - **The positioning page says what happens when an ochakai bundle meets
+  an LLM Wiki, and it was measured rather than read.** Karpathy's LLM
+  Wiki pattern — an LLM compiles raw sources into a linked markdown wiki
+  and a lint pass hunts contradictions and stale claims — is the fastest
+  growing shape in the vault neighbour the page already describes, and
+  its premise is the inverse of ochakai's: the LLM maintains the wiki
+  there, and there is no LLM inside here (0081). On 2026-09-05
+  `examples/demo` (18 concepts) and `kb/bundle` (9 documents) were put
+  through llm-wiki-compiler v1.1.0's `import --okf`, `lint` and
+  `export --target okf`. The entrance is a filesystem operation that
+  calls no LLM, imports 18/18 and 9/9 with nothing skipped, and holds
+  every page in a review queue by default — the same "an import rules on
+  nothing" judgement, implemented by stopping rather than by writing
+  with trust unverified — but a rejection there archives the candidate
+  with no reviewer, reason or time. OKF's `verified`, `generated`,
+  `sources`, `status` and `synonyms` fold into `x-okf.originalFrontmatter`
+  and the live page reads `provenanceState: imported`, the same result
+  Knowledge Catalog gave: the ledger travels as a string. The unit of
+  trust there is a citation to a source line range, so `lint` warned on
+  13 of 18 documents for "inferred paragraphs without citations" and read
+  neither `sources` nor the `[^id]` footnotes as one. The round trip
+  breaks the bodies: 35 links in 13 of 18 documents come back doubled as
+  `[text](/path)](/path)`, `references/thelook-dataset.md` is moved to
+  `concepts/` because `references/` is reserved on that side and the 8
+  links at it are left pointing at the old address, and every document
+  gains a `timestamp` equal to the import time. ochakai's own parser
+  still reads the returned bundle 18/18, with the foreign keys under
+  `received` (0009 §3.2). The page adds no feature for any of it; the
+  neighbour row and the vault section name the pattern and the
+  numbers.
+- **The positioning page says what happens when an ochakai bundle meets
   `kcmd push`, and it was measured rather than read.** On 2026-09-05 an
   `ochakai export` of demo.ochak.ai — 18 concepts plus the 22 `index.md`
   and `log.md` files `export` generates — was pushed into a throwaway
