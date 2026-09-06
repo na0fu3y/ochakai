@@ -21,6 +21,21 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The MCP server declares only the capabilities it has.** The
+  capabilities a client reads at `initialize` were the SDK's defaults, and
+  two of them were untrue: `logging`, a feature ochakai has never used
+  and the protocol deprecated at 2026-07-28 (design doc
+  [0118](docs/design/0118-a-call-carries-everything-it-needs.md) §2), and
+  `listChanged: true` on the tool and resource lists, promising a
+  notification for lists that are fixed when the process is built (0118
+  §7) and that a stateless transport has no session to send anyway. The
+  declaration is now `tools` and `resources` and nothing else, written
+  by hand so a later SDK default cannot change what ochakai says;
+  `subscribe` stays out because a subscription lives on a session and
+  there is none. No tool, list or surface moves.
+
 ### Changed
 
 - **A recall pointer says when a concept is past its re-check date.** The
