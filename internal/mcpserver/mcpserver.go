@@ -242,6 +242,20 @@ func instructionsFor(cfg *config.Config) string {
 func newServer(svc *service.Service, version string, retired []RetiredToolName) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: version}, &mcp.ServerOptions{
 		Instructions: instructionsFor(svc.Config),
+		// What this server can do, said in the protocol's own vocabulary
+		// and nothing it cannot. Left to the SDK, the declaration said two
+		// untrue things: `logging`, a feature ochakai never used and the
+		// protocol has deprecated (design doc 0118 §2), and `listChanged`
+		// on both lists, promising a notification for lists that are fixed
+		// when the process is built (0118 §7) — and that a stateless
+		// transport has no session to send one on anyway. `subscribe`
+		// stays absent for the same reason: a subscription lives on a
+		// session, and there is none. Written down rather than inferred so
+		// that a later SDK default cannot change what ochakai says.
+		Capabilities: &mcp.ServerCapabilities{
+			Tools:     &mcp.ToolCapabilities{},
+			Resources: &mcp.ResourceCapabilities{},
+		},
 	})
 
 	// A name this release renamed still answers, for this release only
