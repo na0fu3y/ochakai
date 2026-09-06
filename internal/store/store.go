@@ -42,7 +42,7 @@ var ErrAlreadyExists = errors.New("knowledge already exists")
 var ErrConflict = errors.New("knowledge changed since it was read")
 
 // ErrCuratedTombstone is returned by Create when the id holds a
-// soft-deleted entry a human ruled on and the caller asked for curated
+// soft-deleted entry a ruling stands on and the caller asked for curated
 // tombstones to be kept (design doc 0015 §3.1). Distinct from
 // ErrAlreadyExists: the blocking row is invisible to a plain read.
 var ErrCuratedTombstone = errors.New("knowledge id holds a curated tombstone")
@@ -979,7 +979,7 @@ func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*dom
 // tombstone is an ordinary one either way, and the note does not decide
 // whether it revives: a recorded reason is information, not authority
 // over the next writer (0135 §3). What still refuses revival is a
-// tombstone a human ruled on before it was deleted — verified, or
+// tombstone a ruling stood on before it was deleted — verified, or
 // deprecated — which is 0015 §3.1 and has nothing to do with rejection.
 //
 // ifMatch is the same optional

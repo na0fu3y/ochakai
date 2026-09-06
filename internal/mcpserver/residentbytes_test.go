@@ -35,9 +35,10 @@ import (
 const surfaceDoc = "../../docs/surface.md"
 
 // The two lines declaring the ceiling and how much of it may sit
-// unspent, read the way cmd/ochakai/surface_test.go reads DOC-LINES and
-// DOC-LINES-SLACK: over the cap is a decision, and so far under it that
-// the slack is gone is a ceiling somebody forgot to return.
+// unspent, read the way cmd/ochakai/surface_test.go read DOC-LINES and
+// DOC-LINES-SLACK before those were retired: over the cap is a decision,
+// and so far under it that the slack is gone is a ceiling somebody forgot
+// to return.
 var (
 	mcpBytesCap   = regexp.MustCompile(`(?m)^- MCP-BYTES: (\d+)$`)
 	mcpBytesSlack = regexp.MustCompile(`(?m)^- MCP-BYTES-SLACK: (\d+)$`)

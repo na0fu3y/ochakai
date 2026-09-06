@@ -368,7 +368,7 @@ def upsert(api: Ochakai, entry_id: str, document: str, identity: str, counts: di
     the race instead of being erased by it (design doc 0030). Verifying an
     entry — or simply editing it — takes it out of the sync for good. That
     is the same line design doc 0067 §6 draws for MCP, applied from
-    outside: a machine does not overwrite what a human ruled on. ochakai
+    outside: a machine does not overwrite what a ruling stands on. ochakai
     needs no owner field and no authorization for this; the projection and
     provenance carry it.
 
@@ -390,7 +390,7 @@ def upsert(api: Ochakai, entry_id: str, document: str, identity: str, counts: di
 
     if verdict := ruled_on(view):
         counts["skipped"] += 1
-        print(f"skip   {entry_id} — {verdict}, a human ruled on it", file=sys.stderr)
+        print(f"skip   {entry_id} — {verdict}, a ruling stands on it", file=sys.stderr)
         return
 
     # Who wrote the words that stand there now (design doc 0065 §4): under

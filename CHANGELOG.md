@@ -402,8 +402,9 @@ last entry.
   and okf-skills' §11 conformance checker on 2026-09-03: zero errors
   from both, the warnings being links to files outside the bundle and
   one past `stale_after`. C3 is now held by other people's checkers,
-  not only this repository's tests. Pushing the same bundle into
-  Knowledge Catalog has not been tried.
+  not only this repository's tests. (Pushing the same bundle into
+  Knowledge Catalog had not been tried when this landed; the `kcmd push`
+  entry above is that measurement, made on 2026-09-05.)
 
 - **The manual says the four things an adopter's review design gets
   wrong.** A review-operations design written by an adopter in
@@ -499,6 +500,36 @@ last entry.
   which the neighbours table already credited it with. Same pass: mem0
   hides an expired memory from search **by default**, `show_expired`
   brings it back.
+
+- **A second pre-release read found the same retired claims standing in
+  the places the first read did not look**: an index summary, a code
+  comment on an exported method, an example's stderr, and a
+  contributor's cross-reference. Prose and messages only.
+  - The English design index's row for 0081 still described a rejection
+    as a ledger that "stops an agent re-proposing", opt-in to retrieve
+    and excluded from search — three mechanisms
+    [0135](docs/design/0135-a-rejection-is-a-deletion.md) retired. The
+    row now says where §4's ledger went; the Japanese row gains the same
+    clause.
+  - The `bigquery-catalog` sync job printed *a human ruled on it* for
+    every trust tier above `unverified`, the drift the MCP refusal above
+    was corrected for. It says *a ruling stands on it*, as does the
+    docstring beside it.
+  - The refusal an MCP create meets on a curated tombstone ended "A human
+    reuses the id from the web UI or CLI"; REST's create takes the id
+    too, and who is not the point. It now lists the three surfaces, like
+    its sibling.
+  - `Service.Delete`'s doc comment still said a noted tombstone "will
+    not revive" on the If-Match-less surfaces and that ruling "is the
+    human's side" — the design 0135 §3 argued out of, and the reason
+    0076 gives differently. Two `store` comments, an access test's, and
+    the `usage_window`/`last_modified` field comments (RFC 3339 or a
+    date since 0139, not a date) follow.
+  - CONTRIBUTING.md's search-evaluation section and two test comments
+    cited `DOC-LINES-SLACK` in the present tense; they now say it is
+    retired. This entry's own earlier sentence, "pushing the same bundle
+    into Knowledge Catalog has not been tried", is dated to the moment it
+    was true and points at the `kcmd push` entry that overtook it.
 
 ## [0.28.3] - 2026-09-03
 

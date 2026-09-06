@@ -159,7 +159,7 @@ func TestScopeRefusesAWriteItAllowsAReadOfIntegration(t *testing.T) {
 // ahead of the write only speak when a human has ruled on the id, so a
 // fixture whose out-of-scope concept is an ordinary draft passes without
 // ever asking the question. Both of their refusals name the id and say a
-// human ruled on it — which is the read 0109 §4 answers with a 404.
+// ruling stands on it — which is the read 0109 §4 answers with a 404.
 func TestScopeHidesARulingOutsideItIntegration(t *testing.T) {
 	f := newAccessFixture(t)
 	if _, err := f.svc.Verify(f.adminCtx, f.theirs, f.admin); err != nil {
