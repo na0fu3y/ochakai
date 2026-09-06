@@ -562,22 +562,23 @@ func (s *Service) RefuseIfRevivingCurated(ctx context.Context, id string) error 
 		return nil
 	}
 	return Invalidf("cannot create %s from this surface: the id holds a deleted %s concept, and "+
-		"creating here would revive it as a fresh draft, replacing that ruling. %s A human reuses "+
-		"the id from the web UI or CLI.", id, ruling, instead)
+		"creating here would revive it as a fresh draft, replacing that ruling. %s The id is "+
+		"reused from the web UI, the CLI or REST.", id, ruling, instead)
 }
 
 // Delete removes a concept from every live answer, keeping its history.
 //
 // A note makes the removal a rejection (design doc 0135): it records that
-// a reviewer turned the concept down and why, the tombstone becomes one
-// the surfaces with no If-Match channel will not revive, and the §9 log
-// renders the removal as `reject` rather than `delete`. Without a note it
-// is housekeeping, and the tombstone stays revivable by a later create.
-//
-// This is the memory of no the write-back loop is built on (design doc
-// 0081 §4) — what stops an agent re-proposing knowledge a human already
-// declined. Deleting is not an MCP tool, for the same reason verifying is
-// not: ruling is the human's side of the loop (design doc 0067 §6).
+// a reviewer turned the concept down and why, and the §9 log renders the
+// removal as `reject` rather than `delete`. That is all it does. The
+// tombstone revives the same way with or without a note — a recorded
+// reason is information for the next writer, not authority over it
+// (0135 §3) — and what still refuses revival on the surfaces without an
+// If-Match channel is a ruling that stood before the delete
+// (RefuseIfRevivingCurated). Deleting is not an MCP tool for the reason
+// design doc 0076 gives: rulings stay off that surface, and a face
+// without the reversible ruling has no business offering the
+// irreversible one.
 //
 // ifMatch is the same optional If-Match precondition Put takes (design
 // docs 0030, 0064): non-nil, the delete lands only if the concept still

@@ -256,8 +256,8 @@ A change to ranking lands with these numbers in its PR. **The floors
 beside them fail in both directions.** Under a floor is the regression
 the floor exists to catch. More headroom over it than
 `evalFloorSlackCases` allows is a floor nobody raised when the ranking
-improved, which is `DOC-LINES-SLACK`'s argument applied to a floor
-rather than a ceiling: banked headroom is budget the next regression
+improved, which is the argument the retired `DOC-LINES-SLACK` made,
+applied to a floor rather than a ceiling: banked headroom is budget the next regression
 spends without moving a number anybody reads. The tolerance is derived
 from the size of the set instead of declared here, because the noise it
 is sized against is one case moving and the set has been 14, 36, 41, 37

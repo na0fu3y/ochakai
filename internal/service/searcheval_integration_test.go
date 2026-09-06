@@ -633,7 +633,8 @@ const (
 // closed it the same way: d28c3c8 shortened the deploy guide, raised
 // DOC-LINES for the room the fold needed, and left 28 lines nobody
 // returned, which is why DOC-LINES-SLACK and RECORD-CORPUS-LINES-SLACK
-// exist (surface_test.go, CONTRIBUTING.md). **The comment above already
+// existed (both retired with their ceilings; docs/surface.md's 上限
+// section says why). **The comment above already
 // states the rule this closes** — "a change that moves those numbers —
 // either way — says so in its PR" — and nothing could check the
 // either-way half of it.

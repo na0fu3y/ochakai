@@ -832,7 +832,7 @@ func (l Link) DisplayText() string {
 // §5.1): "5000 uses" means nothing without the window it was counted over.
 // ochakai records the window and never computes one.
 type UsageWindow struct {
-	From string `json:"from,omitempty"` // YYYY-MM-DD
+	From string `json:"from,omitempty"` // as written: RFC 3339 or YYYY-MM-DD (design doc 0139)
 	To   string `json:"to,omitempty"`
 }
 
@@ -891,7 +891,7 @@ type Source struct {
 	// UsageCount is a pointer because absent and zero say different things:
 	// no count at all versus a source exercised zero times over the window.
 	UsageCount   *int         `json:"usage_count,omitempty"`
-	LastModified string       `json:"last_modified,omitempty"` // YYYY-MM-DD
+	LastModified string       `json:"last_modified,omitempty"` // as written: RFC 3339 or YYYY-MM-DD (design doc 0139)
 	UsageWindow  *UsageWindow `json:"usage_window,omitempty"`  // overrides the entry's window for this source
 	Extra        Extra        `json:"extra,omitempty"`
 }
