@@ -1582,3 +1582,154 @@ func TestGetDownloadRefusesAnEscapingName(t *testing.T) {
 		t.Errorf("escaped.txt was written outside the download directory")
 	}
 }
+
+// `ochakai get` reads either kind of object, and the argument's spelling
+// picks which address it asks first — the same rule `ochakai delete`
+// resolves, shared so the two cannot answer it differently (design doc
+// 0075 §1). The bytes of a file go to stdout, so a script somebody
+// attached can be paged and piped like any other file.
+func TestGetAddressesBothKindsOfObject(t *testing.T) {
+	const script = "#!/usr/bin/env python3\nprint('weekly')\n"
+	var asked []string
+	live := map[string]bool{}
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		p := r.PathValue("path")
+		asked = append(asked, p)
+		if !live[p] {
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+			return
+		}
+		if id, ok := strings.CutSuffix(p, ".md"); ok {
+			_ = json.NewEncoder(w).Encode(domain.View{
+				ID: id, Document: "---\ntype: Metric\n---\n\nbody\n",
+			})
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte(script))
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	for _, tc := range []struct {
+		name, arg  string
+		there      string
+		want       []string
+		wantStdout string
+	}{{
+		name: "a concept by its id", arg: "metrics/revenue", there: "metrics/revenue.md",
+		want: []string{"metrics/revenue.md"}, wantStdout: "---\ntype: Metric\n---\n\nbody\n",
+	}, {
+		name: "a file by its path", arg: "insights/reading/recompute.py", there: "insights/reading/recompute.py",
+		want: []string{"insights/reading/recompute.py"}, wantStdout: script,
+	}, {
+		name: "a concept whose id has a dot", arg: "metrics/revenue.v2", there: "metrics/revenue.v2.md",
+		want:       []string{"metrics/revenue.v2", "metrics/revenue.v2.md"},
+		wantStdout: "---\ntype: Metric\n---\n\nbody\n",
+	}, {
+		name: "a file with no extension", arg: "tables/orders/Makefile", there: "tables/orders/Makefile",
+		want: []string{"tables/orders/Makefile.md", "tables/orders/Makefile"}, wantStdout: script,
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			asked, live = nil, map[string]bool{tc.there: true}
+			out, _ := captureOutput(t, func() error {
+				return cmdGet(context.Background(), []string{tc.arg, "--url", srv.URL})
+			})
+			if !reflect.DeepEqual(asked, tc.want) {
+				t.Errorf("asked %v, want %v", asked, tc.want)
+			}
+			if out != tc.wantStdout {
+				t.Errorf("stdout = %q, want %q", out, tc.wantStdout)
+			}
+		})
+	}
+
+	// Neither address holds anything: the reader hears about the one
+	// their argument spelled, not about the fallback they never asked
+	// for.
+	asked, live = nil, map[string]bool{}
+	err := cmdGet(context.Background(), []string{"metrics/missing", "--url", srv.URL})
+	if !isNotFound(err) {
+		t.Errorf("a missing object: %v, want a 404", err)
+	}
+}
+
+// The two flags read a concept, so a file refuses them rather than
+// ignoring them — and refuses only once the bytes are in hand, so a
+// missing concept still reports itself as missing.
+func TestGetRefusesConceptFlagsForAFile(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/bundle/insights/x/run.py", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("print(1)\n"))
+	})
+	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	for _, flag := range [][]string{{"--json"}, {"--download", t.TempDir()}} {
+		args := append([]string{"insights/x/run.py", "--url", srv.URL}, flag...)
+		err := cmdGet(context.Background(), args)
+		if err == nil || !strings.Contains(err.Error(), "is a file") {
+			t.Errorf("`ochakai get %v`: %v, want a refusal naming the kind of object", flag, err)
+		}
+	}
+	// The same flag against an id that holds nothing reports the miss.
+	err := cmdGet(context.Background(), []string{"metrics/missing", "--json", "--url", srv.URL})
+	if !isNotFound(err) {
+		t.Errorf("a missing concept with --json: %v, want a 404", err)
+	}
+}
+
+// What may be written to a terminal. The command exists to read the
+// text somebody attached; anything else is saved with a redirect, and
+// bytes nothing recognised are not text by default.
+func TestWritableToTerminal(t *testing.T) {
+	for _, tc := range []struct {
+		mediaType string
+		want      bool
+	}{
+		{"text/plain", true},
+		{"text/csv", true},
+		{"application/pdf", false},
+		{"image/png", false},
+		{"application/octet-stream", false},
+		{"application/gzip", false},
+	} {
+		if got := writableToTerminal(tc.mediaType); got != tc.want {
+			t.Errorf("writableToTerminal(%q) = %v, want %v", tc.mediaType, got, tc.want)
+		}
+	}
+}
+
+// Each file beside a concept is listed with the command that reads it.
+// The hint names the file's own address, because "what is in that one?"
+// is the question a reader has here — `--download` answers a different
+// one, saving every file the concept holds.
+func TestGetHintsHowToReadOneFile(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/bundle/{path...}", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(domain.View{
+			ID: "insights/reading", Document: "---\ntype: Insight\n---\n\nbody\n",
+			Files: []domain.File{{
+				Name: "recompute.py", Path: "insights/reading/recompute.py",
+				MediaType: "text/plain", Size: 4321,
+			}},
+		})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	_, errOut := captureOutput(t, func() error {
+		return cmdGet(context.Background(), []string{"insights/reading", "--url", srv.URL})
+	})
+	want := "`ochakai get insights/reading/recompute.py` for its bytes"
+	if !strings.Contains(errOut, want) {
+		t.Errorf("stderr does not say %q:\n%s", want, errOut)
+	}
+}

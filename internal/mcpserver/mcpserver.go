@@ -337,6 +337,20 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 		if err != nil {
 			return nil, searchOut{}, err
 		}
+		// A hit's file metadata is not filled in here, and that is a
+		// decision rather than an omission (design doc 0140 §4).
+		// svc.FillFiles exists for one caller: the REST list surface, so
+		// the web UI can draw a row's thumbnails without a round trip per
+		// row (domain.Hit.Files says so). This face pays
+		// for what it returns out of the agent's context window, and a
+		// name, media type, size, path and SHA-256 per file — on rows an
+		// agent is scanning to decide which one concept to fetch — buys
+		// nothing it does not get one call later: get_concept carries
+		// files, and reading the concept is the step that follows a hit
+		// anyway. The rule this face runs on is that a capability may
+		// leave it only if it stays on another (0076), and nothing
+		// leaves: the file list is on get_concept, on REST and on the
+		// CLI's `ochakai get`, whose bytes are one command away.
 		return nil, searchOut{Hits: page.Hits, Degraded: page.Degraded}, nil
 	}))
 

@@ -30,8 +30,9 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   list [feed]             page a feed (usage, verified_at, failed, stale_after),
                           a reverse lookup, or the concepts a filter matches
   browse [prefix]         list one level of the ID hierarchy (folder view)
-  get <id>                print one concept as an OKF document (stderr notes
-                          what links at it)
+  get <path>              print one object: a concept by its id, as the OKF
+                          document (stderr notes what links at it), or a
+                          file by its path, as the bytes it holds
   put <path> [-f file]    write one object of the bundle: a concept from OKF
                           markdown or JSON at <id>, or a file at its own path
                           (every change kept as a revision)
@@ -252,16 +253,27 @@ Examples:
 ## ochakai get
 
 ```
-Usage: ochakai get [flags] <id>
+Usage: ochakai get [flags] <path>
 
-Print one knowledge concept as an OKF document (YAML frontmatter +
-markdown body), and nothing else, so the output round-trips through
-`ochakai put`. Who wrote and confirmed it, the files beside it, and
-what links at it (linked_from) are observations rather than part of
-the document, so they go to stderr; --download saves the files themselves (an agent can
+Print one object of the bundle. A knowledge concept, named by its id,
+prints as an OKF document (YAML frontmatter + markdown body), and
+nothing else, so the output round-trips through `ochakai put`. Who
+wrote and confirmed it, the files beside it, and what links at it
+(linked_from) are observations rather than part of the document, so
+they go to stderr; --download saves the files themselves (an agent can
 then read them from disk). --json prints the whole read instead: the
 document, the projection under .summary, and the provenance under
 .observed.
+
+A file, named by the path it lives at, prints as the bytes it holds —
+so a script somebody attached can be read, paged and piped like any
+other file. Neither flag applies to one: the bytes are the whole of
+what a file is, and they go to stdout to be redirected. Bytes that are
+not text are refused at a terminal rather than written to it.
+
+A concept's address is <id>.md and an id is that path with the .md
+filed off, so an argument carrying no filename extension is read as an
+id — spell a dotted id with its .md to reach it.
 
 Flags:
   -download string
@@ -275,6 +287,7 @@ Examples:
   ochakai get metrics/revenue
   ochakai get queries/sales/monthly-revenue --json | jq -r '.summary.content_hash'
   ochakai get insights/reading-revenue --download ./img
+  ochakai get insights/reading-revenue/recompute.py | head -40
 ```
 
 ## ochakai import

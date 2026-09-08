@@ -21,6 +21,41 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **`ochakai get` reads a file, not only a concept** (design doc
+  [0140](docs/design/0140-one-address-reads-as-well-as-writes.md), which
+  supersedes [0077](docs/design/0077-one-address-for-a-file.md) and
+  restates that area). The bundle holds both kinds of object at one
+  address space, and `ochakai put` and `ochakai delete` have read their
+  argument against both since 0077; the read was the asymmetry left over.
+  0077 §4 declined it on the ground that the read side already had
+  `ochakai get <id> --download <dir>` — but that saves every file a
+  concept holds into a directory and never writes one to stdout, so
+  `ochakai get insights/reading/recompute.py | head -40`, the first thing
+  anybody does to a script somebody attached, could not be typed. It can
+  now. The argument's spelling picks which address is asked first and the
+  other is tried only when the first holds nothing, exactly as `ochakai
+  delete` resolves the same two, so every invocation that worked before
+  reaches what it always reached. `--json` and `--download` read a
+  concept and are refused for a file rather than ignored; bytes that are
+  not text are refused at a terminal, naming the redirect they want. No
+  new command and no new flag.
+
+### Fixed
+
+- **The web UI's file picker no longer refuses what the server accepts**
+  (0140 §4). Its `accept` list was the five media types design doc
+  [0013](docs/design/0013-attachment-files-gcs-only.md) allowed, and it
+  outlived that rule: since
+  [0046](docs/design/0046-bundle-address-space.md) §3.2 the write side
+  refuses no media type, because a bundle whose files come back missing
+  is not the bundle that was handed over. What was left was a picker that
+  greyed out a `.py`, a `.parquet` or an archive that `ochakai put` would
+  have stored, so the same file could be attached from the CLI and not
+  from the page. What a browser may do with the bytes is still decided on
+  delivery, where it always was.
+
 ## [0.28.4] - 2026-09-07
 
 ### Fixed
