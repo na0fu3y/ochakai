@@ -23,6 +23,27 @@ last entry.
 
 ### Added
 
+- **A file's card says what points at it, and shows the head of it.** The
+  files tab drew a grey `TXT` tile and the file's size, which is nothing
+  a reader can decide from — an attached script and a seed CSV looked
+  identical, and an Attested Computation's page never said which of its
+  files was the computation. Each card now carries the first ten lines of
+  a text file (bounded at 256 KiB, because the contract has no range
+  request and the head costs the whole file — the reason a thumbnail has
+  no such bound), and the frontmatter keys whose values name that file:
+  `computation`, `executor.resource`, or a producer's own key, found the
+  same way. **No key is privileged and no type is consulted** — the walk
+  yields every string in the document's frontmatter and keeps the ones
+  that name a file that is actually there, so the page holds no per-type
+  schema (design doc
+  [0130](docs/design/0130-the-web-ui-and-the-fields-of-a-document.md)
+  §3.5 is why it must not; a per-type contract section stays declined).
+  A frontmatter value is matched strictly, unlike a markdown link:
+  `title: notes.txt` is a title, and treating it as a reference would be
+  the page inventing one. The tab still renders with no request at all;
+  both arrive after it is drawn, are cached for the page's life, and a
+  file that cannot be read leaves the card exactly as it was.
+
 - **`ochakai get` reads a file, not only a concept** (design doc
   [0140](docs/design/0140-one-address-reads-as-well-as-writes.md), which
   supersedes [0077](docs/design/0077-one-address-for-a-file.md) and

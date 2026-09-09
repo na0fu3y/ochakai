@@ -2,13 +2,14 @@
 // history, and the actions a reader can take on it.
 
 import { applyStatus, moveEntry, rejectEntry, verifyEntry } from '../actions.js';
-import { BASE, FILES_VARIABLE, api, toast } from '../api.js';
+import { BASE, FILES_VARIABLE, api, fetchText, toast } from '../api.js';
 import { hitCard } from '../cards.js';
 import { copyText } from '../clipboard.js';
 import { diffHTML, diffLines, diffStats } from '../diff.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
-import { actorStr, conceptURL, crumbTrail, displayTitle, editedSinceVerified, fmtDate, fmtDateTime, fmtSize, idPath, isVerified, lastVerification, parseKPath, provenanceLine, receivedLine, trustOf } from '../format.js';
+import { PREVIEW_MAX_BYTES, actorStr, conceptURL, crumbTrail, displayTitle, editedSinceVerified, fmtDate, fmtDateTime, fmtSize, idPath, isVerified, lastVerification, parseKPath, previewHead, provenanceLine, receivedLine, trustOf } from '../format.js';
+import { frontmatterRefs } from '../frontmatter.js';
 import { checkTargets } from '../links.js';
 import { descHTML, md } from '../markdown.js';
 import { headingAnchors, permalinks, tocHTML } from '../outline.js';
@@ -292,14 +293,26 @@ export async function viewDetail(id, heading = '') {
     }
     return out.join('/');
   };
-  const resolveFile = ref => {
+  // The address a file is drawn and fetched at, once, so the markup, the
+  // preview and the frontmatter all key on the same string.
+  const attAddr = a => a.path || canonicalPath(a.name);
+  // findFile is the matcher both readers of a reference share. `loose`
+  // is the forgiving half — names are unique within the entry, so a
+  // filename match resolves references written against a layout we do
+  // not know — and it is for markdown links, which say they are
+  // references. A frontmatter value says nothing of the kind, so it is
+  // matched strictly: `title: recompute.py` is a title, and treating it
+  // as a reference would be this page inventing one.
+  const findFile = (ref, loose) => {
     const p = normalize(ref.startsWith('/') ? ref : (docDir ? docDir + '/' : '') + ref);
     const canonical = a => entry.id + '/' + a.name;
-    let hit = atts.find(a => p === a.path || p === canonical(a));
-    // Forgiving fallback: names are unique within the entry, so a filename
-    // match resolves references written against a layout we don't know.
-    hit = hit || atts.find(a => a.name === ref.split('/').pop());
-    return hit ? attURL(hit.path || canonicalPath(hit.name)) : null;
+    const hit = atts.find(a => p === a.path || p === canonical(a));
+    if (hit || !loose) return hit || null;
+    return atts.find(a => a.name === ref.split('/').pop()) || null;
+  };
+  const resolveFile = ref => {
+    const hit = findFile(ref, true);
+    return hit ? attURL(attAddr(hit)) : null;
   };
   // Links to other entries, resolved the way the server derives them from
   // this same body (design doc 0024): SPEC §6's two forms, bundle-absolute
@@ -389,13 +402,19 @@ export async function viewDetail(id, heading = '') {
           ? `<a class="thumb" href="${attURL(a.path)}" target="_blank" rel="noopener"><img src="${attURL(a.path)}" alt="${esc(a.name)}" loading="lazy"></a>`
           : `<a class="thumb thumb-file" href="${attURL(a.path)}" target="_blank" rel="noopener">${a.media_type === 'application/pdf' ? 'PDF' : 'TXT'}</a>`;
         const ref = isImage ? `![${esc(a.name)}](${esc(lastSeg)}/${esc(a.name)})` : `[${esc(a.name)}](${esc(lastSeg)}/${esc(a.name)})`;
+        // The two slots below are filled after the tab is drawn, and are
+        // empty markup until then: the files tab has never made a
+        // request to render, and it still does not.
+        const addr = esc(attAddr(a));
         return `
         <div class="card att-card">
           ${thumb}
           <div class="att-meta">
             <span class="mono">${esc(a.name)}</span>
             <span class="meta">${esc(a.media_type || '')} · ${fmtSize(a.size)}${a.created_by && a.created_by.name ? ' · ' + esc(actorStr(a.created_by)) : ''}${a.created_at ? ' · ' + esc(fmtDate(a.created_at)) : ''}</span>
+            <span class="meta" data-pointed-by="${addr}" hidden></span>
             <span class="meta">本文からの参照: <code>${ref}</code></span>
+            <pre class="att-preview" data-preview="${addr}" hidden></pre>
             <button class="btn small danger write-only" data-remove-file="${esc(a.path)}" data-name="${esc(a.name)}">外す</button>
           </div>
         </div>`;
@@ -428,7 +447,72 @@ export async function viewDetail(id, heading = '') {
     history: () => '<div class="empty">…</div>',
   };
 
+  // What the cards gain after they are drawn: which frontmatter key
+  // names each file, and the head of the text ones. Both are cached
+  // rather than re-fetched, because a tab body is rebuilt from its
+  // template every time the tab is opened — the paint has to run again
+  // on the second visit, and the requests must not.
+  const pointedBy = new Map(); // bundle path -> ["computation", …]
+  const previews = new Map();  // bundle path -> the head, as text
+  let fileExtras;
+
+  function paintFiles() {
+    for (const el of body.querySelectorAll('[data-pointed-by]')) {
+      const keys = pointedBy.get(el.dataset.pointedBy) || [];
+      el.innerHTML = keys.length
+        ? 'frontmatter からの参照: ' + keys.map(k => `<code>${esc(k)}</code>`).join('、')
+        : '';
+      el.hidden = !keys.length;
+    }
+    for (const el of body.querySelectorAll('[data-preview]')) {
+      const head = previews.get(el.dataset.preview);
+      // textContent, never innerHTML: this is somebody's uploaded file.
+      el.textContent = head || '';
+      el.hidden = !head;
+    }
+  }
+
+  // One load per page, shared by every visit to the tab.
+  //
+  // The frontmatter half asks the server what the document's keys hold
+  // (the browser parses no YAML, design doc 0130 §3.3) and keeps the
+  // values that name a file that is actually there. That is the whole
+  // rule: no key is privileged, so `computation` is found the way a
+  // producer's own key is, and an Attested Computation stops being a
+  // page where the body and the tiles look unrelated.
+  //
+  // The preview half pays for a whole file to show ten lines of it,
+  // because the contract has no range request (design doc 0107 froze
+  // the core) — which is why it is bounded here and a thumbnail is not:
+  // an image needs all of its bytes to be an image.
+  function loadFileExtras() {
+    return fileExtras ??= (async () => {
+      const [fm] = await Promise.all([
+        frontmatter().catch(() => ({})),
+        Promise.all(atts
+          .filter(a => (a.media_type || '').startsWith('text/') && a.size > 0 && a.size <= PREVIEW_MAX_BYTES)
+          .map(async a => {
+            try {
+              previews.set(attAddr(a), previewHead(await fetchText(attPath(attAddr(a)))));
+            } catch { /* the card stands without it */ }
+          })),
+      ]);
+      for (const [key, ref] of frontmatterRefs(fm.values || {})) {
+        const hit = findFile(ref, false);
+        if (!hit) continue;
+        const addr = attAddr(hit);
+        const keys = pointedBy.get(addr) || [];
+        if (!keys.includes(key)) keys.push(key);
+        pointedBy.set(addr, keys);
+      }
+    })();
+  }
+
   function wireFiles() {
+    paintFiles();
+    loadFileExtras().then(() => {
+      if (document.querySelector('#tabs button.active')?.dataset.tab === 'files') paintFiles();
+    });
     const fileInput = $('#att-file');
     $('#att-choose').addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', () => {

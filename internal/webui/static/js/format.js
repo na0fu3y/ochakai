@@ -237,3 +237,35 @@ export function crumbTrail(dirs, leaf) {
   }
   return leaf === undefined ? out : out + esc(leaf);
 }
+
+// The head of a text file, for the card that lists it. A files tab is
+// asked one question — is this worth opening — and a tile reading "TXT"
+// answers none of it; the first lines do.
+//
+// Two bounds, whichever comes first. The lines are what a reader scans;
+// the characters are for the file that has no lines, a minified JSON or
+// a single-line CSV, which would otherwise put its whole self in one
+// text node. A cut says so with an ellipsis rather than ending mid-air.
+export const PREVIEW_LINES = 10;
+export const PREVIEW_CHARS = 1200;
+
+// How large a text file the page will fetch to show ten lines of. The
+// bound exists because the contract has no range request (design doc
+// 0107 froze the OKF core), so the head costs the whole file — which is
+// the difference from a thumbnail, where every byte is part of the
+// picture. Past it the card lists the file without a preview, which is
+// what every card did before there were previews.
+export const PREVIEW_MAX_BYTES = 256 * 1024;
+
+export function previewHead(text) {
+  const s = String(text ?? '').replace(/\r\n?/gu, '\n').replace(/\n+$/u, '');
+  if (!s) return '';
+  const lines = s.split('\n');
+  let head = lines.slice(0, PREVIEW_LINES).join('\n');
+  let cut = lines.length > PREVIEW_LINES;
+  if (head.length > PREVIEW_CHARS) {
+    head = head.slice(0, PREVIEW_CHARS);
+    cut = true;
+  }
+  return cut ? head + '\n…' : head;
+}

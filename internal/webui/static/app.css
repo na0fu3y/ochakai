@@ -640,6 +640,14 @@ mark { background: var(--mark-bg); color: var(--mark-fg); border-radius: 3px; pa
   text-decoration: none;
 }
 .att-card .att-meta { min-width: 0; display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; }
+/* The head of a text file, on its card. Bounded in height so a list of
+   files stays a list: the preview answers "is this the one" and the file
+   itself is one click away. It scrolls in both directions rather than
+   wrapping, because a wrapped line of code is a line that reads wrong. */
+.att-card .att-preview {
+  align-self: stretch; margin: .1rem 0 0; padding: .45rem .6rem;
+  max-height: 10.5rem; overflow: auto; font-size: .78rem; line-height: 1.5;
+}
 .att-card .att-meta .mono { overflow-wrap: anywhere; }
 @media (max-width: 620px) { .att-card { flex-direction: column; } }
 

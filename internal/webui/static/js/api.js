@@ -150,6 +150,18 @@ export async function api(path, opts = {}) {
   return data;
 }
 
+// A file's bytes, as text. Not api(): that one speaks the JSON envelope
+// every /api/v1 answer comes in, and a file is neither JSON nor an
+// envelope — it is the object itself, served as what it sniffed as
+// (design doc 0140). The caller draws the head of a text attachment
+// with it, so a failure is not the page's problem: the card stands
+// without a preview, exactly as it did before there were previews.
+export async function fetchText(path) {
+  const res = await fetch(BASE + path, { headers: { Accept: 'text/plain' } });
+  if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+  return res.text();
+}
+
 // ms is how long it stays. The default is sized for "保存しました。" —
 // a sentence that is read in a glance and confirms what the reader
 // already expected. A toast that reports a reinterpretation is neither

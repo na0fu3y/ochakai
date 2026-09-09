@@ -5,9 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  FIELDS, fieldsMarkup, listItemMarkup, otherKeys, rowMarkup, valueOf,
-} from '../static/js/frontmatter.js';
+import { FIELDS, fieldsMarkup, frontmatterRefs, listItemMarkup, otherKeys, rowMarkup, valueOf } from '../static/js/frontmatter.js';
 
 const field = key => FIELDS.find(f => f.key === key);
 
@@ -142,4 +140,48 @@ test('a type is a suggestion list, not a menu', () => {
   assert.match(html, /<datalist id="fm-list-type">/);
   // status is the opposite case: SPEC §5.4 gives it three values.
   assert.match(html, /<select[^>]*data-fm-key="status"/);
+});
+
+// Every string in a document's frontmatter, with the key it sits at.
+// The point of the walk is that it privileges nothing: `computation` is
+// found the way a producer's own key is, so the files tab can say which
+// key names a file without the page holding a per-type schema (design
+// doc 0130 §3.5 is why it must not).
+test('frontmatterRefs yields every string with its key path', () => {
+  const refs = [...frontmatterRefs({
+    type: 'Attested Computation',
+    computation: 'reading/recompute.py',
+    executor: { resource: 'runbooks/how.md', receipt: ['rows'] },
+    parameters: [{ name: 'year', type: 'integer' }],
+    weekly_chart: 'reading/weekly.png',
+  })];
+  const byKey = Object.fromEntries(refs);
+  assert.equal(byKey.computation, 'reading/recompute.py');
+  assert.equal(byKey['executor.resource'], 'runbooks/how.md');
+  assert.equal(byKey['parameters.0.name'], 'year');
+  // A producer's own key is not treated differently from a named one.
+  assert.equal(byKey.weekly_chart, 'reading/weekly.png');
+});
+
+// A value carrying a URI scheme addresses something outside the bundle,
+// so it is not a candidate for a file at all — the same test the body's
+// links use. Without it, `https://example.com/weekly.png` would go
+// looking for a file called weekly.png.
+test('frontmatterRefs skips values that name another scheme', () => {
+  const keys = [...frontmatterRefs({
+    resource: 'bigquery://project/dataset',
+    sources: [{ resource: 'https://example.com/weekly.png' }],
+    computation: 'reading/recompute.py',
+  })].map(([k]) => k);
+  assert.deepEqual(keys, ['computation']);
+});
+
+// The walk is over somebody else's document, so it is bounded and it
+// never returns a non-string.
+test('frontmatterRefs is bounded and yields strings only', () => {
+  let deep = 'bottom';
+  for (let i = 0; i < 8; i++) deep = { nest: deep };
+  assert.deepEqual([...frontmatterRefs(deep)], []);
+  assert.deepEqual([...frontmatterRefs({ n: 3, ok: true, nothing: null, empty: '' })], []);
+  assert.deepEqual([...frontmatterRefs('a bare string')], []);
 });
