@@ -50,6 +50,14 @@ func terminalStyling(f *os.File) bool {
 	if os.Getenv("NO_COLOR") != "" {
 		return false
 	}
+	return isTerminal(f)
+}
+
+// isTerminal reports whether f is a terminal rather than a file or a
+// pipe. Separate from the question above because NO_COLOR has nothing to
+// say about it: a reader who turned styling off still has a terminal
+// that a PDF written to it would wreck.
+func isTerminal(f *os.File) bool {
 	fi, err := f.Stat()
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }

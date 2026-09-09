@@ -400,13 +400,23 @@ export async function viewDetail(id, heading = '') {
           </div>
         </div>`;
       }).join('');
+      // The file input carries no accept list. There was one — the five
+      // media types design doc 0013 allowed — and it outlived the rule it
+      // came from: since design doc 0046 §3.2 the write side refuses no
+      // media type, because a bundle whose files come back missing is not
+      // the bundle that was handed over. What was left was a picker that
+      // greyed out a script, a parquet file or an archive the server
+      // would have taken, so the same file could be attached with
+      // `ochakai put` and not from here. What a browser may do with bytes
+      // is still decided on delivery, where "receive it, do not render
+      // it" has always been settled (domain.InlineServable).
       return `
         ${cards || '<div class="empty files-only">ファイルはありません。</div>'}
         <div class="empty files-off">このデプロイはファイルを保存しません。${FILES_VARIABLE
           ? `<br><code>${esc(FILES_VARIABLE)}</code> にバケットを設定すると添付できるようになります。`
           : ''}</div>
         <div class="toolbar write-only files-only" style="margin-top:1rem">
-          <input type="file" id="att-file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,.txt,.csv,.json" multiple hidden>
+          <input type="file" id="att-file" multiple hidden>
           <button class="btn small" id="att-choose">ファイルを選択…</button>
           <span class="provenance" id="att-chosen" style="margin:0"></span>
           <button class="btn small primary" id="att-upload">ファイルを追加</button>

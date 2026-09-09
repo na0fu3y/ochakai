@@ -221,8 +221,9 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   list [feed]             page a feed (usage, verified_at, failed, stale_after),
                           a reverse lookup, or the concepts a filter matches
   browse [prefix]         list one level of the ID hierarchy (folder view)
-  get <id>                print one concept as an OKF document (stderr notes
-                          what links at it)
+  get <path>              print one object: a concept by its id, as the OKF
+                          document (stderr notes what links at it), or a
+                          file by its path, as the bytes it holds
   put <path> [-f file]    write one object of the bundle: a concept from OKF
                           markdown or JSON at <id>, or a file at its own path
                           (every change kept as a revision)

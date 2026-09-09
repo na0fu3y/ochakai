@@ -887,11 +887,11 @@ func cmdLog(ctx context.Context, args []string) error {
 func cmdGet(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"get",
-		"Usage: ochakai get [flags] <id>\n\nPrint one knowledge concept as an OKF document (YAML frontmatter +\nmarkdown body), and nothing else, so the output round-trips through\n`ochakai put`. Who wrote and confirmed it, the files beside it, and\nwhat links at it (linked_from) are observations rather than part of\nthe document, so they go to stderr; --download saves the files themselves (an agent can\nthen read them from disk). --json prints the whole read instead: the\ndocument, the projection under .summary, and the provenance under\n.observed.",
-		"  ochakai get metrics/revenue\n  ochakai get queries/sales/monthly-revenue --json | jq -r '.summary.content_hash'\n  ochakai get insights/reading-revenue --download ./img\n")
+		"Usage: ochakai get [flags] <path>\n\nPrint one object of the bundle. A knowledge concept, named by its id,\nprints as an OKF document (YAML frontmatter + markdown body), and\nnothing else, so the output round-trips through `ochakai put`. Who\nwrote and confirmed it, the files beside it, and what links at it\n(linked_from) are observations rather than part of the document, so\nthey go to stderr; --download saves the files themselves (an agent can\nthen read them from disk). --json prints the whole read instead: the\ndocument, the projection under .summary, and the provenance under\n.observed.\n\nA file, named by the path it lives at, prints as the bytes it holds —\nso a script somebody attached can be read, paged and piped like any\nother file. Neither flag applies to one: the bytes are the whole of\nwhat a file is, and they go to stdout to be redirected. Bytes that are\nnot text are refused at a terminal rather than written to it.\n\nA concept's address is <id>.md and an id is that path with the .md\nfiled off, so an argument carrying no filename extension is read as an\nid — spell a dotted id with its .md to reach it.",
+		"  ochakai get metrics/revenue\n  ochakai get queries/sales/monthly-revenue --json | jq -r '.summary.content_hash'\n  ochakai get insights/reading-revenue --download ./img\n  ochakai get insights/reading-revenue/recompute.py | head -40\n")
 	asJSON := fs.Bool("json", false, "print the whole read as JSON (document, summary, observed) instead of the document alone")
 	download := fs.String("download", "", "save the concept's files into this directory")
-	id, _, err := idArgs(fs, args, 1)
+	arg, _, err := idArgs(fs, args, 1)
 	if err != nil {
 		return err
 	}
@@ -899,12 +899,92 @@ func cmdGet(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
+	// The bundle holds concepts and files at one address space (design
+	// doc 0075 §1), and `put` and `delete` already read their argument
+	// against both. A read that could reach only the concepts was the
+	// asymmetry left over: the bytes of an attached file were reachable
+	// in bulk or not at all, so `ochakai get <path> | head` — the first
+	// thing anybody does to a script somebody attached — had no
+	// spelling, while `ochakai put` had written the file in one line.
+	//
+	// The spelling picks which address to ask first and the other is
+	// tried only when the first holds nothing, exactly as a delete
+	// resolves the same two: nothing that is there is shadowed by the
+	// fallback, and the error a reader sees is the one for the address
+	// their argument actually spelled.
+	first, second := bundleAddresses(arg)
+	if id, ok := strings.CutSuffix(first, ".md"); ok {
+		err = getConcept(ctx, c, id, *asJSON, *download)
+		if second != "" && isNotFound(err) {
+			if fallback := getFile(ctx, c, second, *asJSON, *download); !isNotFound(fallback) {
+				return fallback
+			}
+		}
+		return err
+	}
+	err = getFile(ctx, c, first, *asJSON, *download)
+	if second != "" && isNotFound(err) {
+		if fallback := getConcept(ctx, c, strings.TrimSuffix(second, ".md"),
+			*asJSON, *download); !isNotFound(fallback) {
+			return fallback
+		}
+	}
+	return err
+}
+
+// getFile writes one file's bytes to stdout. What a file is, is its
+// bytes: there is no projection of one to print as JSON and no second
+// place to put it, so the two flags a concept takes are refused here
+// rather than quietly ignored — a reader who passed one asked for
+// something this object does not have.
+//
+// The refusal waits until the bytes are in hand, because this is also
+// the fallback half of a read whose argument spelled a concept: refusing
+// on the flags first would answer "no such concept, and by the way a
+// file cannot take --json" for a file that is not there either.
+func getFile(ctx context.Context, c *apiclient.Client, path string, asJSON bool, download string) error {
+	data, mediaType, err := c.File(ctx, path)
+	if err != nil {
+		return err
+	}
+	if asJSON || download != "" {
+		return fmt.Errorf("%s is a file: --json and --download read a concept, and a file is bytes — redirect stdout to save them", path)
+	}
+	// curl's rule, for curl's reason: bytes that are not text will make
+	// a mess of the terminal they are written to, and the reader who
+	// meant to save them has a redirect to add rather than a session to
+	// repair. A pipe is not a terminal, so `| file -` and `| xxd` are
+	// unaffected, and the refusal names the redirect it wants.
+	if !writableToTerminal(mediaType) && isTerminal(os.Stdout) {
+		name := path[strings.LastIndex(path, "/")+1:]
+		return fmt.Errorf("refusing to write %d bytes of %s to a terminal: redirect them (`ochakai get %s > %s`)",
+			len(data), mediaType, path, name)
+	}
+	if _, err := os.Stdout.Write(data); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "%s (%s, %d bytes)\n", path, mediaType, len(data))
+	return nil
+}
+
+// writableToTerminal reports whether bytes of this media type can be
+// written to a terminal without wrecking it. Text may — which is every
+// script, every CSV and every JSON file somebody attached, and so the
+// whole of what this command was added to read. An image, a PDF and an
+// archive may not, and neither may bytes ochakai could not identify:
+// application/octet-stream is what a sniff returns when it recognised
+// nothing, and nothing recognised is not a reason to believe it is safe.
+func writableToTerminal(mediaType string) bool {
+	return strings.HasPrefix(mediaType, "text/")
+}
+
+func getConcept(ctx context.Context, c *apiclient.Client, id string, asJSON bool, download string) error {
 	k, err := c.Get(ctx, id)
 	if err != nil {
 		return err
 	}
-	if *download != "" && len(k.Files) > 0 {
-		if err := os.MkdirAll(*download, 0o755); err != nil {
+	if download != "" && len(k.Files) > 0 {
+		if err := os.MkdirAll(download, 0o755); err != nil {
 			return err
 		}
 		for _, att := range k.Files {
@@ -922,14 +1002,14 @@ func cmdGet(ctx context.Context, args []string) error {
 			if err != nil {
 				return fmt.Errorf("file %s: %w", att.Name, err)
 			}
-			dst := filepath.Join(*download, att.Name)
+			dst := filepath.Join(download, att.Name)
 			if err := os.WriteFile(dst, data, 0o644); err != nil {
 				return err
 			}
 			fmt.Fprintf(os.Stderr, "saved %s (%s, %d bytes)\n", dst, att.MediaType, att.Size)
 		}
 	}
-	if *asJSON {
+	if asJSON {
 		return printJSON(k)
 	}
 	if _, err := os.Stdout.WriteString(k.Document); err != nil {
@@ -957,10 +1037,14 @@ func cmdGet(ctx context.Context, args []string) error {
 		prov = conf + "; " + prov
 	}
 	fmt.Fprintln(os.Stderr, prov)
-	if *download == "" {
+	// Each file, with the command that reads it. The hint names the
+	// file's own address rather than --download, because that is the
+	// question a reader has here — "what is in that one?" — and the flag
+	// answers a different one, saving every file the concept holds.
+	if download == "" {
 		for _, att := range k.Files {
-			fmt.Fprintf(os.Stderr, "file: %s (%s, %d bytes) — `ochakai get %s --download DIR` to save\n",
-				att.Name, att.MediaType, att.Size, id)
+			fmt.Fprintf(os.Stderr, "file: %s (%s, %d bytes) — `ochakai get %s` for its bytes\n",
+				att.Name, att.MediaType, att.Size, att.Path)
 		}
 	}
 	// The one thing the document cannot say about itself (design doc
@@ -1336,7 +1420,7 @@ func cmdDelete(ctx context.Context, args []string) error {
 	// other is tried only when the first holds nothing. Nothing that is
 	// there can be shadowed by the fallback, and both an id with a dot in
 	// it and a file whose name has no extension stay reachable.
-	first, second := deleteAddresses(arg)
+	first, second := bundleAddresses(arg)
 	err = c.Delete(ctx, first, *ifMatch, *note)
 	if second != "" && isNotFound(err) {
 		if fallback := c.Delete(ctx, second, *ifMatch, *note); !isNotFound(fallback) {
@@ -1358,13 +1442,17 @@ func cmdDelete(ctx context.Context, args []string) error {
 	return nil
 }
 
-// deleteAddresses returns the bundle path the argument spells, and the
+// bundleAddresses returns the bundle path the argument spells, and the
 // one it might have meant. A concept lives at "<id>.md" and a file at
 // its own path, so an argument that carries no filename extension is an
 // id and an argument that carries one is a path; an argument already
 // ending in ".md" is a bundle path, and the server reads it as a concept
 // or as a markdown file by itself.
-func deleteAddresses(arg string) (first, second string) {
+//
+// Read and delete share it because they address the same two kinds of
+// object at one address space (design doc 0075 §1), and a rule spelled
+// twice is a rule that will be answered differently in the two places.
+func bundleAddresses(arg string) (first, second string) {
 	if strings.HasSuffix(arg, ".md") {
 		return arg, ""
 	}
