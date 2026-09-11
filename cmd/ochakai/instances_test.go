@@ -179,3 +179,59 @@ func TestWhoamiAnnouncesTheSandboxPosture(t *testing.T) {
 		t.Errorf("ordinary deployment reported a posture:\n%s", out)
 	}
 }
+
+// The version a person needs is the one on the other end, and this
+// binary cannot know it: `ochakai version` prints what is on this
+// machine, which during an upgrade is exactly the answer that misleads
+// (docs/guides/operating.md, アップグレード). It rides on stats for the
+// posture's reason — the frozen wire has no header for it (design doc
+// 0087 §4) — and is withheld rather than guessed at when the server
+// predates the field.
+func TestWhoamiNamesTheBuildOnTheOtherEnd(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("OCHAKAI_URL", "")
+
+	var stats map[string]any
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("GET /api/v1/bundle/index.md", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("# index\n"))
+	})
+	mux.HandleFunc("GET /api/v1/stats", func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(stats)
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	run := func(t *testing.T) string {
+		t.Helper()
+		orig := os.Stdout
+		pr, pw, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.Stdout = pw
+		err = cmdWhoami(context.Background(), []string{"--url", srv.URL})
+		pw.Close()
+		os.Stdout = orig
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := io.ReadAll(pr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(out)
+	}
+
+	stats = map[string]any{"version": "v9.9.9"}
+	if out := run(t); !strings.Contains(out, "version:   v9.9.9") {
+		t.Errorf("whoami did not name the build answering:\n%s", out)
+	}
+	stats = map[string]any{}
+	if out := run(t); strings.Contains(out, "version:") {
+		t.Errorf("a server that said no version was reported as having one:\n%s", out)
+	}
+}

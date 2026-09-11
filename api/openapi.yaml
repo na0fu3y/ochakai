@@ -3191,6 +3191,24 @@ components:
             rather than narrowed), and `dropped` counts events the server
             lost before it knew what they were about.
         window_days: { type: integer, description: How far back the flow numbers reach. }
+        version:
+          type: string
+          example: v0.28.4
+          description: >
+            The build answering — a release tag, or `dev` for a binary
+            built in the tree. It is here for design doc 0087 §4's
+            reason: what a deployment *is* is answered on `stats`,
+            because the wire is frozen against a header of its own and a
+            property on a response-only schema is not (design doc 0082).
+            The server has always printed it in prose at `/`, where
+            nothing that renders these numbers could read it.
+
+
+            There is one version rather than two: the bundled web UI
+            ships in the same image as the server and is deployed from it
+            (design doc 0130 §1), so a page that shows this is showing
+            the deployment's version and not its own. Absent from a
+            server too old to carry it.
         sandbox:
           type: boolean
           description: >

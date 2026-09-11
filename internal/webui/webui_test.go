@@ -698,3 +698,38 @@ func TestTheEditorSavesAgainstTheVersionItOpened(t *testing.T) {
 		t.Error("a save refused by the precondition is not distinguished from any other failure")
 	}
 }
+
+// "Is the version shown anywhere in the UI?" had no answer: the server
+// prints it in prose at `/`, which is the one page this UI never shows,
+// and the topbar said only what the product is called. It travels on
+// stats for the postures' reason (design doc 0087 §4) and is drawn
+// beside the brand.
+//
+// Three things this checks, and the third is the point: the page shows
+// the server's answer, never its own build. The UI ships in the server's
+// image (design doc 0130 §1), so a version baked into these files would
+// usually be right — and would be wrong in exactly the case somebody
+// runs this command to diagnose, an upgrade where the two ended up on
+// different tags.
+func TestThePageNamesTheBuildTheServerSaidItIs(t *testing.T) {
+	index := asset(t, "index.html")
+	if !strings.Contains(index, `<span class="ver" id="ver"`) {
+		t.Error("the topbar has nowhere to put the version")
+	}
+	if !strings.Contains(section(t, index, `<span class="ver"`, ">"), "hidden") {
+		t.Error("the version element ships visible, so an empty one shows before any answer arrives")
+	}
+	body := section(t, asset(t, "js/api.js"), "function markVersion", "\n}")
+	if !strings.Contains(body, "if (!v) return;") {
+		t.Errorf("a server too old to carry the field is not told from one that answered:\n%s", body)
+	}
+	if !strings.Contains(body, "textContent") {
+		t.Errorf("the version is not written as text, so a server's answer reaches the page as markup:\n%s", body)
+	}
+	if !strings.Contains(section(t, asset(t, "js/api.js"), "export async function markPosture", "\n}"), "markVersion(s.version)") {
+		t.Error("nothing reads the version out of the stats answer the page already asks for")
+	}
+	if !strings.Contains(asset(t, "app.css"), ".ver {") {
+		t.Error("the stylesheet does not carry the .ver rule, so the version is drawn as body text")
+	}
+}

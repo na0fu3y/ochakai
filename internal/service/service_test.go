@@ -11,8 +11,10 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
+	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/okf"
@@ -782,5 +784,27 @@ func TestAskableKeysAreTheOKFKeysWithNoFilterOfTheirOwn(t *testing.T) {
 	}
 	if got, want := len(askable), len(domain.EnvelopeKeys)-len(domain.FilterOwnedKeys)-len(domain.OchakaiEnvelopeKeys); got != want {
 		t.Errorf("askable keys = %d, want %d", got, want)
+	}
+}
+
+// The answer for a caller who can see none of this knowledge is built
+// here rather than by the store, so every field that is about the
+// server rather than about the numbers has to be put on it by hand —
+// and the version is one of those. A caller who was shown nothing is
+// the caller most likely to need to name the deployment that showed
+// them nothing.
+func TestTheEmptyAnswerCarriesTheBuildThatRefusedIt(t *testing.T) {
+	now := time.Now().UTC()
+	st := emptyStats(now, 30, &config.Config{Version: "v9.9.9", Sandbox: true})
+	if st.Version != "v9.9.9" {
+		t.Errorf("version = %q, want the configured build", st.Version)
+	}
+	if !st.Sandbox {
+		t.Error("the posture stopped travelling on the empty answer")
+	}
+	// No config is a Service a test built, not a deployment: the field
+	// says nothing, which is the reading an older server's absence has.
+	if st := emptyStats(now, 30, nil); st.Version != "" {
+		t.Errorf("version = %q with no config, want nothing claimed", st.Version)
 	}
 }

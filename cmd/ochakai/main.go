@@ -268,6 +268,12 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 	if err != nil {
 		return nil, nil, err
 	}
+	// What this process is, put where the answers are built: `stats`
+	// carries it to every face, the way the postures beside it are
+	// carried (design doc 0087 §4). It is not an environment variable —
+	// the environment cannot be allowed to name a version the binary is
+	// not.
+	cfg.Version = version
 	st, err := store.New(ctx, cfg.DatabaseURL, cfg.DBIAMAuth)
 	if err != nil {
 		return nil, nil, err
