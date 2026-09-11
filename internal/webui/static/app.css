@@ -92,6 +92,12 @@ pre:hover .copy-btn, .copy-btn:focus-visible { opacity: 1; }
 }
 .brand { font-weight: 700; font-size: 1.08rem; color: var(--text); display: flex; align-items: center; gap: .45rem; white-space: nowrap; }
 .brand:hover { text-decoration: none; }
+/* Which build is answering, beside the name it is answering as. Muted
+   and small: it is read once, when somebody asks which version this
+   deployment is on, and is scenery every other time. Baselines rather
+   than centres, so the two sit on one line of type at both widths. */
+.brandline { display: flex; align-items: baseline; gap: .4rem; }
+.ver { color: var(--muted); font-size: .78rem; white-space: nowrap; }
 .topnav { display: flex; gap: .2rem; align-self: stretch; }
 .topnav a {
   display: flex; align-items: center; padding: 0 .8rem; color: var(--muted);

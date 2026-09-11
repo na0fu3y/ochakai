@@ -172,7 +172,7 @@ func cmdUse(_ context.Context, args []string) error {
 func cmdWhoami(ctx context.Context, args []string) error {
 	fs, target := newFlagSet(
 		"whoami",
-		"Usage: ochakai whoami [flags]\n\nPrint which server client commands target and where that choice came\nfrom (--url / $OCHAKAI_URL / `ochakai use`), the identity your\ncredentials present (the server's actor resolution is authoritative),\nthe producer $OCHAKAI_PRODUCER declares for writes from this shell, if\nany, and whether the server is reachable.\n\nThe last two lines are what the deployment is, when there is something\nto say: `mode` when it refuses writes, and `posture` when it accepts\nthem on terms worth knowing first — a sandbox erases what you write on\nits next restore, and a dev deployment authenticates nobody.",
+		"Usage: ochakai whoami [flags]\n\nPrint which server client commands target and where that choice came\nfrom (--url / $OCHAKAI_URL / `ochakai use`), the identity your\ncredentials present (the server's actor resolution is authoritative),\nthe producer $OCHAKAI_PRODUCER declares for writes from this shell, if\nany, and whether the server is reachable.\n\nThe last three lines are what the deployment is, when there is\nsomething to say: `version` is the build answering, which is not what\n`ochakai version` prints — that is this binary — `mode` when it refuses\nwrites, and `posture` when it accepts them on terms worth knowing\nfirst: a sandbox erases what you write on its next restore, and a dev\ndeployment authenticates nobody.",
 		"  ochakai whoami\n  ochakai whoami --json\n")
 	asJSON := fs.Bool("json", false, "print JSON")
 	if _, err := exactArgs(fs, args, 0); err != nil {
@@ -190,6 +190,7 @@ func cmdWhoami(ctx context.Context, args []string) error {
 		Auth     string `json:"auth,omitempty"`
 		Error    string `json:"error,omitempty"`
 		Health   string `json:"health"`
+		Version  string `json:"version,omitempty"`
 		Mode     string `json:"mode,omitempty"`
 		Posture  string `json:"posture,omitempty"`
 	}{URL: *target, Source: urlSource(fs), Producer: os.Getenv("OCHAKAI_PRODUCER")}
@@ -230,6 +231,14 @@ func cmdWhoami(ctx context.Context, args []string) error {
 			// quick start actually opens with, and for the deployments
 			// that serve no pages at all.
 			if st, err := c.Stats(ctx, 0, nil); err == nil {
+				// Which build is on the other end, out of the same
+				// answer. `ochakai version` prints what this binary is,
+				// and that is a different question: the trap the
+				// operating guide names is a web UI and an API left on
+				// different versions, and until this field existed
+				// nothing but the bare URL's prose could say which one
+				// you had reached.
+				report.Version = st.Version
 				switch {
 				case st.Sandbox:
 					report.Posture = "sandbox — the base is restored on a schedule, so what you write here is disposable"
@@ -258,6 +267,13 @@ func cmdWhoami(ctx context.Context, args []string) error {
 			fmt.Printf("producer:  %s\n", report.Producer)
 		}
 		fmt.Printf("health:    %s\n", report.Health)
+		if report.Version != "" {
+			// Printed only when there is something to print, like the
+			// two below it: a blank here would read as a deployment
+			// with no version rather than as one that predates the
+			// field.
+			fmt.Printf("version:   %s\n", report.Version)
+		}
 		if report.Mode != "" {
 			fmt.Printf("mode:      %s\n", report.Mode)
 		}

@@ -354,9 +354,9 @@ func TestStatsCarriesThePostureItIsServing(t *testing.T) {
 		name string
 		cfg  *config.Config
 	}{
-		{"sandbox", &config.Config{Sandbox: true}},
-		{"dev", &config.Config{InsecureDev: true}},
-		{"ordinary", &config.Config{}},
+		{"sandbox", &config.Config{Sandbox: true, Version: "v9.9.9"}},
+		{"dev", &config.Config{InsecureDev: true, Version: "v9.9.9"}},
+		{"ordinary", &config.Config{Version: "v9.9.9"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			svc := &Service{Store: st, Log: slog.New(slog.DiscardHandler), Config: c.cfg}
@@ -367,6 +367,12 @@ func TestStatsCarriesThePostureItIsServing(t *testing.T) {
 			if got.Sandbox != c.cfg.Sandbox || got.InsecureDev != c.cfg.InsecureDev {
 				t.Errorf("%s: sandbox=%v insecure_dev=%v, want %v/%v",
 					c.name, got.Sandbox, got.InsecureDev, c.cfg.Sandbox, c.cfg.InsecureDev)
+			}
+			// The build answering travels with them, on every posture
+			// including the ordinary one: which version is running is
+			// not a thing only an unusual deployment has to say.
+			if got.Version != c.cfg.Version {
+				t.Errorf("%s: version=%q, want %q", c.name, got.Version, c.cfg.Version)
 			}
 		})
 	}

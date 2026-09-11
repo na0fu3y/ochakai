@@ -36,7 +36,23 @@ export async function markPosture() {
     // write will be erased, the other says nobody here is who they say.
     document.body.classList.toggle('insecure-dev', s.insecure_dev === true);
     markCapabilities(s);
+    markVersion(s.version);
   } catch (e) { /* a banner is not worth failing the page over */ }
+}
+
+// Which build is serving this deployment, in the topbar beside the name
+// (design doc 0087 §4's shape, applied to the question somebody asks
+// once rather than to a posture): the answer is the server's, so the
+// page shows what it said or shows nothing at all. A server too old to
+// carry the field leaves the element hidden — and the page does not
+// answer out of what it was built from, though it could: the UI and the
+// server ship in one image (design doc 0130 §1), but the one that can
+// say which image is running is the one that was asked.
+function markVersion(v) {
+  if (!v) return;
+  const el = $('#ver');
+  el.textContent = v;
+  el.hidden = false;
 }
 
 // What this deployment cannot do, and who gets told how to change it

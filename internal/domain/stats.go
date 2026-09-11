@@ -43,6 +43,21 @@ type Stats struct {
 	// WindowDays is how far back the flow numbers reach.
 	WindowDays int `json:"window_days"`
 
+	// Version is the build answering — "v0.28.4", or "dev" for a binary
+	// built in the tree. It travels here for design doc 0087 §4's
+	// reason, applied to the question a reader asks before every other
+	// one on this response: what a deployment is is answered on `stats`,
+	// because the wire is frozen against a header of its own and a
+	// property on a response-only schema is not (design doc 0082). The
+	// server has always said it at `/`, in prose, to whoever opened the
+	// bare URL; nothing that renders these numbers could read it there.
+	//
+	// One version, not two, because there are not two: the web UI ships
+	// in the same image as the server and is deployed from it (design
+	// doc 0130 §1), so what the page shows is the deployment's version
+	// rather than the page's own. Absent from a server too old to carry
+	// it, which is the only reading of absent here.
+	Version string `json:"version,omitempty"`
 	// Sandbox marks the disposable public deployment (design doc 0087):
 	// anyone may write, nobody is identified, and the whole base is
 	// restored on a schedule. It travels with the loop's own numbers

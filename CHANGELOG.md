@@ -23,6 +23,28 @@ last entry.
 
 ### Added
 
+- **The deployment says which build it is.** `GET /api/v1/stats` carries
+  `version` — the release tag the server was built at, or `dev` for a
+  binary built in the tree — and the bundled web UI draws it in the
+  topbar beside the name, so "which version is this?" is answered where
+  people were already looking. `ochakai whoami` prints a `version` line
+  from the same answer, which is not what `ochakai version` prints: that
+  is the binary in your hand, and during an upgrade the two are exactly
+  what you need to tell apart. The server has always said it in prose at
+  `/`, to whoever opened the bare URL — the page that serves no pages —
+  and nothing else could read it there. A response property rather than
+  a header, for design doc
+  [0087](docs/design/0087-a-sandbox-says-it-is-one.md) §4's reason: the
+  frozen wire is closed to a new header name and open to a property on a
+  response-only schema
+  ([0082](docs/design/0082-what-the-freeze-holds-still.md)). One version
+  and not two — the web UI ships in the server's own image
+  ([0130](docs/design/0130-the-web-ui-and-the-fields-of-a-document.md)
+  §1) — and a server too old to carry the field says nothing rather than
+  being guessed at, in both faces. MCP gets nothing new and needs
+  nothing: `initialize` has carried this server's version in `serverInfo`
+  all along, which is the protocol's own place for it. No new endpoint,
+  no new header, no new command, no new flag.
 - **`ochakai get` reads a file, not only a concept** (design doc
   [0140](docs/design/0140-one-address-reads-as-well-as-writes.md), which
   supersedes [0077](docs/design/0077-one-address-for-a-file.md) and
