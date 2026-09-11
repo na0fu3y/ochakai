@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.28.5] - 2026-09-12
+
 ### Added
 
 - **The deployment says which build it is.** `GET /api/v1/stats` carries
@@ -6963,7 +6965,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.4...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.5...HEAD
+[0.28.5]: https://github.com/na0fu3y/ochakai/compare/v0.28.4...v0.28.5
 [0.28.4]: https://github.com/na0fu3y/ochakai/compare/v0.28.3...v0.28.4
 [0.28.3]: https://github.com/na0fu3y/ochakai/compare/v0.28.2...v0.28.3
 [0.28.2]: https://github.com/na0fu3y/ochakai/compare/v0.28.1...v0.28.2

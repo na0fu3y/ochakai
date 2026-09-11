@@ -82,7 +82,7 @@ info:
     is a security defect, shipped in the next release with no deprecation
     window (SECURITY.md). MCP, the CLI and the stored shape stay unstable
     while the major version is 0 and may still change in a minor release.
-  version: 0.28.4
+  version: 0.28.5
   license:
     name: MIT
 servers:
@@ -3193,7 +3193,6 @@ components:
         window_days: { type: integer, description: How far back the flow numbers reach. }
         version:
           type: string
-          example: v0.28.4
           description: >
             The build answering — a release tag, or `dev` for a binary
             built in the tree. It is here for design doc 0087 §4's
