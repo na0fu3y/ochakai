@@ -43,8 +43,8 @@ type Stats struct {
 	// WindowDays is how far back the flow numbers reach.
 	WindowDays int `json:"window_days"`
 
-	// Version is the build answering — "v0.28.4", or "dev" for a binary
-	// built in the tree. It travels here for design doc 0087 §4's
+	// Version is the build answering — the tag it was built at, or "dev"
+	// for a binary built in the tree. It travels here for design doc 0087 §4's
 	// reason, applied to the question a reader asks before every other
 	// one on this response: what a deployment is is answered on `stats`,
 	// because the wire is frozen against a header of its own and a
