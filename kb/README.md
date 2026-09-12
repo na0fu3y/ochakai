@@ -21,6 +21,19 @@ Claude Code のセッションでは `.claude/hooks/session-start.sh` がこれ�
 する(draft しか無いバンドルの読み込みは何も裁定しない)。バンドルが
 検証を運ぶようになったら、import は下の規則どおり人の手に戻る。
 
+**立っていることと、いまのコードであることは別である。** `up -d` は手元に
+ある image をそのまま使い、pull も再ビルドもしない — 数週間前に上げた
+インスタンスは、ツリーが先へ進んでもその時のビルドを返し続ける。フックは
+動いている image のビルド時刻とツリーのコードの最終変更を比べ、古ければ
+そう言う。そのときは上げ直す:
+
+```sh
+docker compose -f deploy/compose.yaml up -d --build
+```
+
+データベースは名前付き volume(`pgdata`)にあるので、concept も台帳も
+消えない。
+
 そこから先 — 誰がどの identity で書くか、レビューの回し方、ここへの
 書き戻し — は
 [skills/run-the-dogfood-loop](bundle/skills/run-the-dogfood-loop.md) と
