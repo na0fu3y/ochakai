@@ -6,14 +6,17 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"html"
 	"io/fs"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sync"
+	"time"
 
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/webui"
@@ -84,8 +87,48 @@ func assets(files fs.FS) http.Handler {
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		// The page is the one asset not served exactly as it is embedded:
+		// it carries the version of the build serving it. Only "/" —
+		// FileServerFS redirects /index.html here, so there is one URL
+		// for the page and the un-stamped bytes are never reachable.
+		//
+		// ServeContent rather than a Write: it does the If-None-Match
+		// check against the ETag already set above, which is what keeps
+		// this page as revalidatable as the twenty files beside it.
+		if page := indexPage(); r.URL.Path == "/" && page != nil {
+			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(page))
+			return
+		}
 		srv.ServeHTTP(w, r)
 	})
+}
+
+// uiVersionToken is where index.html keeps room for the version of the
+// build serving it. A token replaced at serve time rather than a value
+// baked in at build time, because the two answers differ in exactly the
+// case somebody looks this up: `ochakai serve` does not serve the page
+// (design doc 0130 §0.1), so the build behind /api/v1 is always a
+// different process, and `webui_image_tag` exists so an operator can
+// deliberately put the two on different versions for one apply. Baking
+// it in would be right for the tag and wrong for the deployment.
+const uiVersionToken = "__OCHAKAI_UI_VERSION__"
+
+// indexPage is the page with that token replaced, built once. Escaped on
+// the way in: it lands in an attribute, and while a version is a tag
+// name in every build that reaches a user, -ldflags will stamp whatever
+// it is given.
+//
+// nil if the page cannot be read, which leaves the caller serving the
+// embedded bytes — an embedded file that fails to open is not a reason
+// for the UI to stop having a page.
+var indexPage = sync.OnceValue(func() []byte { return indexPageFor(resolveVersion()) })
+
+func indexPageFor(version string) []byte {
+	b, err := fs.ReadFile(webui.Files, "index.html")
+	if err != nil {
+		return nil
+	}
+	return bytes.ReplaceAll(b, []byte(uiVersionToken), []byte(html.EscapeString(version)))
 }
 
 // contentSecurityPolicy is what the page is allowed to do. It became
@@ -130,11 +173,19 @@ const contentSecurityPolicy = "default-src 'none'; " +
 // assetTag is one tag for the whole UI: the hash of every embedded file,
 // so any edit to any of them invalidates all of them. One tag rather
 // than one per file because they ship as a set and a page that reloaded
-// half of them is not a state worth being able to reach — and because
-// the build identity does not work here: in-tree builds are all "dev",
-// which would pin a browser to whichever version it saw first.
-var assetTag = sync.OnceValue(func() string {
+// half of them is not a state worth being able to reach.
+//
+// The version is mixed in, not used as the tag. As the tag it would fail
+// in development, where every in-tree build is "dev" and a browser would
+// stay pinned to whichever page it saw first; left out entirely it fails
+// on a patch release that changes no file here, where the page is stamped
+// with a new version while the tag stays put and a browser keeps
+// answering the version question out of cache.
+var assetTag = sync.OnceValue(func() string { return assetTagFor(resolveVersion()) })
+
+func assetTagFor(version string) string {
 	sum := sha256.New()
+	fmt.Fprintf(sum, "version\x00%s\x00", version)
 	_ = fs.WalkDir(webui.Files, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -147,7 +198,7 @@ var assetTag = sync.OnceValue(func() string {
 		return nil
 	})
 	return `"` + hex.EncodeToString(sum.Sum(nil)[:16]) + `"`
-})
+}
 
 // newCredentialProxy reverse-proxies to target, substituting the proxy's
 // own identity for whatever the browser sent. Both credential headers

@@ -40,19 +40,52 @@ export async function markPosture() {
   } catch (e) { /* a banner is not worth failing the page over */ }
 }
 
-// Which build is serving this deployment, in the topbar beside the name
-// (design doc 0087 §4's shape, applied to the question somebody asks
-// once rather than to a posture): the answer is the server's, so the
-// page shows what it said or shows nothing at all. A server too old to
-// carry the field leaves the element hidden — and the page does not
-// answer out of what it was built from, though it could: the UI and the
-// server ship in one image (design doc 0130 §1), but the one that can
-// say which image is running is the one that was asked.
-function markVersion(v) {
-  if (!v) return;
+// Which builds are answering, in the topbar beside the name (design doc
+// 0087 §4's shape, applied to the question somebody asks once rather
+// than to a posture). Two of them, because there are two: `ochakai
+// serve` does not serve this page, so the build that handed the browser
+// these files is always a different process from the one answering
+// /api/v1, and the deploy tooling has a variable whose only purpose is
+// to put them on different versions for one apply (`webui_image_tag`).
+//
+// One number while they agree — that number is both, and labelling it
+// twice would spend the topbar on a distinction nobody has. Both, named,
+// the moment they differ: that is the state the operating guide's first
+// upgrade trap is about, and its damage (a web UI older than the API
+// passes the delegation header through instead of stripping it, design
+// doc 0064) is silent everywhere else.
+//
+// Neither side is guessed at. A server too old to carry the field and a
+// page served by something that is not one of the two commands each go
+// unnamed rather than assumed, and if that leaves nothing to say the
+// element stays hidden, as it was before either half existed.
+function markVersion(server) {
+  const page = servedBy();
+  if (!page && !server) return;
   const el = $('#ver');
-  el.textContent = v;
+  if (page && server && page !== server) {
+    el.textContent = `UI ${page} / API ${server}`;
+    el.title = 'このページを配ったビルドと、応答している API のビルドが違う。'
+      + 'ページ側は API より前か API と一緒に上げること — 後にすると書き込みの帰属が静かに壊れる';
+    el.classList.add('differs');
+  } else {
+    // One of them, or the one that spoke. The label stays on when only
+    // one side answered: an unlabelled number reads as the deployment's,
+    // and half of one is not that.
+    el.textContent = page && server ? server : `${page ? 'UI' : 'API'} ${page || server}`;
+  }
   el.hidden = false;
+}
+
+// The build that served this page, written into the meta by `ochakai ui`
+// / `ochakai serve-ui` as they served it. The token survives when the
+// page is opened as a plain file, which is not a version — it is the one
+// way this page is read by something that did not serve it.
+const UI_VERSION_TOKEN = '__OCHAKAI_UI_VERSION__';
+
+function servedBy() {
+  const v = document.querySelector('meta[name="ochakai-ui-version"]')?.content || '';
+  return v === UI_VERSION_TOKEN ? '' : v;
 }
 
 // What this deployment cannot do, and who gets told how to change it

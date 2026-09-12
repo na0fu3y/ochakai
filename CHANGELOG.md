@@ -21,6 +21,35 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The web UI names both builds when they differ.** 0.28.5 put a version
+  in the topbar and it was the API's — the half `ochakai whoami`, `GET /`
+  and the startup log already answer. The half nothing in a browser could
+  reach is the build that served the page, and that is a different
+  process every time: `ochakai serve` serves no page (design doc
+  [0130](docs/design/0130-the-web-ui-and-the-fields-of-a-document.md)
+  §0.1), so the page always comes from `ochakai ui` or `ochakai serve-ui`,
+  and `webui_image_tag` exists so an operator can deliberately run the two
+  on different versions for one apply. That is the upgrade the operating
+  guide warns about first, and its damage — a web UI older than the API
+  passing the delegation header through instead of stripping it (design
+  doc [0064](docs/design/0064-rest-stops-at-api-v1.md), issue
+  [#418](https://github.com/na0fu3y/ochakai/issues/418)) — is silent
+  everywhere else. The topbar now shows one number while the two agree,
+  because that number is both, and shows `UI … / API …` the moment they
+  do not. Neither side is guessed at: a server too old to carry the field
+  and a page served by something that is not one of the two commands each
+  go unnamed rather than assumed, and when neither says anything the
+  element stays hidden as before. The serving build's half is stamped
+  into the page as it is served rather than baked in at build time —
+  these files are identical in every build, and what is being asked is
+  which binary is running. The UI's ETag now moves with the version as
+  well as with the files, so a patch release that changes no file under
+  `internal/webui` cannot be answered out of a browser's cache. No
+  surface count moves (docs/surface.md): no endpoint, no header, no
+  command, no flag.
+
 ## [0.28.5] - 2026-09-12
 
 ### Added

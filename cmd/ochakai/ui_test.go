@@ -387,3 +387,97 @@ func TestUIHandlerStripsServerlessAuthorization(t *testing.T) {
 		t.Errorf("upstream Authorization = %q, want the CLI user's token", auth)
 	}
 }
+
+// The page says which build served it, because that is not the build
+// answering /api/v1. `ochakai serve` serves no page (design doc 0130
+// §0.1), so the two are always separate processes, and `webui_image_tag`
+// exists so an operator can deliberately run them on different versions
+// for one apply — the upgrade docs/guides/operating.md warns about, whose
+// damage (a web UI that passes the delegation header through instead of
+// stripping it, design doc 0064) is silent everywhere else.
+//
+// Stamped as it is served rather than baked in at build time: these bytes
+// are identical in every build, and the question is which binary is
+// running. Both serving paths, because a browser reaches this page only
+// through one of them.
+func TestThePageSaysWhichBuildServedIt(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		mux  func(t *testing.T) http.Handler
+	}{
+		{"ui", func(t *testing.T) http.Handler {
+			h, err := uiHandler("http://ochakai.internal", nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return h
+		}},
+		{"serve-ui", func(*testing.T) http.Handler {
+			return serveUIHandler(http.NotFoundHandler())
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8098/", nil)
+			rec := httptest.NewRecorder()
+			tc.mux(t).ServeHTTP(rec, req)
+			body := rec.Body.String()
+			if strings.Contains(body, uiVersionToken) {
+				t.Error("the page is served with its placeholder intact, so it cannot say which build served it")
+			}
+			// An in-tree build is "dev" (resolveVersion), which is what a
+			// test binary is: the value is not the point, its arrival is.
+			if !strings.Contains(body, `<meta name="ochakai-ui-version" content="`+resolveVersion()+`">`) {
+				t.Errorf("the serving build's version did not reach the page (want %q)", resolveVersion())
+			}
+		})
+	}
+}
+
+// The stamp goes in escaped, and the token it replaces is the one the
+// page ships with. -ldflags stamps whatever it is given, and this value
+// lands in an attribute.
+func TestTheServingVersionIsStampedIntoAnAttributeSafely(t *testing.T) {
+	page := string(indexPageFor(`v1"><script>alert(1)</script>`))
+	if strings.Contains(page, "<script>alert(1)</script>") {
+		t.Error("a version reaches the page as markup")
+	}
+	if !strings.Contains(page, `content="v1&#34;&gt;&lt;script&gt;`) {
+		t.Error("the version is not escaped into the attribute")
+	}
+	if strings.Contains(page, uiVersionToken) {
+		t.Error("the token survived the replacement")
+	}
+}
+
+// The ETag has to move when the version does. Without it a patch release
+// that changes no file under internal/webui/static ships a page stamped
+// with a new version behind an unchanged validator, and a browser goes on
+// answering the version question out of its cache — the one question this
+// page cannot be stale about.
+//
+// Mixed in rather than used as the tag: every in-tree build is "dev", so
+// as the tag it would pin a browser to whichever page it saw first.
+func TestTheAssetTagMovesWithTheServingVersion(t *testing.T) {
+	if assetTagFor("v0.28.4") == assetTagFor("v0.28.5") {
+		t.Error("two builds of the same files share an ETag, so a stamped page is served out of cache")
+	}
+}
+
+// One URL for the page. FileServerFS redirects /index.html to /, which is
+// what keeps the un-stamped bytes unreachable — served there, they would
+// be a page claiming its own placeholder as a version.
+func TestTheUnstampedPageIsNotReachable(t *testing.T) {
+	h, err := uiHandler("http://ochakai.internal", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8098/index.html", nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusMovedPermanently {
+		t.Fatalf("GET /index.html = %d, want a redirect to /", rec.Code)
+	}
+	if strings.Contains(rec.Body.String(), uiVersionToken) {
+		t.Error("the embedded page is served at its own name, placeholder and all")
+	}
+}

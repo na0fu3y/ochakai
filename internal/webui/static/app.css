@@ -98,6 +98,16 @@ pre:hover .copy-btn, .copy-btn:focus-visible { opacity: 1; }
    than centres, so the two sit on one line of type at both widths. */
 .brandline { display: flex; align-items: baseline; gap: .4rem; }
 .ver { color: var(--muted); font-size: .78rem; white-space: nowrap; }
+/* The page's build and the API's disagreeing. Muted is wrong for this
+   one: it is scenery every other time precisely because the two agree,
+   and when they do not it is the answer somebody came to the topbar
+   for. The draft trio rather than a fourth colour pair — amber is
+   already this page's "worth a look, not broken", and this is not an
+   error: shipping the UI ahead of the server is the supported order. */
+.ver.differs {
+  color: var(--draft-fg); background: var(--draft-bg);
+  border: 1px solid var(--draft-bd); border-radius: 4px; padding: 0 .35rem;
+}
 .topnav { display: flex; gap: .2rem; align-self: stretch; }
 .topnav a {
   display: flex; align-items: center; padding: 0 .8rem; color: var(--muted);

@@ -705,13 +705,21 @@ func TestTheEditorSavesAgainstTheVersionItOpened(t *testing.T) {
 // stats for the postures' reason (design doc 0087 §4) and is drawn
 // beside the brand.
 //
-// Three things this checks, and the third is the point: the page shows
-// the server's answer, never its own build. The UI ships in the server's
-// image (design doc 0130 §1), so a version baked into these files would
-// usually be right — and would be wrong in exactly the case somebody
-// runs this command to diagnose, an upgrade where the two ended up on
-// different tags.
-func TestThePageNamesTheBuildTheServerSaidItIs(t *testing.T) {
+// There are two builds and the topbar says so. `ochakai serve` does not
+// serve this page (design doc 0130 §0.1), so the process that handed the
+// browser these files is never the process answering /api/v1, and
+// `webui_image_tag` exists so an operator can put the two on different
+// versions on purpose — which is the state the operating guide's first
+// upgrade trap is about, and the one a version in the topbar is read to
+// diagnose. Showing only the server's answer there names the half that
+// `ochakai whoami`, `GET /` and the startup log already answer, and
+// leaves the half nothing in the browser could reach.
+//
+// The shape, and the last two are the point: one number while they
+// agree, both named the moment they do not, and neither side ever
+// guessed at — a server too old to carry the field and a page opened as
+// a plain file each go unnamed rather than assumed.
+func TestTheTopbarNamesBothBuildsWhenTheyDisagree(t *testing.T) {
 	index := asset(t, "index.html")
 	if !strings.Contains(index, `<span class="ver" id="ver"`) {
 		t.Error("the topbar has nowhere to put the version")
@@ -719,17 +727,41 @@ func TestThePageNamesTheBuildTheServerSaidItIs(t *testing.T) {
 	if !strings.Contains(section(t, index, `<span class="ver"`, ">"), "hidden") {
 		t.Error("the version element ships visible, so an empty one shows before any answer arrives")
 	}
-	body := section(t, asset(t, "js/api.js"), "function markVersion", "\n}")
-	if !strings.Contains(body, "if (!v) return;") {
-		t.Errorf("a server too old to carry the field is not told from one that answered:\n%s", body)
+	// The serving build's half reaches the page as a stamped meta, not as
+	// a value baked in here: these bytes are the same in both builds, and
+	// what is being asked is which binary is running.
+	meta := section(t, index, `<meta name="ochakai-ui-version"`, ">")
+	if !strings.Contains(meta, `content="__OCHAKAI_UI_VERSION__"`) {
+		t.Errorf("the page carries no room for the build serving it, or a version baked in instead of a token:\n%s", meta)
 	}
-	if !strings.Contains(body, "textContent") {
+	body := section(t, asset(t, "js/api.js"), "function markVersion", "\n}")
+	if !strings.Contains(body, "if (!page && !server) return;") {
+		t.Errorf("a side too old to say is not told from one that answered:\n%s", body)
+	}
+	if !strings.Contains(body, "page !== server") {
+		t.Errorf("the two builds are never compared, so a mismatch shows as one number:\n%s", body)
+	}
+	if !strings.Contains(body, "UI ${page} / API ${server}") {
+		t.Errorf("a mismatch does not name which build is which:\n%s", body)
+	}
+	if !strings.Contains(body, "textContent") || strings.Contains(body, "innerHTML") {
 		t.Errorf("the version is not written as text, so a server's answer reaches the page as markup:\n%s", body)
+	}
+	// The token is what a page served by something that is not one of the
+	// two commands still carries. Read as a version it would put
+	// "__OCHAKAI_UI_VERSION__" in the topbar and, worse, claim a mismatch.
+	servedBy := section(t, asset(t, "js/api.js"), "function servedBy", "\n}")
+	if !strings.Contains(servedBy, "UI_VERSION_TOKEN") {
+		t.Errorf("an un-stamped page reads its own placeholder as a version:\n%s", servedBy)
 	}
 	if !strings.Contains(section(t, asset(t, "js/api.js"), "export async function markPosture", "\n}"), "markVersion(s.version)") {
 		t.Error("nothing reads the version out of the stats answer the page already asks for")
 	}
-	if !strings.Contains(asset(t, "app.css"), ".ver {") {
+	css := asset(t, "app.css")
+	if !strings.Contains(css, ".ver {") {
 		t.Error("the stylesheet does not carry the .ver rule, so the version is drawn as body text")
+	}
+	if !strings.Contains(css, ".ver.differs") {
+		t.Error("a mismatch is drawn as quietly as agreement, which is the one time it is not scenery")
 	}
 }

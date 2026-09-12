@@ -28,6 +28,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ochakai</title>
+<!-- The build that served this page. `ochakai ui` and `ochakai serve-ui`
+     write it in as they serve it (cmd/ochakai/uicommon.go); nothing bakes
+     it in here, because the question is which binary is running and only
+     the running binary knows. It is a different build from the one
+     answering /api/v1 — `ochakai serve` does not serve this page, so the
+     two are always separate processes and, during the upgrade the
+     operating guide warns about, separate versions. Opened as a plain
+     file the token below survives, and the page reads that as "not
+     said" rather than as a version. -->
+<meta name="ochakai-ui-version" content="__OCHAKAI_UI_VERSION__">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -40,11 +50,12 @@
   <span class="brandline">
     <a class="brand" href="#/">🍵 ochakai</a>
     <!-- Which ochakai this is. Written by api.js out of the same
-         /api/v1/stats answer the banners come from, and empty until
-         then: a server too old to say carries nothing here rather than
-         a guess, and the page never answers this out of what it was
-         built from. One version and not two — the UI ships in the
-         server's own image (design doc 0130 §1). -->
+         /api/v1/stats answer the banners come from plus the meta above,
+         and empty until then: a side too old to say carries nothing
+         here rather than a guess. One number while the two agree, and
+         both the moment they do not — which is a state the deploy
+         tooling can produce on purpose (`webui_image_tag`) and the one
+         the operating guide's first upgrade trap is about. -->
     <span class="ver" id="ver" title="このデプロイの ochakai のバージョン" hidden></span>
   </span>
   <nav class="topnav" id="topnav" aria-label="メインナビゲーション">
