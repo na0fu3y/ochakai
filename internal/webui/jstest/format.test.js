@@ -3,12 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import {
-  actorStr, conceptURL, crumbTrail, daysSince, dirHash, displayTitle,
-  editedSinceVerified, entryHash, fmtAge, fmtDateTime, fmtSize, headingHash,
-  isVerified, lastVerification, parseActorText, parseKPath, provenanceLine,
-  receivedLine, trustOf,
-} from '../static/js/format.js';
+import { PREVIEW_CHARS, PREVIEW_LINES, actorStr, conceptURL, crumbTrail, daysSince, dirHash, displayTitle, editedSinceVerified, entryHash, fmtAge, fmtDateTime, fmtSize, headingHash, isVerified, lastVerification, parseActorText, parseKPath, previewHead, provenanceLine, receivedLine, trustOf } from '../static/js/format.js';
 import { esc } from '../static/js/escape.js';
 
 test('an id keeps its slashes and encodes everything else', () => {
@@ -245,4 +240,30 @@ test('a received claim is read like the ledger, and is empty when there is none'
   assert.equal(receivedLine({}), '');
   assert.equal(receivedLine({ verified: [] }), '');
   assert.equal(receivedLine({ verified: [{}] }), '');
+});
+
+// The head of a text file, for the card that lists it (design doc 0140
+// left the preview open; this is the rule it runs on). Two bounds,
+// whichever comes first, and a cut says so.
+test('previewHead keeps the first lines and marks a cut', () => {
+  assert.equal(previewHead('a\nb\nc\n'), 'a\nb\nc');
+  assert.equal(previewHead(''), '');
+  assert.equal(previewHead(null), '');
+  // A trailing newline is not a line: a file that ends the way every
+  // text file ends must not read as truncated.
+  assert.equal(previewHead('one\n'), 'one');
+  assert.equal(previewHead('a\r\nb'), 'a\nb');
+
+  const long = Array.from({ length: PREVIEW_LINES + 5 }, (_, i) => 'L' + i).join('\n');
+  const head = previewHead(long);
+  assert.equal(head.split('\n').length, PREVIEW_LINES + 1, 'the lines kept, plus the ellipsis');
+  assert.ok(head.endsWith('\n…'));
+  assert.ok(!head.includes('L' + PREVIEW_LINES));
+
+  // The file with no lines — a minified JSON, a one-line CSV — is cut by
+  // characters instead, so one text node cannot carry the whole file.
+  const oneLine = 'x'.repeat(PREVIEW_CHARS * 3);
+  const cut = previewHead(oneLine);
+  assert.equal(cut.length, PREVIEW_CHARS + 2);
+  assert.ok(cut.endsWith('\n…'));
 });

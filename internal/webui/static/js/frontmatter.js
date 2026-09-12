@@ -335,3 +335,33 @@ export function rowMarkup(field, i, row) {
     + `<button type="button" class="btn small fm-del" title="この行を消します" aria-label="この行を消す">×</button></div>`
     + `<div class="row-trio">${cells}</div></div>`;
 }
+
+// Every string in a document's frontmatter, with the key path it sits
+// at: ["computation", "reading/recompute.py"], ["executor.resource",
+// "…"], and a producer's own key exactly the same way.
+//
+// **No key is special-cased and no type is consulted.** What the caller
+// does with these is resolve them against the objects that are actually
+// there — a value that names one is a reference, and a value that names
+// nothing is prose. That order is what keeps this page from teaching a
+// rule the format does not have (design doc 0130 §3.5): ochakai holds no
+// per-type schema, so a files tab that knew `computation` names a file
+// would know one more rule than the write path does.
+//
+// A value carrying a URI scheme is skipped — it addresses something
+// outside the bundle, and the same test the body's links use decides it
+// (design doc 0024). Depth is bounded because the walk is over somebody
+// else's document.
+const SCHEME = /^[a-zA-Z][a-zA-Z0-9+.-]*:/u;
+const MAX_DEPTH = 4;
+
+export function* frontmatterRefs(value, key = '', depth = 0) {
+  if (typeof value === 'string') {
+    if (key && value && !SCHEME.test(value)) yield [key, value];
+    return;
+  }
+  if (depth >= MAX_DEPTH || !value || typeof value !== 'object') return;
+  for (const [k, child] of Object.entries(value)) {
+    yield* frontmatterRefs(child, key ? key + '.' + k : k, depth + 1);
+  }
+}
