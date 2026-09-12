@@ -300,10 +300,12 @@ for what they still don't do:
   Zep, Letta, MemPalace) auto-extract and auto-inject, and by 2026 some
   do it with no LLM at write time, shared across a team, behind a gate
   that reviews a proposal before it applies — usually another agent;
-  only remnic's gate is a person. What none of them holds is
-  the ruling side named above — a ledger row naming the authenticated
-  caller who confirmed this content, and a tier saying whether that
-  caller was a human. *Memory layers remember what happened; ochakai
+  among the open-source, markdown-native ones only remnic's gate is a
+  person, and the commercial ones that record who approved (Memco,
+  TencentDB's Team Memory) keep it inside their own product. What none
+  of them holds is the ruling side named above — a ledger row naming the
+  authenticated caller who confirmed this content, a tier saying whether
+  that caller was a human, and outcomes counted against it. *Memory layers remember what happened; ochakai
   curates what's true.* They compose — preferences there, verified data
   knowledge here.
 - **Verified answers for any client, and an exit.** Verified-query stores
