@@ -158,7 +158,9 @@ OKF の SPEC と参照バンドルは
 カタログ自身が裁定を行為者の identity で記録すること、却下が理由ごと
 残ること、丸ごと OKF に戻ることの三つで、そうなればナレッジの置き場が
 Google Cloud の中で足りるので、BigQuery 一本のチームに対して ochakai が
-言えることはほとんど残らない。
+言えることはほとんど残らない。2026-09-12 のリリースノートまでに増えたのは
+dbt Core / MetricFlow の import(Preview、08-26)と data domains(Preview、
+09-07)で、verified queries は Preview のまま、三つのどれも動いていない。
 
 ### ウェアハウス native の semantic layer
 
@@ -178,7 +180,9 @@ dbt Labs・Salesforce ほかが始め、Apache Software Foundation に寄贈さ�
 Incubator に入った(Apache-2.0)。標準化するのは**定義の層**で、
 2026-08 に読んだ `core-spec/spec.yaml`(`0.2.0.dev0`、draft)の
 トップレベルは `semantic_model` / `datasets` / `fields` / `metrics` /
-`relationships` / `dialects` / `datatypes` である。
+`relationships` / `dialects` / `datatypes` である。**その `0.2.0.dev0` は
+リポジトリの中の開発版で、リリースされた版は v0.1(2026-01-27)だけ
+である** — GitHub release は一つも無い(2026-09-12)。
 
 **ochakai はこれと競合しない。同じ境界の反対側に立っている。** 上の
 「一行で」がその境界そのものである — Ossie が一つの綴りに揃えるのは
@@ -199,7 +203,9 @@ concept に投影したいなら、その形は既にある — 自分のサー�
 ochakai が持つコネクタではない([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1)。
 **見直す条件は書いておく**: Ossie が incubating を出て、かつ「この定義を
 人が確認した」を core が運ぶようになったとき。そのときは重なりが本物に
-なるので、OKF との対応を書く価値がある。
+なるので、OKF との対応を書く価値がある。2026-09-12 の時点で、その方向の
+提案は Discussion #267(モデルごとに `verified` / `inferred` / `proposed` の
+evidence grade を置く外部キット)が一つあるだけで、maintainer の返信は無い。
 
 ### コンテキスト層としてのカタログ
 
@@ -214,6 +220,21 @@ Google 純正のそれは上の節が単独で扱う。ここはそれ以外で�
 層としてその隣に立つ。カタログの投影は自分のサービスアカウントで動く
 普通のクライアントであって([例](../examples/bigquery-catalog))、
 ochakai が持つ資格情報では決してない。
+
+**「商用ティア」には例外が付いた(2026-09-12)。** Lightdash は verified
+content を GA にし、chart・dashboard・**AI エージェントの回答**に一つの
+verified を置く — バッジは誰がいつ確かめたかを出し、`lightdash download`
+の YAML に検証のメタデータが載り、エージェントは verified を先に引く
+([docs](https://docs.lightdash.com/guides/verified-content))。単位は
+チャートと回答であって定義の読み方ではなく、OSS 版で使えるかは確かめて
+いないが、「レビューは商用ティア」はカテゴリ全体には言えなくなった。
+**同じ棚に、軸が反対の新顔も並んだ。** [ktx](https://github.com/Kaelio/ktx)
+(Apache-2.0)は「data agent 向けの実行可能な context layer」を名乗り、
+ウェアハウスの introspection と LLM の編纂で wiki markdown と YAML の
+semantic layer を作って CLI と MCP で配る — 0081 が断った二つ、LLM を中に
+持つことと SQL を実行することを、どちらも中核に置く。ochakai が同じ
+問題に置いた答えは、編纂の出口を OKF で import すること
+(下の LLM Wiki の実測)であって、編纂そのものではない。
 
 ### エージェントのメモリ層
 
@@ -239,7 +260,14 @@ ochakai が持つ資格情報では決してない。
   監査証跡を売っている。**ただし門の中身は分かれる**: Letta の設定名は
   "Agent reviews before applying" で、見直すのはエージェント自身であって
   人の承認は要らない。**人が承認する門を持つのは、この並びでは
-  [remnic](https://github.com/joshuaswarren/remnic) だけである。**
+  [remnic](https://github.com/joshuaswarren/remnic) だけである** — と
+  2026-09-05 に書いたが、**2026-09-12 には「OSS で markdown-native の中では」
+  と狭めなければならない**。商用の [Memco](https://www.memco.ai/) は承認した
+  人を lesson ごとに記録し、TencentDB Agent Memory の Team Memory
+  (2026-08-13)は項目に owner / version / status を持って「レビューしてから
+  共有する」と言い、Databricks Genie は memory confirmation prompts
+  (Beta、2026-09-10)でエージェントが提案した事実を人に確認させる。
+  どれも出口を持たず、outcome を承認者に紐づけて数で持つものは見ていない。
 
 **残る差は一つに絞れる**: 裁定が**インスタンス自身の観測**として台帳に残り、
 その行が**認証された呼び出し元**を名指すこと
@@ -409,7 +437,11 @@ AI が生んだ洞察を人が検証してオントロジーへ還流する閉�
 があり、MCP サーバー経由で Claude Code から 10 分ほどで届く — インフラは
 一切要らない。**そしてその vault は、2026 年の夏に OKF を話すようになった。**
 Google が OKF v0.2 を公開した 2026-07-24 から三か月で、GitHub の topic
-`open-knowledge-format` には 136 のリポジトリが付いた(2026-09-05)。
+`open-knowledge-format` には 136 のリポジトリが付いた(2026-09-05)—
+一週間後には 142 で、首位は 09-05 に生まれた
+[okf-agent-memory](https://github.com/okf-memory/okf-agent-memory)(590)、
+コーディングエージェントの git-native な OKF メモリで、人の裁定は無い
+(2026-09-12)。
 **この節の見出しが言う「ローカルツール群」は、もうカテゴリの全体では
 ない。** 大きいものの多くは今もローカルで、ファイルで、一台である —
 Claude Code プラグインと conformance checker と read-only MCP を持つ
@@ -445,6 +477,26 @@ namespace による federation、`manifest.aix.yaml` を足す。この四つの
 ([0136](design/0136-a-concept-is-addressed-not-labelled.md) §2)。
 断り自体は今も筋が通っているが、**同じ穴を別の答えで埋める形式が出て
 きたこと**は、次にこの二つを問い直す人が読むべき事実である。
+
+**そして規格のリポジトリに、ochakai が既に実装で答えている問いが立った**
+(2026-09-12、いずれも open で返信はほぼ無い)。
+[#13](https://github.com/GoogleCloudPlatform/open-knowledge-format/issues/13)
+は `verified` の反対 — 見て、成り立たないと判断した — を記録する
+`refuted` を提案する。ochakai の答えは
+[0135](design/0135-a-rejection-is-a-deletion.md) で、却下は削除であり、
+理由は `log.md` とリビジョンに残り、再提案は塞がない。
+[#15](https://github.com/GoogleCloudPlatform/open-knowledge-format/issues/15)
+は他のバンドルから取り込んだ concept を、向こうの `verified` を洗浄せずに
+再発行する `imported` を提案する。ochakai の答えは
+[0009](design/0009-provenance-portability.md) §3.2 で、持ち込まれた
+`verified` は `received` の下に分かれ、台帳に載るのはこのインスタンス自身の
+観測だけである。#16 は型付きの関係で、上の aix と同じ穴であり
+([0136](design/0136-a-concept-is-addressed-not-labelled.md) §2)、その上に
+#22 が `supersedes` と `contested_by` の query 時の意味を登録する提案を
+重ねている(2026-09-12)。**規格がここで別の答えを採れば C3 の綴りが動く
+ので、この三つは追う。** 追うことと向こうで発言することは別で、後者は
+していない — 調査記録は
+[#849](https://github.com/na0fu3y/ochakai/issues/849)。
 
 **そこで通した。** 2026-09-05、aix-format の `examples/` を
 `ochakai import` に入れ、`ochakai export` で引き戻した。6 文書のうち
@@ -676,7 +728,10 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   [OKF](design/0075-the-bundle-is-the-address-space.md) 自身のキーで
   運ぶ主張である。それらのキーは普通の YAML なので vault にも置ける —
   そしてまさにそこに違いが出る。vault では、人の名前が書かれた
-  `verified` の concept は誰かがタイプした一行である。ここではそれは、
+  `verified` の concept は誰かがタイプした一行である — **kaut だけは
+  v0.8.1(2026-08-27)から `okf export` の `verified.by` を engine 自身の
+  git identity に解決する**ので、タイプした一行ではないが、呼び出し元の
+  観測でもない。ここではそれは、
   認証された呼び出し元についてインスタンスが観測したことであり、文書
   から読み戻されることは決してない
   ([0009](design/0009-provenance-portability.md)、
@@ -739,6 +794,12 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   プロジェクトと Postgres と月 $10 とセットアップは、人の裁定・却下の
   理由が残ること・OKF の出口に対して払う分であって、その三つが要らない
   なら払う理由も無い。
+- **AWS なら、OKF は ochakai を経由しなくてよい。**
+  [Data Wiki](https://github.com/aws-samples/sample-okf-llm-wiki)
+  (aws-samples)は Glue と Redshift から Bedrock が OKF バンドルを編纂し、
+  S3 に置いて Cognito の認証で MCP に配る(2026-09-12)。人の承認手順は
+  無く、正本を書くのは LLM である — ochakai が言えるのは上と同じ三つで、
+  それだけである。
 - **インフラ。** vault を立てるのはただである。ochakai は Google Cloud
   プロジェクトと Postgres を要る — 月 $10 ほどだが、ゼロではないし、
   5 分でもない。
@@ -833,4 +894,8 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
 ノートである。0001 は [0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md)
 が置き換えたので、あの二つのノートは墓標が指す全文のコミットにある —
 **日付の付いた調査は書き換えないので、動かすのではなく置いてきた。**
-landscape は決定ではないので、代わりにここで追う。
+landscape は決定ではないので、代わりにここで追う。その後の日付入りの
+記録は issue にある — 41 組織の事例調査が
+[#703](https://github.com/na0fu3y/ochakai/issues/703)(2026-08-19)、
+このページの 2026-09-12 の訂正の元になった三週間分の差分が
+[#849](https://github.com/na0fu3y/ochakai/issues/849)。
