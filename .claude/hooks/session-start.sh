@@ -60,6 +60,31 @@ concepts() {
 	curl -sf -m 3 "$OCHAKAI_URL/api/v1/stats" 2>/dev/null | jq -r '.concepts.total // empty' 2>/dev/null
 }
 
+# stale_note prints one sentence when the running dogfood image was built
+# before the last change to code in this tree, and nothing otherwise —
+# including whenever it cannot tell. The instance answering is not the
+# instance being current: `up -d` reuses the image it already has and
+# neither pulls nor rebuilds, so a stack started weeks ago keeps serving
+# that build while the tree moves on. /api/v1/stats cannot say so, because
+# a build from the tree reports `dev` as its version; the image's build
+# time against the tree's last code change can. 2026-09-12 found an
+# instance built on 08-26 still reporting a trust tier that design doc 0138
+# had lapsed, sixteen days after 0138 landed.
+stale_note() {
+	command -v docker >/dev/null 2>&1 || return 0
+	command -v git >/dev/null 2>&1 || return 0
+	cid=$(docker compose -f "$2" ps -q ochakai 2>/dev/null | head -n 1) || return 0
+	[ -n "$cid" ] || return 0
+	img=$(docker inspect "$cid" --format '{{.Image}}' 2>/dev/null) || return 0
+	created=$(docker image inspect "$img" --format '{{.Created}}' 2>/dev/null) || return 0
+	built=$(printf '%s\n' "$created" | jq -Rr 'sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601' 2>/dev/null) || return 0
+	code=$(git -C "$1" log -1 --format=%ct -- internal cmd go.mod go.sum 2>/dev/null) || return 0
+	[ -n "$built" ] && [ -n "$code" ] || return 0
+	[ "$built" -lt "$code" ] || return 0
+	code_day=$(git -C "$1" log -1 --format=%cs -- internal cmd go.mod go.sum 2>/dev/null) || return 0
+	printf ' It is older than the code in this tree — the running image was built %s and the code last changed %s — so what it recalls and the trust tiers it reports can predate what the tree implements. Rebuild it with `docker compose -f deploy/compose.yaml up -d --build`.' "$(printf '%s' "$created" | cut -c1-10)" "$code_day"
+}
+
 dogfood_local() {
 	root=$(cd "$(dirname "$0")/../.." && pwd)
 	compose="$root/deploy/compose.yaml"
@@ -102,7 +127,8 @@ dogfood_local() {
 		n=$(concepts) || n=0
 		verb="$verb and was loaded from kb/bundle as drafts (nothing verified, so nothing ruled on)"
 	fi
-	say "The dogfood ochakai instance $verb at $OCHAKAI_URL: $n concepts (kb/README.md). Recall runs on each prompt; fetch with the ochakai MCP get_concept tool, never the CLI."
+	stale=$(stale_note "$root" "$compose") || stale=
+	say "The dogfood ochakai instance $verb at $OCHAKAI_URL: $n concepts (kb/README.md).$stale Recall runs on each prompt; fetch with the ochakai MCP get_concept tool, never the CLI."
 }
 
 [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || dogfood_local
