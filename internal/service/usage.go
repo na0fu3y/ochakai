@@ -224,7 +224,11 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 	}
 	// A sandbox says so beside its own numbers: everything counted here
 	// is about to be erased, and a caller that does not know that may
-	// curate into it (design doc 0087).
+	// curate into it (design doc 0087). The build answering travels the
+	// same way, for the same reason the postures do: it is what the
+	// deployment is, and every face that reads this response can now
+	// say it without asking a second address.
+	st.Version = versionOf(s.Config)
 	st.Sandbox = s.Config != nil && s.Config.Sandbox
 	st.InsecureDev = s.Config != nil && s.Config.InsecureDev
 	st.Files = s.filesState(sc)
@@ -271,9 +275,23 @@ func emptyStats(now time.Time, days int, cfg *config.Config) *domain.Stats {
 	}
 	st.Misses.Recording = cfg == nil || cfg.RecordMisses
 	st.Misses.Withheld = true
+	// The three that are about the server rather than about the numbers,
+	// carried here too: a caller who can see none of this knowledge is
+	// still owed what deployment refused to show it to them.
+	st.Version = versionOf(cfg)
 	st.Sandbox = cfg != nil && cfg.Sandbox
 	st.InsecureDev = cfg != nil && cfg.InsecureDev
 	return st
+}
+
+// versionOf is the build this process is, or nothing when the caller
+// built a Service without a config — a test, and an answer that says
+// nothing is the one reading of absent this field has.
+func versionOf(cfg *config.Config) string {
+	if cfg == nil {
+		return ""
+	}
+	return cfg.Version
 }
 
 // filesState is what this deployment can do about files, and — for a

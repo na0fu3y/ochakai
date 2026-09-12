@@ -28,12 +28,36 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ochakai</title>
+<!-- The build that served this page. `ochakai ui` and `ochakai serve-ui`
+     write it in as they serve it (cmd/ochakai/uicommon.go); nothing bakes
+     it in here, because the question is which binary is running and only
+     the running binary knows. It is a different build from the one
+     answering /api/v1 — `ochakai serve` does not serve this page, so the
+     two are always separate processes and, during the upgrade the
+     operating guide warns about, separate versions. Opened as a plain
+     file the token below survives, and the page reads that as "not
+     said" rather than as a version. -->
+<meta name="ochakai-ui-version" content="__OCHAKAI_UI_VERSION__">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <header class="topbar">
   <button id="side-toggle" title="ナレッジツリーを開閉します" aria-label="サイドバーの開閉">☰</button>
-  <a class="brand" href="#/">🍵 ochakai</a>
+  <!-- The name, and the build answering as it. One flex item rather than
+       two, because the topbar's own gap is the distance between
+       controls: at that distance the version reads as belonging to the
+       tabs on its other side. -->
+  <span class="brandline">
+    <a class="brand" href="#/">🍵 ochakai</a>
+    <!-- Which ochakai this is. Written by api.js out of the same
+         /api/v1/stats answer the banners come from plus the meta above,
+         and empty until then: a side too old to say carries nothing
+         here rather than a guess. One number while the two agree, and
+         both the moment they do not — which is a state the deploy
+         tooling can produce on purpose (`webui_image_tag`) and the one
+         the operating guide's first upgrade trap is about. -->
+    <span class="ver" id="ver" title="このデプロイの ochakai のバージョン" hidden></span>
+  </span>
   <nav class="topnav" id="topnav" aria-label="メインナビゲーション">
     <a href="#/search" data-route="search">検索</a><a href="#/review" data-route="review">レビュー<span class="waiting" id="nav-waiting" hidden></span></a>
     <!-- Shown once the server answers for it: reading the access policy

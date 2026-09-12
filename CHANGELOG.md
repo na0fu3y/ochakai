@@ -44,6 +44,61 @@ last entry.
   both arrive after it is drawn, are cached for the page's life, and a
   file that cannot be read leaves the card exactly as it was.
 
+### Changed
+
+- **The web UI names both builds when they differ.** 0.28.5 put a version
+  in the topbar and it was the API's — the half `ochakai whoami`, `GET /`
+  and the startup log already answer. The half nothing in a browser could
+  reach is the build that served the page, and that is a different
+  process every time: `ochakai serve` serves no page (design doc
+  [0130](docs/design/0130-the-web-ui-and-the-fields-of-a-document.md)
+  §0.1), so the page always comes from `ochakai ui` or `ochakai serve-ui`,
+  and `webui_image_tag` exists so an operator can deliberately run the two
+  on different versions for one apply. That is the upgrade the operating
+  guide warns about first, and its damage — a web UI older than the API
+  passing the delegation header through instead of stripping it (design
+  doc [0064](docs/design/0064-rest-stops-at-api-v1.md), issue
+  [#418](https://github.com/na0fu3y/ochakai/issues/418)) — is silent
+  everywhere else. The topbar now shows one number while the two agree,
+  because that number is both, and shows `UI … / API …` the moment they
+  do not. Neither side is guessed at: a server too old to carry the field
+  and a page served by something that is not one of the two commands each
+  go unnamed rather than assumed, and when neither says anything the
+  element stays hidden as before. The serving build's half is stamped
+  into the page as it is served rather than baked in at build time —
+  these files are identical in every build, and what is being asked is
+  which binary is running. The UI's ETag now moves with the version as
+  well as with the files, so a patch release that changes no file under
+  `internal/webui` cannot be answered out of a browser's cache. No
+  surface count moves (docs/surface.md): no endpoint, no header, no
+  command, no flag.
+
+## [0.28.5] - 2026-09-12
+
+### Added
+
+- **The deployment says which build it is.** `GET /api/v1/stats` carries
+  `version` — the release tag the server was built at, or `dev` for a
+  binary built in the tree — and the bundled web UI draws it in the
+  topbar beside the name, so "which version is this?" is answered where
+  people were already looking. `ochakai whoami` prints a `version` line
+  from the same answer, which is not what `ochakai version` prints: that
+  is the binary in your hand, and during an upgrade the two are exactly
+  what you need to tell apart. The server has always said it in prose at
+  `/`, to whoever opened the bare URL — the page that serves no pages —
+  and nothing else could read it there. A response property rather than
+  a header, for design doc
+  [0087](docs/design/0087-a-sandbox-says-it-is-one.md) §4's reason: the
+  frozen wire is closed to a new header name and open to a property on a
+  response-only schema
+  ([0082](docs/design/0082-what-the-freeze-holds-still.md)). One version
+  and not two — the web UI ships in the server's own image
+  ([0130](docs/design/0130-the-web-ui-and-the-fields-of-a-document.md)
+  §1) — and a server too old to carry the field says nothing rather than
+  being guessed at, in both faces. MCP gets nothing new and needs
+  nothing: `initialize` has carried this server's version in `serverInfo`
+  all along, which is the protocol's own place for it. No new endpoint,
+  no new header, no new command, no new flag.
 - **`ochakai get` reads a file, not only a concept** (design doc
   [0140](docs/design/0140-one-address-reads-as-well-as-writes.md), which
   supersedes [0077](docs/design/0077-one-address-for-a-file.md) and
@@ -6962,7 +7017,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.4...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.5...HEAD
+[0.28.5]: https://github.com/na0fu3y/ochakai/compare/v0.28.4...v0.28.5
 [0.28.4]: https://github.com/na0fu3y/ochakai/compare/v0.28.3...v0.28.4
 [0.28.3]: https://github.com/na0fu3y/ochakai/compare/v0.28.2...v0.28.3
 [0.28.2]: https://github.com/na0fu3y/ochakai/compare/v0.28.1...v0.28.2

@@ -82,6 +82,15 @@ type Config struct {
 	// process and parsing it is all that is left to do.
 	Verifier any
 
+	// Version is the build this process is, set by main at startup from
+	// the ldflags stamp or the module build info. It sits here beside
+	// the postures below because it is answered the same way they are
+	// — on `stats`, as part of what the deployment says it is — and it
+	// is the one field in this struct that no environment variable can
+	// set: a deployment that could be told what version to claim would
+	// be able to lie about which binary is answering.
+	Version string
+
 	// ReadOnly makes the deployment refuse every change to knowledge
 	// (design doc 0040). It is not authorization: it does not look at the
 	// caller, and it cannot be narrowed to some entries or some people —
