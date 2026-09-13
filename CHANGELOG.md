@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.28.6] - 2026-09-13
+
 ### Added
 
 - **A file's card says what points at it, and shows the head of it.** The
@@ -72,6 +74,23 @@ last entry.
   `internal/webui` cannot be answered out of a browser's cache. No
   surface count moves (docs/surface.md): no endpoint, no header, no
   command, no flag.
+
+### Security
+
+- **go-jose moves to 4.1.5**, which fixes GHSA-6mp9-8xrw-74r4: deeply
+  nested JSON could exhaust the stack, and CBC-HMAC decryption could panic
+  on untrusted input. ochakai reaches go-jose only through the OIDC
+  verifier (design doc
+  [0086](docs/design/0086-a-second-way-to-say-who-is-calling.md)), which
+  parses a bearer token with `jwt.ParseSigned` before checking its
+  signature. The CBC-HMAC half never applies there, because ochakai accepts
+  signed tokens only and decrypts nothing. The nesting half was tried
+  against 4.1.4 in that exact call, with tokens up to the 1 MiB header limit
+  and the nesting placed in an unknown header key, in `jwk`, in `jwk.x5c`
+  and in `crit`; every one returned without crashing. That is a list of
+  shapes rather than a proof, so the dependency moves anyway. `govulncheck`
+  said nothing about it only because the Go vulnerability database had not
+  yet listed the advisory.
 
 ## [0.28.5] - 2026-09-12
 
@@ -7017,7 +7036,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.5...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.6...HEAD
+[0.28.6]: https://github.com/na0fu3y/ochakai/compare/v0.28.5...v0.28.6
 [0.28.5]: https://github.com/na0fu3y/ochakai/compare/v0.28.4...v0.28.5
 [0.28.4]: https://github.com/na0fu3y/ochakai/compare/v0.28.3...v0.28.4
 [0.28.3]: https://github.com/na0fu3y/ochakai/compare/v0.28.2...v0.28.3
