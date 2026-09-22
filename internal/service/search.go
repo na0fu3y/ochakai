@@ -57,7 +57,7 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 	if !ok {
 		return nil, false, nil
 	}
-	hits, degraded, err := s.search(ctx, query, f, limit)
+	hits, worded, degraded, err := s.search(ctx, query, f, limit)
 	if err != nil {
 		return nil, false, err
 	}
@@ -66,26 +66,33 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 		ids[i] = h.ID
 	}
 	s.recordUsage(ctx, domain.EventSearchHit, ids)
-	// A search that found nothing is recorded as itself: it is the one
-	// observation that says what this knowledge base is missing, and
-	// until design doc 0051 it was the only one being discarded. Here
-	// rather than in each surface, so every way of asking is counted —
-	// get_context searches through this function too.
-	if len(hits) == 0 {
+	// A question no word of the base matched is recorded as a miss: it
+	// is the one observation that says what this knowledge base is
+	// missing (design doc 0051). It is read off the lexical list, not
+	// off the answer, because the vector list has no floor — it returns
+	// the nearest N whatever the distance — so on a deployment that
+	// embeds, "the answer was empty" never happened (design doc 0141).
+	// Here rather than in each surface, so every way of asking is
+	// counted.
+	if !worded {
 		s.recordMiss(ctx, query)
 	}
 	return hits, degraded, nil
 }
 
-func (s *Service) search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, bool, error) {
+// search returns the ranking, whether any concept matched the query's
+// words (the lexical list was non-empty — what a miss is read off), and
+// whether the ranking degraded.
+func (s *Service) search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, bool, bool, error) {
 	limit, err := checkedLimit(limit, 10, 50)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	lexical, err := s.Store.SearchLexical(ctx, query, f, limit*2)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
+	worded := len(lexical) > 0
 	cut := func() []domain.SearchHit {
 		if len(lexical) > limit {
 			return lexical[:limit]
@@ -97,7 +104,7 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	// every response would say nothing about any of them (design doc
 	// 0114 §2).
 	if s.Embedder == nil {
-		return cut(), false, nil
+		return cut(), worded, false, nil
 	}
 
 	vecs, err := s.Embedder.Embed(ctx, embed.TaskQuery, []string{query})
@@ -109,21 +116,21 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 		// and until design doc 0114 nothing told them (0080 §1 fuses
 		// three lists, and this is two of them missing).
 		s.Log.Warn("query embedding failed; falling back to lexical-only", "error", err)
-		return cut(), true, nil
+		return cut(), worded, true, nil
 	}
 	vector, err := s.Store.SearchVector(ctx, vecs[0], s.Embedder.Model(), f, limit*2)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	// Concepts whose attachments match are the third list (design doc
 	// 0020): a concept matching in both body and attachment gains rank
 	// from both, so evidence-backed concepts surface first.
 	attachments, err := s.Store.SearchVectorAttachments(ctx, vecs[0], s.Embedder.Model(), f, limit*2)
 	if err != nil {
-		return nil, false, err
+		return nil, false, false, err
 	}
 	fused := rrfFuse(query, limit, lexical, vector, attachments)
-	return fused, false, nil
+	return fused, worded, false, nil
 }
 
 // rrfK is reciprocal rank fusion's damping constant, and the unit the

@@ -294,7 +294,7 @@ stale_after: "2026-12-31T00:00:00Z"   # 参考情報: この瞬間以降に見�
 `generated.at` 以降、つまりいまの内容を確認したエントリ — だけで、
 検証のあとに編集・移動された concept は unverified に戻る(設計
 ドキュメント
-[0138](design/0138-a-verification-stands-until-the-content-moves.md)。
+[0141](design/0141-a-miss-is-read-off-the-words.md) §2.4。
 台帳そのものは append-only のまま残る)。
 ochakai はこれらを spec が定義するとおりに保持する:
 `status` は lifecycle の値だけを持ち(`draft`、`stable`、
@@ -383,7 +383,7 @@ restore を求められたときである(設計ドキュメント
 メモリ上にバッファされ、定期的にフラッシュされる。統計は
 best-effort だと文書化されており、あふれた分はリクエストを詰まらせ
 るのではなく捨てられ、shutdown は最後のフラッシュの前に drain する
-(設計ドキュメント [0069](design/0069-the-loop-and-what-measures-it.md) §3)。
+(設計ドキュメント [0141](design/0141-a-miss-is-read-off-the-words.md) §3)。
 同時編集は同じ文書のハッシュに対する楽観的ロックで扱われる(設計
 ドキュメント [0030](design/0030-optimistic-locking.md))。
 
@@ -489,7 +489,7 @@ score は較正されておらず、二つのモード間で比較できるも�
 付けた `POST /api/v1/review/{id}` が concept の ledger に追記する。
 なぜなら、何も変えない更新は何も書き込まないので、「もう一度確かめた、
 まだ正しい」がどこにも着地しないからである(設計ドキュメント
-[0069](design/0069-the-loop-and-what-measures-it.md) §2。宣言した期限と
+[0141](design/0141-a-miss-is-read-off-the-words.md) §2。宣言した期限と
 引用元からの逆引きは同 §2.2・§2.3 が拡張している)。
 そして**`stale_after` は再検証によってではなく編集によって片づく**
 — これはサーバーが観測したものではなく、その著者が立てた主張だから

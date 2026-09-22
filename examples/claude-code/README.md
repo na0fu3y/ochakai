@@ -20,7 +20,7 @@
      自分を指す concept を `linked_from` として連れてくる。期限の印は
      隠しも減点もしない — 期限切れは「間違い」ではなく「再確認が要る」
      なので(設計ドキュメント
-     [0069](../../docs/design/0069-the-loop-and-what-measures-it.md) §7)、
+     [0141](../../docs/design/0141-a-miss-is-read-off-the-words.md) §7)、
      順位を動かさずに伝えるのがこの一語である。
    - `ochakai-write-back.sh`(**Stop**)はデータ作業のセッションごとに
      一度、エージェントが止まる直前に割り込み、再利用できるクエリと

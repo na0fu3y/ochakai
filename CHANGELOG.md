@@ -23,6 +23,27 @@ last entry.
 
 ### Changed
 
+- **A miss is a search no concept's words matched, so embedding
+  deployments record them at last.** Misses — the `stats` gap lines, the
+  list of what to write next — were defined as searches that returned
+  nothing. The vector half of search has no distance floor: it returns the
+  nearest concepts at any distance, so on a deployment that embeds (the
+  Google Cloud default) a search against a non-empty base never returned
+  nothing, and **`misses.count` stayed at zero there whatever people
+  asked**. A miss is now read off the lexical ranking, which every
+  deployment computes the same way. **The ranking a caller receives does
+  not change by one hit**, and a deployment without embeddings counts
+  exactly what it counted before. The trade: a question the vectors
+  answered by meaning but no concept names in its words is now a miss too,
+  which is what the gap list is for — a concept to write, or a word for an
+  existing concept's `synonyms`. Expect `misses` to start filling after
+  the upgrade on an embedding deployment; nothing is backfilled. The
+  change is [design doc 0141](docs/design/0141-a-miss-is-read-off-the-words.md),
+  which also folds 0069, 0090, 0095, 0137 and 0138 into one record for
+  the loop and what measures it (their decisions carried over unchanged),
+  and the first month's §3 now tells a reader to expect near matches rather
+  than empty results on such a deployment.
+
 - **The first month tells a missing concept from a misnamed one, and
   compares each run of the question set with the last.** A question that
   returned nothing sent the reader straight to writing, but a concept that

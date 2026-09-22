@@ -112,14 +112,14 @@ machine-confirmed で止まる。** `POST /api/v1/review/{id}` は打った
 呼び出し元を台帳に記録するだけで、actor の kind で分岐しない。tier は
 その台帳から導かれ、**立っている検証に `human:` の行が一つでもあれば
 human-reviewed、無ければ machine-confirmed** である(設計ドキュメント
-[0138](design/0138-a-verification-stands-until-the-content-moves.md))。
+[0141](design/0141-a-miss-is-read-off-the-words.md) §2.4)。
 [golden query のカナリア](guides/golden-query-canary.md)は、CI の
 サービスアカウントがこれを打つ運用そのものである — 承認としてではなく、
 「この日、このクエリは走った」という記録として。
 
 **検索の順位は二つの tier を区別しない。** 加点は「いまの内容を誰かが
 確かめた」に対して 1 順位ぶん付き、人か機械かでは重み付けしない(設計
-ドキュメント 0138 §2)。区別が要る読み手は順位ではなく `trust` を読む
+ドキュメント 0141 §2.4)。区別が要る読み手は順位ではなく `trust` を読む
 — `--trust human-reviewed` のフィルタと `ochakai stats` の trust の
 内訳が、その問いに答える面である。
 

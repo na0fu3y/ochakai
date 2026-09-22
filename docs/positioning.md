@@ -220,7 +220,7 @@ revenue = `SUM(price)` の側で、ochakai が持つのは 100 が良いのか�
 鮮度・誰が書いたか を運ぶ構造が無い**ことで、あるのはベンダーごとの
 `custom_extensions` だけである。つまり OKF が中核に置いているもの —
 誰が書き、誰が確認し、いつ古びるか([0065](design/0065-identity-and-provenance.md)・
-[0069](design/0069-the-loop-and-what-measures-it.md))— は Ossie の枠の
+[0141](design/0141-a-miss-is-read-off-the-words.md))— は Ossie の枠の
 外にあり、**二つは同じものを二通りに言っているのではない**。重なって
 いないから、両方置ける。
 
@@ -303,7 +303,7 @@ semantic layer を作って CLI と MCP で配る — 0081 が断った二つ、
 ([0075](design/0075-the-bundle-is-the-address-space.md) §3.1)。人が確かめた
 のか機械かは、その台帳から導かれる tier が言い分ける — 中核に置いているのは
 `human-reviewed` の側である
-([0138](design/0138-a-verification-stands-until-the-content-moves.md))。mem0 の
+([0141](design/0141-a-miss-is-read-off-the-words.md) §2.4)。mem0 の
 history は old / new と `user_id` を持つが行為者の名前を持たず、feedback
 (POSITIVE / NEGATIVE / VERY_NEGATIVE と理由)は蓄えて自社のチューニングに
 使うもので、人が読む面が無い。**mem0 自身の 2026 年の報告が、誰が記憶を
@@ -325,7 +325,7 @@ ochakai は Claude Code の[フック](../examples/claude-code)でそれに
 **期限切れの扱いは、そこで分かれる。** mem0 は期限の切れた記憶を既定で
 検索から隠すが(`show_expired` で戻せる)、ochakai の期限切れは「間違い」
 ではなく「再確認が要る」なので
-([0069](design/0069-the-loop-and-what-measures-it.md) §7)、隠さず、順位も
+([0141](design/0141-a-miss-is-read-off-the-words.md) §7)、隠さず、順位も
 動かさず、想起のポインタ行に印として出す。
 
 ### 自分の文書に対する RAG
@@ -775,7 +775,7 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   検証の古さのフィード、concept に基づいて動いて間違いだったと分かった
   エージェントからの結果報告、そして**答えの無かった問い**
   ([ループ](loop.md)、
-  [0069](design/0069-the-loop-and-what-measures-it.md) §1)。裁定を持つ
+  [0141](design/0141-a-miss-is-read-off-the-words.md) §1)。裁定を持つ
   ものは増えたが、**裁定の効き目を数で持つものは、まだ見ていない。**
 - **向き。** vault は人が人のために書き、エージェントは読み手である —
   最近は書き手でもあるが、監査もされず測られもしない。ochakai の賭けは

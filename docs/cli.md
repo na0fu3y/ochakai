@@ -788,8 +788,9 @@ instance's own list is an administrator's to read.
 
 One line per number, so it composes: cron it and diff the output, or
 grep one line out of it for a prompt or a dashboard. The gap lines are
-the questions that came back empty, most-asked first — the list of what
-to write next.
+the questions no concept's words matched, most-asked first — even where
+the vector half of search returned something — the list of what to
+write next, or which word to add to a concept's synonyms.
 
 The queue lines — drafts waiting to be published or turned down,
 concepts whose failure reports are unanswered, concepts past the expiry
@@ -812,7 +813,7 @@ Flags:
   -json
     	print JSON
   -prefix path
-    	measure only concepts under this path, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed). The unanswered questions are not scoped: one that found nothing found it nowhere
+    	measure only concepts under this path, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed). The unanswered questions are not scoped: one no concept's words matched has no concept to belong to
   -url ochakai use
     	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
 

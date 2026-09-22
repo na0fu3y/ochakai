@@ -198,9 +198,9 @@ warning だが、レベルで絞り込むとこの表を素通りする行が三
 
 | メッセージ | 意味 |
 |---|---|
-| `usage flush failed` | usage イベントのバッチが失われた。設計として best-effort であり(0069 §3)、これが*連続*するならデータベースの調子が悪いということである |
+| `usage flush failed` | usage イベントのバッチが失われた。設計として best-effort であり(0141 §3)、これが*連続*するならデータベースの調子が悪いということである |
 | `usage recording failed` | メモリ上のバッファが満杯 — 20,000 イベント — になり、イベントが捨てられた |
-| `search miss recording failed` | 同じバッファ、同じ取引(0069 §4): 答えの無かった問いが記録されなかった。ナレッジには影響しない; `ochakai stats` が過小に数える |
+| `search miss recording failed` | 同じバッファ、同じ取引(0141 §4): 答えの無かった問いが記録されなかった。ナレッジには影響しない; `ochakai stats` が過小に数える |
 | `query embedding failed; falling back to lexical-only` | Vertex AI が検索に答えなかった; 結果は lexical 側だけでランクされて返る |
 | `document embedding failed; concept remains findable by the lexical half of search` / `storing embedding failed` | concept は書き込まれたがベクトル索引には無い。`ochakai reembed` が直す |
 | `attachment embedding failed; attachment remains findable by name` | 同じことがファイルについて起きた。メッセージは今も *attachment* と言う: 0064 が変えたのはワイヤ上の語であって、ログの語ではない |
@@ -269,7 +269,7 @@ asia-northeast1 のデプロイなら `location=asia-northeast1` が出る。
 入っていないレビューキューとまったく同じに見える。
 
 `ochakai stats` がその答えのすべてである(設計ドキュメント
-[0069](../design/0069-the-loop-and-what-measures-it.md) §5)。その中の行のうち、キュレー
+[0141](../design/0141-a-miss-is-read-off-the-words.md) §5)。その中の行のうち、キュレー
 ターが空にする四つのキューは、それぞれ一覧表示するコマンドを添えて
 出てくる:
 
@@ -285,11 +285,11 @@ edited	2	ochakai list verified_at --trust unverified
 
 それぞれのキューは、それを一覧表示する `sort` にちなんで名付けられて
 いるので、数とそれを見る方法は同じ一語である(設計ドキュメント
-[0069](../design/0069-the-loop-and-what-measures-it.md) §5.2)。`drafts`
+[0141](../design/0141-a-miss-is-read-off-the-words.md) §5.2)。`drafts`
 と `edited` は例外で、単一の sort がそれを一覧表示することは無いから
 である。`edited` は検証の**あとに**編集・移動された concept — 検証は
 いまの内容に立つので、これらは unverified に戻っている(設計ドキュメント
-[0138](../design/0138-a-verification-stands-until-the-content-moves.md))
+[0141](../design/0141-a-miss-is-read-off-the-words.md) §2.4)
 — を数え、内容を確かめて検証し直すと空になる。添えられた一覧では、
 一度も検証されていない concept が第一列(検証時刻)の空の行として
 後ろに続く。
@@ -329,12 +329,12 @@ jobs:
 ```
 
 ochakai 自身は何も配送しない — メールも chat も webhook も無い(設計
-ドキュメント 0069 §6)。上のジョブが配送であり、それはあなたのもので
+ドキュメント 0141 §6)。上のジョブが配送であり、それはあなたのもので
 ある。
 
 キューの深さの履歴も持たない — 数えているのはいまの状態で、先月そこに
 何件あったかを記録するテーブルは無い(設計ドキュメント
-[0095](../design/0095-the-loop-has-a-shape.md) §1)。「キューがコント
+[0141](../design/0141-a-miss-is-read-off-the-words.md) §5.3)。「キューがコント
 ロールできている」を完了条件にしたいなら、上のジョブに `ochakai stats`
 の出力を日付付きで保存させて diff する。一行に一つの数なので、それで
 足りる。
@@ -343,7 +343,7 @@ ochakai 自身は何も配送しない — メールも chat も webhook も無�
 なく「これはうまくいっているか」: ベースのどれだけが確認済みか、今月
 どれだけがレビューを通ったか、そして人々が何を検索して見つけられなかった
 か(設計ドキュメント
-[0069](../design/0069-the-loop-and-what-measures-it.md) §5)。1 行に
+[0141](../design/0141-a-miss-is-read-off-the-words.md) §5)。1 行に
 1 数字なので、キューを見張るのと同じ cron が `>>` と日付でその履歴も
 残せる:
 
@@ -376,7 +376,7 @@ gap	3	arr by segment
   無い。
 - **usage バッファ**: メモリ上に 20,000 イベント、5 秒ごとに flush
   される。上限を超えるとイベントはキューイングされず捨てられる(設計
-  ドキュメント 0069 §3)。
+  ドキュメント 0141 §3)。
 - **生の usage イベント**は 180 日後に pruning される; concept ごとの
   合計は pruning されない。
 - **シャットダウン**: 処理中のリクエストは SIGTERM の後 5 秒をもらい、
@@ -1114,7 +1114,7 @@ bundle という凍結された操作に 429 を足すことになり(0082 §2)�
   ためにそれを外せ。
 
 **デモのデータベースはそれでも育つ。** usage テレメトリ — 検索のヒット
-と fetch の回数(設計ドキュメント 0069 §3)— は、read-only の下でも意図的
+と fetch の回数(設計ドキュメント 0141 §3)— は、read-only の下でも意図的
 に記録され続ける: それは呼び出し元の書き込みではなくサーバー自身の
 観測であり、それを止めれば、デモがいちばん見せたい `sort=usage` の
 フィードが凍りついてしまうからである(設計ドキュメント 0066 §2)。
