@@ -21,6 +21,30 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The first month tells a missing concept from a misnamed one, and
+  compares each run of the question set with the last.** A question that
+  returned nothing sent the reader straight to writing, but a concept that
+  exists under the warehouse's word (`revenue`) and not the team's (`売上`)
+  is fixed by adding the team's word to its `synonyms` (design doc 0105),
+  not by writing a second concept the ruling then has to do twice — and a
+  verified one is re-verified after, because the edit expires it (0138).
+  The re-run of `questions.txt` now keeps the returned ids and diffs them
+  against the previous run, so an addition that pushes another question's
+  answer out of the top three shows up before anyone rules on it. [The
+  positioning page](docs/positioning.md) gains a fifth outside
+  measurement, EvoOntology ([arXiv:2609.15779](https://arxiv.org/abs/2609.15779),
+  checked against the paper on 2026-09-22): the same semantic layer
+  prepended to the prompt can score below having none (−15.0
+  Trajectory-Wise on one backbone) while the same content fetched through
+  MCP tools raises all six, and the paired parent-versus-candidate gate
+  is the most load-bearing step of its refinement loop (−11.2 without it).
+  The page says which half ochakai already has (pointer-only recall and
+  search → get, 0108), which it answers with a person rather than a
+  validation score (0081), and why it does not grow one layer per model.
+  No surface moves.
+
 ## [0.28.6] - 2026-09-13
 
 ### Added
