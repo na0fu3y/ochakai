@@ -142,8 +142,8 @@ export async function loadLoopStats() {
   const truncated = s.embedding?.enabled ? (s.embedding.truncated ?? 0) : 0;
   // Every number keyed by a concept honors the scope — the tallies, the
   // queues, the verifications, the outcomes, the shape. `misses` does
-  // not and cannot: a search that found nothing found it nowhere, so
-  // there is no id to scope it by (design doc 0069 §5.1). Wherever one
+  // not and cannot: a search no concept's words matched matched nothing
+  // anywhere, so there is no id to scope it by (design doc 0141 §5.1). Wherever one
   // is drawn beside a scoped number, it says which it is.
   //
   // Which subtrees were counted is the server's answer, not this page's
@@ -175,7 +175,7 @@ export async function loadLoopStats() {
       ${truncated} 件のナレッジが、埋め込みモデルの入力窓に収まらず<strong>前半だけ</strong>ベクトル検索に載っています(全 ${s.embedding.vectors} 件中)。後半に書かれた内容では見つかりません。語句そのものが含まれていれば字句検索では見つかります。長すぎるナレッジを分けるか、より広い窓のモデルに移すかのどちらかが必要です。</p>` : '') + (gaps.length ? `
     <details style="max-width:48rem;margin:0 0 1.2rem">
       <summary style="cursor:pointer;color:var(--muted)">該当なしの検索(次に書くべきもの)</summary>
-      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日で何も返さなかった検索を、多く尋ねられた順に並べています。</p>
+      <p style="color:var(--muted);font-size:.9rem;margin:.5rem 0">直近 ${s.window_days} 日で、どのナレッジの言葉にも一致しなかった検索を、多く尋ねられた順に並べています。</p>
       ${gaps.map(g => `<div style="display:flex;gap:.6rem;align-items:baseline;padding:.25rem 0">
         <span class="badge">${g.count}×</span>
         <a href="#/search" class="mono" data-gap="${esc(g.query)}">${esc(g.query)}</a></div>`).join('')}

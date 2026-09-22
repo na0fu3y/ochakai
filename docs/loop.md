@@ -140,7 +140,7 @@ reject を待っている concept](images/webui-review.png)
 で、**初日はここが全部 0 である**。順番が意味を持つのは二周目からで、
 エージェントを一度走らせたあとにもう一度見ると、**あなたのチームが実際に
 触れている十件が上に来る**。直近の窓で並ぶことは
-[0090](design/0090-a-queue-ranks-on-what-happened-lately.md) の決定で、
+[0141](design/0141-a-miss-is-read-off-the-words.md) §2.5 の決定で、
 「昔たくさん読まれた」ではなく「いま読まれている」を上に置くためである。
 
 骨格のまま残った concept は誰の邪魔もしない — 検索では verified が上に
@@ -176,7 +176,7 @@ concept を再検証すること、つまり「もう一度確かめた、まだ
 unverified`)は、検証のあとに編集・移動された concept を並べる。tier に
 数えられるのは**いまの内容**を確認した検証だけなので、本文が動けば検証は
 立たなくなり、その concept は unverified に戻る(設計ドキュメント
-[0138](design/0138-a-verification-stands-until-the-content-moves.md))。
+[0141](design/0141-a-miss-is-read-off-the-words.md) §2.4)。
 整形だけの書き込みでは失効しない。台帳が消えるわけでもない — 詳細
 ページでは「検証後に編集」が ✓ の隣に付き、`ochakai get` の provenance 行が
 `verified by … on …, then edited on …` と読む。読み直して問題なければ
@@ -186,23 +186,24 @@ unverified`)は、検証のあとに編集・移動された concept を並べ�
 `ochakai stats`、そして「レビュー」タブのバッジである。おかげで**静かな
 キューが、空のキューに見えなくなる**。`--exit-code` を付ければ、チームに
 知らせる cron ジョブまであと一歩である(設計ドキュメント
-[0069](design/0069-the-loop-and-what-measures-it.md) §5)。そして引用元の文書が変わったときは、
+[0141](design/0141-a-miss-is-read-off-the-words.md) §5)。そして引用元の文書が変わったときは、
 `?source=<uri>` が逆向きに答える — そこから導かれた concept を、concept
 ページの出典行からそのまま辿れる。
 
 ## 何が測られているか
 
 concept ごとの利用回数は、そのナレッジが使われているかを示す。
-`ochakai stats` はインスタンス全体の集計を返し、**何も返さなかった検索**
-もそこに含まれる(設計ドキュメント
-[0069](design/0069-the-loop-and-what-measures-it.md) §4)。結果報告
+`ochakai stats` はインスタンス全体の集計を返し、**どの concept の言葉にも
+一致しなかった検索**もそこに含まれる — 埋め込むデプロイでもベクトルが
+近いものを返したかどうかによらず数える(設計ドキュメント
+[0141](design/0141-a-miss-is-read-off-the-words.md) §4)。結果報告
 (`report_outcome`: worked / failed)は、古びの**証拠にもとづく半分**で
 あり、時間にもとづく `verified_at` / `stale_after` の隣に立つ — golden
 query を実行して違う数字を得たエージェントがそう言い、その concept が
 再検証フィードに浮かんで、人かエージェントが確かめ直す。確かめ直したこと
 自体も記録され(`ochakai verify`、または Web UI の「検証」)、それが
 フィードを空にする(設計ドキュメント
-[0069](design/0069-the-loop-and-what-measures-it.md) §1)。
+[0141](design/0141-a-miss-is-read-off-the-words.md) §1)。
 
 `ochakai stats` の `vectors` と `truncated` は、**ベクトル検索がこのナレッジ
 ベースのどれだけを見ているか**である。埋め込みモデルの入力窓に収まらない
