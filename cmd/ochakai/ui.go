@@ -16,6 +16,8 @@ import (
 	"syscall"
 
 	"golang.org/x/oauth2"
+
+	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
 func cmdUI(ctx context.Context, args []string) error {
@@ -23,7 +25,7 @@ func cmdUI(ctx context.Context, args []string) error {
 		"ui",
 		"Usage: ochakai ui [flags]\n\nServe the web UI at http://127.0.0.1:<port> against the selected\nserver. API calls are proxied with your own Google identity (resolved\nthe same way as every other client command), so no deployment is\nneeded and your edits are recorded as human:<you>. The proxy also\nexposes /mcp, so it doubles as an authenticated local MCP endpoint.\nFor a team-shared UI on Cloud Run, deploy `ochakai serve-ui`.",
 		"  ochakai ui\n  ochakai ui --port 9000\n  claude mcp add --transport http ochakai http://127.0.0.1:8098/mcp\n")
-	port := fs.Int("port", 8098, "port to listen on (always bound to 127.0.0.1: whoever reaches the proxy acts as you)")
+	port := fs.Int("port", defaultUIPort, "port to listen on (always bound to 127.0.0.1: whoever reaches the proxy acts as you)")
 	if _, err := exactArgs(fs, args, 0); err != nil {
 		return err
 	}
@@ -49,7 +51,31 @@ func cmdUI(ctx context.Context, args []string) error {
 	defer stop()
 	fmt.Printf("ochakai ui: http://127.0.0.1:%d → %s as %s (%s); Ctrl-C to stop\n",
 		*port, *target, identity, auth)
+	if st, err := c.Stats(ctx, 0, nil); err == nil {
+		if note := oauthOriginNote(st.Agent, *port); note != "" {
+			fmt.Fprintln(os.Stderr, note)
+		}
+	}
 	return runServer(ctx, fmt.Sprintf("127.0.0.1:%d", *port), handler)
+}
+
+// defaultUIPort is the port the deploy guide tells an operator to
+// register on the OAuth client (deploy/cloudrun/README.md §4c).
+const defaultUIPort = 8098
+
+// oauthOriginNote says, before anybody meets it in a popup, that a query
+// the agent proposes cannot run from this port. Google matches a web
+// client's redirect URI exactly, port included, so a page on any other
+// port than the one registered gets redirect_uri_mismatch — and the page
+// itself cannot tell that apart from a person closing the popup. Empty
+// where there is nothing to run, and on the port the guide registers.
+func oauthOriginNote(a *domain.StatsAgent, port int) string {
+	if a == nil || a.OAuthClientID == "" || port == defaultUIPort {
+		return ""
+	}
+	origin := fmt.Sprintf("http://127.0.0.1:%d", port)
+	return fmt.Sprintf("ochakai ui: running a query the agent proposes needs %s as an authorized JavaScript origin and %s/oauth.html as a redirect URI on this deployment's OAuth client; the deploy guide registers port %d (deploy/cloudrun/README.md §4c)",
+		origin, origin, defaultUIPort)
 }
 
 // uiHandler serves the embedded page at / and reverse-proxies /api/v1

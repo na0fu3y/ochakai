@@ -403,6 +403,10 @@ gcloud run services update ochakai --region=$REGION \
      (`https://ochakai-webui-….run.app`)、手元の `ochakai ui` も使うなら
      `http://127.0.0.1:8098`
    - 承認済みのリダイレクト URI: 上のそれぞれに `/oauth.html` を付けたもの
+
+   Google はオリジンをポートまで完全一致で照合する。`ochakai ui --port`
+   で別のポートを使う人がいるなら、そのオリジンも登録する — 登録の無い
+   ポートで起動した `ochakai ui` は、起動時にそう言う。
 3. クライアント ID(`…apps.googleusercontent.com`、secret ではない)を
    渡す:
 

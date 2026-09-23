@@ -135,6 +135,15 @@ last entry.
 
 ### Changed
 
+- **A query that cannot sign in says why.** Google matches an OAuth web
+  client's redirect URI exactly, port included, so `ochakai ui --port`
+  on a port the operator did not register fails in the popup with
+  `redirect_uri_mismatch`, and the page saw only a closed popup. `ochakai
+  ui` now says so on stderr at start when the deployment's agent runs
+  queries and the port is not the guide's 8098, and the page's message for
+  a popup closed without a token names the origin an operator would
+  register.
+
 - **The agent page says what runs a query, and how long an answer is
   taking.** Its opening line used to say the agent runs no SQL right above
   a button that runs one; it now says the agent proposes and the person

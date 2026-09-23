@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/oauth2"
 
+	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 )
 
@@ -479,5 +480,28 @@ func TestTheUnstampedPageIsNotReachable(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), uiVersionToken) {
 		t.Error("the embedded page is served at its own name, placeholder and all")
+	}
+}
+
+// The note is for the one case a popup would otherwise fail without
+// saying why: a deployment whose agent runs queries, reached from a port
+// the guide did not register.
+func TestOAuthOriginNote(t *testing.T) {
+	sql := &domain.StatsAgent{Enabled: true, OAuthClientID: "1-x.apps.googleusercontent.com"}
+	for _, c := range []struct {
+		name string
+		a    *domain.StatsAgent
+		port int
+		want string
+	}{
+		{"no agent", nil, 9000, ""},
+		{"agent that runs nothing", &domain.StatsAgent{Enabled: true}, 9000, ""},
+		{"registered port", sql, defaultUIPort, ""},
+		{"another port", sql, 9000, "http://127.0.0.1:9000/oauth.html"},
+	} {
+		got := oauthOriginNote(c.a, c.port)
+		if (c.want == "") != (got == "") || !strings.Contains(got, c.want) {
+			t.Errorf("%s: note = %q, want one containing %q", c.name, got, c.want)
+		}
 	}
 }

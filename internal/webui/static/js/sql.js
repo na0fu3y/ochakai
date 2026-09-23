@@ -45,7 +45,12 @@ export function signIn(clientId) {
       done(resolve, token.value);
     };
     window.addEventListener('message', onMessage);
-    const watch = setInterval(() => { if (popup.closed && !token) done(reject, new Error('サインインが閉じられました')); }, 500);
+    // A popup that closes without a token is either the person closing it
+    // or Google refusing this origin (redirect_uri_mismatch) — the page
+    // cannot tell which, so the message names what an operator would fix.
+    const watch = setInterval(() => {
+      if (popup.closed && !token) done(reject, new Error(`サインインが閉じられました。Google の画面にエラー(redirect_uri_mismatch)が出ていたなら、このページのアドレス ${location.origin} が OAuth クライアントに登録されていません — 運用者に伝えてください`));
+    }, 500);
   });
 }
 
