@@ -801,6 +801,8 @@ body:not(.has-agent) .agent-only { display: none !important; }
   border-radius: 10px; background: var(--accent-weak); white-space: normal; }
 .ask-agent { padding: .6rem .8rem; }
 .ask-proposal { margin: .5rem 0; }
+.ask-verdict { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.ask-verdict-form { flex-basis: 100%; }
 .ask-proposal textarea { width: 100%; box-sizing: border-box; font-family: var(--mono, ui-monospace, monospace); font-size: .85rem; }
 .ask-form { position: sticky; bottom: 0; background: var(--bg); padding: .5rem 0; }
 .ask-form textarea { width: 100%; box-sizing: border-box; }

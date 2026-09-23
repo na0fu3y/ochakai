@@ -23,6 +23,24 @@ last entry.
 
 ### Added
 
+- **The person who asked judges the agent's answer, and the loop hears
+  it** ([design doc 0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §3, §6).
+  Every answered turn is kept in its shape — the conversation's first
+  question, the message answered, the concepts read, a proposed query's
+  text; never the answer or a query's result — for 180 days, pruned with
+  the raw usage events and not exported. `POST /api/v1/agent` returns its
+  `turn` id, and `POST /api/v1/agent/turns/{id}` takes the asker's verdict
+  once: `good` becomes their `worked` report on every concept the answer
+  read, `bad` a `failed` report only on the concepts they name in `blame`
+  (naming none blames none). **A verdict verifies nothing.** `keep` puts a
+  good answer's question in the comparison set. The agent reads the turns
+  with a new `list_turns` tool — an administrator's covers everybody,
+  anyone else's only their own — so triage sees what people said was
+  wrong and re-checks the kept questions. `stats.agent.turns` counts the
+  window's turns and verdicts. The web UI puts 合っている / 違う under each
+  answer (hidden on a read-only deployment); 違う asks which concept misled
+  it. REST 14 → 15.
+
 - **The agent can propose a query, and the person runs it as
   themselves** ([design doc 0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §4).
   `OCHAKAI_OAUTH_CLIENT_ID` names a Google OAuth web client (a public

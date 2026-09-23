@@ -69,7 +69,7 @@ function draw(pending) {
   const last = turns.length - 1;
   const out = turns.map((t, i) => t.role === 'user'
     ? `<div class="ask-turn ask-user">${t.sqlResult ? md(t.text) : esc(t.text).replace(/\n/g, '<br>')}</div>`
-    : `<div class="card ask-turn ask-agent">${md(t.text)}${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}</div>`).join('');
+    : `<div class="card ask-turn ask-agent">${md(t.text)}${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}${verdictHTML(t, i)}</div>`).join('');
   $('#ask-turns').innerHTML = out + (pending
     ? '<div class="empty">エージェントが読んでいます…</div>'
     : (turns.length ? '' : '<div class="empty">まだ何も訊いていません。</div>'));
@@ -77,6 +77,58 @@ function draw(pending) {
   $('#ask-count').textContent = left <= 6 ? `この会話はあと ${Math.max(0, Math.floor(left / 2))} 往復まで` : '';
   $('#ask-send').disabled = !!pending || left < 1;
   $('#ask-run')?.addEventListener('click', runProposal);
+  document.querySelectorAll('[data-verdict]').forEach(b => b.addEventListener('click', openVerdict));
+}
+
+// The verdict of the person who asked (design doc 0142 §3). It becomes
+// their own outcome reports — "worked" for what a good answer read,
+// "failed" only for what they say misled a bad one — and verifies
+// nothing. Hidden on a read-only deployment, which refuses reports.
+function verdictHTML(t, i) {
+  if (!t.turn) return '';
+  if (t.verdict) {
+    return `<div class="hint">判定: ${t.verdict === 'good' ? '合っている' : '違う'}(記録済み)</div>`;
+  }
+  return `<div class="ask-verdict write-only" data-turn="${i}">
+      <span class="hint">この答えは</span>
+      <button type="button" class="btn small" data-verdict="good" data-i="${i}">合っている</button>
+      <button type="button" class="btn small" data-verdict="bad" data-i="${i}">違う</button>
+      <div class="ask-verdict-form" id="verdict-${i}" hidden></div>
+    </div>`;
+}
+
+function openVerdict(e) {
+  const i = Number(e.currentTarget.dataset.i), verdict = e.currentTarget.dataset.verdict;
+  const t = turns[i], box = $('#verdict-' + i);
+  const read = t.read || [];
+  box.innerHTML = verdict === 'good'
+    ? `<label class="check"><input type="checkbox" id="keep-${i}"> この問いを比較に使う(棚卸しが、これからもこの答えに届くかを確かめる)</label>`
+    : `<div class="hint">どのナレッジが答えを誤らせましたか。分からなければ選ばずに記録してください — そのときはどのナレッジにも失敗を報告しません。</div>`
+      + read.map(id => `<label class="check"><input type="checkbox" data-blame="${esc(id)}"> <code>${esc(id)}</code></label>`).join('<br>');
+  box.innerHTML += `
+      <input type="text" id="note-${i}" placeholder="一言(任意)— 何が合っていた / 違っていたか" style="width:100%;margin:.3rem 0">
+      <button type="button" class="btn primary small" data-judge="${verdict}" data-i="${i}">記録する</button>`;
+  box.hidden = false;
+  box.querySelector('[data-judge]').addEventListener('click', judge);
+}
+
+async function judge(e) {
+  const i = Number(e.currentTarget.dataset.i), verdict = e.currentTarget.dataset.judge;
+  const t = turns[i], box = $('#verdict-' + i);
+  const body = { verdict, note: $('#note-' + i).value.trim() };
+  if (verdict === 'good') body.keep = $('#keep-' + i).checked;
+  else body.blame = [...box.querySelectorAll('[data-blame]:checked')].map(c => c.dataset.blame);
+  e.currentTarget.disabled = true;
+  try {
+    const res = await api('/api/v1/agent/turns/' + encodeURIComponent(t.turn), { method: 'POST', body });
+    t.verdict = verdict;
+    save();
+    toast(res.reported.length ? `記録しました(${res.reported.length} 件のナレッジに報告)` : '記録しました');
+    draw();
+  } catch (err) {
+    e.currentTarget.disabled = false;
+    toast('記録できませんでした: ' + err.message, 6000);
+  }
 }
 
 // A proposal is the agent asking the person to run something. Only the
@@ -149,7 +201,7 @@ async function answer() {
       // the model reads what it asked for beside what came back.
       body: { messages: turns.map(t => ({ role: t.role, text: t.sql ? `${t.text}\n\n\`\`\`sql\n${t.sql.query}\n\`\`\`` : t.text })) },
     });
-    turns.push({ role: 'agent', text: ans.text, read: ans.read || [], sql: ans.sql || null });
+    turns.push({ role: 'agent', text: ans.text, read: ans.read || [], sql: ans.sql || null, turn: ans.turn || '' });
     save();
     draw();
     return true;

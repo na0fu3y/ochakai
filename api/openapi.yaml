@@ -1503,6 +1503,13 @@ paths:
                     type: array
                     items: { type: string }
                     description: The ids of the concepts the agent fetched to write it, in the order it fetched them.
+                  turn:
+                    type: string
+                    description: >
+                      The id this turn was kept under (design doc 0142 §6),
+                      for the person who asked to judge it with
+                      POST /api/v1/agent/turns/{id}. Absent when it could not
+                      be kept.
                   sql:
                     type: object
                     required: [query, purpose]
@@ -1529,6 +1536,86 @@ paths:
         "413": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
+  /api/v1/agent/turns/{id}:
+    post:
+      operationId: judgeAgentTurn
+      summary: Judge one of the agent's answers
+      description: >
+        The verdict of the person who asked, on one answer of this
+        deployment's agent (design doc 0142 §3, §6). **It becomes their own
+        outcome reports**: `good` reports `worked` against every concept the
+        answer read; `bad` reports `failed` only against the concepts named
+        in `blame` — none is a valid answer, and then no concept is blamed
+        and only the verdict is kept. The note travels with each report.
+        **A verdict verifies nothing** and moves no trust tier.
+
+
+        Once per turn, and only by the person who asked it: anybody else,
+        and a turn past its 180 days, get 404. `keep` (good only) puts the
+        question in the comparison set the agent's triage reads. A
+        read-only deployment refuses it, as it refuses any report.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: The `turn` id POST /api/v1/agent returned.
+        - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
+      requestBody:
+        required: true
+        description: A key outside verdict/note/blame/keep is a 400 naming it (design doc 0064).
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verdict]
+              properties:
+                verdict: { type: string, enum: [good, bad] }
+                note: { type: string, maxLength: 2000, description: What was right or wrong, in a sentence. }
+                blame:
+                  type: array
+                  items: { type: string }
+                  description: Bad only. Concepts the answer read that misled it; each gets a failed report.
+                keep:
+                  type: boolean
+                  description: Good only. Use this question for comparison.
+            example: { verdict: bad, note: 返品を引いていない, blame: [metrics/revenue] }
+      responses:
+        "200":
+          description: The judged turn, and the concepts reported against.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [turn, reported]
+                properties:
+                  turn:
+                    type: object
+                    description: The kept turn — what was asked and read, and the verdict.
+                    properties:
+                      id: { type: string }
+                      at: { type: string, format: date-time }
+                      asked: { type: string }
+                      latest: { type: string }
+                      read: { type: array, items: { type: string } }
+                      proposed_sql: { type: string }
+                      verdict: { type: string }
+                      note: { type: string }
+                      blamed: { type: array, items: { type: string } }
+                      keep: { type: boolean }
+                      judged_at: { type: string, format: date-time }
+                  reported:
+                    type: array
+                    items: { type: string }
+                    description: The concepts an outcome was reported against. One deleted since the answer is skipped.
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/Error" }
+        "405": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/move:
     post:
       operationId: moveConcept
@@ -3374,6 +3461,16 @@ components:
                 when the agent proposes SQL. A public identifier, not a
                 secret: the server holds no warehouse credential and never
                 sees the token.
+            turns:
+              type: object
+              description: >
+                Flow: the turns the agent answered in the window, and how the
+                people who asked judged them (design doc 0142 §6). Absent where
+                there is no agent, and for a caller who reads part of the bundle.
+              properties:
+                count: { type: integer }
+                good: { type: integer }
+                bad: { type: integer }
         files:
           type: object
           description: >

@@ -45,6 +45,11 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 		// (design doc 0109). SetPolicy is the write here, and it is
 		// guarded like every other one.
 		"Policy": true, "RequireAdmin": true,
+		// The agent answers on a read-only deployment (design doc 0142
+		// §5) and its turns are kept there the way a miss is — the
+		// caller's own measurement, not a change to the base. Listing
+		// them is a read. Judging one is a report, and is guarded.
+		"RecordAgentTurn": true, "AgentTurns": true,
 		// Whether this caller may take the archive at a path is the same
 		// kind of question, asked of a read (design doc 0127).
 		"MayArchive": true,

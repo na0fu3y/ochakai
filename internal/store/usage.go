@@ -290,6 +290,10 @@ func (s *Store) maybePruneEvents(ctx context.Context) {
 		eventRetention.String())
 	_, _ = s.pool.Exec(ctx, `DELETE FROM usage_drop WHERE at < now() - $1::interval`,
 		eventRetention.String())
+	// The agent's turns are measurement like a raw event, and keep to the
+	// same window (design doc 0142 §6).
+	_, _ = s.pool.Exec(ctx, `DELETE FROM agent_turn WHERE at < now() - $1::interval`,
+		eventRetention.String())
 }
 
 // Usage returns the running usage totals for one knowledge entry.
