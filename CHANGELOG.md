@@ -21,6 +21,28 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The web UI's agent page asks less of the person reading it.** Under
+  an answer there is one 👎; pressing it opens a single free-text box, and
+  what is recorded is a `bad` verdict blaming no concept. The page no
+  longer offers 合っている, the comparison-set checkbox or the list of
+  concepts to blame — `good`, `keep` and `blame` stay on
+  `POST /api/v1/agent/turns/{id}`. The agent's words and the page's own
+  lines (what was read, the proposal's controls, the verdict) are drawn
+  apart by a rule. The page's preface is gone, the heading is
+  エージェント, a query's result goes back as `実行 SQL(… 読み取り)`
+  without the billing project, and the triage button loses its caption.
+- **Asked to triage where the base holds no reviewed triage Skill, the
+  agent says how to get one** — import the bundled
+  `examples/claude-code/bundle/skills/ochakai-triage.md` as
+  `skills/ochakai-triage`, verify it, ask again — instead of stopping at
+  "there is none".
+- **The first grant added on an empty access policy starts as the
+  policy that holds now** — the whole bundle, `*`, read and write — so
+  saving it alone changes nothing and the boundary is narrowed from
+  there.
+
 ## [0.28.7] - 2026-09-24
 
 ### Added

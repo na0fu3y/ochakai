@@ -185,8 +185,16 @@ export function renderAccess(rules, version = '') {
     admin.title = admin.disabled ? 'バンドル全体の「付与」は置けません(OCHAKAI_ADMINS が答えます)' : '';
   });
 
+  // The first row on an empty policy is the one that says what holds
+  // now — everybody authenticated reads and writes the whole bundle — so
+  // saving it alone changes nothing, and the boundary starts from where
+  // the deployment stands instead of from a blank row that would shut
+  // everybody else out at once.
   $('#access-add').addEventListener('click', () => {
-    rowsBody.insertAdjacentHTML('beforeend', editRow({ prefix: '', principal: '', may_write: false }));
+    const first = !rowsBody.children.length && !rules.length;
+    rowsBody.insertAdjacentHTML('beforeend', editRow(first
+      ? { prefix: '', principal: ANY_PRINCIPAL, may_write: true }
+      : { prefix: '', principal: '', may_write: false }));
     afterRowsChanged();
     rowsBody.lastElementChild.querySelector('[data-f="prefix"]').focus();
   });
