@@ -24,17 +24,19 @@ import (
 
 // webUIMux serves the embedded page and its modules at /, and routes
 // /api/v1 and /mcp through proxy. Callers add their own extras
-// (serve-ui's /health) and wrapping (ui's loopbackHostGuard).
+// (serve-ui's /health, ui's query routes) and wrapping (ui's
+// loopbackHostGuard). runsQueries is whether the caller serves the query
+// routes, which the page is told in its own markup (indexPageFor).
 //
 // The two API patterns are more specific than "/", so they win the
 // ServeMux match however the page's own asset paths are spelled.
-func webUIMux(proxy http.Handler) *http.ServeMux {
+func webUIMux(proxy http.Handler, runsQueries bool) *http.ServeMux {
 	mux := http.NewServeMux()
 	// No method on the catch-all: "GET /" and "/api/v1/" are ambiguous to
 	// ServeMux — one is more specific in its method and the other in its
 	// path — and it says so by panicking at registration. The method
 	// check moves inside the handler instead.
-	mux.Handle("/", assets(webui.Files))
+	mux.Handle("/", assets(webui.Files, runsQueries))
 	mux.Handle("/api/v1/", proxy)
 	mux.Handle("/mcp", proxy)
 	return mux
@@ -75,7 +77,7 @@ func crossOriginGuard(next http.Handler) http.Handler {
 // 304s and an upgrade is picked up on the first load after it. A max-age
 // would serve a module out of cache against an API that has moved on,
 // which is the one failure this page cannot show anybody.
-func assets(files fs.FS) http.Handler {
+func assets(files fs.FS, runsQueries bool) http.Handler {
 	srv := http.FileServerFS(files)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -95,7 +97,7 @@ func assets(files fs.FS) http.Handler {
 		// ServeContent rather than a Write: it does the If-None-Match
 		// check against the ETag already set above, which is what keeps
 		// this page as revalidatable as the twenty files beside it.
-		if page := indexPage(); r.URL.Path == "/" && page != nil {
+		if page := indexPage(runsQueries); r.URL.Path == "/" && page != nil {
 			http.ServeContent(w, r, "index.html", time.Time{}, bytes.NewReader(page))
 			return
 		}
@@ -113,6 +115,13 @@ func assets(files fs.FS) http.Handler {
 // it in would be right for the tag and wrong for the deployment.
 const uiVersionToken = "__OCHAKAI_UI_VERSION__"
 
+// runsQueriesToken is where index.html says whether the proxy in front
+// runs a query the agent proposed (uiquery.go). "proxy" where it does;
+// empty where the page signs the person in itself. A token replaced at
+// serve time for the reason the version is: the same embedded page is
+// served by both commands.
+const runsQueriesToken = "__OCHAKAI_RUNS_QUERIES__"
+
 // indexPage is the page with that token replaced, built once. Escaped on
 // the way in: it lands in an attribute, and while a version is a tag
 // name in every build that reaches a user, -ldflags will stamp whatever
@@ -121,13 +130,28 @@ const uiVersionToken = "__OCHAKAI_UI_VERSION__"
 // nil if the page cannot be read, which leaves the caller serving the
 // embedded bytes — an embedded file that fails to open is not a reason
 // for the UI to stop having a page.
-var indexPage = sync.OnceValue(func() []byte { return indexPageFor(resolveVersion()) })
+var (
+	teamPage  = sync.OnceValue(func() []byte { return indexPageFor(resolveVersion(), false) })
+	localPage = sync.OnceValue(func() []byte { return indexPageFor(resolveVersion(), true) })
+)
 
-func indexPageFor(version string) []byte {
+func indexPage(runsQueries bool) []byte {
+	if runsQueries {
+		return localPage()
+	}
+	return teamPage()
+}
+
+func indexPageFor(version string, runsQueries bool) []byte {
 	b, err := fs.ReadFile(webui.Files, "index.html")
 	if err != nil {
 		return nil
 	}
+	runs := ""
+	if runsQueries {
+		runs = "proxy"
+	}
+	b = bytes.ReplaceAll(b, []byte(runsQueriesToken), []byte(runs))
 	return bytes.ReplaceAll(b, []byte(uiVersionToken), []byte(html.EscapeString(version)))
 }
 

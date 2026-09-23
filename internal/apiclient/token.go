@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/idtoken"
 )
 
@@ -28,6 +29,44 @@ func tokenSource(ctx context.Context, audience string) (oauth2.TokenSource, stri
 		return nil, "", fmt.Errorf("no Google credentials for %s: need service-account ADC or the gcloud CLI (run `gcloud auth login`)", audience)
 	}
 	return oauth2.ReuseTokenSource(nil, gcloudSource{}), "gcloud", nil
+}
+
+// BigQueryReadOnly is the scope a query token is asked for where the
+// credential honours scopes. A gcloud user token does not — it carries
+// cloud-platform — so a caller that must stay read-only checks what it
+// runs rather than trusting the scope (cmd/ochakai, `ochakai ui`).
+const BigQueryReadOnly = "https://www.googleapis.com/auth/bigquery.readonly"
+
+// QueryTokenSource resolves an OAuth access token for calling BigQuery as
+// the same principal tokenSource names to ochakai, in the same order:
+// service-account ADC first, then the gcloud CLI. Resolving them in the
+// same order is what keeps a query from running as somebody other than
+// the name `ochakai ui` printed at start.
+func QueryTokenSource(ctx context.Context) (oauth2.TokenSource, error) {
+	if _, err := idtoken.NewTokenSource(ctx, "https://bigquery.googleapis.com"); err == nil {
+		return google.DefaultTokenSource(ctx, BigQueryReadOnly)
+	}
+	if _, err := exec.LookPath("gcloud"); err != nil {
+		return nil, errors.New("no Google credentials to run a query with: need service-account ADC or the gcloud CLI (run `gcloud auth login`)")
+	}
+	return oauth2.ReuseTokenSource(nil, gcloudAccessSource{}), nil
+}
+
+// gcloudAccessSource is gcloudSource's access-token twin. gcloud does not
+// say when the token expires, so it is reused for well under the hour
+// Google issues it for.
+type gcloudAccessSource struct{}
+
+func (gcloudAccessSource) Token() (*oauth2.Token, error) {
+	out, err := exec.Command("gcloud", "auth", "print-access-token").Output()
+	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+			return nil, fmt.Errorf("gcloud auth print-access-token: %s", strings.TrimSpace(string(ee.Stderr)))
+		}
+		return nil, fmt.Errorf("gcloud auth print-access-token: %w", err)
+	}
+	return &oauth2.Token{AccessToken: strings.TrimSpace(string(out)), Expiry: time.Now().Add(30 * time.Minute)}, nil
 }
 
 type gcloudSource struct{}

@@ -45,19 +45,26 @@ export function signIn(clientId) {
       done(resolve, token.value);
     };
     window.addEventListener('message', onMessage);
-    const watch = setInterval(() => { if (popup.closed && !token) done(reject, new Error('サインインが閉じられました')); }, 500);
+    // A popup that closes without a token is either the person closing it
+    // or Google refusing this origin (redirect_uri_mismatch) — the page
+    // cannot tell which, so the message names what an operator would fix.
+    const watch = setInterval(() => {
+      if (popup.closed && !token) done(reject, new Error(`サインインが閉じられました。Google の画面にエラー(redirect_uri_mismatch)が出ていたなら、このページのアドレス ${location.origin} が OAuth クライアントに登録されていません — 運用者に伝えてください`));
+    }, 500);
   });
 }
 
 // run executes one query in the named billing project and waits for it
 // (up to about a minute) — jobs.query answers at once for a small query
-// and hands back a job to poll for a slow one.
+// and hands back a job to poll for a slow one. With no token it goes to
+// the same paths on this origin, where `ochakai ui` runs it as the person
+// and adds the credential itself.
 export async function run(tok, project, query) {
-  const base = `https://bigquery.googleapis.com/bigquery/v2/projects/${encodeURIComponent(project)}`;
+  const base = `${tok ? 'https://bigquery.googleapis.com' : ''}/bigquery/v2/projects/${encodeURIComponent(project)}`;
   const call = async (path, init) => {
-    const res = await fetch(base + path, {
-      ...init, headers: { Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json' },
-    });
+    const headers = { 'Content-Type': 'application/json' };
+    if (tok) headers.Authorization = 'Bearer ' + tok;
+    const res = await fetch(base + path, { ...init, headers });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error?.message || `BigQuery ${res.status}`);
     return body;

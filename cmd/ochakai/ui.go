@@ -16,12 +16,14 @@ import (
 	"syscall"
 
 	"golang.org/x/oauth2"
+
+	"github.com/na0fu3y/ochakai/internal/apiclient"
 )
 
 func cmdUI(ctx context.Context, args []string) error {
 	fs, target := newFlagSet(
 		"ui",
-		"Usage: ochakai ui [flags]\n\nServe the web UI at http://127.0.0.1:<port> against the selected\nserver. API calls are proxied with your own Google identity (resolved\nthe same way as every other client command), so no deployment is\nneeded and your edits are recorded as human:<you>. The proxy also\nexposes /mcp, so it doubles as an authenticated local MCP endpoint.\nFor a team-shared UI on Cloud Run, deploy `ochakai serve-ui`.",
+		"Usage: ochakai ui [flags]\n\nServe the web UI at http://127.0.0.1:<port> against the selected\nserver. API calls are proxied with your own Google identity (resolved\nthe same way as every other client command), so no deployment is\nneeded and your edits are recorded as human:<you>. The proxy also\nexposes /mcp, so it doubles as an authenticated local MCP endpoint.\nA query the deployment's agent proposes runs from here as you, too, with\nno sign-in popup: the proxy asks BigQuery for a dry run first and runs\nonly a SELECT, capped at 10 GiB billed.\nFor a team-shared UI on Cloud Run, deploy `ochakai serve-ui`.",
 		"  ochakai ui\n  ochakai ui --port 9000\n  claude mcp add --transport http ochakai http://127.0.0.1:8098/mcp\n")
 	port := fs.Int("port", 8098, "port to listen on (always bound to 127.0.0.1: whoever reaches the proxy acts as you)")
 	if _, err := exactArgs(fs, args, 0); err != nil {
@@ -41,7 +43,13 @@ func cmdUI(ctx context.Context, args []string) error {
 		return fmt.Errorf("server %s is not reachable: %w", *target, err)
 	}
 
-	handler, err := uiHandler(*target, c.TokenSource())
+	// Where no credential can run a query, the page falls back to
+	// signing the person in itself, as the team web UI does.
+	queries, qerr := apiclient.QueryTokenSource(ctx)
+	if qerr != nil {
+		queries = nil
+	}
+	handler, err := uiHandler(*target, c.TokenSource(), queries)
 	if err != nil {
 		return err
 	}
@@ -55,11 +63,12 @@ func cmdUI(ctx context.Context, args []string) error {
 // uiHandler serves the embedded page at / and reverse-proxies /api/v1
 // and /mcp to target, replacing any browser-supplied credentials with
 // a fresh ID token from tokens (nil = plain-http development server,
-// forward without credentials). The delegation header is stripped too:
+// forward without credentials). With queries, it also runs a query the
+// agent proposed, as you (uiquery.go); nil leaves that to the page. The delegation header is stripped too:
 // this proxy has no verified source for one (serve-ui gets its from
 // IAP, design doc 0032), and a page that could set it would be forging
 // an author on a server where you are permitted to delegate.
-func uiHandler(target string, tokens oauth2.TokenSource) (http.Handler, error) {
+func uiHandler(target string, tokens, queries oauth2.TokenSource) (http.Handler, error) {
 	u, err := url.Parse(target)
 	if err != nil {
 		return nil, fmt.Errorf("invalid server URL %q: %w", target, err)
@@ -71,7 +80,11 @@ func uiHandler(target string, tokens oauth2.TokenSource) (http.Handler, error) {
 			}
 		}
 	})
-	return loopbackHostGuard(crossOriginGuard(webUIMux(stripDelegation(proxy)))), nil
+	mux := webUIMux(stripDelegation(proxy), queries != nil)
+	if queries != nil {
+		mux.Handle("/bigquery/v2/", queryHandler(queries))
+	}
+	return loopbackHostGuard(crossOriginGuard(mux)), nil
 }
 
 // loopbackHostGuard fends off the way a web page in the user's browser

@@ -835,6 +835,9 @@ server. API calls are proxied with your own Google identity (resolved
 the same way as every other client command), so no deployment is
 needed and your edits are recorded as human:<you>. The proxy also
 exposes /mcp, so it doubles as an authenticated local MCP endpoint.
+A query the deployment's agent proposes runs from here as you, too, with
+no sign-in popup: the proxy asks BigQuery for a dry run first and runs
+only a SELECT, capped at 10 GiB billed.
 For a team-shared UI on Cloud Run, deploy `ochakai serve-ui`.
 
 Flags:

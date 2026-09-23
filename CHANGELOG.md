@@ -135,6 +135,18 @@ last entry.
 
 ### Changed
 
+- **`ochakai ui` runs a query the agent proposed itself, as you.** The
+  page no longer opens Google's sign-in popup there, and no OAuth origin
+  has to be registered for it, on any port. The proxy calls BigQuery with
+  the identity it already resolves for ochakai (service-account ADC, else
+  gcloud), dry-runs every query first and runs **only a SELECT** — a
+  gcloud token is `cloud-platform`-scoped, so this check is what keeps a
+  proposal read-only — with `maximumBytesBilled` fixed at 10 GiB and only
+  the request fields the page uses passed on. Where no credential can run
+  a query, the page falls back to the popup. The team web UI
+  (`serve-ui`) is unchanged. When a popup closes without a token, the page
+  now names the origin an operator would register.
+
 - **The agent page says what runs a query, and how long an answer is
   taking.** Its opening line used to say the agent runs no SQL right above
   a button that runs one; it now says the agent proposes and the person

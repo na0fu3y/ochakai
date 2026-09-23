@@ -12,7 +12,7 @@
 // page says so where the question is typed rather than leaving the
 // reader to find out from an answer.
 
-import { AGENT_CLIENT, AGENT_PROJECT, api, toast } from '../api.js';
+import { AGENT_CLIENT, AGENT_PROJECT, PROXY_RUNS, api, toast } from '../api.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { entryHash } from '../format.js';
@@ -156,14 +156,18 @@ function proposalHTML(sql, open) {
   if (!open) return `<pre><code>${esc(sql.query)}</code></pre>`;
   let project = '';
   try { project = localStorage.getItem(PROJECT_KEY) || ''; } catch { /* asked each time */ }
-  const how = AGENT_CLIENT
-    ? `あなたの Google アカウントの権限(BigQuery の読み取りだけ)で実行します。${AGENT_PROJECT ? `課金はプロジェクト ${AGENT_PROJECT} で、` : ''}一回の上限は ${fmtBytes(MAX_BYTES_BILLED)} です。`
+  const runs = AGENT_CLIENT || PROXY_RUNS;
+  const who = PROXY_RUNS
+    ? 'ochakai ui を動かしているあなたの Google アカウントの権限で、SELECT であることを確かめてから実行します。'
+    : 'あなたの Google アカウントの権限(BigQuery の読み取りだけ)で実行します。';
+  const how = runs
+    ? `${who}${AGENT_PROJECT ? `課金はプロジェクト ${AGENT_PROJECT} で、` : ''}一回の上限は ${fmtBytes(MAX_BYTES_BILLED)} です。`
     : 'このデプロイには実行のためのサインインが設定されていません。自分で実行して、結果を次のメッセージに貼ってください。';
   return `
     <div class="ask-proposal">
       <div class="hint">エージェントはこの SQL の実行を提案しています。${esc(how)}</div>
       <textarea id="ask-sql" rows="${Math.min(14, sql.query.split('\n').length + 1)}" aria-label="提案された SQL">${esc(sql.query)}</textarea>
-      ${AGENT_CLIENT ? `<div class="toolbar">
+      ${runs ? `<div class="toolbar">
         ${AGENT_PROJECT ? '' : `<label class="check">課金するプロジェクト <input type="text" id="ask-project" value="${esc(project)}" placeholder="my-project" style="width:12rem"></label>`}
         <button type="button" id="ask-run" class="btn primary">実行して結果を返す</button>
       </div>` : ''}
@@ -181,7 +185,7 @@ async function runProposal() {
   btn.disabled = true;
   btn.textContent = '実行しています…';
   try {
-    const tok = await signIn(AGENT_CLIENT);
+    const tok = PROXY_RUNS ? null : await signIn(AGENT_CLIENT);
     const res = await run(tok, project, query);
     turns.push({ role: 'user', text: asMessage(project, query, res), sqlResult: true });
     save();
