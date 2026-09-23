@@ -30,8 +30,13 @@
 
 三つ目は、ループのうち**人の手が追いつかなくなる側**を回すためにある。
 
-3. **[skills/ochakai-triage](skills/ochakai-triage/SKILL.md)** は、
-   「ochakai の棚卸し」と頼まれたときにエージェントが従う手順である。
+3. **[bundle/skills/ochakai-triage](bundle/skills/ochakai-triage.md)** は、
+   「ochakai の棚卸し」と頼まれたときにエージェントが従う手順で、
+   スクリプトではなく **`type: Skill` の concept** として出荷している
+   ([bigquery-catalog](../bigquery-catalog) の初日の手順と同じ形)。
+   ナレッジベースに入れれば、エージェントは検索で見つけ(想起フックも
+   「棚卸し」でそれを指す)、人は他の concept と同じく読んで verify
+   でき、合わなかった回は failed の報告として手順自身に溜まる。
    `ochakai stats` の答えられなかった問いと、答えの無い失敗報告を読んで
    束ね、**見せ方**(在るのにその語で引けない — `synonyms` を足す)・
    **中身**(無い — 根拠を取って書く)・**構造**・**ノイズ**に振り分け、
@@ -59,15 +64,19 @@ cp hooks/ochakai-*.sh .claude/hooks/
 chmod +x .claude/hooks/ochakai-*.sh
 # settings.json の "hooks" キーを .claude/settings.json にマージする
 
-# 棚卸しの skill を使うなら
-mkdir -p .claude/skills
-cp -r skills/ochakai-triage .claude/skills/
+# 棚卸しの手順をナレッジベースに入れる(読んで verify してから使う)
+ochakai import bundle
 ```
 
-skill が書き込むには、エージェントとして記録される MCP 接続が要る —
+Claude Code に言葉で呼ばせたいなら、同じファイルを
+`.claude/skills/ochakai-triage/SKILL.md` に写してもよい — frontmatter の
+`name` はそのためのキーで、OKF の側では書き手のキーとしてそのまま残る。
+ただし写しは ochakai の検証の外に出るので、正本はナレッジベースの側である。
+
+手順が書き込むには、エージェントとして記録される MCP 接続が要る —
 `Ochakai-On-Behalf-Of` ヘッダを載せた接続である
 ([MCP クライアント](../../docs/guides/mcp-clients.md#claude-code))。
-それが無ければ skill は何も書かず、書くはずだった本文を裁定の一枚に
+それが無ければ何も書かず、書くはずだった本文を裁定の一枚に
 載せるだけになる。
 
 どちらのスクリプトも `jq` を要り、失敗しても黙る: 届かないナレッジ

@@ -76,7 +76,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 ([最初のひと月](guides/onboarding.md) §3)、**育てるループそのものも
 クライアントの側に採った** — 答えられなかった問いと失敗報告を束ね、
 見せ方・中身・構造に振り分け、根拠のある候補だけを一件ずつ書いて前後を
-比べる [棚卸しの skill](../examples/claude-code/skills/ochakai-triage/SKILL.md)
+比べる [棚卸しの skill](../examples/claude-code/bundle/skills/ochakai-triage.md)
 である。あちらでも LLM が走るのは層を**書く**エージェントの側で、MCP
 サーバー自体は引かれたものを返すだけなので、形は同じである。ochakai の
 中に LLM は入らない([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md))。

@@ -23,34 +23,34 @@ last entry.
 
 ### Added
 
-- **A Claude Code skill runs the half of the loop people can no longer
-  keep up with.** [examples/claude-code](examples/claude-code) now ships
-  `skills/ochakai-triage`: asked to take stock, the agent reads the `stats`
-  gap lines and the unanswered failure reports, groups them, sorts each
-  group into exposure (the concept exists but not under that word — add
-  `synonyms`), content (it does not exist — probe the warehouse with the
-  user's own tools, then write), structure, or noise, and writes at most
-  five drafts, one at a time. After each write it re-runs `questions.txt`
-  and keeps only a candidate whose target question now returns it in the
-  top three while no question loses an id it had before; the rest it
-  reverts or lists as "recommend rejecting". What reaches a person is one
-  page of what passed, what did not, and what was discarded and why. The
-  shape is EvoOntology's refinement loop
+- **A procedure an agent follows runs the half of the loop people can no
+  longer keep up with.** [examples/claude-code](examples/claude-code)
+  now ships a one-concept bundle, `skills/ochakai-triage` (`type: Skill`,
+  the same form as the day-one procedure in examples/bigquery-catalog):
+  imported into the base, an agent finds it by search — the recall hook
+  points at it when asked to take stock (`棚卸し`) — and a person verifies
+  it like any other concept. Asked to take stock, the agent reads the
+  `stats` gap lines and the unanswered failure reports, groups them,
+  sorts each group into exposure (the concept exists but not under that
+  word — add `synonyms`), content (it does not exist — probe the warehouse
+  with the user's own tools, then write), structure, or noise, and writes
+  at most five drafts, one at a time. After each write it re-runs
+  `questions.txt` and keeps only a candidate whose target question now
+  returns it in the top three while no question loses an id it had
+  before; the rest it reverts or lists as "recommend rejecting". What
+  reaches a person is one page of what passed, what did not, and what was
+  discarded and why. The shape is EvoOntology's refinement loop
   ([arXiv:2609.15779](https://arxiv.org/abs/2609.15779)) — diagnose,
   attribute, localized edit, paired comparison — with the gate split in
   two: the comparison decides what stays, a person decides what is
-  accepted. The skill never verifies (`machine-confirmed` is for checks
-  that compare content, like the canary), and writes only through an MCP
-  connection that records it as a process, so a proposal never reads as
-  something the reviewer wrote. [The positioning page](docs/positioning.md)
-  says what it keeps from the paper and what it gives up — the tool layer,
-  57% of the paper's gain, stays one contract for every client. The one
-  count that moves is `DOC`, 27 → 28: a skill's frontmatter is not OKF,
-  so the rule that reads frontmatter under `examples/` as knowledge now
-  names skills as the exception rather than letting the page drop out of
-  the manual ([docs/surface.md](docs/surface.md) answers the three
-  questions). No endpoint, tool, command or variable moves, and ochakai
-  still runs no LLM.
+  accepted. The procedure never verifies (`machine-confirmed` is for
+  checks that compare content, like the canary), follows itself only once
+  a person has reviewed it, never writes a `Skill`, and writes only
+  through an MCP connection that records it as a process, so a proposal
+  never reads as something the reviewer wrote. [The positioning
+  page](docs/positioning.md) says what it keeps from the paper and what it
+  gives up — the tool layer, 57% of the paper's gain, stays one contract
+  for every client. No surface moves; ochakai still runs no LLM.
 
 ### Changed
 

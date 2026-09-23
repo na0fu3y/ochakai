@@ -94,7 +94,7 @@ UserPromptSubmit フックがエージェントの開始前に関連ナレッジ
 
 **入ってくる量が裁定する人の手を超えたら**、答えられなかった問いの棚卸し
 をエージェントに回させる。同じ場所にある
-[skill](../examples/claude-code/skills/ochakai-triage/SKILL.md) が、問いを
+[skill](../examples/claude-code/bundle/skills/ochakai-triage.md) が、問いを
 束ねて振り分け、根拠のある候補だけを書き、`questions.txt` で前後を比べ、
 人が読む分だけを一枚にする。裁定は変わらず人のもので、skill は verify を
 打たない。

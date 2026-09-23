@@ -273,7 +273,7 @@ draft で埋まっているなら、そこが裁定すべき場所である。�
 
 **gap 行と失敗報告が、週に一度では読み切れなくなったら**、§3 の仕分けと
 前後の比較をエージェントに回させる
-([棚卸しの skill](../../examples/claude-code/skills/ochakai-triage/SKILL.md))。
+([棚卸しの skill](../../examples/claude-code/bundle/skills/ochakai-triage.md))。
 手順は §3 と同じで、違うのは束ねて振り分けるのがエージェントになり、
 人の前に来るのが通過した候補と却下を勧めるものの一枚になることである。
 

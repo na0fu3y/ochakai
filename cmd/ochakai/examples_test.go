@@ -127,7 +127,7 @@ func TestExampleBundlesReadCleanly(t *testing.T) {
 // trusted (design doc 0035).
 func exampleBundleRoots(t *testing.T) []string {
 	t.Helper()
-	roots := []string{"../../examples/bigquery-catalog/bundle", "../../examples/demo"}
+	roots := []string{"../../examples/bigquery-catalog/bundle", "../../examples/claude-code/bundle", "../../examples/demo"}
 	// examples/golden-query.md is one document for `ochakai put -f`, not a
 	// bundle; TestGoldenQueryExampleParses in internal/service pins it.
 	exempt := map[string]bool{"../../examples/golden-query.md": true}
@@ -146,7 +146,7 @@ func exampleBundleRoots(t *testing.T) []string {
 			return nil
 		}
 		slash := filepath.ToSlash(p)
-		if exempt[slash] || isAgentSkill(strings.TrimPrefix(slash, "../../")) {
+		if exempt[slash] {
 			return nil
 		}
 		for _, root := range roots {
