@@ -327,7 +327,11 @@ func (s *Service) filesState(sc *Scope) *domain.StatsFiles {
 // there stops the start (design doc 0142 §5).
 func (s *Service) agentState(sc *Scope) *domain.StatsAgent {
 	if s.Model != nil {
-		return &domain.StatsAgent{Enabled: true}
+		st := &domain.StatsAgent{Enabled: true}
+		if s.Config != nil && s.Config.Agent != nil {
+			st.OAuthClientID = s.Config.Agent.OAuthClientID
+		}
+		return st
 	}
 	st := &domain.StatsAgent{}
 	if sc != nil && sc.Everything() && (s.Config == nil || !s.Config.Anonymous()) {

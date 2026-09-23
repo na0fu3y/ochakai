@@ -29,6 +29,28 @@ const system = `あなたは ochakai のデータエージェントである。o
 - 手順が CLI のコマンドで書かれていたら、同じ読みをする道具に読み替えて自分で行う: ochakai search → search_concepts、ochakai get → get_concept、ochakai list → list_concepts、ochakai stats → get_stats、ochakai usage → get_usage、ochakai log → read_log。書き込むコマンドと SQL だけは読み替えられない。
 - 手順の材料として get_stats(答えられなかった問いと四つのキュー)、list_concepts(sort=failed / usage / stale_after)、get_usage(失敗報告の note)、read_log(却下とその理由)が使える。`
 
+// systemSQL is added where the agent may propose a query (design doc
+// 0142 §4). The server still runs nothing: a proposal ends the turn, and
+// the person who asked decides whether to run it as themselves.
+const systemSQL = `
+
+SQL を提案できるとき(この版):
+- 数字を出すのに SQL が要るときは、propose_sql で一つだけ提案して止まる。実行するのはあなたではなく、問うた人である — その人が自分の権限で走らせるかを決め、走らせたら結果が次のメッセージとして届く。
+- 書く前に、同じ問いに答える Attested Computation を search_concepts で探す。あれば、その SQL をそのまま使い、id を purpose に書く。無ければ、読んだ Metric・BigQuery Table の concept に沿って書き、どの concept に沿ったかを purpose に書く。
+- 読むだけの SELECT に限る。一度に一つ。対象のテーブルは完全修飾名で書く。
+- 結果が届いたら、その数字を、使った concept の読み方(linked_from の insight)に照らして答える。結果の行はナレッジではないので、concept と同じ形では引かない。`
+
+// proposeSQL is the one tool that is not a read: it asks the person to
+// run a query. Nothing is executed by calling it (design doc 0142 §4).
+var proposeSQL = llm.Tool{
+	Name:        "propose_sql",
+	Description: "BigQuery の SQL を一つ、問うた人に実行してもらうよう提案する。呼ぶとこの応答は終わり、人が自分の権限で実行するかを決める。実行されれば結果が次のメッセージで届く。",
+	Parameters: object(map[string]any{
+		"query":   str("読むだけの SELECT。テーブルは完全修飾名"),
+		"purpose": str("何を確かめる SQL か、どの concept に沿ったか(一、二文)"),
+	}, "query", "purpose"),
+}
+
 // tools are the reads the agent may make. Each is a service call made as
 // the person who asked, so an access policy narrows the agent exactly as
 // it narrows them (design doc 0109).

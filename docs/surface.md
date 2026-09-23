@@ -81,7 +81,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - MCP-BYTES-SLACK: 500
 - CLI: 24
 - FLAG: 27
-- ENV: 16
+- ENV: 17
 - VOCAB: 46
 - DOC: 27
 
@@ -692,7 +692,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 `--note` は増えていない — `report` と `reject` が既に持っていた語を
 `delete` が受け継いだだけで、**既存の語彙を使い回すのは無料**である。
 
-## ENV (16)
+## ENV (17)
 
 環境変数も表面である — デプロイする人が読み、間違えられる。No FDE(C4)
 を掲げる以上、**設定の数は「自分で立ち上げられるか」に直接効く**。
@@ -740,6 +740,16 @@ ochakai が定義した変数ではなく、**既にある綴りを読んだ**�
 だけで足りるのは、この機能に「常に付ける」の用途が無いからである
 (0111 §5)。
 
+**16 → 17 は [0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)
+§4 の `OCHAKAI_OAUTH_CLIENT_ID` である。天井を上げる決定であり、そう言って
+上げている。** エージェントが提案した SQL を、ページが**本人の身元で**
+走らせるには、Google のサインインに使う Web クライアントが要る。
+`OCHAKAI_AGENT` に畳めなかったのは、二つが別の事実だからである — モデルは
+サーバーが呼ぶもの、クライアントはブラウザが名乗るもので、片方だけで
+エージェントは成り立つ(SQL を提案しないだけ)。**secret は増えていない**:
+クライアント ID は公開の識別子で、`stats` がページに渡し、サーバーは
+トークンを一度も見ない。エージェント無しで設定すれば起動を断る。
+
 **15 → 16 は [0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) の
 `OCHAKAI_AGENT` である。天井を上げる決定であり、そう言って上げている。**
 一語で済ませたのは [0078](design/0078-one-variable-says-how-it-embeds.md)
@@ -782,6 +792,7 @@ ochakai が定義した変数ではなく、**既にある綴りを読んだ**�
 - `OCHAKAI_GCS_BUCKET`
 - `OCHAKAI_IAP_AUDIENCE`
 - `OCHAKAI_MODE`
+- `OCHAKAI_OAUTH_CLIENT_ID`
 - `OCHAKAI_OIDC_AUDIENCE`
 - `OCHAKAI_OIDC_ISSUER`
 - `OCHAKAI_PRODUCER`

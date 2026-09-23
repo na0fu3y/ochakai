@@ -1443,8 +1443,16 @@ paths:
         **The agent rules on nothing and, in this release, writes
         nothing**: no draft, no verification, no rejection, no report.
         Where a procedure it follows would write, it puts the text it
-        would have written in the reply for a person to write. It runs no
-        SQL. Nothing is stored, so a read-only deployment answers it.
+        would have written in the reply for a person to write.
+
+
+        **The server runs no SQL.** Where the deployment names an OAuth
+        client (`OCHAKAI_OAUTH_CLIENT_ID`), the agent may end a turn by
+        proposing one query in `sql`. It is a proposal: the person who
+        asked reads it, runs it as themselves if they choose (the bundled
+        web UI does so from the browser with their own token, capped by
+        `maximumBytesBilled`), and sends what came back as their next
+        message. Nothing is stored, so a read-only deployment answers it.
         The model runs in the deployment's region (design doc 0142 §5); a
         failure to reach it is a 500 naming the model's answer.
       parameters:
@@ -1495,6 +1503,20 @@ paths:
                     type: array
                     items: { type: string }
                     description: The ids of the concepts the agent fetched to write it, in the order it fetched them.
+                  sql:
+                    type: object
+                    required: [query, purpose]
+                    description: >
+                      Present when the agent stopped to ask for a query to be
+                      run. Nothing has been executed; running it is the
+                      caller's choice, as the caller.
+                    properties:
+                      query:
+                        type: string
+                        description: One read-only BigQuery statement.
+                      purpose:
+                        type: string
+                        description: What it checks, and which concept it follows.
               example:
                 text: "売上は税と送料を除く(metrics/revenue、human-reviewed)。"
                 read: [metrics/revenue, insights/revenue-seasonality]
@@ -3343,6 +3365,15 @@ components:
                 Absent unless the agent is off and this caller holds the
                 whole bundle, and on `public` and `sandbox`, which refuse
                 the agent at start.
+            oauth_client_id:
+              type: string
+              description: >
+                The Google OAuth web client a page signs a person in with to
+                run a query the agent proposed, as that person
+                (`OCHAKAI_OAUTH_CLIENT_ID`, design doc 0142 §4). Present only
+                when the agent proposes SQL. A public identifier, not a
+                secret: the server holds no warehouse credential and never
+                sees the token.
         files:
           type: object
           description: >

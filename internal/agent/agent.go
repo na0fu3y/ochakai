@@ -34,9 +34,21 @@ type Message struct {
 
 // Answer is what one call returns: the agent's reply, and the concepts it
 // read to write it, in the order it read them.
+//
+// SQL is present when the agent stopped to ask for a query to be run.
+// It is a proposal: the server runs nothing (design doc 0142 §4). The
+// person who asked reads it, runs it as themselves if they choose, and
+// sends what came back as their next message.
 type Answer struct {
-	Text string   `json:"text"`
-	Read []string `json:"read"`
+	Text string    `json:"text"`
+	Read []string  `json:"read"`
+	SQL  *Proposal `json:"sql,omitempty"`
+}
+
+// Proposal is one query the agent asks the person to run.
+type Proposal struct {
+	Query   string `json:"query"`
+	Purpose string `json:"purpose"`
 }
 
 // Limits on what one call may carry and spend. A conversation longer
@@ -69,12 +81,25 @@ func Run(ctx context.Context, svc *service.Service, msgs []Message) (*Answer, er
 
 	r := &run{svc: svc, read: []string{}, seen: map[string]bool{}}
 	req := llm.Request{System: system, Contents: contents, Tools: tools}
+	if proposesSQL(svc) {
+		req.System += systemSQL
+		req.Tools = append(append([]llm.Tool(nil), tools...), proposeSQL)
+	}
 	for range maxRounds {
 		turn, err := svc.Model.Generate(ctx, req)
 		if err != nil {
 			return nil, fmt.Errorf("the agent could not answer: %w", err)
 		}
 		calls := turn.Calls()
+		if p := proposal(calls); p != nil && proposesSQL(svc) {
+			// The turn ends here, whatever else the model asked for in
+			// it: the next step is the person's.
+			text := strings.TrimSpace(turn.Text())
+			if text == "" {
+				text = p.Purpose
+			}
+			return &Answer{Text: text, Read: r.read, SQL: p}, nil
+		}
 		if len(calls) == 0 {
 			text := strings.TrimSpace(turn.Text())
 			if text == "" {
@@ -91,6 +116,27 @@ func Run(ctx context.Context, svc *service.Service, msgs []Message) (*Answer, er
 		req.Contents = append(req.Contents, turn.Content, llm.Content{Role: "user", Parts: answers})
 	}
 	return nil, fmt.Errorf("the agent did not finish within %d rounds of reading", maxRounds)
+}
+
+// proposesSQL is whether this deployment can have a proposed query run:
+// only where the page has a client to sign a person in with.
+func proposesSQL(svc *service.Service) bool {
+	return svc.Config != nil && svc.Config.Agent != nil && svc.Config.Agent.OAuthClientID != ""
+}
+
+// proposal is the first propose_sql call in a turn, or nil. A call with
+// no query is not a proposal; the model is told so by the loop going on.
+func proposal(calls []llm.FunctionCall) *Proposal {
+	for _, c := range calls {
+		if c.Name != proposeSQL.Name {
+			continue
+		}
+		a := args(c.Args)
+		if q := a.str("query"); q != "" {
+			return &Proposal{Query: q, Purpose: a.str("purpose")}
+		}
+	}
+	return nil
 }
 
 func validate(msgs []Message) ([]llm.Content, error) {
