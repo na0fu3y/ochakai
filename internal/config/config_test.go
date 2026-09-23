@@ -533,3 +533,31 @@ func TestOAuthClientNeedsTheAgent(t *testing.T) {
 		t.Error("a malformed client id was accepted")
 	}
 }
+
+// The billing project is only read where the page runs queries, and it
+// is spelled as a project id.
+func TestBigQueryProjectNeedsTheClient(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
+	t.Setenv("OCHAKAI_AGENT", "gemini-x")
+	t.Setenv("OCHAKAI_BIGQUERY_PROJECT", "analytics-billing")
+	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "OCHAKAI_OAUTH_CLIENT_ID") {
+		t.Errorf("a project without a client: err = %v", err)
+	}
+	t.Setenv("OCHAKAI_OAUTH_CLIENT_ID", "1-abc.apps.googleusercontent.com")
+	for _, ok := range []string{"analytics-billing", "example.com:my-project"} {
+		t.Setenv("OCHAKAI_BIGQUERY_PROJECT", ok)
+		cfg, err := FromEnv()
+		if err != nil {
+			t.Fatalf("%s: %v", ok, err)
+		}
+		if cfg.Agent.BigQueryProject != ok {
+			t.Errorf("project = %q, want %q", cfg.Agent.BigQueryProject, ok)
+		}
+	}
+	for _, bad := range []string{"My-Project", "123456789012", "projects/x", "ab"} {
+		t.Setenv("OCHAKAI_BIGQUERY_PROJECT", bad)
+		if _, err := FromEnv(); err == nil {
+			t.Errorf("%q was accepted", bad)
+		}
+	}
+}

@@ -8,10 +8,11 @@
 // closing the tab does, which is the same lifetime a chat window has.
 //
 // The agent reads and answers. It writes nothing, rules on nothing and
-// runs no SQL, and the page says so where the question is typed rather
-// than leaving the reader to find out from an answer.
+// runs no SQL — where it proposes a query, the person runs it — and the
+// page says so where the question is typed rather than leaving the
+// reader to find out from an answer.
 
-import { AGENT_CLIENT, api, toast } from '../api.js';
+import { AGENT_CLIENT, AGENT_PROJECT, api, toast } from '../api.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { entryHash } from '../format.js';
@@ -23,11 +24,12 @@ import { asMessage, fmtBytes, MAX_BYTES_BILLED, run, signIn } from '../sql.js';
 // after it.
 const MAX_TURNS = 40;
 const KEY = 'ochakai.ask';
-// The billing project a person runs proposals in, remembered per browser:
-// it is theirs, not the deployment's.
+// The billing project a person runs proposals in, where the operator
+// named none — remembered per browser, since it is then theirs.
 const PROJECT_KEY = 'ochakai.bq-project';
 
 let turns = load();
+let ticking = 0; // the interval counting a pending answer's seconds
 
 function load() {
   try {
@@ -43,7 +45,7 @@ function save() {
 export function viewAsk() {
   view.innerHTML = `
     <div class="section-title">エージェントに訊く</div>
-    <div class="hint" style="margin-bottom:.6rem">エージェントはナレッジを読んで答え、引いたナレッジが人に確かめられたものかを答えの中で言います。書き込み・裁定・SQL の実行はしません — 書き足すべきことを見つけたら、その本文を答えに載せます。</div>
+    <div class="hint" style="margin-bottom:.6rem">エージェントはナレッジを読んで答え、引いたナレッジが人に確かめられたものかを答えの中で言います。ナレッジの書き込みと裁定はしません — 書き足すべきことを見つけたら、その本文を答えに載せます。<span class="agent-sql-only">データが要る問いには SQL を提案します。走るのは、あなたが「実行して結果を返す」を押したときだけで、あなたの Google アカウントの権限で走ります。</span><span class="agent-no-sql">SQL は書いて見せるだけで、実行はしません。</span></div>
     <div id="ask-turns"></div>
     <div class="ask-form">
       <textarea id="ask-text" rows="3" placeholder="例: 先月の売上はどう数えればいい？(⌘/Ctrl + Enter で送る)" aria-label="エージェントへの質問"></textarea>
@@ -71,13 +73,28 @@ function draw(pending) {
     ? `<div class="ask-turn ask-user">${t.sqlResult ? md(t.text) : esc(t.text).replace(/\n/g, '<br>')}</div>`
     : `<div class="card ask-turn ask-agent">${md(t.text)}${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}${verdictHTML(t, i)}</div>`).join('');
   $('#ask-turns').innerHTML = out + (pending
-    ? '<div class="empty">エージェントが読んでいます…</div>'
+    ? '<div class="empty" id="ask-pending">エージェントが読んでいます…</div>'
     : (turns.length ? '' : '<div class="empty">まだ何も訊いていません。</div>'));
+  clearInterval(ticking);
+  if (pending) tick(Date.now());
   const left = MAX_TURNS - turns.length;
   $('#ask-count').textContent = left <= 6 ? `この会話はあと ${Math.max(0, Math.floor(left / 2))} 往復まで` : '';
   $('#ask-send').disabled = !!pending || left < 1;
   $('#ask-run')?.addEventListener('click', runProposal);
   document.querySelectorAll('[data-verdict]').forEach(b => b.addEventListener('click', openVerdict));
+}
+
+// tick says how long a pending answer has taken. The server answers in
+// one piece, often after half a minute of reading, and a line that never
+// changes for that long reads as a page that has stopped.
+function tick(start) {
+  ticking = setInterval(() => {
+    const el = $('#ask-pending');
+    if (!el) { clearInterval(ticking); return; }
+    const s = Math.round((Date.now() - start) / 1000);
+    el.textContent = `エージェントが読んでいます…(${s} 秒)`
+      + (s >= 15 ? ' ナレッジを何件か読んでから答えるので、一分ほどかかることがあります。' : '');
+  }, 1000);
 }
 
 // The verdict of the person who asked (design doc 0142 §3). It becomes
@@ -140,14 +157,14 @@ function proposalHTML(sql, open) {
   let project = '';
   try { project = localStorage.getItem(PROJECT_KEY) || ''; } catch { /* asked each time */ }
   const how = AGENT_CLIENT
-    ? `あなたの Google アカウントの権限(BigQuery の読み取りだけ)で実行します。一回の上限は ${fmtBytes(MAX_BYTES_BILLED)} です。`
+    ? `あなたの Google アカウントの権限(BigQuery の読み取りだけ)で実行します。${AGENT_PROJECT ? `課金はプロジェクト ${AGENT_PROJECT} で、` : ''}一回の上限は ${fmtBytes(MAX_BYTES_BILLED)} です。`
     : 'このデプロイには実行のためのサインインが設定されていません。自分で実行して、結果を次のメッセージに貼ってください。';
   return `
     <div class="ask-proposal">
       <div class="hint">エージェントはこの SQL の実行を提案しています。${esc(how)}</div>
       <textarea id="ask-sql" rows="${Math.min(14, sql.query.split('\n').length + 1)}" aria-label="提案された SQL">${esc(sql.query)}</textarea>
       ${AGENT_CLIENT ? `<div class="toolbar">
-        <label class="check">課金するプロジェクト <input type="text" id="ask-project" value="${esc(project)}" placeholder="my-project" style="width:12rem"></label>
+        ${AGENT_PROJECT ? '' : `<label class="check">課金するプロジェクト <input type="text" id="ask-project" value="${esc(project)}" placeholder="my-project" style="width:12rem"></label>`}
         <button type="button" id="ask-run" class="btn primary">実行して結果を返す</button>
       </div>` : ''}
     </div>`;
@@ -155,9 +172,11 @@ function proposalHTML(sql, open) {
 
 async function runProposal() {
   const query = $('#ask-sql').value.trim();
-  const project = $('#ask-project').value.trim();
+  const project = AGENT_PROJECT || $('#ask-project').value.trim();
   if (!query || !project) { toast('SQL と課金するプロジェクトが要ります'); return; }
-  try { localStorage.setItem(PROJECT_KEY, project); } catch { /* remembered for this run only */ }
+  if (!AGENT_PROJECT) {
+    try { localStorage.setItem(PROJECT_KEY, project); } catch { /* remembered for this run only */ }
+  }
   const btn = $('#ask-run');
   btn.disabled = true;
   btn.textContent = '実行しています…';

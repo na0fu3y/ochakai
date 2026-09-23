@@ -23,6 +23,17 @@ last entry.
 
 ### Added
 
+- **An operator can name the project a proposed query is billed to**
+  (`OCHAKAI_BIGQUERY_PROJECT`, needs `OCHAKAI_OAUTH_CLIENT_ID`). Where it
+  is set, the web UI no longer asks the person who runs a proposal for a
+  billing project — they only pass Google's consent screen once — and
+  `stats.agent.bigquery_project` tells the page. Unset, the page asks as
+  before. The Terraform module gains `agent_model`,
+  `agent_oauth_client_id` and `agent_bigquery_project`; with
+  `enable_webui`, the last grants `roles/bigquery.jobUser` on that project
+  to `webui_iap_members`. The deploy guide gains §4c, the whole setup
+  including the console-only OAuth client. ENV 17 → 18.
+
 - **The person who asked judges the agent's answer, and the loop hears
   it** ([design doc 0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §3, §6).
   Every answered turn is kept in its shape — the conversation's first
@@ -123,6 +134,14 @@ last entry.
   for every client. No surface moves; ochakai still runs no LLM.
 
 ### Changed
+
+- **The agent page says what runs a query, and how long an answer is
+  taking.** Its opening line used to say the agent runs no SQL right above
+  a button that runs one; it now says the agent proposes and the person
+  runs it, as themselves, only when they press 実行して結果を返す (or, with
+  no OAuth client, that SQL is only shown). A pending answer counts its
+  seconds and, past fifteen, says an answer can take about a minute —
+  the server answers in one piece, often after half a minute of reading.
 
 - **The architecture and surface records say what ochakai refuses now.**
   [Design doc 0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)

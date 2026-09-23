@@ -322,6 +322,52 @@ variable "gcs_force_destroy" {
   default     = false
 }
 
+# --- Optional: the data agent (guide §4c) --------------------------------
+
+variable "agent_model" {
+  description = <<-EOT
+    OCHAKAI_AGENT: turns on the deployment's own data agent and names its
+    model — a bare model id such as "gemini-2.5-flash", run in this project
+    and region, or a Vertex AI model resource name to run it elsewhere
+    (design doc 0142 §5). Null, the default, leaves the agent off. Setting it
+    grants roles/aiplatform.user and enables the API even where
+    enable_vertex_embeddings is false. A model the region does not carry stops
+    the start rather than sending the text to another region.
+  EOT
+  type        = string
+  default     = null
+}
+
+variable "agent_oauth_client_id" {
+  description = <<-EOT
+    OCHAKAI_OAUTH_CLIENT_ID: the Google OAuth web client the web UI signs a
+    person in with to run a query the agent proposes, as that person. A public
+    identifier, not a secret. Terraform cannot create one: make it in the
+    console (guide §4c) with the web UI's origin and <origin>/oauth.html
+    registered. Null: the agent answers from knowledge and proposes no SQL.
+  EOT
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.agent_oauth_client_id == null || can(regex("\\.apps\\.googleusercontent\\.com$", coalesce(var.agent_oauth_client_id, "x")))
+    error_message = "agent_oauth_client_id is a Google OAuth web client id, <number>-<id>.apps.googleusercontent.com."
+  }
+}
+
+variable "agent_bigquery_project" {
+  description = <<-EOT
+    OCHAKAI_BIGQUERY_PROJECT: the project the web UI bills a proposed query to,
+    so nobody who reads an answer has to know a project id. With enable_webui,
+    this module also grants roles/bigquery.jobUser on it to webui_iap_members —
+    the people who can open the page can then run a query there. Reading the
+    data itself stays the data owner's grant. Null: each person types their
+    own project the first time they run a query.
+  EOT
+  type        = string
+  default     = null
+}
+
 # --- Optional: the team web UI behind IAP (guide §5b) ---------------------
 
 variable "enable_webui" {

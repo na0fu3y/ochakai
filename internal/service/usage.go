@@ -337,6 +337,7 @@ func (s *Service) agentState(sc *Scope) *domain.StatsAgent {
 		st := &domain.StatsAgent{Enabled: true}
 		if s.Config != nil && s.Config.Agent != nil {
 			st.OAuthClientID = s.Config.Agent.OAuthClientID
+			st.BigQueryProject = s.Config.Agent.BigQueryProject
 		}
 		return st
 	}

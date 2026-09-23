@@ -364,6 +364,75 @@ migration 0009 が実行を拒む — サービスは指示付きで起動に失
 しのバイナリや設定はもう添付を読めなくなる — その後は変数を設定した
 ままにしておく。
 
+<a id="4c-optional-the-data-agent"></a>
+
+## 4c. 任意: データエージェント
+
+Web UI の「エージェント」タブで、Claude Code を持たない人がナレッジに
+ついて訊けるようにする(設計ドキュメント
+[0142](../../docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md))。
+**既定は off で、設定するのは運用者だけである** — 利用者の画面に設定の
+欄は出ない。段階は三つあり、どこで止めてもよい。
+
+**① 答えるだけ。** モデルを一語で名指す。サービス identity が Vertex AI
+を呼ぶので、§4 の二コマンド(API の有効化と `roles/aiplatform.user`)が
+済んでいればよい:
+
+```sh
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars=OCHAKAI_AGENT=gemini-2.5-flash
+```
+
+モデルはこのサービスのリージョンで動く。リージョンにモデルが無ければ
+起動を拒否し、直前のリビジョンが答え続ける(どのモデルがどこで答えるかは
+[環境変数](../../docs/configuration.md#environment-variables)の
+`OCHAKAI_AGENT` の行)。
+
+**② SQL を提案し、利用者が自分の権限で走らせる。** サーバーは SQL を
+実行しない。ページが利用者を Google にサインインさせ、`bigquery.readonly`
+のトークンで BigQuery を直接呼ぶ。そのための OAuth クライアントは
+**コンソールでしか作れない**(gcloud にも Terraform にもこの種類の作成は
+無い):
+
+1. コンソールの **Google Auth Platform** で同意画面(ブランディング)を
+   作る。組織の Workspace があるなら対象を**内部**にする — 組織の外に
+   開くと、BigQuery のスコープに Google の審査が要ることがある。
+2. **クライアント** → 種類「**ウェブ アプリケーション**」で作り、Web UI
+   を開くオリジンごとに二つを登録する:
+   - 承認済みの JavaScript 生成元: §5b の serve-ui の URL
+     (`https://ochakai-webui-….run.app`)、手元の `ochakai ui` も使うなら
+     `http://127.0.0.1:8098`
+   - 承認済みのリダイレクト URI: 上のそれぞれに `/oauth.html` を付けたもの
+3. クライアント ID(`…apps.googleusercontent.com`、secret ではない)を
+   渡す:
+
+```sh
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars=OCHAKAI_OAUTH_CLIENT_ID=123-abc.apps.googleusercontent.com
+```
+
+**③ 課金するプロジェクトを運用者が決める。** ②だけだと、ページは
+実行のたびに「課金するプロジェクト」の欄を出し、利用者に自分の
+プロジェクト ID を書かせる。gcloud を持たない人はそれを知らないので、
+決めておく。設定するとページから欄が消え、利用者がすることは、初回の
+実行で Google の同意画面を一度通すことだけになる:
+
+```sh
+BQ_PROJECT=analytics-billing   # クエリの課金先
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars=OCHAKAI_BIGQUERY_PROJECT=$BQ_PROJECT
+
+# 利用者がそこでジョブを作れるように(読むデータへの閲覧権限は、データの持ち主の付与のまま)
+gcloud projects add-iam-policy-binding $BQ_PROJECT \
+  --member=domain:your-org.example --role=roles/bigquery.jobUser
+```
+
+一回のクエリの課金はページが 10 GiB で止め、何を読めるかは利用者本人の
+権限が決める。結果の行はサーバーとモデルを通るが、どこにも残らない
+(0142 §4, §6)。Terraform では `agent_model` / `agent_oauth_client_id` /
+`agent_bigquery_project` が同じことをし、`enable_webui` と併せれば
+`roles/bigquery.jobUser` も `webui_iap_members` に付与する。
+
 ## 5. ナレッジを読み込み、Claude Code を接続する
 
 API 経由で concept を一つ登録する。CLI は自分の gcloud ログインから

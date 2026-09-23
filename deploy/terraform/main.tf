@@ -104,6 +104,9 @@ locals {
     # var.embedding_model's description says so.
     var.enable_vertex_embeddings ? {} : { OCHAKAI_EMBEDDINGS = "off" },
     var.enable_vertex_embeddings && var.embedding_model != null ? { OCHAKAI_EMBEDDINGS = var.embedding_model } : {},
+    var.agent_model != null ? { OCHAKAI_AGENT = var.agent_model } : {},
+    var.agent_oauth_client_id != null ? { OCHAKAI_OAUTH_CLIENT_ID = var.agent_oauth_client_id } : {},
+    var.agent_bigquery_project != null ? { OCHAKAI_BIGQUERY_PROJECT = var.agent_bigquery_project } : {},
     length(local.delegating_callers) > 0 ? { OCHAKAI_DELEGATING_CALLERS = join(",", local.delegating_callers) } : {},
   )
 
@@ -120,7 +123,7 @@ locals {
       "artifactregistry.googleapis.com",
     ],
     var.enable_private_ip ? ["compute.googleapis.com", "servicenetworking.googleapis.com"] : [],
-    var.enable_vertex_embeddings ? ["aiplatform.googleapis.com"] : [],
+    var.enable_vertex_embeddings || var.agent_model != null ? ["aiplatform.googleapis.com"] : [],
     var.enable_webui ? ["iap.googleapis.com", "cloudresourcemanager.googleapis.com"] : [],
   )) : toset([])
 }
@@ -330,7 +333,8 @@ resource "google_sql_user" "ochakai_run" {
 # runs on Google Cloud; whether it gets them is IAM's answer (0053 §2.2).
 
 resource "google_project_iam_member" "ochakai_vertex" {
-  count = var.enable_vertex_embeddings ? 1 : 0
+  # The agent's model is called through the same role (design doc 0142 §5).
+  count = var.enable_vertex_embeddings || var.agent_model != null ? 1 : 0
 
   project = var.project_id
   role    = "roles/aiplatform.user"
@@ -600,6 +604,17 @@ resource "google_cloud_run_v2_service_iam_member" "iap_agent" {
   name     = google_cloud_run_v2_service.webui[0].name
   role     = "roles/run.invoker"
   member   = "serviceAccount:${google_project_service_identity.iap[0].email}"
+}
+
+# Who may run a query the agent proposed, billed to the named project
+# (guide §4c). The page runs it as the person, so the grant is theirs, not
+# the service's: ochakai itself holds no BigQuery role.
+resource "google_project_iam_member" "agent_bigquery_job_user" {
+  for_each = var.enable_webui && var.agent_bigquery_project != null ? toset(var.webui_iap_members) : toset([])
+
+  project = var.agent_bigquery_project
+  role    = "roles/bigquery.jobUser"
+  member  = each.value
 }
 
 # Who may sign in through IAP.
