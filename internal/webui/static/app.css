@@ -800,6 +800,8 @@ body:not(.has-agent) .agent-only { display: none !important; }
 .ask-user { margin-left: auto; max-width: 80%; width: fit-content; padding: .45rem .7rem;
   border-radius: 10px; background: var(--accent-weak); white-space: normal; }
 .ask-agent { padding: .6rem .8rem; }
+.ask-proposal { margin: .5rem 0; }
+.ask-proposal textarea { width: 100%; box-sizing: border-box; font-family: var(--mono, ui-monospace, monospace); font-size: .85rem; }
 .ask-form { position: sticky; bottom: 0; background: var(--bg); padding: .5rem 0; }
 .ask-form textarea { width: 100%; box-sizing: border-box; }
 .files-off { display: none; }

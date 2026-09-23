@@ -511,3 +511,25 @@ func TestAnAnonymousPostureRefusesTheAgent(t *testing.T) {
 		}
 	}
 }
+
+// The OAuth client exists only to run what the agent proposes, so it
+// needs the agent, and it is spelled the one way Google issues it.
+func TestOAuthClientNeedsTheAgent(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
+	t.Setenv("OCHAKAI_OAUTH_CLIENT_ID", "1-abc.apps.googleusercontent.com")
+	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "OCHAKAI_AGENT") {
+		t.Errorf("a client without an agent: err = %v", err)
+	}
+	t.Setenv("OCHAKAI_AGENT", "gemini-x")
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Agent.OAuthClientID != "1-abc.apps.googleusercontent.com" {
+		t.Errorf("client = %q", cfg.Agent.OAuthClientID)
+	}
+	t.Setenv("OCHAKAI_OAUTH_CLIENT_ID", "not-a-client")
+	if _, err := FromEnv(); err == nil {
+		t.Error("a malformed client id was accepted")
+	}
+}

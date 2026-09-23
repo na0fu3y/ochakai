@@ -172,6 +172,12 @@ type AgentConfig struct {
 	Project  string
 	Location string
 	Model    string
+	// OAuthClientID is the web application client the page signs a person
+	// in with, to run a query the agent proposed as that person (design
+	// doc 0142 §4). Empty means the agent proposes no SQL. It is a public
+	// identifier, not a secret: it travels to every browser that opens
+	// the page.
+	OAuthClientID string
 }
 
 // EmbeddingConfig enables hybrid search via Vertex AI embeddings
@@ -286,6 +292,7 @@ var Known = []string{
 	"OCHAKAI_GCS_BUCKET",
 	"OCHAKAI_IAP_AUDIENCE",
 	"OCHAKAI_MODE",
+	"OCHAKAI_OAUTH_CLIENT_ID",
 	"OCHAKAI_OIDC_AUDIENCE",
 	"OCHAKAI_OIDC_ISSUER",
 	"OCHAKAI_PRODUCER",
@@ -485,6 +492,18 @@ func FromEnv() (*Config, error) {
 				os.Getenv("OCHAKAI_MODE"))
 		}
 		cfg.Agent = a
+	}
+	if id := strings.TrimSpace(os.Getenv("OCHAKAI_OAUTH_CLIENT_ID")); id != "" {
+		if cfg.Agent == nil {
+			// Read alone it would sign people in for nothing: the only
+			// thing the page does with a Google token is run a query the
+			// agent proposed.
+			return nil, fmt.Errorf("OCHAKAI_OAUTH_CLIENT_ID is set but OCHAKAI_AGENT is not; the client is only used to run a query the agent proposes (design doc 0142 §4)")
+		}
+		if !strings.HasSuffix(id, ".apps.googleusercontent.com") {
+			return nil, fmt.Errorf("OCHAKAI_OAUTH_CLIENT_ID is %q; it takes a Google OAuth web client id, <number>-<id>.apps.googleusercontent.com", id)
+		}
+		cfg.Agent.OAuthClientID = id
 	}
 
 	// The pair is refused at startup rather than half-honoured: an

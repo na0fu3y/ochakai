@@ -23,6 +23,22 @@ last entry.
 
 ### Added
 
+- **The agent can propose a query, and the person runs it as
+  themselves** ([design doc 0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §4).
+  `OCHAKAI_OAUTH_CLIENT_ID` names a Google OAuth web client (a public
+  identifier, not a secret; it needs `OCHAKAI_AGENT`). With it, the agent
+  may end a turn with `sql: {query, purpose}` — preferring a sanctioned
+  Attested Computation's SQL verbatim — and `stats.agent.oauth_client_id`
+  tells the page it can. The web UI shows the proposal in an editable box;
+  the person names a billing project and presses 実行して結果を返す, the page
+  signs them in through a popup (`bigquery.readonly`, no script loaded from
+  Google — `oauth.html` on the page's own origin hands the token back),
+  runs the query against BigQuery from the browser with a 10 GiB
+  `maximumBytesBilled`, and sends which SQL ran and the first rows back as
+  the person's next message. **The server runs nothing and never sees the
+  token.** The page's CSP adds `https://bigquery.googleapis.com` to
+  `connect-src` and nothing else. ENV 16 → 17.
+
 - **The web UI can ask the deployment's own agent.** Where `OCHAKAI_AGENT`
   is on, an "エージェント" tab appears beside レビュー: the person who has
   no agent of their own types a question and gets the answer the agent

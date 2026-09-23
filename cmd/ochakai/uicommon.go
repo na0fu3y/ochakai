@@ -155,7 +155,14 @@ func indexPageFor(version string) []byte {
 //     shipping a header would be breaking documents to look secure.
 //     data: and http: are not allowed.
 //   - connect-src 'self' — the API is same-origin through the proxy in
-//     front (design doc 0006), so there is nowhere else to reach.
+//     front (design doc 0006) — and BigQuery, the one other host: a query
+//     the agent proposed runs from the page, as the person, with a token
+//     that never reaches the server (design doc 0142 §4). Named rather
+//     than configured (0094 §5): it is what this page does, and on a
+//     deployment without the agent nothing ever calls it.
+//     Signing in needs no script from Google: the page opens Google's
+//     consent screen in a popup and oauth.html, on this origin, hands the
+//     token back — a navigation, which no directive here governs.
 //   - frame-ancestors 'none' keeps the curation surface out of somebody
 //     else's frame, and form-action 'none' means the editor's form
 //     cannot navigate even if its submit handler ever stops running.
@@ -167,7 +174,7 @@ func indexPageFor(version string) []byte {
 // that buys that little does not get counted for.
 const contentSecurityPolicy = "default-src 'none'; " +
 	"script-src 'self'; style-src 'self' 'unsafe-inline'; " +
-	"img-src 'self' https:; connect-src 'self'; font-src 'self'; " +
+	"img-src 'self' https:; connect-src 'self' https://bigquery.googleapis.com; font-src 'self'; " +
 	"base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 // assetTag is one tag for the whole UI: the hash of every embedded file,

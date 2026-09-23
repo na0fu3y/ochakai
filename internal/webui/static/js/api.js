@@ -101,6 +101,10 @@ function servedBy() {
 // the files tab — the one place somebody meets the refusal — rather
 // than as a page-wide banner.
 export let FILES_VARIABLE = '';
+// The Google OAuth client the page signs a person in with to run a query
+// the agent proposed (design doc 0142 §4). Empty where the agent proposes
+// none.
+export let AGENT_CLIENT = '';
 function markCapabilities(s) {
   // Absent is not "off". A server that predates the field answers
   // nothing here, and the page goes on offering what it always offered
@@ -108,6 +112,7 @@ function markCapabilities(s) {
   // The agent is the other way round: off unless the answer says on
   // (design doc 0142 §5), so absent — an older server — offers nothing.
   document.body.classList.toggle('has-agent', s.agent?.enabled === true);
+  AGENT_CLIENT = s.agent?.oauth_client_id || '';
   const files = s.files;
   if (!files || files.enabled !== false) return;
   document.body.classList.add('no-files');
