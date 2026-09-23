@@ -22,7 +22,7 @@ import (
 // written against this so its tests do not need Vertex AI.
 type Model interface {
 	Generate(ctx context.Context, req Request) (*Turn, error)
-	// Name is the model id, e.g. "gemini-3.8-flash" — what a write made
+	// Name is the model id, e.g. "gemini-2.5-flash" — what a write made
 	// through the agent says produced it.
 	Name() string
 }
@@ -44,10 +44,17 @@ type Content struct {
 
 // Part is exactly one of text, a call the model asks for, or the answer
 // to one.
+//
+// ThoughtSignature is opaque and belongs to the model: a thinking model
+// attaches one to the parts of its turn, and a function call sent back
+// without its signature is refused on the next round. The loop hands a
+// model turn back exactly as it arrived, so keeping the field is all it
+// takes.
 type Part struct {
 	Text             string            `json:"text,omitempty"`
 	FunctionCall     *FunctionCall     `json:"functionCall,omitempty"`
 	FunctionResponse *FunctionResponse `json:"functionResponse,omitempty"`
+	ThoughtSignature string            `json:"thoughtSignature,omitempty"`
 }
 
 type FunctionCall struct {

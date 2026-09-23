@@ -31,7 +31,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 
 | 領域 | いま読むドキュメント |
 |---|---|
-| 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md)。**提案中の置き換えは [0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md)**(Proposed — 裁定しないデータエージェントを持つ。受理までは 0081 が現行) |
+| 全体アーキテクチャ | [0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md) が現行 — Context Provider であり、裁定しないデータエージェント(既定 off)を一つ持つ。配る中身を変えるのは人の裁定だけ、サーバーは SQL を実行しない、Go の単一バイナリと PostgreSQL 一本(0081 を置き換えた) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
 | 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**ディレクトリごとの管理者は [0124](0124-a-directory-can-have-its-own-administrator.md)**(0109 §3 を改訂 — `may_admin` は prefix に縛られ、根には置けない)。**subtree のアーカイブを読める者に開いたのは [0134](0134-an-archive-says-which-part-it-is.md)**(0109 §3 を改訂 — アーカイブが自分の範囲を名乗る)。**`stats` が範囲を持つ呼び出し元にも答えることは [0123](0123-the-numbers-say-what-they-counted.md)**(0109 §3 を改訂 — 答えが自分の範囲を宣言する)。**`move` が書き換えの収まる範囲で動くことは [0129](0129-a-move-runs-when-its-rewrite-fits.md)**(0109 §3 を改訂 — はみ出すなら丸ごと断る)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
@@ -49,7 +49,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md)。**番号は領域の決定に与え、その内側の規則には与えないことと、この表の一行が挙げてよい記録の数の天井は [0128](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)**(0048 §2.1 / §2.2 を改訂) |
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**却下が frontmatter を離れ、イベントとして `log.md` で運ばれることは [0135](0135-a-rejection-is-a-deletion.md)**(OKF の信号は単調で、否定の段はどのキーにも無い) |
-| 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
+| 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §2 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**MCP OAuth コネクタの再実装の出発点は [0116](0116-the-connector-price-changed-not-its-condition.md) が差し替えた** — 戻す条件は 0070 §5 のままで、その日に開くのが 0010 の認可サーバ(863 行)ではなく、測定済みの二つの答え(180 行)になった |
 | REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md)。**本文の鍵の照合が完全一致で、同じ鍵の重複が 400 になることは [0125](0125-a-body-names-each-field-once.md)**(0064 §2 が決めた規則を、書かれたとおりに効かせたもの) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
@@ -75,16 +75,9 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 ## アーキテクチャと基盤
 
 - [0081 ochakai が何であり、何を持たないか](0081-what-ochakai-is-and-what-it-refuses-to-hold.md)
-  — **Accepted**。**全体アーキテクチャの現行ドキュメント**(0001 のうち
-  他のどの記録も持っていない決定だけを引き継いだもの)。LLM を内蔵せず
-  SQL を実行しない Context Provider、Go 単一バイナリと PostgreSQL 一本
-  (Redis もベクトル DB も検索クラスタも持たない)、配布とサプライ
-  チェーン、そして却下の記憶 —— No を覚えていることが verified を覚えて
-  いることと同じだけ要る(§4 の台帳は [0135](0135-a-rejection-is-a-deletion.md)
-  で削除と log の理由に置き換わり、再提案を止めるものではなくなった)。§5 は 0001 の各節がいまどの記録に移ったかの
-  行き先表である。
+  — **Superseded by 0142**。
 - [0142 ochakai は裁定しないデータエージェントを持つ](0142-ochakai-carries-a-data-agent-that-does-not-rule.md)
-  — **Proposed**。受理されたとき 0081 を置き換える。Web UI のデータエージェント
+  — **Accepted**。**全体アーキテクチャの現行ドキュメント**(0081 を置き換えた)。Web UI のデータエージェント
   (既定 off)が問いに答え、draft と裁定用の一枚を作るが、裁定はしない —
   配るナレッジが人の裁定でしか変わらないことは動かず、LLM を持たないことは
   その手段の一つだったとして手段を替える。**サーバーは SQL を実行しない**:
@@ -93,8 +86,8 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   IAM により呼ぶ。答えへの 👍 / 👎 は人の結果報告になり、軌跡(結果を除く)は
   180 日残り、人が選んだ問いが比較の問いのセットに入る。退けた案は別サービス
   化(デプロイが二つになる)、サービスアカウントでの実行、リフレッシュ
-  トークンの保管、順位付けへの LLM、👍 を検証にすること。受理までにブラウザ
-  からの BigQuery、リージョンのモデル、問いのセットの置き場所を確かめる。
+  トークンの保管、順位付けへの LLM、👍 を検証にすること。ブラウザからの BigQuery は `bigquery.readonly` で通り、asia-northeast1 で答えるのは
+  `gemini-2.5-flash`(3.x 系は `global` だけ)と確かめてから受理した。問いのセットはベースの外に置き export に載せない。
 - [0001 全体アーキテクチャ](0001-architecture.md) — **Superseded by 0081**。
   最初の記録。402 行のうち生きていたのは 4 分の 1 ほどで、残りは後続が
   持つか、もう事実でなかった。

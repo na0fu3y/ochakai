@@ -548,7 +548,7 @@ func agentFromName(v string) (*AgentConfig, error) {
 	if len(p) != 8 || p[0] != "projects" || p[2] != "locations" ||
 		p[4] != "publishers" || p[5] != "google" || p[6] != "models" ||
 		p[1] == "" || p[3] == "" || p[7] == "" {
-		return nil, fmt.Errorf("OCHAKAI_AGENT is %q; it takes a model id such as gemini-3.8-flash, or a Vertex AI model resource name (%s)",
+		return nil, fmt.Errorf("OCHAKAI_AGENT is %q; it takes a model id such as gemini-2.5-flash, or a Vertex AI model resource name (%s)",
 			v, embeddingResourceForm)
 	}
 	return &AgentConfig{Project: p[1], Location: p[3], Model: p[7]}, nil

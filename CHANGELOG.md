@@ -27,7 +27,9 @@ last entry.
   nothing** ([design doc 0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)).
   `OCHAKAI_AGENT` names a Gemini model on Vertex AI — a bare model id
   runs in the deployment's own project and region, a model resource name
-  says where — and is **off by default**: unset, ochakai is byte-for-byte
+  says where (in asia-northeast1 that is `gemini-2.5-flash` today; the
+  3.x models answer only on `global`, which an operator must name) — and
+  is **off by default**: unset, ochakai is byte-for-byte
   what it was, apart from `stats` answering `agent: {enabled: false}`. Named,
   the start calls the model once and refuses to start if it does not answer
   there, rather than sending text to another region; `public` and

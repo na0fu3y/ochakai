@@ -98,3 +98,21 @@ func TestGenerateSaysWhenNothingCameBack(t *testing.T) {
 		t.Errorf("err = %v", err)
 	}
 }
+
+// A thinking model refuses a function call handed back without the
+// signature it attached, so the signature survives the round trip.
+func TestAThoughtSignatureTravelsBack(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"candidates":[{"content":{"role":"model","parts":[
+			{"functionCall":{"name":"get_concept","args":{"id":"x"}},"thoughtSignature":"sig=="}]}}]}`)
+	}))
+	defer srv.Close()
+	turn, err := newGemini(srv.Client(), srv.URL, "m").Generate(context.Background(), Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, _ := json.Marshal(turn.Content)
+	if !strings.Contains(string(b), `"thoughtSignature":"sig=="`) {
+		t.Errorf("the signature was dropped: %s", b)
+	}
+}
