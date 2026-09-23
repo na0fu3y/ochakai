@@ -24,7 +24,7 @@ last entry.
 ### Added
 
 - **An operator can name the project a proposed query is billed to**
-  (`OCHAKAI_BIGQUERY_PROJECT`, needs `OCHAKAI_OAUTH_CLIENT_ID`). Where it
+  (`OCHAKAI_BIGQUERY_PROJECT`, needs `OCHAKAI_AGENT`). Where it
   is set, the web UI no longer asks the person who runs a proposal for a
   billing project — they only pass Google's consent screen once — and
   `stats.agent.bigquery_project` tells the page. Unset, the page asks as
@@ -54,11 +54,13 @@ last entry.
 
 - **The agent can propose a query, and the person runs it as
   themselves** ([design doc 0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §4).
-  `OCHAKAI_OAUTH_CLIENT_ID` names a Google OAuth web client (a public
-  identifier, not a secret; it needs `OCHAKAI_AGENT`). With it, the agent
-  may end a turn with `sql: {query, purpose}` — preferring a sanctioned
-  Attested Computation's SQL verbatim — and `stats.agent.oauth_client_id`
-  tells the page it can. The web UI shows the proposal in an editable box;
+  The agent may end a turn with `sql: {query, purpose}` — preferring a
+  sanctioned Attested Computation's SQL verbatim. `OCHAKAI_OAUTH_CLIENT_ID`
+  names a Google OAuth web client (a public identifier, not a secret; it
+  needs `OCHAKAI_AGENT`) that lets the team web UI run it, and
+  `stats.agent.oauth_client_id` tells the page; without one, that page
+  shows the SQL for the person to run and paste back (`ochakai ui` runs it
+  either way, below). The web UI shows the proposal in an editable box;
   the person names a billing project and presses 実行して結果を返す, the page
   signs them in through a popup (`bigquery.readonly`, no script loaded from
   Google — `oauth.html` on the page's own origin hands the token back),
@@ -136,8 +138,9 @@ last entry.
 ### Changed
 
 - **`ochakai ui` runs a query the agent proposed itself, as you.** The
-  page no longer opens Google's sign-in popup there, and no OAuth origin
-  has to be registered for it, on any port. The proxy calls BigQuery with
+  page no longer opens Google's sign-in popup there, and needs no OAuth
+  client at all — a team that works only through `ochakai ui` never makes
+  one — nor an origin registered, on any port. The proxy calls BigQuery with
   the identity it already resolves for ochakai (service-account ADC, else
   gcloud), dry-runs every query first and runs **only a SELECT** — a
   gcloud token is `cloud-platform`-scoped, so this check is what keeps a

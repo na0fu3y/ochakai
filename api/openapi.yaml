@@ -1446,13 +1446,14 @@ paths:
         would have written in the reply for a person to write.
 
 
-        **The server runs no SQL.** Where the deployment names an OAuth
-        client (`OCHAKAI_OAUTH_CLIENT_ID`), the agent may end a turn by
-        proposing one query in `sql`. It is a proposal: the person who
-        asked reads it, runs it as themselves if they choose (the bundled
-        web UI does so from the browser with their own token, capped by
-        `maximumBytesBilled`), and sends what came back as their next
-        message. Nothing is stored, so a read-only deployment answers it.
+        **The server runs no SQL.** The agent may end a turn by proposing
+        one query in `sql`. It is a proposal: the person who asked reads
+        it, runs it as themselves if they choose, and sends what came
+        back as their next message. The bundled web UI runs it for them
+        where it can — from the browser with their own token where the
+        deployment names an OAuth client (`OCHAKAI_OAUTH_CLIENT_ID`),
+        through `ochakai ui`'s own proxy on their machine — capped by
+        `maximumBytesBilled`. Nothing is stored, so a read-only deployment answers it.
         The model runs in the deployment's region (design doc 0142 §5); a
         failure to reach it is a 500 naming the model's answer.
       parameters:
@@ -3458,7 +3459,7 @@ components:
                 The Google OAuth web client a page signs a person in with to
                 run a query the agent proposed, as that person
                 (`OCHAKAI_OAUTH_CLIENT_ID`, design doc 0142 §4). Present only
-                when the agent proposes SQL. A public identifier, not a
+                where the operator named one. A public identifier, not a
                 secret: the server holds no warehouse credential and never
                 sees the token.
             bigquery_project:

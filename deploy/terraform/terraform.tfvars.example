@@ -27,8 +27,9 @@ invoker_members = [
 # enable_gcs_files = true
 
 # The data agent in the web UI (guide §4c). The model alone answers from the
-# knowledge; the OAuth client (made in the console) lets it propose SQL that
-# people run as themselves; the billing project spares them typing one.
+# knowledge and proposes SQL, which `ochakai ui` runs as the person; the OAuth
+# client (made in the console) lets the team web UI run it too; the billing
+# project spares people typing one.
 # agent_model            = "gemini-2.5-flash"
 # agent_oauth_client_id  = "123-abc.apps.googleusercontent.com"
 # agent_bigquery_project = "your-analytics-project"
