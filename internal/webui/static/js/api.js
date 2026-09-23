@@ -105,6 +105,10 @@ export let FILES_VARIABLE = '';
 // the agent proposed (design doc 0142 §4). Empty where the agent proposes
 // none.
 export let AGENT_CLIENT = '';
+// Whether the proxy in front runs such a query itself, as the person at
+// the keyboard — `ochakai ui` does, and says so in the page's markup;
+// the team web UI does not, and the page signs the person in instead.
+export const PROXY_RUNS = document.querySelector('meta[name="ochakai-runs-queries"]')?.content === 'proxy';
 // The project such a query is billed to, where the operator named one
 // (OCHAKAI_BIGQUERY_PROJECT). Empty: the person names their own.
 export let AGENT_PROJECT = '';

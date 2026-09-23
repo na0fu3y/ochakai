@@ -397,12 +397,15 @@ gcloud run services update ochakai --region=$REGION \
 1. コンソールの **Google Auth Platform** で同意画面(ブランディング)を
    作る。組織の Workspace があるなら対象を**内部**にする — 組織の外に
    開くと、BigQuery のスコープに Google の審査が要ることがある。
-2. **クライアント** → 種類「**ウェブ アプリケーション**」で作り、Web UI
-   を開くオリジンごとに二つを登録する:
-   - 承認済みの JavaScript 生成元: §5b の serve-ui の URL
-     (`https://ochakai-webui-….run.app`)、手元の `ochakai ui` も使うなら
-     `http://127.0.0.1:8098`
-   - 承認済みのリダイレクト URI: 上のそれぞれに `/oauth.html` を付けたもの
+2. **クライアント** → 種類「**ウェブ アプリケーション**」で作り、§5b の
+   serve-ui のオリジンを二か所に登録する:
+   - 承認済みの JavaScript 生成元: `https://ochakai-webui-….run.app`
+   - 承認済みのリダイレクト URI: 同じオリジンに `/oauth.html` を付けたもの
+
+   手元の `ochakai ui` は登録しなくてよい。あちらはサインインの画面を
+   出さず、プロキシがその人の gcloud の身元で BigQuery を直接呼ぶ —
+   ただし BigQuery に試行(dry run)させて **SELECT だと分かったものだけ**を
+   走らせ、課金の上限もプロキシが付ける。どのポートで開いても同じである。
 3. クライアント ID(`…apps.googleusercontent.com`、secret ではない)を
    渡す:
 

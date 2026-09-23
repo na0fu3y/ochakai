@@ -13,7 +13,7 @@ import (
 )
 
 func TestUIHandlerServesIndex(t *testing.T) {
-	h, err := uiHandler("http://ochakai.internal", nil)
+	h, err := uiHandler("http://ochakai.internal", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestTheUIPageCarriesASecurityPolicy(t *testing.T) {
 		mux  func(t *testing.T) http.Handler
 	}{
 		{"ui", func(t *testing.T) http.Handler {
-			h, err := uiHandler("http://ochakai.internal", nil)
+			h, err := uiHandler("http://ochakai.internal", nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -98,7 +98,7 @@ func TestUIHandlerProxiesWithToken(t *testing.T) {
 	defer backend.Close()
 
 	tokens := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "id-token"})
-	h, err := uiHandler(backend.URL, tokens)
+	h, err := uiHandler(backend.URL, tokens, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestUIHandlerNilTokensSendsNoCredentials(t *testing.T) {
 	}))
 	defer backend.Close()
 
-	h, err := uiHandler(backend.URL, nil)
+	h, err := uiHandler(backend.URL, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestUIHandlerNilTokensSendsNoCredentials(t *testing.T) {
 // DNS rebinding guard: a page at attacker.example resolving to 127.0.0.1
 // reaches the listener, but its Host header gives it away.
 func TestUIHandlerRejectsForeignHost(t *testing.T) {
-	h, err := uiHandler("http://ochakai.internal", nil)
+	h, err := uiHandler("http://ochakai.internal", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestUIHandlerRefusesACrossSiteWrite(t *testing.T) {
 		reached = true
 	}))
 	defer backend.Close()
-	h, err := uiHandler(backend.URL, nil)
+	h, err := uiHandler(backend.URL, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestUIHandlerRefusesACrossSiteWrite(t *testing.T) {
 // without ochakai refusing to serve its page. This is also what keeps
 // serve-ui's /health answering (design doc 0006) — it is a GET.
 func TestUIHandlerAllowsCrossSiteReads(t *testing.T) {
-	h, err := uiHandler("http://ochakai.internal", nil)
+	h, err := uiHandler("http://ochakai.internal", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func TestUIHandlerRejectsRebindingThatLooksSameOrigin(t *testing.T) {
 		reached = true
 	}))
 	defer backend.Close()
-	h, err := uiHandler(backend.URL, nil)
+	h, err := uiHandler(backend.URL, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestUIHandlerStripsDelegationHeader(t *testing.T) {
 	}))
 	defer backend.Close()
 
-	h, err := uiHandler(backend.URL, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "t"}))
+	h, err := uiHandler(backend.URL, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "t"}), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +332,7 @@ func TestUIHandlerStripsRetiredDelegationHeaderSpelling(t *testing.T) {
 	}))
 	defer backend.Close()
 
-	h, err := uiHandler(backend.URL, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "t"}))
+	h, err := uiHandler(backend.URL, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "t"}), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +365,7 @@ func TestUIHandlerStripsServerlessAuthorization(t *testing.T) {
 	}))
 	defer backend.Close()
 
-	h, err := uiHandler(backend.URL, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "id-token"}))
+	h, err := uiHandler(backend.URL, oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "id-token"}), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +406,7 @@ func TestThePageSaysWhichBuildServedIt(t *testing.T) {
 		mux  func(t *testing.T) http.Handler
 	}{
 		{"ui", func(t *testing.T) http.Handler {
-			h, err := uiHandler("http://ochakai.internal", nil)
+			h, err := uiHandler("http://ochakai.internal", nil, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -437,7 +437,7 @@ func TestThePageSaysWhichBuildServedIt(t *testing.T) {
 // page ships with. -ldflags stamps whatever it is given, and this value
 // lands in an attribute.
 func TestTheServingVersionIsStampedIntoAnAttributeSafely(t *testing.T) {
-	page := string(indexPageFor(`v1"><script>alert(1)</script>`))
+	page := string(indexPageFor(`v1"><script>alert(1)</script>`, false))
 	if strings.Contains(page, "<script>alert(1)</script>") {
 		t.Error("a version reaches the page as markup")
 	}
@@ -467,7 +467,7 @@ func TestTheAssetTagMovesWithTheServingVersion(t *testing.T) {
 // what keeps the un-stamped bytes unreachable — served there, they would
 // be a page claiming its own placeholder as a version.
 func TestTheUnstampedPageIsNotReachable(t *testing.T) {
-	h, err := uiHandler("http://ochakai.internal", nil)
+	h, err := uiHandler("http://ochakai.internal", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

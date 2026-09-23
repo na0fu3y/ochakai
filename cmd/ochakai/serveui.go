@@ -81,7 +81,7 @@ func serveUI(log *slog.Logger) error {
 // serveUIHandler serves the embedded page at / plus /health, and routes
 // /api/v1 and /mcp through proxy.
 func serveUIHandler(proxy http.Handler) http.Handler {
-	mux := webUIMux(proxy)
+	mux := webUIMux(proxy, false)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("ok"))
 	})
