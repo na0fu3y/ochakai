@@ -9,7 +9,8 @@
   Computation として、その Python を隣に置いて出荷している。コネクタに
   よる取り込みをサーバーの外に留めると、こういう形になる。
 - **[claude-code/](claude-code)** — 想起と書き戻しのループを、Claude Code
-  の指示とフックにしたもの。
+  の指示とフックにしたもの。ループの人の手が追いつかない側 — 答えられ
+  なかった問いの棚卸し — を回す skill も同梱している。
 - **[golden-query.md](golden-query.md)** — concept 一つだけ。
   `ochakai put -f` 用。
 
