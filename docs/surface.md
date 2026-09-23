@@ -83,7 +83,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - FLAG: 27
 - ENV: 15
 - VOCAB: 46
-- DOC: 27
+- DOC: 28
 
 **`MCP-BYTES` だけは、一覧ではなく量に天井を置いている。** 名前は何度
 出てきても一度覚えれば済むが、ツールスキーマと instructions は
@@ -892,7 +892,7 @@ enum は凍結された契約に書いてあり、`ochakai import` はこの三�
 `change.reject` は残る — それが OKF SPEC §9 の log が刷るイベントの語だから
 である。
 
-## DOC (27)
+## DOC (28)
 
 九つ目の次元は**読まされる文書**である。上の八つが数えているのは利用者が
 **使うもの** — 呼べる操作、渡す語、覚えるコマンド、設定する変数 — で
@@ -1093,6 +1093,29 @@ Computation` が canary としてそれを継続実行する — が、**三つ�
 新しいページの仕事なので、あちらは 45 行から 20 行に縮んで新ページを指す。
 **一つの話を二枚が半分ずつ持つのが、この節が最も嫌う形である。**
 
+**DOC 27 → 28 は棚卸しの skill
+([examples/claude-code/skills/ochakai-triage](../examples/claude-code/skills/ochakai-triage/SKILL.md))
+である。天井を上げる決定であり、そう言って上げている。** 三つの問いに、
+この順で答える。**誰が詰まったか**: ochakai を実際に回している運用者が、
+入ってくるナレッジの量が裁定する人の手を超えたと言った(2026-09-23)。
+[最初のひと月](guides/onboarding.md) §3 の仕分け — 無いのか、別の名前で
+在るのか — は問い一つずつ人が行う手順で、それが追いつかなくなった。
+**既存の面で回避できるか**: 手順そのものは §3 に在り、skill はそれを
+エージェントに回させるだけなので、REST・MCP・CLI・変数は一つも増えない。
+増えるのはエージェントが読む指示で、置き場所は二つあった — 毎ターン
+読まれる `examples/claude-code/CLAUDE.md` に足すか、頼まれたときだけ
+読まれる skill にするか。前者は、意味層を丸ごとプロンプトに前置すると
+層が無いときを下回ることがあるという実測
+([ポジショニング](positioning.md#外からの実測))と同じ形の支払いを、
+棚卸しをしない全ターンに課す。**何が畳めるか — 表面は何も畳めない。**
+単調に増やしてよい理由は、このページが減らすのが人の読む時間 — いま
+いちばん足りないもの — だからである: 人の前に来るのは束ねて比べ終えた
+候補の一枚で、一回に 5 件を超えない。
+
+このページは frontmatter を持つが OKF ではないので、`examples/` の
+frontmatter を知識と読む規則から名指しで外した(上の「数えないもの」)。
+外さなければ、DOC にも例のバンドルの検査にも見えないページになっていた。
+
 残すのは**次に効く発見**だけ:
 
 - **翻訳は行数を減らさない。** 日本語は語間に空白を置かないので一行が
@@ -1135,7 +1158,10 @@ Computation` が canary としてそれを継続実行する — が、**三つ�
   `examples/bigquery-catalog/bundle` も、プロジェクト自身のナレッジで
   ある `kb/bundle` も、ochakai が**保存するもの**であって ochakai に
   ついての説明ではない。frontmatter を持つ md は知識であり、ここでは
-  数えない。
+  数えない。**例外は Claude Code の skill(`SKILL.md`)だけ**で、あの
+  frontmatter は skill の名前と呼ばれる条件であって OKF ではない —
+  隣の `examples/claude-code/CLAUDE.md` と同じく、利用者が自分の
+  エージェントに写す指示なので数える。
 - **CHANGELOG。** 過去の台帳で、読むのは一エントリである。通して読む
   ものを数えるこの節に、追記だけで伸びるものを混ぜない。
 - **CONTRIBUTING・CLAUDE.md・行動規範・`.github`・`.claude`。**
@@ -1167,6 +1193,7 @@ Computation` が canary としてそれを継続実行する — が、**三つ�
 - `examples/bigquery-catalog/README.md`
 - `examples/claude-code/CLAUDE.md`
 - `examples/claude-code/README.md`
+- `examples/claude-code/skills/ochakai-triage/SKILL.md`
 - `kb/README.md`
 
 ## 数えていないもの

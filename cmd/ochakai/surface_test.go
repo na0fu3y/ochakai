@@ -934,7 +934,7 @@ func userDocs(t *testing.T) []string {
 		// a reason that has nothing to do with OKF — this test caught
 		// nothing telling the two apart until it did.
 		if (strings.HasPrefix(rel, "examples/") || strings.HasPrefix(rel, "kb/")) &&
-			strings.HasPrefix(string(content), "---\n") {
+			strings.HasPrefix(string(content), "---\n") && !isAgentSkill(rel) {
 			return nil // an OKF document: knowledge, not documentation
 		}
 		docs = append(docs, rel)
@@ -944,6 +944,16 @@ func userDocs(t *testing.T) []string {
 		t.Fatalf("walk %s: %v", root, err)
 	}
 	return docs
+}
+
+// isAgentSkill reports whether an examples/ file is a Claude Code skill:
+// instructions a reader copies into their agent, like
+// examples/claude-code/CLAUDE.md beside it. Its frontmatter is the skill's
+// name and trigger, not an OKF document's, so it is a manual page and not
+// knowledge — a page that dropped out of DOC for starting with "---" is
+// the hiding place userDocs' own comment warns about.
+func isAgentSkill(rel string) bool {
+	return strings.HasPrefix(filepath.ToSlash(rel), "examples/") && filepath.Base(rel) == "SKILL.md"
 }
 
 // extraTopLevelCommands are the words after "ochakai" that a reader can

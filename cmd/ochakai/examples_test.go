@@ -146,7 +146,7 @@ func exampleBundleRoots(t *testing.T) []string {
 			return nil
 		}
 		slash := filepath.ToSlash(p)
-		if exempt[slash] {
+		if exempt[slash] || isAgentSkill(strings.TrimPrefix(slash, "../../")) {
 			return nil
 		}
 		for _, root := range roots {

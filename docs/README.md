@@ -99,7 +99,8 @@ otherwise have to hunt for. Not a translation; a way in.
   混在する status、宣言された期限を過ぎた concept があり、フィードと
   検索に何か表示するものがある。
 - [examples/claude-code](../examples/claude-code) — そのまま使える
-  エージェント向けの指示と、思い出す/書き戻すのフック。
+  エージェント向けの指示と、思い出す/書き戻すのフック、答えられなかった
+  問いを棚卸しする skill。
 - [REST API を組み込む](guides/rest-integration.md) — 認証の方法、
   利用者本人の identity をサービスアカウントに潰さず転送する方法、他の
   書き込みと競合しない書き方。

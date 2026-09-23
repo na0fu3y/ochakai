@@ -1,6 +1,6 @@
 # Claude Code との統合
 
-二つの層がある。弱いほうから:
+三つの層がある。はじめの二つは弱いほうから:
 
 1. **[CLAUDE.md](CLAUDE.md)** はエージェントにコマンドと「学んだことを
    書き戻す」習慣を教える。中身をあなたのプロジェクトの `CLAUDE.md` に
@@ -28,6 +28,25 @@
      実際に使って持ちこたえたか(`report_outcome`)を訊く — あるいは
      どちらでもないと判断させる。
 
+三つ目は、ループのうち**人の手が追いつかなくなる側**を回すためにある。
+
+3. **[skills/ochakai-triage](skills/ochakai-triage/SKILL.md)** は、
+   「ochakai の棚卸し」と頼まれたときにエージェントが従う手順である。
+   `ochakai stats` の答えられなかった問いと、答えの無い失敗報告を読んで
+   束ね、**見せ方**(在るのにその語で引けない — `synonyms` を足す)・
+   **中身**(無い — 根拠を取って書く)・**構造**・**ノイズ**に振り分け、
+   根拠のある候補だけを一件ずつ draft として書く。書くたびに
+   `questions.txt` を流し直し、狙った問いが通って、**前は通っていた問いが
+   落ちていない**ものだけを残す。最後に、人が裁定する分だけを一枚に
+   まとめる。一回に書くのは 5 件まで。
+
+   フックと違い、こちらは LLM が判断する — 束ね方と振り分けがこの手順の
+   中身だからである。そのぶん**裁定はしない**: verify も reject もせず、
+   書くのはエージェントとして記録される接続からだけで、比較を通らなかった
+   ものは隠さずに「却下を勧める」と書く。形は意味層を自動で育てる研究の
+   ループに沿っていて、どこが同じでどこを変えたかは
+   [ポジショニング](../../docs/positioning.md#外からの実測)にある。
+
 ## 導入
 
 ```sh
@@ -39,7 +58,17 @@ mkdir -p .claude/hooks
 cp hooks/ochakai-*.sh .claude/hooks/
 chmod +x .claude/hooks/ochakai-*.sh
 # settings.json の "hooks" キーを .claude/settings.json にマージする
+
+# 棚卸しの skill を使うなら
+mkdir -p .claude/skills
+cp -r skills/ochakai-triage .claude/skills/
 ```
+
+skill が書き込むには、エージェントとして記録される MCP 接続が要る —
+`Ochakai-On-Behalf-Of` ヘッダを載せた接続である
+([MCP クライアント](../../docs/guides/mcp-clients.md#claude-code))。
+それが無ければ skill は何も書かず、書くはずだった本文を裁定の一枚に
+載せるだけになる。
 
 どちらのスクリプトも `jq` を要り、失敗しても黙る: 届かないナレッジ
 ベースがプロンプトや停止を塞ぐことはない。
