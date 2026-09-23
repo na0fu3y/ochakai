@@ -15,7 +15,7 @@
      をエージェントが作業を始める前にコンテキストへ差し込み、
      何を指したかを下の Stop フックのために記録する。自動の想起である。
      ナレッジ本体は注入しない(設計ドキュメント
-     [0108](../../docs/design/0108-the-context-pack-retires.md)):
+     [0143](../../docs/design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4):
      fetch はエージェント自身の選択で、`ochakai get` で取った concept は
      自分を指す concept を `linked_from` として連れてくる。期限の印は
      隠しも減点もしない — 期限切れは「間違い」ではなく「再確認が要る」

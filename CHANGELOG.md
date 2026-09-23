@@ -23,6 +23,29 @@ last entry.
 
 ### Added
 
+- **A deployment can turn on its own data agent, and it rules on
+  nothing** ([design doc 0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)).
+  `OCHAKAI_AGENT` names a Gemini model on Vertex AI — a bare model id
+  runs in the deployment's own project and region, a model resource name
+  says where (in asia-northeast1 that is `gemini-2.5-flash` today; the
+  3.x models answer only on `global`, which an operator must name) — and
+  is **off by default**: unset, ochakai is byte-for-byte
+  what it was, apart from `stats` answering `agent: {enabled: false}`. Named,
+  the start calls the model once and refuses to start if it does not answer
+  there, rather than sending text to another region; `public` and
+  `sandbox` refuse the variable. The agent answers one REST operation,
+  `POST /api/v1/agent`: the caller sends the whole conversation (the
+  server keeps none) and gets the reply and the ids of the concepts it
+  read. It reads through the same service every face calls, **as the
+  caller**, so an access policy narrows it as it narrows them, and cites
+  each concept with whether a person confirmed it. **In this release it
+  writes nothing and runs no SQL** — no draft, no verification, no
+  report; where a procedure would write, the text lands in the reply.
+  The web UI's review tab gains "エージェントに棚卸しを頼む" where the agent
+  is on: it follows the triage `Skill` in the base only once a person has
+  reviewed it, and hands back one page for the person who rules. MCP and
+  the CLI do not carry it. REST 13 → 14, ENV 15 → 16.
+
 - **A procedure an agent follows runs the half of the loop people can no
   longer keep up with.** [examples/claude-code](examples/claude-code)
   now ships a one-concept bundle, `skills/ochakai-triage` (`type: Skill`,
@@ -53,6 +76,20 @@ last entry.
   for every client. No surface moves; ochakai still runs no LLM.
 
 ### Changed
+
+- **The architecture and surface records say what ochakai refuses now.**
+  [Design doc 0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)
+  replaces 0081: what "no LLM inside" protected was that only a person's
+  ruling changes what is served, and that stays; the server still
+  executes no SQL, and a query the agent runs will run as the person
+  asking. [0143](docs/design/0143-four-faces-and-an-agent-that-answers-behind-one.md)
+  folds 0067 and the four records stacked on it (0076, 0106, 0108, 0118)
+  into one surface record, with one decision moving — the agent sits
+  behind one REST operation, and "no feature that uses an LLM" becomes
+  "no feature that lets an LLM rule". The README, ROADMAP, CONTRIBUTING,
+  CLAUDE.md, the OpenAPI overview, the MCP instructions and the MCPB
+  manifest say so; the MCP instructions lose "and no LLM" (the tools
+  still carry none).
 
 - **A miss is a search no concept's words matched, so embedding
   deployments record them at last.** Misses — the `stats` gap lines, the

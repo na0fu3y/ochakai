@@ -75,7 +75,7 @@ Search ranks what bears on the question; `get` hands one concept over in
 full, and its `linked_from` rows name what points back at it — which is
 how the caveat that says *how to read* a metric reaches whoever reads the
 metric ([design doc
-0106](docs/design/0106-a-read-carries-what-points-at-it.md)). Here is
+0143 §4](docs/design/0106-a-read-carries-what-points-at-it.md)). Here is
 part of what the insight above holds, condensed — the quoted sentences
 are verbatim, and the English beside them is this page's rendering of
 what the demo actually says:
@@ -112,10 +112,11 @@ ruled on it, and ochakai says so instead of quietly ranking it beside the
 verified ones. The deprecated bookings computation — the number FY2025's
 reports were built on — comes back too, by name, for the same reason.
 
-**No LLM ran inside ochakai to produce any of that.** It returned what
-people wrote and verified, with the provenance still attached; the reading
-is your agent's job ([design doc
-0081](docs/design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §6).
+**No LLM ran inside ochakai to produce any of that.** Search and reads
+return what people wrote and verified, with the provenance still
+attached, whether or not a deployment has turned on its own agent; the
+reading is your agent's job ([design doc
+0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §3).
 
 ### Ten minutes: a base of your own
 

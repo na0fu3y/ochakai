@@ -71,7 +71,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 五つ目だけが置き方について言う — 丸ごと前置するより引かせるほうがよく、
 採る前に比べる門がループのいちばん重い部品である。ochakai は前者をすでに
 その形で持っている(想起フックが差し込むのはポインタ行だけで、本文は
-エージェントが search → get で取る。[0108](design/0108-the-context-pack-retires.md))。
+エージェントが search → get で取る。[0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)。
 後者の比べる一手は利用者の手順に置いてあり
 ([最初のひと月](guides/onboarding.md) §3)、**育てるループそのものも
 クライアントの側に採った** — 答えられなかった問いと失敗報告を束ね、
@@ -79,7 +79,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 比べる [棚卸しの skill](../examples/claude-code/bundle/skills/ochakai-triage.md)
 である。あちらでも LLM が走るのは層を**書く**エージェントの側で、MCP
 サーバー自体は引かれたものを返すだけなので、形は同じである。ochakai の
-中に LLM は入らない([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md))。
+検索と読みに LLM は入らない([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md))。
 
 **変えたところは三つある。** 門を二段にした — 比較(検索が悪化しないか)は
 残すかどうかだけを決め、採るかどうかは人が裁定する。あちらの門は検証
@@ -240,7 +240,7 @@ revenue = `SUM(price)` の側で、ochakai が持つのは 100 が良いのか�
 断っている。ウェアハウス側の semantic model を ochakai の `Metric`
 concept に投影したいなら、その形は既にある — 自分のサービスアカウントで
 動く普通のクライアント([例](../examples/bigquery-catalog))であって、
-ochakai が持つコネクタではない([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1)。
+ochakai が持つコネクタではない([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §2)。
 **見直す条件は書いておく**: Ossie が incubating を出て、かつ「この定義を
 人が確認した」を core が運ぶようになったとき。そのときは重なりが本物に
 なるので、OKF との対応を書く価値がある。2026-09-12 の時点で、その方向の
@@ -271,8 +271,9 @@ verified を置く — バッジは誰がいつ確かめたかを出し、`light
 **同じ棚に、軸が反対の新顔も並んだ。** [ktx](https://github.com/Kaelio/ktx)
 (Apache-2.0)は「data agent 向けの実行可能な context layer」を名乗り、
 ウェアハウスの introspection と LLM の編纂で wiki markdown と YAML の
-semantic layer を作って CLI と MCP で配る — 0081 が断った二つ、LLM を中に
-持つことと SQL を実行することを、どちらも中核に置く。ochakai が同じ
+semantic layer を作って CLI と MCP で配る — ochakai が断っている二つ、
+LLM に知識を編纂させることとサーバーで SQL を実行することを、どちらも
+中核に置く。ochakai が同じ
 問題に置いた答えは、編纂の出口を OKF で import すること
 (下の LLM Wiki の実測)であって、編纂そのものではない。
 
@@ -287,10 +288,10 @@ semantic layer を作って CLI と MCP で配る — 0081 が断った二つ、
   本文は逐語で保存する — その姿勢のまま LongMemEval R@5 96.6% を公表して
   いる。批判論文はその数字を再現できるとしたうえで、効いているのは逐語
   保存と既定の埋め込みであって階層の比喩ではないと書く
-  ([arXiv:2604.21284](https://arxiv.org/abs/2604.21284))。**LLM を持たない
-  ことは、もうこの節の差別化ではない。** ochakai がそれを持たない理由 —
-  人の検証への信頼の根拠
-  ([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md))— は
+  ([arXiv:2604.21284](https://arxiv.org/abs/2604.21284))。**書き込みに
+  LLM を使わないことは、もうこの節の差別化ではない。** ochakai が LLM に
+  裁定させない理由 — 人の検証への信頼の根拠
+  ([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md))— は
   変わらないが、理由と差別化は同じものではない。
 - **「記憶は個体に属する」も言えない。** MemPalace は共有ハブを、Letta は
   クラウドの共有メモリと git のリモートを、mem0 は `app_id` / `org_id` の
@@ -412,7 +413,7 @@ Source Palantir for AI Agents")は上の節の二つの支払いを両方とも�
 あちらは数十ソースを取り込み、プロセス内の ML(NER・関係抽出)で
 グラフを機械が建て、衝突検出や SHACL で後から統治する。ochakai は
 コネクタも取り込みも持たない
-([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1)。
+([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §2)。
 どちらも「中核に LLM 不要」を名乗るが意味が逆で、あちらは抽出まで機械が
 やるための ML を中に持ち、こちらは LLM(エージェント)が外にいる前提で
 抽出の実装を一行も持たない — 読む・割る・書き起こすのはエージェントの
@@ -425,7 +426,7 @@ Intelligence が記録するのはエージェントの決定の因果であり�
 
 なお表面を数字で比べるなら、MCP だけは本数で語らないこと — ツール数は
 あちらが多いのに、実測の常駐バイトはツールが書き方を教えるこちらの方が
-重い([0076](design/0076-two-tools-leave-mcp.md) が「代金は本数ではなく
+重い([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §5.1 が「代金は本数ではなく
 バイト」と言った当のトレードオフである)。数字を置いておく: ochakai は
 6 ツールで 10,485 バイト(2026-09-04、`tools/list` の応答を丸ごと数え、
 instructions の 1,037 を含む — [surface.md](surface.md) の `MCP-BYTES` が
@@ -448,7 +449,7 @@ instructions の 1,037 を含む — [surface.md](surface.md) の `MCP-BYTES` �
 ochakai の前提はその逆側にある: 人を通った数千の concept(下の「負ける
 ところ」の規模の項)であり、その規模に専用エンジンは要らない。多段の
 辿りは、リンクは本文の導出でどの concept も `linked_from` を連れて
-返るから([0106](design/0106-a-read-carries-what-points-at-it.md))、
+返るから([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)、
 エージェントの search → get で足りる。型付き
 リレーションは持たない — `rel` は機械可読な型として導入され、機械が
 一度も読まなかったので、関係の種類は周囲の散文が運ぶ
@@ -462,8 +463,8 @@ AI が生んだ洞察を人が検証してオントロジーへ還流する閉�
 12〜18 ヶ月の投資の先にある最前線として売られる。ここではそれが初日の
 中核であり(draft → 裁定 → verified、`report_outcome`、
 [ループ](loop.md))、その段が言う「LLM は推測せず、決定論的な意味の層に
-問う」は ochakai が中に LLM を持たない理由と同じ線である
-([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md))。
+問う」は ochakai の検索と読みに LLM が入らない理由と同じ線である
+([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §3)。
 実体が数十億で機械的な多段推論が仕事ならあちらを買う。足りないのが
 誰かが確かめたナレッジとそのループなら、グラフ DB を運用していても
 この枠は別に残る。
@@ -701,7 +702,7 @@ ochakai の中核は人の裁定が台帳に載ることだが、その区別は
 README がそう書いており、[0131](design/0131-a-deployment-says-what-it-cannot-do.md)
 のファイルはローカルのままになる)。本文のリンクは markdown のまま運ばれ、
 カタログのネイティブなエッジにはならないので、`linked_from`
-([0106](design/0106-a-read-carries-what-points-at-it.md))に当たるものは
+([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)に当たるものは
 向こうに無い。そして **`synonyms` は `extra` の JSON に入る** — ochakai では
 索引が読む鍵([0105](design/0105-a-concept-answers-to-its-other-names.md))
 だが、向こうでは検索できる欄ではなくなる。C8 の機構は、バンドルと一緒には
@@ -713,8 +714,9 @@ README がそう書いており、[0131](design/0131-a-deployment-says-what-it-c
 ページを拾う — は、この節が言う vault の中で最も速く増えた形であり、
 上の pi-llm-wiki と aws-samples/sample-okf-llm-wiki はその実装である。
 **前提が ochakai と正反対である**: 向こうは LLM が wiki を維持することが
-本体で、こちらは中に LLM を持たない
-([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md))。
+本体で、こちらは LLM に裁定させない — 自分のエージェントを入れた
+デプロイでも、そのエージェントは提案するだけで、配る中身を変えるのは人の
+裁定だけである([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md))。
 その代表実装 [llm-wiki-compiler](https://github.com/atomicstrata/llm-wiki-compiler)
 (2.0k、MIT、OKF の producer と consumer、レビューキュー、MCP サーバー)
 の v1.1.0 に、2026-09-05、`examples/demo` の 18 concept と `kb/bundle` の
@@ -931,7 +933,7 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
 [0001](design/0001-architecture.md) §2 で取られた — カタログが
 コンテキスト層になっていることとウェアハウス native の semantic layer に
 ついての 2026-07-16 のノート、そしてメモリ層についての 2026-07-17 の
-ノートである。0001 は [0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md)
+ノートである。0001 は [0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)
 が置き換えたので、あの二つのノートは墓標が指す全文のコミットにある —
 **日付の付いた調査は書き換えないので、動かすのではなく置いてきた。**
 landscape は決定ではないので、代わりにここで追う。その後の日付入りの

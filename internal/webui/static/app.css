@@ -792,5 +792,9 @@ body.sandbox .sandbox-note {
    rule above gives — and the one sentence that replaces them says which
    deployment this is, not that the concept has no files. */
 body.no-files .files-only { display: none !important; }
+/* The agent is off unless the deployment says on (design doc 0142 §5). */
+body:not(.has-agent) .agent-only { display: none !important; }
+#triage { margin: .2rem 0 .8rem; }
+.triage-answer { padding: .6rem .8rem; }
 .files-off { display: none; }
 body.no-files .files-off { display: block; }

@@ -20,7 +20,7 @@ import (
 // The empty base is the first thing a new deployment has, and the last
 // thing anybody wants to look at. Catalogs solve it with connectors that
 // crawl the warehouse; ochakai does not have those and will not
-// (design doc 0081 §1: a harvester inside the server would need warehouse
+// (design doc 0142 §2: a harvester inside the server would need warehouse
 // credentials it deliberately does not hold, and knowledge here is
 // curated rather than collected).
 //

@@ -150,7 +150,7 @@ id の prefix は、この日に決めるものの中で唯一、後から変え
 まま置くか、検証した骨格への追記を**別の concept**として書かせ、本文からその
 テーブルにリンクさせるか。後者なら、テーブルを取ったエージェントは
 `linked_from` でその追記に出会う
-([0106](../design/0106-a-read-carries-what-points-at-it.md))。拒否のメッセー
+([0143](../design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)。拒否のメッセー
 ジも同じことを言う。
 
 一ヶ月で verified が 20〜30 個あれば、十分に育ったベースである。骨格のまま残

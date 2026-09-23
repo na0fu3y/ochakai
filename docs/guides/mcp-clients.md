@@ -8,7 +8,7 @@ ochakai は `/mcp` で streamable HTTP による MCP を提供する。クライ
 運ばなければならないので、接続は `ochakai mcp-stdio` を通す —
 stdin/stdout で MCP を話し、他のクライアントコマンドと同じ方法で
 identity を解決し、JSON-RPC メッセージをそのまま転送する(設計
-ドキュメント [0067](../design/0067-four-faces-and-what-they-decline.md) §3)。
+ドキュメント [0143](../design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §3)。
 クライアント側の設定に資格情報は要らない、そもそも設定するものが無い
 からである。**読まないデプロイではこの要件が消え、URL がそのまま
 使える** — ローカルの `dev` だけでなく、公開された `public` や
@@ -67,11 +67,11 @@ JSON のキー名が違うだけなので、[その他のクライアント](#�
 [0070](../design/0070-what-was-retired-and-why.md) §3): エージェントが実際に
 必要としているのは検証済みのクエリとそれに添う注意書きであり、検索が
 前者を見つけ、取った concept の `linked_from` が後者を名指す(設計
-ドキュメント [0106](../design/0106-a-read-carries-what-points-at-it.md))。
+ドキュメント [0143](../design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)。
 
 **削除と利用回数の合計はこの表に無い。** `delete_concept` と
 `get_concept_usage` は設計ドキュメント
-[0076](../design/0076-two-tools-leave-mcp.md) で降ろした — 削除は裁定で
+[0143](../design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §5.1 で降ろした — 削除は裁定で
 あり、利用回数はループの人間側だからである。どちらも REST(`DELETE
 /api/v1/bundle/{path}`・`GET /api/v1/usage/{id}`)、CLI(`ochakai delete`・
 `ochakai usage`)、Web UI には残っている。
@@ -92,7 +92,7 @@ JSON のキー名が違うだけなので、[その他のクライアント](#�
 コンテキストウィンドウから支払われるので、REST API はその上位互換に
 なる — 一括エクスポート、人が読むための取得、削除、利用回数の合計、
 そしてファイルの書き込みは無い(設計ドキュメント
-[0067 §5](../design/0067-four-faces-and-what-they-decline.md))。シェルを
+[0143 §5](../design/0143-four-faces-and-an-agent-that-answers-behind-one.md))。シェルを
 持つエージェントには、[CLI](../cli.md) が全機能をカバーしつつスキーマ
 の代金を一切要求しない。
 

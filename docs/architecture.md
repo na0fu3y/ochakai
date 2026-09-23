@@ -49,7 +49,7 @@ flowchart LR
 `serve` は MCP サーバーと REST API を一つのポートで、データベースの
 隣で動かす。CLI と web UI は REST クライアントであり、自分自身の
 データベース接続を持たない(設計ドキュメント
-[0067](design/0067-four-faces-and-what-they-decline.md) §2)。web UI はビルドステップの無い
+[0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §2)。web UI はビルドステップの無い
 一枚の自己完結したページで、`ochakai ui` によってループバックから、
 あるいは `ochakai serve-ui` によってチームのサービスとして配られる —
 同じコンテナイメージに、違う引数を渡すだけである(設計ドキュメント
@@ -125,7 +125,7 @@ ochakai が identity に対してすることは*記録*だけであり、目的
 verified・deprecated — を上書き・変更することを
 拒み、そうした concept のソフトデリートされた tombstone を create
 で蘇らせることも拒む(削除はそもそもツールが無い — 設計ドキュメント
-[0076](design/0076-two-tools-leave-mcp.md))。**却下された id はこれに
+[0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §5.1)。**却下された id はこれに
 当たらない**: 却下は削除であり、その墓標は普通の墓標なので、MCP からも
 書き直せる(設計ドキュメント
 [0135](design/0135-a-rejection-is-a-deletion.md) §3)。その理由は権限ではなく
@@ -134,7 +134,7 @@ verified・deprecated — を上書き・変更することを
 違う数字を得たときにしか発覚せず、しかも MCP には条件付き書き込みの
 経路(ETag)が無いので、エージェントは自分が何を置き換えるつもり
 だったかを示すすべを持たない。人間向けのサーフェスは制限されない
-(設計ドキュメント [0067](design/0067-four-faces-and-what-they-decline.md) §6)。
+(設計ドキュメント [0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §6)。
 
 <a id="the-data-model"></a>
 
@@ -231,7 +231,7 @@ vocabulary の隣にあるチーム独自の vocabulary のように、ディレ
 (`./gross.md`)— この二つが OKF SPEC §6 が定義する形式であり、それが
 すべてである — が edge になる。リンク先は backlink を得て、concept の
 読みはその逆向きの edge を `linked_from` の行として連れて返る
-([0106](design/0106-a-read-carries-what-points-at-it.md))。どんな種類の関係かは
+([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)。どんな種類の関係かは
 その周りの文が語るので、ochakai は自分自身の関係 vocabulary を一切
 保存しない(設計ドキュメント [0136](design/0136-a-concept-is-addressed-not-labelled.md) §2)。
 フェンスされたコードブロック(``` や ~~~)の中のリンクとインラインの
@@ -331,7 +331,7 @@ concept を消費する側の仕事である(SPEC §5.1、§10.5)。
 
 REST、MCP、CLI、web UI は一つのルールに従う: 機能はこのすべてに
 一貫して現れる — 意図してどれにも現れない場合も含めて(設計
-ドキュメント [0067](design/0067-four-faces-and-what-they-decline.md))。それぞれ
+ドキュメント [0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md))。それぞれ
 に宣言された役目がある。
 
 | Surface | 役目 |
@@ -350,7 +350,7 @@ base64 は token の無駄であり、エージェントの書き戻しは検索
 テキストであるべきである)、一括の export も import も無く、
 `verify` も `delete` も無い — 裁定をこの面に置かないからである
 (取り消せる裁定を持たない面が、取り消せないほうを差し出す筋は無い。
-設計ドキュメント [0076](design/0076-two-tools-leave-mcp.md))。
+設計ドキュメント [0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §5.1)。
 利用回数の合計も無い — それを読んで動くのは人である。web UI には
 outcome の報告が無い。SQL を実行できないサーフェスが worked/failed
 の報告を作っても、その裏に行動が無いからである。REST には SQL の
@@ -366,7 +366,7 @@ outcome の報告が無い。SQL を実行できないサーフェスが worked/
 を書き尽くしていて、別の実装がそれを再現できることである。この決定
 を覆す条件も record は名指している: バイナリを動かせない環境から
 restore を求められたときである(設計ドキュメント
-[0067](design/0067-four-faces-and-what-they-decline.md) §5.2)。
+[0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §5.2)。
 
 ## ストレージ
 
@@ -374,7 +374,7 @@ restore を求められたときである(設計ドキュメント
 合計、そして埋め込みベクトルはすべて PostgreSQL に住む — ベクトルに
 は pgvector を使い、これは Cloud SQL でもプレーンな Postgres でも
 使えるので、ハイブリッド検索は追加のインフラを一つも要らない(設計
-ドキュメント [0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §2)。Redis も、
+ドキュメント [0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §8)。Redis も、
 別のベクトルデータベースも、検索クラスタも無い。マイグレーションは
 バイナリの中に入って出荷される。markdown 以外のバイト列だけは例外
 で、上の Files の節で述べたとおり Cloud Storage に住む。
@@ -476,7 +476,7 @@ score は較正されておらず、二つのモード間で比較できるも�
 
 ## 書き戻しと検証のループ
 
-設計ドキュメント [0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) が賭けている
+設計ドキュメント [0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) が賭けている
 のは、エージェントが広さを、人間が判断を供給するということである:
 エージェントは学んだことを `draft` として書き、人間はそれを
 確認するか、deprecate するか、理由を付けて reject する。provenance
@@ -517,7 +517,7 @@ ochakai の不変条件のほとんどは Go の型システムでは表現で�
   テストを通るすべてのリクエストとレスポンスをこれに照らして
   検証する。コード生成器は使わない: handler は手書きのままである。
   各サーフェスの意味を意図して設計することが設計ドキュメント
-  0067 の要点であり、この規模なら生成と同じだけの精度でテストが
+  0143 の要点であり、この規模なら生成と同じだけの精度でテストが
   spec を同期させ続けられるからである。
 - **Properties。** Go 標準の fuzzing が、信頼されない入力が入って
   くる唯一の場所である OKF parser、id と link の導出、そして設計

@@ -154,6 +154,24 @@ type Config struct {
 	// deployment sets when it wants no Vertex AI call made on its behalf
 	// at all.
 	EmbeddingsOff bool
+
+	// Agent is nil on a deployment with no agent, which is the default
+	// (design doc 0142 §5). OCHAKAI_AGENT names the model: a Vertex AI
+	// model resource name says where, and a bare model id is run in the
+	// project and region this process is deployed to.
+	Agent *AgentConfig
+}
+
+// AgentConfig is the generative model behind the agent. Unlike an
+// embedding it is never discovered: the default is off, and a deployment
+// that names one has asked for it — so a model that does not answer
+// stops the start rather than being quietly dropped.
+type AgentConfig struct {
+	// Project and Location are empty when the deployment named a bare
+	// model id; the start fills them from the metadata server.
+	Project  string
+	Location string
+	Model    string
 }
 
 // EmbeddingConfig enables hybrid search via Vertex AI embeddings
@@ -260,6 +278,7 @@ func (c *Config) Anonymous() bool { return c.PublicReadOnly || c.Sandbox }
 // Cloud Run and to every program that reads NO_COLOR.
 var Known = []string{
 	"OCHAKAI_ADMINS",
+	"OCHAKAI_AGENT",
 	"OCHAKAI_DATABASE_URL",
 	"OCHAKAI_DB_IAM_AUTH",
 	"OCHAKAI_DELEGATING_CALLERS",
@@ -451,6 +470,23 @@ func FromEnv() (*Config, error) {
 		cfg.Embedding = e
 	}
 
+	switch v := strings.TrimSpace(os.Getenv("OCHAKAI_AGENT")); v {
+	case "":
+	default:
+		a, err := agentFromName(v)
+		if err != nil {
+			return nil, err
+		}
+		if cfg.Anonymous() {
+			// An anonymous caller would be spending the operator's model
+			// on nobody's behalf, and nothing it asked could be
+			// attributed (design doc 0142 §5).
+			return nil, fmt.Errorf("OCHAKAI_AGENT cannot be combined with OCHAKAI_MODE=%s: that posture reads no identity, and the agent answers somebody",
+				os.Getenv("OCHAKAI_MODE"))
+		}
+		cfg.Agent = a
+	}
+
 	// The pair is refused at startup rather than half-honoured: an
 	// issuer with no audience accepts tokens minted for other services,
 	// and an audience with no issuer authenticates nothing while looking
@@ -493,6 +529,30 @@ const defaultEmbeddingModel = "gemini-embedding-001"
 // embeddingResourceForm is the third spelling, quoted back in every error
 // that refuses one.
 const embeddingResourceForm = "projects/<project>/locations/<location>/publishers/google/models/<model>"
+
+// agentFromName reads OCHAKAI_AGENT: a Vertex AI model resource name, or
+// a bare model id to run where this process runs. A model is not checked
+// against a list here, as an embedding's is — there is no width to get
+// wrong, and whether the region carries it is the probe's answer at start.
+func agentFromName(v string) (*AgentConfig, error) {
+	switch strings.ToLower(v) {
+	case "off", "false", "0", "no", "none":
+		// Read as a model id, this would stop the start with a 404 from
+		// Vertex AI about a model named "off" — true, and no help.
+		return nil, fmt.Errorf("OCHAKAI_AGENT is %q; the agent is off by default, so leave it unset to keep it off", v)
+	}
+	if !strings.Contains(v, "/") {
+		return &AgentConfig{Model: v}, nil
+	}
+	p := strings.Split(v, "/")
+	if len(p) != 8 || p[0] != "projects" || p[2] != "locations" ||
+		p[4] != "publishers" || p[5] != "google" || p[6] != "models" ||
+		p[1] == "" || p[3] == "" || p[7] == "" {
+		return nil, fmt.Errorf("OCHAKAI_AGENT is %q; it takes a model id such as gemini-2.5-flash, or a Vertex AI model resource name (%s)",
+			v, embeddingResourceForm)
+	}
+	return &AgentConfig{Project: p[1], Location: p[3], Model: p[7]}, nil
+}
 
 // embeddingFromResourceName reads the one spelling that carries a project,
 // a location and a model at once — the Vertex AI model resource name, the

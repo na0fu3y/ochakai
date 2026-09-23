@@ -31,7 +31,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 
 | 領域 | いま読むドキュメント |
 |---|---|
-| 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md)。**提案中の置き換えは [0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md)**(Proposed — 裁定しないデータエージェントを持つ。受理までは 0081 が現行) |
+| 全体アーキテクチャ | [0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md) が現行 — Context Provider であり、裁定しないデータエージェント(既定 off)を一つ持つ。配る中身を変えるのは人の裁定だけ、サーバーは SQL を実行しない、Go の単一バイナリと PostgreSQL 一本(0081 を置き換えた) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
 | 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**ディレクトリごとの管理者は [0124](0124-a-directory-can-have-its-own-administrator.md)**(0109 §3 を改訂 — `may_admin` は prefix に縛られ、根には置けない)。**subtree のアーカイブを読める者に開いたのは [0134](0134-an-archive-says-which-part-it-is.md)**(0109 §3 を改訂 — アーカイブが自分の範囲を名乗る)。**`stats` が範囲を持つ呼び出し元にも答えることは [0123](0123-the-numbers-say-what-they-counted.md)**(0109 §3 を改訂 — 答えが自分の範囲を宣言する)。**`move` が書き換えの収まる範囲で動くことは [0129](0129-a-move-runs-when-its-rewrite-fits.md)**(0109 §3 を改訂 — はみ出すなら丸ごと断る)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
@@ -41,15 +41,15 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md)。**バケットの無いデプロイがそう言い、どの面もファイルを差し出さなくなることは [0131](0131-a-deployment-says-what-it-cannot-do.md)** — `stats` が `files` を答え、直し方(変数の名前)はバンドル全体を持つ呼び出し元にだけ載る |
-| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、`context` の `hits` は [0067](0067-four-faces-and-what-they-decline.md) §4([0093](0093-the-budget-governs-the-whole-response.md) が予算の側を改訂)。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
-| サーフェスの配分 | [0067](0067-four-faces-and-what-they-decline.md)(各面の役割と、載せないもの)、[0068](0068-how-a-face-is-added-and-removed.md)(足す規則と降ろす規則)。**MCP の転送が stateless になり、プロトコルが 2026-07-28 になることは [0118](0118-a-call-carries-everything-it-needs.md)**(0067 §3 を改訂 — 面もツールも動かない)。一覧がいつまで持つかを自分で答えること(構築時に決まる三つの一覧だけ。concept の読みは 0 のまま)は同記録 §7。MCP のツール 7 本とその境界は [0076](0076-two-tools-leave-mcp.md) と、**7 本目を割った [0096](0096-a-listing-is-not-a-search-here-either.md)**。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは、読みも含めて [0140](0140-one-address-reads-as-well-as-writes.md)。**`context` の予算が応答全体を縛ることは [0093](0093-the-budget-governs-the-whole-response.md)**(0067 §4 を改訂)。**CLI の行の第一列が「読み手が並べてくれと言った鍵」だけになることは [0110](0110-the-first-column-is-the-key-you-asked-for.md)**(0068 §3 の CLI への適用。`search` と逆引きからスコア列が落ちる)。**その行に太字と dim が付くのは [0111](0111-weight-for-the-eye-and-only-for-an-eye.md)**(端末のときだけ。パイプが受け取るバイト列は変わらない) |
+| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、検索の `hits` が順位に徹することは [0143](0143-four-faces-and-an-agent-that-answers-behind-one.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
+| サーフェスの配分 | [0143](0143-four-faces-and-an-agent-that-answers-behind-one.md) が現行 — 各面の役割と載せないもの、MCP の 6 本と stateless な転送、読みが search → get で単読が `linked_from` を運ぶこと、そして**デプロイ自身のエージェントが REST 一本の後ろにいること**(0067 と、それに積まれた 0076 / 0106 / 0108 / 0118 を畳んだ)。足す規則と降ろす規則は [0068](0068-how-a-face-is-added-and-removed.md)。一覧と検索を MCP でも二本に分けることは [0096](0096-a-listing-is-not-a-search-here-either.md)。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0140](0140-one-address-reads-as-well-as-writes.md)。CLI の行の第一列は [0110](0110-the-first-column-is-the-key-you-asked-for.md)、その太字と dim は [0111](0111-weight-for-the-eye-and-only-for-an-eye.md) |
 | Web UI | [0130](0130-the-web-ui-and-the-fields-of-a-document.md) が現行(配信・ページの形・編集を一冊で。0072 / 0092 / 0126 を畳んだ)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**このデプロイができないことをページが出さなくなり、直せる呼び出し元にだけ案内を出すことは [0131](0131-a-deployment-says-what-it-cannot-do.md)** |
 | 検証ループと利用測定 | [0141](0141-a-miss-is-read-off-the-words.md) が現行 — 四つのキュー、立っている検証からの tier、直近 90 日の並び、`stats` と、**どの concept の言葉にも一致しなかった検索をミスとして数えること**(0069・0090・0095・0137・0138 を畳んだ)。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂)。**却下が削除の一種であり、理由がリビジョンに載ることは [0135](0135-a-rejection-is-a-deletion.md)** — 墓標は塞がず、`knowledge_rejection` は畳まれた |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md)。**番号は領域の決定に与え、その内側の規則には与えないことと、この表の一行が挙げてよい記録の数の天井は [0128](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)**(0048 §2.1 / §2.2 を改訂) |
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**却下が frontmatter を離れ、イベントとして `log.md` で運ばれることは [0135](0135-a-rejection-is-a-deletion.md)**(OKF の信号は単調で、否定の段はどのキーにも無い) |
-| 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1 のコネクタ取り込みの拒否は不変 |
+| 空のベースを埋める | [0085](0085-the-empty-base-and-what-fills-it.md) — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし、書き込みは既存の `import` が行う。**ウェアハウスには接続しない**ので [0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §2 のコネクタ取り込みの拒否は不変 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**MCP OAuth コネクタの再実装の出発点は [0116](0116-the-connector-price-changed-not-its-condition.md) が差し替えた** — 戻す条件は 0070 §5 のままで、その日に開くのが 0010 の認可サーバ(863 行)ではなく、測定済みの二つの答え(180 行)になった |
 | REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md)。**本文の鍵の照合が完全一致で、同じ鍵の重複が 400 になることは [0125](0125-a-body-names-each-field-once.md)**(0064 §2 が決めた規則を、書かれたとおりに効かせたもの) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
@@ -75,16 +75,9 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
 ## アーキテクチャと基盤
 
 - [0081 ochakai が何であり、何を持たないか](0081-what-ochakai-is-and-what-it-refuses-to-hold.md)
-  — **Accepted**。**全体アーキテクチャの現行ドキュメント**(0001 のうち
-  他のどの記録も持っていない決定だけを引き継いだもの)。LLM を内蔵せず
-  SQL を実行しない Context Provider、Go 単一バイナリと PostgreSQL 一本
-  (Redis もベクトル DB も検索クラスタも持たない)、配布とサプライ
-  チェーン、そして却下の記憶 —— No を覚えていることが verified を覚えて
-  いることと同じだけ要る(§4 の台帳は [0135](0135-a-rejection-is-a-deletion.md)
-  で削除と log の理由に置き換わり、再提案を止めるものではなくなった)。§5 は 0001 の各節がいまどの記録に移ったかの
-  行き先表である。
+  — **Superseded by 0142**。
 - [0142 ochakai は裁定しないデータエージェントを持つ](0142-ochakai-carries-a-data-agent-that-does-not-rule.md)
-  — **Proposed**。受理されたとき 0081 を置き換える。Web UI のデータエージェント
+  — **Accepted**。**全体アーキテクチャの現行ドキュメント**(0081 を置き換えた)。Web UI のデータエージェント
   (既定 off)が問いに答え、draft と裁定用の一枚を作るが、裁定はしない —
   配るナレッジが人の裁定でしか変わらないことは動かず、LLM を持たないことは
   その手段の一つだったとして手段を替える。**サーバーは SQL を実行しない**:
@@ -93,8 +86,8 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   IAM により呼ぶ。答えへの 👍 / 👎 は人の結果報告になり、軌跡(結果を除く)は
   180 日残り、人が選んだ問いが比較の問いのセットに入る。退けた案は別サービス
   化(デプロイが二つになる)、サービスアカウントでの実行、リフレッシュ
-  トークンの保管、順位付けへの LLM、👍 を検証にすること。受理までにブラウザ
-  からの BigQuery、リージョンのモデル、問いのセットの置き場所を確かめる。
+  トークンの保管、順位付けへの LLM、👍 を検証にすること。ブラウザからの BigQuery は `bigquery.readonly` で通り、asia-northeast1 で答えるのは
+  `gemini-2.5-flash`(3.x 系は `global` だけ)と確かめてから受理した。問いのセットはベースの外に置き export に載せない。
 - [0001 全体アーキテクチャ](0001-architecture.md) — **Superseded by 0081**。
   最初の記録。402 行のうち生きていたのは 4 分の 1 ほどで、残りは後続が
   持つか、もう事実でなかった。
@@ -451,15 +444,7 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   SPEC §2 の語 `concept` に改めた最初の決定。0057 §0 に吸収された。
 
 - [0106 読みは、自分を指すものを連れて返る](0106-a-read-carries-what-points-at-it.md)
-  — **Accepted**。concept の単読(REST の JSON・`get_concept`・
-  `ochakai get`)が `linked_from` を運ぶ — その concept を本文から指す
-  concept の行(住所順、上限 20、却下済みは出ない)。リンクは本文からの
-  導出なので順方向は文書に見えているが、**逆方向だけが他人の文書に住む**:
-  metric を読む者に、それを explains する insight の存在は見えなかった。
-  `links_to` は畳まない — 尋ね方を知っている者の完全でページングできる
-  逆引きはあちら、尋ねなかった者に届く先頭 20 行がこちら。行はポインタで
-  あって配達ではないので fetched は記録せず、応答専用の追加なので凍結の
-  外である(0082)。MCP のスキーマは 1 バイトも動かない(0103)。
+  — **Superseded by 0143**。
 - [0024 リンクは本文から導出する](0024-links-from-body.md) — **Superseded by 0074**。
 
 ## 添付ファイル(0046 でバンドルのオブジェクトになった)
@@ -655,33 +640,23 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 
 ## サーフェス(REST / MCP / CLI / Web UI)
 
+- [0143 四つの面と、その一つの後ろで答えるエージェント](0143-four-faces-and-an-agent-that-answers-behind-one.md)
+  — **Accepted**。**面の配分の現行ドキュメント。** 0067 と、それに積まれた
+  0076 / 0106 / 0108 / 0118 を一冊に畳む。動く決定は一つ —
+  [0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md) のエージェントが
+  REST の `POST /api/v1/agent` 一本の後ろにいて、Web UI はそのクライアントで
+  あること。「LLM を使う機能は載せない」は「LLM に裁定させる機能は載せない」
+  になり、MCP にも CLI にもエージェントは載らない(MCP は予算、CLI の人は自分の
+  エージェントを持つ)。Web UI の結果報告はエージェントの答えへの判定としてだけ
+  置く。畳んだ決定: REST が唯一の契約、MCP の 6 本と「能力は他の面に残るときだけ
+  MCP から降りる」、CLI は REST の薄いクライアント、`mcp-stdio` は経路で `/mcp`
+  は stateless(2026-07-28、名乗りは毎回、構築時の一覧は 5 分)、読みは
+  search → get で pack は無く、単読は `linked_from` の行を運ぶ、人が判断を
+  下した concept はエージェントから動かせない。
 - [0067 四つの面と、それぞれが引き受けないもの](0067-four-faces-and-what-they-decline.md)
-  — **Accepted**。**面の配分の現行ドキュメント**(0004 / 0007 / 0015 /
-  0033 / 0039 の五冊を一冊にまとめたもので、決定は一つも動いていない)。
-  REST は唯一の契約、MCP のツール数は予算、CLI は完全性の面(能力の
-  完全性)、Web UI は BI ツールではない。CLI が REST の薄いクライアントで
-  あること、`mcp-stdio` が面ではなく経路であること、`context` の `hits` が
-  全面で順位に徹すること、そして**面ごとに意図して載せないもの**の一覧を
-  現行の語彙で持つ。
+  — **Superseded by 0143**。
 - [0118 一回の呼び出しが、必要なものを全部運ぶ](0118-a-call-carries-everything-it-needs.md)
-  — **Accepted**。0067 §3 と [0065](0065-identity-and-provenance.md) §4 を
-  改訂する。**`/mcp` を stateless にし、MCP プロトコル 2026-07-28 で
-  答える。** SDK は stateless なハンドラからしか新プロトコルを出さず、
-  session を持つハンドラは 2025-11-25 に上限を掛けるので、ochakai は
-  最新の SDK を積んだまま最新の仕様を拒んでいた — しかも黙って(交渉は
-  成功し、ツールは動き、降ろされたことはどこにも出ない)。**手放すのは
-  一度も使っていないモードである**(roots も sampling も logging も
-  使わず、どれも 2026-07-28 で非推奨。ochakai の状態は接続ではなく
-  ナレッジベース)。得るのは新プロトコルと、idle session が溜まらない
-  ことと、**インスタンスを増やせること**(session はメモリにあったので
-  `max_instance_count = 1` は選択ではなく帰結だった)。`Mcp-Session-Id`
-  は発行も参照もせず、GET と DELETE は 405。**代償は明示する**: 
-  2025-11-25 では名乗りが `initialize` にしかなく、それは使い捨ての
-  session で消えるので、古いクライアントの `clientInfo` は producer に
-  届かない(実測 — `claude-desktop/1.2` が空になる)。落ちるのは 0065 §4
-  が「認可でも identity でもない、記録である」と呼んだ**自称**の側で、
-  `created_by` は動かず、`Ochakai-Producer` が代替で、クライアントが
-  移った日に自動的に戻る。数える表面は一つも動かない。
+  — **Superseded by 0143**。
 - [0068 面はどう足され、どう降ろされるか](0068-how-a-face-is-added-and-removed.md)
   — **Accepted**。**面を足す規則と降ろす規則の現行ドキュメント**(0050 /
   0056 / 0058 / 0062 の四冊を一冊にまとめたもので、決定は一つも動いて
@@ -720,18 +695,8 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   当たった行に嘘の下線を引く)・`get` / `stats` の装飾は採らない。
   `--color` フラグも足さない — 止める側の綴りは既存の慣習
   `NO_COLOR` を読むだけで、**ENV が 14 → 15** になる唯一の代金である。
-- [0076 二つのツールが MCP から降りる](0076-two-tools-leave-mcp.md) —
-  **Accepted**、**BREAKING(MCP)**。`delete_concept` と
-  `get_concept_usage` を降ろし、MCP のツールを 8 本から 6 本にする
-  (0068 §3「通行量の無い入口は降ろす」の、パラメータではなくツールへの
-  適用)。削除は**裁定**であり、この面は取り消せる裁定
-  (`POST /api/v1/review/{id}` の verify / reject)すら載せていないのに、
-  取り消せないほうだけを配っていた — 却下を任せられないエージェントに
-  削除を任せる理由は無い。利用回数はループの**人間側**で、エージェントが
-  頼ってよいかを判断するための trust tier と `verified_at` は検索ヒットと
-  `get_concept` に既に載っている。**能力が落ちるのは MCP からだけ**で、
-  REST・CLI(`ochakai delete` / `ochakai usage`)・Web UI には一つも
-  欠けない。0067 §5.1・§6・§7 を改訂する。
+- [0076 二つのツールが MCP から降りる](0076-two-tools-leave-mcp.md)
+  — **Superseded by 0143**。
 - [0109 ディレクトリに閲覧者と編集者を持つ](0109-a-directory-has-readers-and-writers.md)
   — **Accepted**。0065 §1 が自分で置いた改訂条件
   (「『読めるが書けない人』が要るようになったら」)が満たされ、
@@ -889,17 +854,7 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   却下: 出口の検査だけ外すこと、締め出しを受け入れて 200 を返すこと、
   400 で断ること、最初の一行を書いた本人を自動的に管理者にすること。
 - [0108 context pack は退役する](0108-the-context-pack-retires.md)
-  — **Accepted**。**BREAKING(REST 非コア・MCP・CLI)**。
-  REST の `/context`・MCP `get_context`・CLI の context コマンドを
-  全面から同時に退役させる。0076 と違い通行量はあった — 降ろす根拠は前提の古びで
-  ある: pack は「往復は高価」という前提の機構で、何を読むべきかを
-  サーバが先に決めるが、search → get を自前で反復できるエージェントから
-  その判断を取り上げていた。pack が同梱していた逆向きの hop は concept
-  自身の `linked_from`(0106)が、書き戻しの hint は `get_concept` の
-  応答(0096 §3 の改訂)が引き継ぐ。需要シグナルは配られた pack より
-  選ばれた fetch のほうが正直になる。縮小版の pack は作らない。
-  見直す条件: シェルも MCP の反復も持たないホストが一回の HTTP で
-  「読むべき一式」を要すると実際に詰まった一件。
+  — **Superseded by 0143**。
 - [0093 予算は応答全体を縛り、一位は名前だけでは返らない](0093-the-budget-governs-the-whole-response.md) — **Superseded by 0108**。
 - [0098 ジェネレータは動く。欠けていたのは宣言だった](0098-the-generator-works-what-was-missing-was-the-declaration.md)
   — **Accepted**。0064 §11 の「どんなジェネレータもこの一つの住所に

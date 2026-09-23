@@ -4,7 +4,7 @@
 # Surfaces pointers to relevant team knowledge before the agent starts
 # working — automatic recall, no LLM involved, no agent judgment
 # required. What this injects is the search ranking, not the knowledge
-# itself (design doc 0108): rows the agent follows with `ochakai get`,
+# itself (design doc 0143 §4): rows the agent follows with `ochakai get`,
 # so a fetch is a choice the agent makes — and the concept it fetches
 # names what links at it under linked_from, which is where the caveats
 # live.
