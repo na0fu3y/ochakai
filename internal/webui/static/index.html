@@ -63,7 +63,11 @@
     <!-- Shown once the server answers for it: reading the access policy
          is an administrator's operation, and a tab that can only 403 is
          a lie the same way a button that can only 403 is. -->
-    <a href="#/access" data-route="access" id="nav-access" hidden>アクセス</a>
+    <!-- エージェント is the deployment's own agent (design doc 0142): off
+         by default, so the tab is drawn only where stats says it answers.
+         The links share a line because a break between them renders as a
+         space. -->
+    <a href="#/ask" data-route="ask" class="agent-only">エージェント</a><a href="#/access" data-route="access" id="nav-access" hidden>アクセス</a>
   </nav>
   <span class="spacer"></span>
   <!-- The door documentation services keep: jump to an entry from

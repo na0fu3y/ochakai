@@ -127,9 +127,13 @@ it.
   ([docs/positioning.md](docs/positioning.md#ウェアハウス-native-の-semantic-layer)):
   Ossie leaving incubation with a place in its core for a human having
   confirmed a definition.
-- **A chat UI or dashboards.** The bundled web UI is a curation surface, not a
-  BI tool: no charts, no query execution, no chat. It feeds your agents rather
-  than competing with them.
+- **Dashboards, or a BI tool.** The bundled web UI is a curation surface: no
+  charts, no dashboards, and no query run by the server. Where a deployment
+  turns on its own agent, the UI can ask it — for the person who has no agent
+  of their own — and it answers from the knowledge, citing whether a person
+  confirmed each concept, and rules on nothing
+  ([0143](docs/design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §1).
+  It feeds your agents rather than competing with them.
 - **Secrets.** Cloud Run IAM decides who reaches a deployment and Cloud SQL
   authenticates the service account, so there is nothing to issue or rotate by
   default. Features must not introduce a token or a password. This declined

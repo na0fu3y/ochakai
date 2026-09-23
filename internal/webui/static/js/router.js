@@ -7,6 +7,7 @@ import { $, view } from './dom.js';
 import { parseKPath } from './format.js';
 import { markTreeSelection } from './tree.js';
 import { viewAccess } from './views/access.js';
+import { viewAsk } from './views/ask.js';
 import { viewDetail } from './views/detail.js';
 import { viewDir, viewHome } from './views/dir.js';
 import { viewEditor } from './views/editor.js';
@@ -81,6 +82,9 @@ export function route() {
   } else if (head === 'review') {
     mark('review');
     viewReview();
+  } else if (head === 'ask') {
+    mark('ask');
+    viewAsk();
   } else if (head === 'access') {
     // Reachable by typing it even where the tab is hidden, which is what
     // a route is: the view says who may read the policy, and the server

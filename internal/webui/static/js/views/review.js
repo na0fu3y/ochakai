@@ -47,7 +47,7 @@ export function viewReview() {
     </div>
     <div class="agent-only" id="triage">
       <div class="toolbar">
-        <button id="triage-run">エージェントに棚卸しを頼む</button>
+        <button id="triage-run" class="btn">エージェントに棚卸しを頼む</button>
         <span class="hint">答えられなかった問いと失敗報告を読んで束ね、裁定の一枚を作ります。エージェントは裁定も書き込みもしません — 読んで決めるのはあなたです。</span>
       </div>
       <div id="triage-out"></div>
