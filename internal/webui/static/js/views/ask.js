@@ -12,7 +12,7 @@
 // page says so where the question is typed rather than leaving the
 // reader to find out from an answer.
 
-import { AGENT_CLIENT, AGENT_PROJECT, api, toast } from '../api.js';
+import { AGENT_CLIENT, AGENT_PROJECT, api, postureSettled, toast } from '../api.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { entryHash } from '../format.js';
@@ -65,6 +65,13 @@ export function viewAsk() {
   });
   $('#ask-new').addEventListener('click', () => { turns = []; save(); draw(); $('#ask-text').focus(); });
   draw();
+  // A reload restores the conversation from sessionStorage and draws it
+  // before /api/v1/stats answers (main.js fires that request but does
+  // not wait for it), so an open proposal's branch on AGENT_CLIENT —
+  // the run button, the billing-project field — can be drawn on the
+  // stale empty default and then never revisited. Redraw once the real
+  // value has landed; harmless where there was nothing to fix.
+  postureSettled.then(() => { if ($('#ask-turns') && !$('#ask-pending')) draw(); });
 }
 
 function draw(pending) {

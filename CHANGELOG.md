@@ -200,6 +200,17 @@ last entry.
   validation score (0081), and why it does not grow one layer per model.
   No surface moves.
 
+### Fixed
+
+- **The agent page no longer draws a reload's open proposal on a stale
+  answer.** `viewAsk()` restores the conversation from `sessionStorage`
+  and draws it before `/api/v1/stats` returns — main.js fires that
+  request without waiting for it — so a last turn still holding a
+  proposal could draw its run button and billing-project field against
+  `AGENT_CLIENT`'s empty default and never get a second look. The view
+  now redraws once that answer lands, so a reload lines the field and
+  button up the same way a fresh conversation does.
+
 ## [0.28.6] - 2026-09-13
 
 ### Added

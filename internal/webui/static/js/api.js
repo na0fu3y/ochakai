@@ -38,7 +38,16 @@ export async function markPosture() {
     markCapabilities(s);
     markVersion(s.version);
   } catch (e) { /* a banner is not worth failing the page over */ }
+  finally { resolvePosture(); }
 }
+
+// Settles once markPosture's answer has landed (or failed) — a view
+// drawn from `AGENT_CLIENT` before then, such as a reload restoring a
+// conversation with an open proposal, reads it again here to redraw
+// with the value the first draw missed, instead of staying wrong for
+// the rest of the tab's life.
+let resolvePosture;
+export const postureSettled = new Promise(res => { resolvePosture = res; });
 
 // Which builds are answering, in the topbar beside the name (design doc
 // 0087 §4's shape, applied to the question somebody asks once rather
