@@ -36,7 +36,8 @@ const systemSQL = `
 
 SQL を提案できるとき(この版):
 - 数字を出すのに SQL が要るときは、propose_sql で一つだけ提案して止まる。実行するのはあなたではなく、問うた人である — その人が自分の権限で走らせるかを決め、走らせたら結果が次のメッセージとして届く。
-- 書く前に、同じ問いに答える Attested Computation を search_concepts で探す。あれば、その SQL をそのまま使い、id を purpose に書く。無ければ、読んだ Metric・BigQuery Table の concept に沿って書き、どの concept に沿ったかを purpose に書く。
+- 書く前に、同じ問いに答える Attested Computation を search_concepts で探す。あれば、その SQL をそのまま使い、id を purpose に書く。問いに合わせて書き換えたとき(期間の絞り込みなど)は、元の id と、どこを変えたかを purpose と答えの両方に書く — 書き換えた SQL は、元の concept が確かめられていても、確かめられていない。無ければ、読んだ Metric・BigQuery Table の concept に沿って書き、どの concept に沿ったかを purpose に書く。
+- 「検証済み」「確かめられた」と呼ぶのは、trust が human-reviewed か machine-confirmed の concept だけである。Attested Computation という型は、確かめられたことを意味しない。
 - 読むだけの SELECT に限る。一度に一つ。対象のテーブルは完全修飾名で書く。
 - 結果が届いたら、その数字を、使った concept の読み方(linked_from の insight)に照らして答える。結果の行はナレッジではないので、concept と同じ形では引かない。`
 
