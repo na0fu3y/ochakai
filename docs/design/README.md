@@ -31,7 +31,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 
 | 領域 | いま読むドキュメント |
 |---|---|
-| 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md) |
+| 全体アーキテクチャ | [0081](0081-what-ochakai-is-and-what-it-refuses-to-hold.md)。**提案中の置き換えは [0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md)**(Proposed — 裁定しないデータエージェントを持つ。受理までは 0081 が現行) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
 | 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**ディレクトリごとの管理者は [0124](0124-a-directory-can-have-its-own-administrator.md)**(0109 §3 を改訂 — `may_admin` は prefix に縛られ、根には置けない)。**subtree のアーカイブを読める者に開いたのは [0134](0134-an-archive-says-which-part-it-is.md)**(0109 §3 を改訂 — アーカイブが自分の範囲を名乗る)。**`stats` が範囲を持つ呼び出し元にも答えることは [0123](0123-the-numbers-say-what-they-counted.md)**(0109 §3 を改訂 — 答えが自分の範囲を宣言する)。**`move` が書き換えの収まる範囲で動くことは [0129](0129-a-move-runs-when-its-rewrite-fits.md)**(0109 §3 を改訂 — はみ出すなら丸ごと断る)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
@@ -83,6 +83,18 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   いることと同じだけ要る(§4 の台帳は [0135](0135-a-rejection-is-a-deletion.md)
   で削除と log の理由に置き換わり、再提案を止めるものではなくなった)。§5 は 0001 の各節がいまどの記録に移ったかの
   行き先表である。
+- [0142 ochakai は裁定しないデータエージェントを持つ](0142-ochakai-carries-a-data-agent-that-does-not-rule.md)
+  — **Proposed**。受理されたとき 0081 を置き換える。Web UI のデータエージェント
+  (既定 off)が問いに答え、draft と裁定用の一枚を作るが、裁定はしない —
+  配るナレッジが人の裁定でしか変わらないことは動かず、LLM を持たないことは
+  その手段の一つだったとして手段を替える。**サーバーは SQL を実行しない**:
+  共有の UI ではブラウザが本人の短命なトークンで BigQuery を呼び、手元の
+  `ochakai ui` ではプロキシが本人として呼ぶ。モデルはデプロイのリージョンで
+  IAM により呼ぶ。答えへの 👍 / 👎 は人の結果報告になり、軌跡(結果を除く)は
+  180 日残り、人が選んだ問いが比較の問いのセットに入る。退けた案は別サービス
+  化(デプロイが二つになる)、サービスアカウントでの実行、リフレッシュ
+  トークンの保管、順位付けへの LLM、👍 を検証にすること。受理までにブラウザ
+  からの BigQuery、リージョンのモデル、問いのセットの置き場所を確かめる。
 - [0001 全体アーキテクチャ](0001-architecture.md) — **Superseded by 0081**。
   最初の記録。402 行のうち生きていたのは 4 分の 1 ほどで、残りは後続が
   持つか、もう事実でなかった。
