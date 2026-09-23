@@ -90,6 +90,10 @@ type Stats struct {
 	// acts on. A `sandbox` that is absent is an ordinary deployment; a
 	// `files` that is absent is a server too old to have been asked.
 	Files *StatsFiles `json:"files,omitempty"`
+	// Agent is whether this deployment has its own data agent (design
+	// doc 0142), in the shape and for the reason Files is: a face that
+	// offers the agent on a deployment without one is offering a 501.
+	Agent *StatsAgent `json:"agent,omitempty"`
 
 	Concepts StatsConcepts `json:"concepts"`
 	// Queues is what design doc 0049's GET /api/v1/queues returns, under
@@ -179,6 +183,18 @@ type StatsFiles struct {
 	// OCHAKAI_GCS_BUCKET. Absent when files are already enabled, and
 	// absent for a caller who is not an administrator of this
 	// deployment.
+	Variable string `json:"variable,omitempty"`
+}
+
+// StatsAgent is whether a deployment has its own data agent, and how it
+// would be given one — StatsFiles' pair, for the agent (design doc 0142).
+type StatsAgent struct {
+	// Enabled is whether POST /api/v1/agent answers. It is off by
+	// default: the agent is something an operator turns on.
+	Enabled bool `json:"enabled"`
+	// Variable is OCHAKAI_AGENT, the variable that would enable it.
+	// Absent when the agent is already on, for a caller who is not an
+	// administrator, and on a posture that refuses the agent.
 	Variable string `json:"variable,omitempty"`
 }
 

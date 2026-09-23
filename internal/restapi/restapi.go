@@ -36,6 +36,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/na0fu3y/ochakai/internal/agent"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
 	"github.com/na0fu3y/ochakai/internal/okf"
@@ -1175,6 +1176,35 @@ func Handler(svc *service.Service) http.Handler {
 			Keys     []string       `json:"keys"`
 			Values   map[string]any `json:"values"`
 		}{string(doc), structure.Keys, structure.Values})
+	})
+
+	// POST /api/v1/agent — one turn of ochakai's own data agent (design
+	// doc 0142). The caller sends the whole conversation and gets the next
+	// reply, with the concepts the agent read to write it: the server
+	// keeps no conversation, for the reason MCP's transport keeps no
+	// session (design doc 0118). The agent reads as the caller, so an
+	// access policy narrows it exactly as it narrows them.
+	//
+	// It writes nothing in this cut, so a read-only deployment answers it
+	// the way it answers frontmatter. A deployment with no agent answers
+	// 501, and says so in stats before anybody asks (agent.enabled).
+	mux.HandleFunc("POST /api/v1/agent", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+			writeError(w, err)
+			return
+		}
+		var in struct {
+			Messages []agent.Message `json:"messages"`
+		}
+		if !readJSON(w, r, &in) {
+			return
+		}
+		ans, err := agent.Run(r.Context(), svc, in.Messages)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, ans)
 	})
 
 	// POST /api/v1/reembed?limit=N&cursor=... — fill in vectors for

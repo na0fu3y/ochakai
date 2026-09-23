@@ -40,7 +40,7 @@ bq query --max_rows=100000 --format=json --nouse_legacy_sql \
 You run the query, with your own client and your own identity, and pipe
 the answer in. That is the same shape `ochakai seed` takes and it is the
 same reason: ochakai holds no warehouse credential, and neither does this
-([0081](../../../../docs/design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1).
+([0142](../../../../docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §2).
 
 It also makes the permission yours to have or not. Seeing anybody else's
 jobs needs `bigquery.jobs.listAll`; without it the history is your own

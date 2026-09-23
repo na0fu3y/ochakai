@@ -97,13 +97,19 @@ These are decisions, not backlog. Each has a document behind it, and where a
 decision has a condition under which it would be revisited, the document states
 it.
 
-- **An LLM inside.** ochakai returns human-verified golden queries verbatim,
-  and the definitions and caveats around them. Interpretation is the client
-  agent's job, and staying LLM-free is what the trust in human verification
-  rests on ([0081](docs/design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md)). Summarization, chat, and
-  automatic verification are out for the same reason.
-- **SQL execution.** ochakai holds no warehouse credentials; your agent
-  executes. `compile_sql` — deterministic SQL generation from a semantic model,
+- **An LLM that rules.** ochakai returns human-verified golden queries
+  verbatim, and the definitions and caveats around them, and only a
+  person's ruling changes what it serves — that is what the trust in human
+  verification rests on. Since [0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)
+  a deployment may turn on its own data agent (off by default), and it
+  answers and proposes but never verifies, rejects or rewrites a ruled
+  concept; search and reads carry no LLM either way. Automatic
+  verification, LLM ranking, and summaries served in place of the
+  knowledge stay out.
+- **SQL execution on the server.** ochakai holds no warehouse
+  credentials; your agent executes — and ochakai's own agent, where a
+  query is run at all, runs it as the person asking, never as the server
+  (0142 §4). `compile_sql` — deterministic SQL generation from a semantic model,
   which was as close as this ever came — existed until 0.13.0 and was retired
   ([0070 §3](docs/design/0070-what-was-retired-and-why.md)): what an agent needs is the
   verified query and the caveat around it — search finds the one, and the

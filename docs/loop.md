@@ -20,7 +20,7 @@
 検索が順位を返し、エージェントは読む価値のある concept を fetch して
 あなたの定義から始める — 自分で定義を作らない。取った concept には
 `linked_from` が付いてくるので、metric を読めばそれを説明する insight の
-存在も見える([0106](design/0106-a-read-carries-what-points-at-it.md))。
+存在も見える([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)。
 
 **書き戻す。** 残す価値のあることを伝える:
 

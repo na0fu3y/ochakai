@@ -197,7 +197,7 @@ func answer(res *mcp.CallToolResult, out any) (*mcp.CallToolResult, any, error) 
 // as free (TestMCPStaysUnderItsResidentByteCap).
 const instructions = "ochakai serves human-curated knowledge for data work: what a number means, " +
 	"the computations others sanctioned, how to read a metric, the vocabulary, and the " +
-	"catalog around them. It runs no SQL and no LLM.\n" +
+	"catalog around them. It runs no SQL.\n" +
 	"Before answering a data question, search_concepts, then get_concept the hits worth " +
 	"reading. A fetched concept carries linked_from — the concepts pointing at it, which " +
 	"is where the insight that says how to read a metric lives — so fetch those too " +
@@ -572,9 +572,9 @@ var writeTools = []string{"put_concept", "report_outcome"}
 // tool, and every tool on this surface reads or writes this deployment's
 // own base and reaches nothing else. Left unsaid it defaults to true,
 // which would tell a client these calls go somewhere unbounded — the
-// opposite of what ochakai refuses to do (design doc 0081: no LLM, no
-// SQL, and the only hosts it contacts are Google Cloud APIs in the
-// caller's own project).
+// opposite of what ochakai refuses to do (design doc 0142: no SQL, no
+// LLM behind any tool here, and the only hosts it contacts are Google
+// Cloud APIs in the caller's own project).
 //
 // idempotentHint is where the two writes stop being one thing, so they no
 // longer share a value. put_concept is a replace at an address: the same

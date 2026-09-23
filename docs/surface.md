@@ -26,9 +26,9 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 | C1 | 資産は利用者のもの — 丸ごと出て、丸ごと戻り、求められれば消える([0009](design/0009-provenance-portability.md)・[0031](design/0031-purge.md)・[0075](design/0075-the-bundle-is-the-address-space.md)) |
 | C2 | secret を一つも置かないこと — その性質を Cloud Run IAM と Cloud SQL IAM が無設定で買う([0065](design/0065-identity-and-provenance.md)・[0003](design/0003-gcp-only.md))。**性質と買い方は同じではない**: OIDC 発行者を名指したデプロイは Google Cloud の外でも secret を増やさずに誰が呼んでいるかを答え([0086](design/0086-a-second-way-to-say-who-is-calling.md))、そこではデータベースの資格情報が運用者の仕事に戻る。**残りを撤回してよい条件は [0115](design/0115-the-second-footing-waits-for-search.md)** |
 | C3 | 形式は Open Knowledge Format — 保存もワイヤも往復も OKF で、その横に第二の形式を発明しない([0075](design/0075-the-bundle-is-the-address-space.md))。**「v0.2」は一つの文書を指さない**ので、留めるのは版ではなく**コミット**である(`open-knowledge-format@0b87c52`、[compatibility.md](compatibility.md) が正典): v0.2 は公開後に normative な規則を版番号を動かさずに変えており、綴りをどちらに合わせるかは [0139](design/0139-ochakai-does-not-choose-a-spelling.md) |
-| C4 | No FDE — デプロイは自分でできて、必要な操作には自分で打てるコマンドがある([0067](design/0067-four-faces-and-what-they-decline.md)) |
-| C5 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0067](design/0067-four-faces-and-what-they-decline.md) §3) |
-| C6 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md)・[0067](design/0067-four-faces-and-what-they-decline.md) §1) |
+| C4 | No FDE — デプロイは自分でできて、必要な操作には自分で打てるコマンドがある([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md)) |
+| C5 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §3) |
+| C6 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)・[0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §1) |
 | C7 | 人間の改善ループが測れる — 検証・結果報告・キューの長さ・答えの無かった問いを、推測ではなく数で持つ([0141](design/0141-a-miss-is-read-off-the-words.md)) |
 | C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — 二文字の日本語語が索引で引け(移行 `0036`)、書き手が与えた別名も索引に入り([0105](design/0105-a-concept-answers-to-its-other-names.md))、埋め込みは既定でデプロイのリージョンで走る([0080](design/0080-search-and-how-a-deployment-embeds.md) §1.2) |
 
@@ -73,7 +73,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 ない。ここがその調節器である — 面ごとに天井を宣言し、超えたら CI が
 落ちる。
 
-- REST: 13
+- REST: 14
 - PARAM: 18
 - HEADER: 13
 - MCP: 6
@@ -81,7 +81,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - MCP-BYTES-SLACK: 500
 - CLI: 24
 - FLAG: 27
-- ENV: 15
+- ENV: 16
 - VOCAB: 46
 - DOC: 27
 
@@ -130,7 +130,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 規則の下で動く運用であって、規則の変更ではない。増やしたくないものを
 数える仕組みが、自分の数え先を増やすのでは筋が通らない。
 
-## REST (13)
+## REST (14)
 
 - `DELETE /api/v1/bundle/{path}`
 - `GET /api/v1/access`
@@ -138,6 +138,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `GET /api/v1/search`
 - `GET /api/v1/stats`
 - `GET /api/v1/usage/{id}`
+- `POST /api/v1/agent`
 - `POST /api/v1/frontmatter`
 - `POST /api/v1/move`
 - `POST /api/v1/reembed`
@@ -182,12 +183,12 @@ CRUD なら三操作以上になり、それでも全体をレビューできる
 (0109 §5)。パラメータもヘッダも符号も一つも増えていない: スコープ外の
 読みは既存の `error.not_found`、書きは既存の `error.forbidden` である。
 
-11 → 10 は [0108](design/0108-the-context-pack-retires.md) が
+11 → 10 は [0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4 が
 `/context` を退役させたぶんである。**畳み込みではなく削除で、落ちるのは
 全面から同時に**である — pack(検索 + 上位の全文 + リンク一 hop +
 バイト予算)はどの面にも残らない。エージェントの読みは search → get に
 なり、pack が同梱していた逆向きの hop は concept 自身の `linked_from`
-([0106](design/0106-a-read-carries-what-points-at-it.md))が運ぶ。
+([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)が運ぶ。
 凍結との関係は [0107](design/0107-the-freeze-holds-the-okf-core.md) が
 先に整えた — `/context` はコアの外なので、この削除は 0.x の BREAKING
 として届く。
@@ -219,6 +220,19 @@ Web UI で概念を書く人が、`sources` を一件足すためにも
 関係は [0107](design/0107-the-freeze-holds-the-okf-core.md) が先に
 整えた: コアは bundle の往復と search なので、この操作はその外の
 0.x の面として着地する。
+
+**13 → 14 は [0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) の
+`POST /api/v1/agent` である。天井を上げる決定であり、そう言って上げて
+いる。** 三つの問いに、この順で答える。**誰が詰まったか**: 入ってくる
+ナレッジの量が裁定する人の手を超え、棚卸しの手順(#867)は効いたが
+Claude Code を持つ人にしか回せなかった。Claude Code を持たない人が
+ochakai に直接問いたいとも言った。**既存の面で回避できるか**: できない。
+既存のエージェントを MCP で繋ぐ手順では、Web UI だけで裁定する人の前に
+一枚が来ず、軌跡も人の判定も ochakai に戻らない(0142 §9)。**何が畳めるか
+— 何も畳めない。** 単調に増やしてよい理由は、これが C4 と C7 を同時に
+買う一本だからである。**既定は off** で、入れない運用者の面は `stats` の
+`agent` 一つを除いて一バイトも動かない。会話は呼び出しごとに運ばれ
+(0118 と同じ形)、サーバーは会話を持たない。
 
 `report_outcome`(`POST /api/v1/usage/{id}`)はそこに畳んでいない。
 人の裁定ではなく機械の観測であり、[0067 §5.4](design/0067-four-faces-and-what-they-decline.md)
@@ -271,10 +285,10 @@ Web UI で概念を書く人が、`sources` を一件足すためにも
 (design doc [0064](design/0064-rest-stops-at-api-v1.md)) が `attachments`
 を `files` に改めた。
 
-19 → 18 は [0108](design/0108-the-context-pack-retires.md) の `budget` で
+19 → 18 は [0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4 の `budget` で
 ある。予算は pack の語彙であり、pack と一緒に落ちた — 応答の大きさを
 呼び出し側の窓に合わせる機構は、読みがプリミティブになった面では
-`limit` と行の上限([0106](design/0106-a-read-carries-what-points-at-it.md))
+`limit` と行の上限([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)
 が担う。下の MCP の `get_attachment` → `get_file` と同じ
 改名で、**変わったのは利用者が知る語そのもの**である。
 
@@ -379,7 +393,7 @@ Web UI で概念を書く人が、`sources` を一件足すためにも
 - `report_outcome`
 - `search_concepts`
 
-8 → 6 は [0076](design/0076-two-tools-leave-mcp.md) で、`delete_concept`
+8 → 6 は [0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §5.1 で、`delete_concept`
 と `get_concept_usage` を降ろした([0068](design/0068-how-a-face-is-added-and-removed.md)
 §3「通行量の無い入口は降ろす」の、パラメータではなくツールへの適用で
 ある)。**畳み込みではなく削除である** — 上の REST の 19 → 11 は住所が
@@ -407,7 +421,7 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 だが、**支払っているのは本数ではなくバイトである** — クライアントは
 ツール一覧と instructions を会話の間ずっと保持する。6 本という予算を
 守っている間に、`put_concept` 一本の説明が
-[0076](design/0076-two-tools-leave-mcp.md) の降ろした 2 本より大きく
+[0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §5.1 の降ろした 2 本より大きく
 なっていた。PARAM・FLAG・VOCAB が塞いだのと同じ逃げ道である。
 
 上限は `MCP-BYTES`。数えるのは実セッションの `tools/list` が返す
@@ -446,8 +460,7 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 言う([0087](design/0087-a-sandbox-says-it-is-one.md) §3。README を
 読んでいない呼び出し元の代表がエージェントであり、書くのはそれである)。
 ツールではなく instructions に載るのは、この面の既定が no である理由
-そのものによる([0067](design/0067-four-faces-and-what-they-decline.md)
-§4)— 守っているのは**すべてのエージェントが毎ターン払う文脈**であり、
+そのものによる([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)— 守っているのは**すべてのエージェントが毎ターン払う文脈**であり、
 一つのデプロイだけが送る一文はそこに入らない。だから天井は動かず、
 その一文は `TestASandboxSaysSoInItsInstructions` が別に上限を持つ。
 `dev` は載せない: 失われるのは書いたものではなく裁定に載る名前で、
@@ -470,13 +483,13 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 あって frontmatter のキーではなく、応答が運ぶ `trust`(段は一つなので
 単数)も三つの段の綴りもそのままである。
 
-7 → 6 は [0108](design/0108-the-context-pack-retires.md) で、
+7 → 6 は [0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4 で、
 `get_context` を降ろした。0076 の二本と違い**通行量はあった** — 同梱の
 フックも配布 CLAUDE.md もここを通っていた — ので、根拠も別である:
 エージェントは search → get の反復が得意になり、サーバが「何を読むべき
 か」を先に詰めて渡す pack は、その判断をエージェントから取り上げる
 機構になっていた。pack が同梱していた逆向きの hop は `get_concept` の
-`linked_from` が運び([0106](design/0106-a-read-carries-what-points-at-it.md))、
+`linked_from` が運び([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)、
 書き戻しの習慣を運ぶ hint は pack の応答から `get_concept` の応答へ
 移った(0096 §3 の改訂)。常駐は 13,460 → 11,629 バイトで、
 `MCP-BYTES` は 13,500 → 12,000 に**下がる** — 上げるのが決定なら、
@@ -557,7 +570,7 @@ CLI は完全性の面なので既定は yes(0067 §1)だが、ここで書い�
 フラグは三つ増えていた。文書なら git に入り、境界にふさわしいレビュー経路が
 そこにある。
 
-25 → 24 は [0108](design/0108-the-context-pack-retires.md) が
+25 → 24 は [0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4 が
 `context` コマンドを退役させたぶんである。フック(`examples/claude-code/hooks/`)は
 `ochakai search --json` の順位を注入するポインタ注入器になり、取りに
 行くのはエージェント自身になった — 配られた pack より、選ばれた fetch の
@@ -582,7 +595,7 @@ CLI は完全性の面なので既定は yes(0067 §1)だが、ここで書い�
 24 → 25 は [0085](design/0085-the-empty-base-and-what-fills-it.md) の
 `ochakai seed` である。**天井を上げる決定**であり、そう言って上げている。
 新しいデプロイが最初に持つのは空のベースで、カタログ製品はそこをコネクタで
-埋める — ochakai はコネクタを持たないと決めている([0081](design/0081-what-ochakai-is-and-what-it-refuses-to-hold.md) §1)。
+埋める — ochakai はコネクタを持たないと決めている([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §2)。
 `seed` はその二択の外にあり、**ウェアハウスには一切接続しない**: 運用者が
 自分のクライアントと自分の identity で実行した `INFORMATION_SCHEMA` の
 答えを受け取り、draft の OKF バンドルとして吐くだけである。書き込みは既存の
@@ -638,7 +651,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 `serve` / `serve-ui` のフラグは数えない。CLI の節が `serve` を数えないのと
 同じ理由で、バイナリの動かし方であって ochakai が知っていることではない。
 
-29 → 28 は [0108](design/0108-the-context-pack-retires.md) の `budget`
+29 → 28 は [0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4 の `budget`
 で、PARAM の同名と同じ一つの決定の片割れである。
 
 28 のまま、PR [#407](https://github.com/na0fu3y/ochakai/issues/407) が
@@ -679,7 +692,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 `--note` は増えていない — `report` と `reject` が既に持っていた語を
 `delete` が受け継いだだけで、**既存の語彙を使い回すのは無料**である。
 
-## ENV (15)
+## ENV (16)
 
 環境変数も表面である — デプロイする人が読み、間違えられる。No FDE(C4)
 を掲げる以上、**設定の数は「自分で立ち上げられるか」に直接効く**。
@@ -727,6 +740,14 @@ ochakai が定義した変数ではなく、**既にある綴りを読んだ**�
 だけで足りるのは、この機能に「常に付ける」の用途が無いからである
 (0111 §5)。
 
+**15 → 16 は [0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) の
+`OCHAKAI_AGENT` である。天井を上げる決定であり、そう言って上げている。**
+一語で済ませたのは [0078](design/0078-one-variable-says-how-it-embeds.md)
+と同じ理由による — プロジェクト・リージョン・モデルを一度に運ぶ綴り
+(Vertex のモデル resource name)が既にあり、モデル id だけなら残り二つは
+メタデータサーバーが答える。on / off の語は持たない: 既定が off で、
+モデルを名指すことがそのまま on だからである。
+
 **13 → 14 は [0109](design/0109-a-directory-has-readers-and-writers.md) の
 `OCHAKAI_ADMINS` である。天井を上げる決定であり、そう言って上げている。**
 ポリシーそのものはデータベースに入るので、この次元に出るのは一語だけで
@@ -753,6 +774,7 @@ ochakai が定義した変数ではなく、**既にある綴りを読んだ**�
 
 - `NO_COLOR`
 - `OCHAKAI_ADMINS`
+- `OCHAKAI_AGENT`
 - `OCHAKAI_DATABASE_URL`
 - `OCHAKAI_DB_IAM_AUTH`
 - `OCHAKAI_DELEGATING_CALLERS`
@@ -1059,7 +1081,7 @@ Neo4j の発信で広く流通しているのに、[positioning](positioning.md)
 入口も一枚ぶんの決定だが、天井を下げた PR と ページを足した PR は
 互いを見ていない — main で合流した実数は 5,708 行、下げたばかりの天井を
 8 行超えた。**別々の PR の散文が合流して境界を越える**のは
-[0076](design/0076-two-tools-leave-mcp.md) と
+[0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §5.1 と
 [0078](design/0078-one-variable-says-how-it-embeds.md) が上向きにやった
 ことで、下向きの天井に対して同じことが起きるのは初めてである。どちらの
 PR も自分の tree では正しく、落ちたのは合流点だった。100 行の幅は

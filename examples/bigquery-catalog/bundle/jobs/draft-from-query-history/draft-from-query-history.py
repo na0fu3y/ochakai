@@ -16,7 +16,7 @@ per query somebody keeps running. Pipe it into `ochakai import -`.
 **It does not connect to anything.** You run the query, with your own
 client and your own identity, and pipe the answer here — the same shape
 `ochakai seed` takes, and for the same reason: ochakai holds no warehouse
-credential and neither does this (design doc 0081 §1). Seeing anybody
+credential and neither does this (design doc 0142 §2). Seeing anybody
 else's jobs needs bigquery.jobs.listAll; without it the history is your
 own queries, which is worth knowing before you read the counts.
 

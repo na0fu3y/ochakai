@@ -8,8 +8,10 @@ info:
     external material) in one knowledge base. The REST API is a superset
     of the MCP tools — the same operations plus bulk export, the
     human-facing reverse lookups, deletion, a concept's usage totals and
-    file writes — so users can build their own web UIs. ochakai executes
-    no SQL and uses no LLM.
+    file writes — so users can build their own web UIs. The server
+    executes no SQL, and no LLM enters search or reads; a deployment's own
+    data agent, off by default, is one operation (POST /api/v1/agent)
+    that rules on nothing.
 
     Why an operation is shaped the way it is, and what was considered and
     declined, is in the design records, cited below as "design doc NNNN":
@@ -1417,6 +1419,94 @@ paths:
         "405": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
+  /api/v1/agent:
+    post:
+      operationId: askAgent
+      summary: One turn of this deployment's data agent
+      description: >
+        ochakai's own data agent (design doc 0142), **off by default**:
+        an operator turns it on with `OCHAKAI_AGENT`, and `stats` says
+        whether it is (`agent.enabled`). A deployment without one answers
+        501.
+
+
+        The caller sends the whole conversation and gets the next reply.
+        **The server keeps no conversation** — a call carries everything
+        it needs, for the reason MCP's transport keeps no session (design
+        doc 0118). The agent reads the knowledge base through the same
+        operations every client calls, **as the caller**: an access
+        policy narrows it exactly as it narrows them (design doc 0109).
+        The reply cites the concepts it used and whether a person
+        confirmed them; `read` lists what it fetched, in order.
+
+
+        **The agent rules on nothing and, in this release, writes
+        nothing**: no draft, no verification, no rejection, no report.
+        Where a procedure it follows would write, it puts the text it
+        would have written in the reply for a person to write. It runs no
+        SQL. Nothing is stored, so a read-only deployment answers it.
+        The model runs in the deployment's region (design doc 0142 §5); a
+        failure to reach it is a 500 naming the model's answer.
+      parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
+      requestBody:
+        required: true
+        description: A key outside messages is a 400 naming it (design doc 0064).
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [messages]
+              properties:
+                messages:
+                  type: array
+                  minItems: 1
+                  maxItems: 40
+                  description: >
+                    The conversation so far, oldest first, ending with the
+                    question to answer. At most 64 KiB of text in all.
+                  items:
+                    type: object
+                    required: [role, text]
+                    properties:
+                      role:
+                        type: string
+                        enum: [user, agent]
+                      text:
+                        type: string
+                        minLength: 1
+            example:
+              messages:
+                - { role: user, text: 棚卸しをして、裁定の一枚を出して }
+      responses:
+        "200":
+          description: The agent's reply.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [text, read]
+                properties:
+                  text:
+                    type: string
+                    description: The reply, in markdown.
+                  read:
+                    type: array
+                    items: { type: string }
+                    description: The ids of the concepts the agent fetched to write it, in the order it fetched them.
+              example:
+                text: "売上は税と送料を除く(metrics/revenue、human-reviewed)。"
+                read: [metrics/revenue, insights/revenue-seasonality]
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "405": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+        "501": { $ref: "#/components/responses/Error" }
   /api/v1/move:
     post:
       operationId: moveConcept
@@ -2113,6 +2203,7 @@ paths:
                     at: "2026-07-28T02:07:44.291508Z"
                     window_days: 30
                     files: { enabled: true }
+                    agent: { enabled: false, variable: OCHAKAI_AGENT }
                     concepts:
                       total: 128
                       status: { draft: 31, stable: 92, deprecated: 5 }
@@ -3231,6 +3322,27 @@ components:
             `dev` tells its own readers not to deploy it, which is why
             this is worth carrying: the deployments that need telling are
             the ones that did it anyway. Absent everywhere else.
+        agent:
+          type: object
+          description: >
+            Whether this deployment has its own data agent
+            (`POST /api/v1/agent`, design doc 0142), in the shape `files`
+            has and for its reason: the agent is off by default, a
+            deployment without one answers that operation 501, and the
+            bundled web UI reads this and offers the agent only where it
+            answers. Absent on a server that predates it.
+          required: [enabled]
+          properties:
+            enabled:
+              type: boolean
+              description: Whether `POST /api/v1/agent` answers (`OCHAKAI_AGENT`).
+            variable:
+              type: string
+              description: >
+                `OCHAKAI_AGENT`, the variable that would enable the agent.
+                Absent unless the agent is off and this caller holds the
+                whole bundle, and on `public` and `sandbox`, which refuse
+                the agent at start.
         files:
           type: object
           description: >

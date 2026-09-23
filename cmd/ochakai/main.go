@@ -23,6 +23,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/embed"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
+	"github.com/na0fu3y/ochakai/internal/llm"
 	"github.com/na0fu3y/ochakai/internal/mcpserver"
 	"github.com/na0fu3y/ochakai/internal/restapi"
 	"github.com/na0fu3y/ochakai/internal/service"
@@ -339,8 +340,54 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 				"deployment (design doc 0109 §3)", len(p.Rules))
 		}
 	}
-	return &service.Service{Store: st, Embedder: embedder, Config: cfg, Log: log}, cfg, nil
+	model, err := agentModel(ctx, cfg, log)
+	if err != nil {
+		return nil, nil, err
+	}
+	return &service.Service{Store: st, Embedder: embedder, Model: model, Config: cfg, Log: log}, cfg, nil
 }
+
+// agentModel builds the agent's model, or returns nil when the deployment
+// named none — the default (design doc 0142 §5).
+//
+// Named is asked for, so every way of not having it stops the start: a
+// region the metadata server will not name (ochakai does not pick where
+// the text goes), and a model that does not answer there — no role, no
+// API, or a region that does not carry it. The probe is one short
+// generation, the same shape of question the embedder is asked once.
+func agentModel(ctx context.Context, cfg *config.Config, log *slog.Logger) (llm.Model, error) {
+	if cfg.Agent == nil {
+		return nil, nil
+	}
+	a := cfg.Agent
+	if a.Project == "" || a.Location == "" {
+		project, region := config.DiscoverVertex(ctx)
+		if project == "" || region == "" {
+			return nil, fmt.Errorf("OCHAKAI_AGENT names %q without saying where it runs, and this deployment's project and region could not be read from the metadata server; name them: OCHAKAI_AGENT=projects/<project>/locations/<region>/publishers/google/models/%s",
+				a.Model, a.Model)
+		}
+		a.Project, a.Location = project, region
+	}
+	m, err := llm.NewGemini(ctx, a.Project, a.Location, a.Model)
+	if err != nil {
+		return nil, err
+	}
+	probe, cancel := context.WithTimeout(ctx, agentProbeTimeout)
+	defer cancel()
+	if _, err := m.Generate(probe, llm.Request{
+		Contents: []llm.Content{{Role: "user", Parts: []llm.Part{{Text: "ochakai"}}}},
+	}); err != nil {
+		return nil, fmt.Errorf("OCHAKAI_AGENT: %s did not answer in %s (project %s). Grant roles/aiplatform.user to the service identity, enable aiplatform.googleapis.com, and check that this region carries the model — ochakai will not send the text to another region: %w",
+			a.Model, a.Location, a.Project, err)
+	}
+	log.Info("agent enabled", "model", a.Model, "project", a.Project, "location", a.Location)
+	return m, nil
+}
+
+// agentProbeTimeout bounds the one generation that decides whether the
+// start goes ahead. A generation is slower than an embedding, so this is
+// longer than vertexProbeTimeout.
+const agentProbeTimeout = 30 * time.Second
 
 // semanticSearch builds the embedder behind hybrid search, and decides
 // whether this deployment has one at all.

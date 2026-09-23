@@ -1,8 +1,9 @@
 # CLAUDE.md
 
 ochakai is a knowledge store for data-analysis agents. Two decisions
-frame everything: no LLM inside and no SQL execution (0081), and
-zero secrets — Cloud Run IAM + Cloud SQL IAM on Google Cloud,
+frame everything: nothing but a person's ruling changes what is served,
+and the server executes no SQL (0142 — its own data agent is off by
+default and rules on nothing), and zero secrets — Cloud Run IAM + Cloud SQL IAM on Google Cloud,
 in-process OIDC verification off it (0086), never tokens or passwords
 (0065, 0003).
 

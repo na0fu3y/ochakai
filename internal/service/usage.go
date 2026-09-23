@@ -204,6 +204,7 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 		// this, because in a filter it means the whole bundle.
 		empty := emptyStats(now, days, s.Config)
 		empty.Files = s.filesState(sc)
+		empty.Agent = s.agentState(sc)
 		return empty, nil
 	}
 	st, err := s.Store.Stats(ctx, now.AddDate(0, 0, -days), f.Prefixes)
@@ -232,6 +233,7 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 	st.Sandbox = s.Config != nil && s.Config.Sandbox
 	st.InsecureDev = s.Config != nil && s.Config.InsecureDev
 	st.Files = s.filesState(sc)
+	st.Agent = s.agentState(sc)
 	// The model is the service's, not the store's — the store holds
 	// vectors and never asks who made them — so the coverage is read
 	// here, beside the other two answers the service alone can give.
@@ -315,6 +317,21 @@ func (s *Service) filesState(sc *Scope) *domain.StatsFiles {
 		// Spelled here as it is spelled in the refusal a write gets
 		// (settleFile): one name, said by whichever face the reader met.
 		st.Variable = "OCHAKAI_GCS_BUCKET"
+	}
+	return st
+}
+
+// agentState is filesState for the agent: enabled for everybody, and the
+// variable that would turn it on for a caller who holds the whole bundle.
+// A posture that refuses the agent names no variable, because setting it
+// there stops the start (design doc 0142 §5).
+func (s *Service) agentState(sc *Scope) *domain.StatsAgent {
+	if s.Model != nil {
+		return &domain.StatsAgent{Enabled: true}
+	}
+	st := &domain.StatsAgent{}
+	if sc != nil && sc.Everything() && (s.Config == nil || !s.Config.Anonymous()) {
+		st.Variable = "OCHAKAI_AGENT"
 	}
 	return st
 }

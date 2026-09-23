@@ -462,3 +462,52 @@ func TestUnknownVarsReadsOnlyOchakaisNamespace(t *testing.T) {
 		t.Errorf("unknownVars = %v, want %v", got, want)
 	}
 }
+
+// The agent is off unless named (design doc 0142 §5), and a name is
+// either a model id to run where the deployment runs or a resource name
+// that says where.
+func TestAgentSwitch(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
+
+	cfg, err := FromEnv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Agent != nil {
+		t.Errorf("Agent = %+v with nothing set; the default is off", cfg.Agent)
+	}
+
+	t.Setenv("OCHAKAI_AGENT", "gemini-x")
+	if cfg, err = FromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Agent == nil || cfg.Agent.Model != "gemini-x" || cfg.Agent.Project != "" || cfg.Agent.Location != "" {
+		t.Errorf("Agent = %+v, want the bare model with project and region left to the start", cfg.Agent)
+	}
+
+	t.Setenv("OCHAKAI_AGENT", "projects/p/locations/asia-northeast1/publishers/google/models/gemini-x")
+	if cfg, err = FromEnv(); err != nil {
+		t.Fatal(err)
+	}
+	if *cfg.Agent != (AgentConfig{Project: "p", Location: "asia-northeast1", Model: "gemini-x"}) {
+		t.Errorf("Agent = %+v; the resource name was not read apart", cfg.Agent)
+	}
+
+	for _, v := range []string{"off", "projects/p/models/m", "projects//locations/l/publishers/google/models/m"} {
+		t.Setenv("OCHAKAI_AGENT", v)
+		if _, err := FromEnv(); err == nil {
+			t.Errorf("OCHAKAI_AGENT=%q was accepted", v)
+		}
+	}
+}
+
+func TestAnAnonymousPostureRefusesTheAgent(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
+	t.Setenv("OCHAKAI_AGENT", "gemini-x")
+	for _, mode := range []string{"public", "sandbox"} {
+		t.Setenv("OCHAKAI_MODE", mode)
+		if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "OCHAKAI_AGENT") {
+			t.Errorf("OCHAKAI_MODE=%s with an agent: err = %v, want a refusal naming OCHAKAI_AGENT", mode, err)
+		}
+	}
+}

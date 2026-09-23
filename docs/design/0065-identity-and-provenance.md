@@ -17,7 +17,8 @@ Status: Accepted(2026-08-02)。**identity と provenance の現行ドキュメ�
 満たされ、prefix ごとの閲覧・編集の付与を持つ。**付与が一つも無いデプロイ
 では §1 がそのまま現行である**。
 §4 の「無ければ initialize の `clientInfo` をフォールバックとして読む」は
-[0118](0118-a-call-carries-everything-it-needs.md) §3 が改訂する — 名乗りは
+[0118](0118-a-call-carries-everything-it-needs.md) §3 が改訂し、いまは
+[0143](0143-four-faces-and-an-agent-that-answers-behind-one.md) §3 が持つ — 名乗りは
 毎回の呼び出しから読むようになり、2026-07-28 より前のクライアントでは
 フォールバックが届かなくなる。契約が `Ochakai-Producer` であることは動かない。
 **§6 の「trust tier は検証台帳の `human:` だけから導かれる」は

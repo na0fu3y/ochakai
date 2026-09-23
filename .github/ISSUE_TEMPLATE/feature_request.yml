@@ -69,9 +69,9 @@ body:
         out of scope rather than a matter of priority. Check both.
       options:
         - label: >-
-            No LLM inside, no SQL execution — `ochakai` stores and serves
-            knowledge; interpretation and execution belong to the client agent
-            (design doc 0081).
+            Only a person rules, and the server runs no SQL — no LLM verifies,
+            rejects, ranks or rewrites curated knowledge, and a query runs as
+            the person asking, never as the server (design doc 0142).
           required: true
         - label: >-
             Google Cloud only, secret-zero — auth is Cloud Run IAM + Cloud SQL

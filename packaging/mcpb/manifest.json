@@ -4,7 +4,7 @@
   "display_name": "ochakai",
   "version": "0.0.0",
   "description": "Your team's metric definitions, verified golden queries, and the interpretation knowledge around them.",
-  "long_description": "ochakai is a context provider for data agents. A semantic layer tells you that revenue = SUM(price); it does not tell you whether 100 is good or bad. ochakai keeps that missing half — metric definitions, verified golden queries, insights that say how to read a number, glossary terms, table catalog entries — curated by people and agents together.\n\nThis bundle is a client. It talks to an ochakai server over MCP: the public demo to look around, or your own deployment. No LLM runs inside ochakai, and it holds no warehouse credential — it hands back what people wrote and verified, with the provenance still on it.",
+  "long_description": "ochakai is a context provider for data agents. A semantic layer tells you that revenue = SUM(price); it does not tell you whether 100 is good or bad. ochakai keeps that missing half — metric definitions, verified golden queries, insights that say how to read a number, glossary terms, table catalog entries — curated by people and agents together.\n\nThis bundle is a client. It talks to an ochakai server over MCP: the public demo to look around, or your own deployment. No LLM enters its search or reads, and it holds no warehouse credential — it hands back what people wrote and verified, with the provenance still on it.",
   "author": {
     "name": "na0fu3y",
     "url": "https://github.com/na0fu3y"

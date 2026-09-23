@@ -7,7 +7,7 @@ import { cardThumbs } from '../cards.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { actorStr, daysSince, displayTitle, entryHash, fmtAge } from '../format.js';
-import { descHTML } from '../markdown.js';
+import { descHTML, md } from '../markdown.js';
 import { queueStrip, refreshQueues } from '../queues.js';
 import { knownDirs, refreshTree } from '../tree.js';
 import { icon } from '../vocab.js';
@@ -45,6 +45,13 @@ export function viewReview() {
                value="${esc(review.prefix)}" style="width:9rem"></label>
       <datalist id="loop-dirs"></datalist>
     </div>
+    <div class="agent-only" id="triage">
+      <div class="toolbar">
+        <button id="triage-run">エージェントに棚卸しを頼む</button>
+        <span class="hint">答えられなかった問いと失敗報告を読んで束ね、裁定の一枚を作ります。エージェントは裁定も書き込みもしません — 読んで決めるのはあなたです。</span>
+      </div>
+      <div id="triage-out"></div>
+    </div>
     <div id="loop-stats"></div>
     <div class="toolbar">
       <span class="grow"></span>
@@ -61,9 +68,37 @@ export function viewReview() {
     review.prefix = e.target.value.replace(/^\/+|\/+$/g, '').trim();
     debounce(() => { loadLoopStats(); runReview(); }, 250);
   });
+  $('#triage-run').addEventListener('click', runTriage);
   refreshQueues();
   runReview();
   loadLoopStats();
+}
+
+// The agent's take on the loop, on the page where the person who rules
+// already is (design doc 0142 §3). It follows the triage procedure the
+// base itself holds — as a Skill a person has reviewed — and hands back
+// one page; nothing it says has touched the base. The scope control
+// above narrows it the way it narrows the numbers.
+async function runTriage() {
+  const btn = $('#triage-run'), out = $('#triage-out');
+  btn.disabled = true;
+  out.innerHTML = '<div class="empty">エージェントが読んでいます — 一、二分かかることがあります…</div>';
+  const scope = review.prefix ? `範囲は ${review.prefix} の下だけにして。` : '';
+  try {
+    const ans = await api('/api/v1/agent', {
+      method: 'POST',
+      body: { messages: [{ role: 'user', text: `棚卸しをして、裁定の一枚を出して。${scope}` }] },
+    });
+    const read = (ans.read || []).map(id =>
+      `<a href="${esc(entryHash({ id }))}"><code>${esc(id)}</code></a>`).join(' ');
+    out.innerHTML = `<div class="card triage-answer">${md(ans.text)}</div>`
+      + (read ? `<div class="hint">読んだナレッジ: ${read}</div>` : '');
+  } catch (e) {
+    out.innerHTML = '';
+    toast('棚卸しに失敗しました: ' + e.message, 6000);
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 // The loop as the instance sees it (design doc 0069 §5), on the page

@@ -7,7 +7,8 @@ Status: Accepted(2026-08-10)。[0068](0068-how-a-face-is-added-and-removed.md)
 ([#539](https://github.com/na0fu3y/ochakai/issues/539) の束)。
 **§3(hint の置き場所)は [0108](0108-the-context-pack-retires.md) が
 改訂した** — 乗り物だった pack が退役し、hint は `get_concept` の応答に
-移った。残す理由(0069 の機構、常駐ではない)はそのまま。
+移った。残す理由(0069 の機構、常駐ではない)はそのまま。いまは
+[0143](0143-four-faces-and-an-agent-that-answers-behind-one.md) §4 が持つ。
 Date: 2026-08-10
 
 ## 0. この記録が決めたこと

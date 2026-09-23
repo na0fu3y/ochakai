@@ -56,8 +56,9 @@ number. The alternatives you dropped stay in the PR history.
 
 Two decisions to check any proposal against first:
 
-- **No LLM inside, no SQL execution** (0081). Interpretation and
-  execution belong to the client agent.
+- **Only a person rules, and the server runs no SQL** (0142). The
+  deployment's own agent is off by default, answers and proposes, and
+  never rules; a query runs as the person asking.
 - **Secret-zero** (0065, 0003). Cloud Run IAM + Cloud SQL IAM on Google
   Cloud, in-process OIDC verification off it (0086); no tokens, no
   passwords.

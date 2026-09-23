@@ -13,6 +13,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
+	"github.com/na0fu3y/ochakai/internal/llm"
 	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
@@ -20,8 +21,11 @@ import (
 type Service struct {
 	Store    *store.Store
 	Embedder embed.Embedder // nil when semantic search is disabled
-	Config   *config.Config
-	Log      *slog.Logger
+	// Model is the agent's generative model (design doc 0142), nil on a
+	// deployment that has no agent — the default.
+	Model  llm.Model
+	Config *config.Config
+	Log    *slog.Logger
 }
 
 // ErrReadOnly is returned by every operation that would change knowledge
