@@ -137,7 +137,7 @@ paths:
         is kept up shows an empty feed.
         With sort=stale_after it lists concepts whose author declared a
         stale_after that has now passed, most overdue first — the feed for
-        knowledge dated by whoever wrote it (design doc 0069 §2.2).
+        knowledge dated by whoever wrote it (design doc 0141 §2.2).
         Concepts whose expiry has not come due are not listed. Unlike the
         two feeds above, verifying does not clear this one: the date is
         the writer's declaration, so a concept leaves only when someone
@@ -184,7 +184,7 @@ paths:
             Filter by who confirmed the concept as it reads now — OKF's
             own trust tiers (SPEC §5.3), derived from the verifications
             that stand: the ledger rows at or after the concept's last
-            meaningful change (design doc 0138). A concept edited or
+            meaningful change (design doc 0141 §2.4). A concept edited or
             moved since its last confirmation matches unverified.
             Repeatable and OR-ed, so "anything somebody confirmed" is two
             values. Omit to leave the question unasked. Independent of
@@ -242,7 +242,7 @@ paths:
           description: >
             Only concepts citing this resource — the reverse of
             sources[].resource, for "this material changed, what derives
-            from it?" (design doc 0069 §2.3). Matched exactly: no prefix
+            from it?" (design doc 0141 §2.3). Matched exactly: no prefix
             or substring matching, and sources[].id is not consulted
             because it keys a document's own footnotes rather than
             identifying an artifact across concepts. Single-valued, unlike
@@ -1629,7 +1629,7 @@ paths:
         computation (docs/guides/golden-query-canary.md) — is appended to
         the ledger like any other, and the tier derived from it stops at
         `machine-confirmed`, since `human-reviewed` takes a standing
-        `human:` row (design doc 0138). What the tier says is who
+        `human:` row (design doc 0141 §2.4). What the tier says is who
         confirmed it, and judging that is the reading side's (design doc
         0065 §1).
 
@@ -1660,7 +1660,7 @@ paths:
                     nothing when the content is unchanged, so "checked
                     again, still right" could not be recorded and both
                     review feeds (`sort=verified_at`, `sort=failed`) had
-                    no exit (design doc 0069 §2).
+                    no exit (design doc 0141 §2).
 
                 note:
                   type: string
@@ -1790,7 +1790,7 @@ paths:
 
 
         `reports` carries what those reports said: the notes their
-        callers wrote, newest first and at most 10 (design doc 0137). A
+        callers wrote, newest first and at most 10 (design doc 0141 §3.1). A
         review feed brings a reviewer here to answer "how bad is it";
         this is where "what was wrong" is written down.
       responses:
@@ -1863,7 +1863,7 @@ paths:
                     What was run, what went wrong. Recorded with the raw
                     event and read back as `reports` on this concept's
                     usage, where a reviewer working the failed feed sees
-                    it (design doc 0137). Pruned with the event after
+                    it (design doc 0141 §3.1). Pruned with the event after
                     180 days.
             examples:
               worked:
@@ -2048,10 +2048,10 @@ paths:
         an improvement loop needs a trend: whether the verified share is
         growing, whether failure reports are being answered, and what people
         asked for and did not find. That is a question about the base as a
-        whole, and this is the face that answers it (design doc 0069 §5).
+        whole, and this is the face that answers it (design doc 0141 §5).
 
 
-        It carries the queue depths under `queues` (design doc 0069
+        It carries the queue depths under `queues` (design doc 0141
         §5), and `prefix` narrows every number keyed by a concept.
 
 
@@ -2086,10 +2086,10 @@ paths:
 
             Every number keyed by a concept honors it — the tallies, the
             queues, the verifications, the outcomes. **`misses` does
-            not**, and cannot: a search that found nothing found it
-            nowhere, so there is no id to scope by, and the questions this
-            base could not answer stay the instance's whatever prefix is
-            passed (design doc 0069 §5.1).
+            not**, and cannot: a search no concept's words matched matched
+            nothing anywhere, so there is no id to scope by, and the
+            questions this base could not answer stay the instance's
+            whatever prefix is passed (design doc 0141 §5.1).
           schema: { type: array, items: { type: string } }
           explode: true
           allowReserved: true
@@ -2107,7 +2107,7 @@ paths:
                   description: >
                     A base being curated: two thirds of it confirmed, seven
                     verifications last month, four failure reports nobody has
-                    answered — and eleven questions that found nothing, which
+                    answered — and eleven questions no concept's words matched, which
                     is the list of what to write next.
                   value:
                     at: "2026-07-28T02:07:44.291508Z"
@@ -2712,7 +2712,7 @@ components:
 
         Only the verifications that stand count: the ledger rows at or
         after the concept's last meaningful change, i.e. the ones that
-        confirmed the content as it reads now (design doc 0138). An edit
+        confirmed the content as it reads now (design doc 0141 §2.4). An edit
         — or a move, which reassigns who the content stands by — returns
         the tier to unverified until somebody confirms the new content;
         the ledger itself keeps every row, and the `edited` queue lists
@@ -3085,7 +3085,7 @@ components:
           description: >
             The same activity inside a fixed recent window, and what the
             `usage` and `failed` listings are ordered by (design doc
-            0090). The counters above are lifetime and never decay, so
+            0141 §2.5). The counters above are lifetime and never decay, so
             ranking on them left a concept that was read a lot in a
             knowledge base's first month at the top of the promotion
             queue for as long as the deployment lived, and a long-ago
@@ -3107,7 +3107,7 @@ components:
           description: >
             What the reports said, newest first and at most 10 — the
             notes callers wrote with `POST /api/v1/usage/{id}`, back out
-            where a reviewer can read them (design doc 0137). A feed
+            where a reviewer can read them (design doc 0141 §3.1). A feed
             says a concept was reported wrong and is unanswered; this is
             where what was wrong is written down, by the caller who ran
             it.
@@ -3131,7 +3131,7 @@ components:
             **These rows are pruned with the raw events at 180 days**,
             so this list answers only for that window; a report older
             than the retention is gone the way a pruned search miss is
-            (design doc 0069 §4). The counters above are running totals
+            (design doc 0141 §4). The counters above are running totals
             and survive pruning, so they keep answering when this list
             no longer does.
 
@@ -3155,7 +3155,7 @@ components:
                   Who reported it, as kind and name. **`via` and
                   `producer` are never here**: the raw event rows hold
                   the two columns and no more, which design doc 0065 §4
-                  chose deliberately and 0137 §4 keeps. Under delegation
+                  chose deliberately and 0141 §3.1 keeps. Under delegation
                   `name` is already the delegated end user, so whose
                   report this is has an answer; which application and
                   which software it came through does not.
@@ -3166,7 +3166,7 @@ components:
       required: [search_hits, fetches, worked, failed, recent]
     Stats:
       description: >
-        The instance-level view of the loop (design doc 0069 §5). State
+        The instance-level view of the loop (design doc 0141 §5). State
         fields describe the base as it stands; flow fields cover the last
         `window_days`.
       type: object
@@ -3290,8 +3290,8 @@ components:
           allOf: [ { $ref: "#/components/schemas/QueueCounts" } ]
           description: >
             State: how much each review queue is holding right now (design
-            doc 0069 §5 kept this place for the metrics beside it), and
-            since 0069 §5 the only place it is answered — `prefix`
+            doc 0141 §5 kept this place for the metrics beside it), and
+            since 0141 §5 the only place it is answered — `prefix`
             scopes it like everything else here. When the question is only
             "is there anything", `ochakai stats` prints these with
             the next step on each line, and its `--exit-code` is what a
@@ -3315,7 +3315,7 @@ components:
                 oldest first, counted back from today rather than as
                 calendar weeks — a calendar week would make the newest
                 bucket a partial one whose dip is the calendar rather
-                than the curator (design doc 0095).
+                than the curator (design doc 0141 §5.3).
 
                 Verifications and not queue depth, because the ledger
                 records every ruling with its time and **nothing
@@ -3368,8 +3368,13 @@ components:
         misses:
           type: object
           description: >
-            Flow: the searches that found nothing — the questions this base
-            could not answer, which is the list of what to write next.
+            Flow: the searches no concept's words matched — the questions
+            this base could not answer, which is the list of what to write
+            next or which word to add to a concept's `synonyms`. Read off
+            the lexical ranking, not off the answer: on a deployment that
+            embeds, the vector half returns the nearest concepts at any
+            distance, so a question can come back with hits and still be
+            one of these (design doc 0141 §4).
           properties:
             recording:
               type: boolean
@@ -3385,7 +3390,7 @@ components:
                 Present and true when the caller reads part of the bundle
                 (`scope` above) and these are the whole instance's, so
                 they are not shown. A miss carries no concept id (design
-                doc 0069), so there is nothing to narrow it by, and
+                doc 0141), so there is nothing to narrow it by, and
                 showing it unnarrowed would tell one team what every
                 other team searched for. Like `recording: false` it makes
                 the two fields below meaningless rather than zero; unlike
@@ -3476,7 +3481,7 @@ components:
 
 
         A queue is named after the `sort` that lists it, so the count and
-        the way to see what it counts are one word (design doc 0069 §5.2).
+        the way to see what it counts are one word (design doc 0141 §5.2).
         `drafts` and `edited` are the exceptions, and name themselves,
         because no single sort lists either.
       properties:
@@ -3486,7 +3491,7 @@ components:
             Drafts waiting to be published or turned down — GET
             /api/v1/search?sort=usage&status=draft. It takes a filter as
             well as a sort, which is why this one keeps a name of its own
-            (design doc 0069 §5.2). Verifying does not empty it:
+            (design doc 0141 §5.2). Verifying does not empty it:
             confirming and publishing are different acts, so a draft
             leaves when it is edited to another status, or when it is
             turned down and removed (design doc 0135).
@@ -3495,20 +3500,20 @@ components:
           description: >
             Concepts whose failure reports are still unanswered —
             sort=failed, the listing this count is keyed by (design doc
-            0069 §5.2). Verifying takes one out.
+            0141 §5.2). Verifying takes one out.
         stale_after:
           type: integer
           description: >
             Concepts past the stale_after their author declared —
             sort=stale_after. Verifying does not clear this one: the date
             is the writer's declaration, so the concept leaves when someone
-            edits it (design doc 0069 §2.2).
+            edits it (design doc 0141 §2.2).
         edited:
           type: integer
           description: >
             Concepts confirmed once but edited or moved since, so no
             verification stands for what they say now and their trust
-            tier reads unverified (design doc 0138) — GET
+            tier reads unverified (design doc 0141 §2.4) — GET
             /api/v1/search?sort=verified_at&trust=unverified, where they
             precede the never-verified tail. Verifying takes one out.
       required: [drafts, failed, stale_after, edited]

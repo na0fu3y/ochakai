@@ -89,7 +89,7 @@ teams/growth`)。
 - *検証したはずの concept が unverified に戻っている。* tier に数え
   られるのは**いまの内容**を確認した検証だけで、検証のあとの編集・
   移動(rename は本文リンクの書き換えを伴う)で検証は立たなくなる
-  ([0138](../design/0138-a-verification-stands-until-the-content-moves.md))。
+  ([0141](../design/0141-a-miss-is-read-off-the-words.md) §2.4)。
   台帳は消えていない — `ochakai get` の `verified` に履歴はそのまま
   ある。`ochakai list verified_at --trust unverified` がそういう
   concept を先頭に並べるので、内容を確かめて verify し直す。
