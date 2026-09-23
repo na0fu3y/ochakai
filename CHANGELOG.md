@@ -23,6 +23,19 @@ last entry.
 
 ### Added
 
+- **The web UI can ask the deployment's own agent.** Where `OCHAKAI_AGENT`
+  is on, an "エージェント" tab appears beside レビュー: the person who has
+  no agent of their own types a question and gets the answer the agent
+  writes from the knowledge — each concept cited with whether a person
+  confirmed it, and the ids it read linked underneath. The page holds the
+  conversation (in the tab's sessionStorage, so following a cited concept
+  and coming back keeps it) and sends it whole on every turn to the same
+  `POST /api/v1/agent` the triage button uses; the server keeps none. The
+  agent still writes nothing, rules on nothing and runs no SQL, and the tab
+  says so above the question box. No surface moves: the web UI is not a
+  counted surface, and no endpoint, parameter or variable was added.
+  ROADMAP and docs/loop.md no longer say the UI has no chat.
+
 - **A deployment can turn on its own data agent, and it rules on
   nothing** ([design doc 0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)).
   `OCHAKAI_AGENT` names a Gemini model on Vertex AI — a bare model id

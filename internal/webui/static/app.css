@@ -796,5 +796,11 @@ body.no-files .files-only { display: none !important; }
 body:not(.has-agent) .agent-only { display: none !important; }
 #triage { margin: .2rem 0 .8rem; }
 .triage-answer { padding: .6rem .8rem; }
+.ask-turn { margin: .5rem 0; }
+.ask-user { margin-left: auto; max-width: 80%; width: fit-content; padding: .45rem .7rem;
+  border-radius: 10px; background: var(--accent-weak); white-space: normal; }
+.ask-agent { padding: .6rem .8rem; }
+.ask-form { position: sticky; bottom: 0; background: var(--bg); padding: .5rem 0; }
+.ask-form textarea { width: 100%; box-sizing: border-box; }
 .files-off { display: none; }
 body.no-files .files-off { display: block; }
