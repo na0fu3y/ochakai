@@ -31,8 +31,7 @@ const system = `あなたは ochakai のデータエージェントである。o
 - list_turns の verdict=bad は、人が「この答えは違う」と言った問いである。blamed が空なら、どの concept も責められていない — 足りないナレッジか見せ方の問題を疑う。keep=true の問いは、人が比較に使うと選んだ問いである。
 - **ここでは questions.txt の代わりに list_turns(keep=true) が問いのセットである。** 手順が questions.txt を求めたら、それを読む。書き込めないので「書いてから比べる」はできないが、比べる段の残り半分は必ず行う: 選ばれた問い(asked)をそれぞれ search_concepts し直し、そのとき読まれた concept(read)がまだ上位 3 件に返るかを一件ずつ確かめ、返らなくなったものを「落ちた問い」として一枚に書く。選ばれた問いが一つも無いときだけ、比較を飛ばしたと書く。`
 
-// systemSQL is added where the agent may propose a query (design doc
-// 0142 §4). The server still runs nothing: a proposal ends the turn, and
+// systemSQL is how the agent proposes a query (design doc 0142 §4). The server still runs nothing: a proposal ends the turn, and
 // the person who asked decides whether to run it as themselves.
 const systemSQL = `
 

@@ -102,8 +102,9 @@ function servedBy() {
 // than as a page-wide banner.
 export let FILES_VARIABLE = '';
 // The Google OAuth client the page signs a person in with to run a query
-// the agent proposed (design doc 0142 §4). Empty where the agent proposes
-// none.
+// the agent proposed (design doc 0142 §4). Empty where the team web UI
+// cannot run one: the agent still proposes, and the page shows the SQL
+// for the person to run elsewhere.
 export let AGENT_CLIENT = '';
 // Whether the proxy in front runs such a query itself, as the person at
 // the keyboard — `ochakai ui` does, and says so in the page's markup;
@@ -122,7 +123,7 @@ function markCapabilities(s) {
   AGENT_CLIENT = s.agent?.oauth_client_id || '';
   // A class rather than a value read at render: the agent page can be
   // drawn before this answer arrives, when it is the page first opened.
-  document.body.classList.toggle('agent-sql', !!AGENT_CLIENT);
+  document.body.classList.toggle('agent-sql', !!AGENT_CLIENT || PROXY_RUNS);
   AGENT_PROJECT = s.agent?.bigquery_project || '';
   const files = s.files;
   if (!files || files.enabled !== false) return;

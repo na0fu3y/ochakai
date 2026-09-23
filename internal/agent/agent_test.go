@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/llm"
 	"github.com/na0fu3y/ochakai/internal/service"
 )
@@ -129,15 +128,12 @@ func TestCutKeepsCharactersWhole(t *testing.T) {
 	}
 }
 
-func withClient() *service.Service {
-	cfg := &config.Config{Agent: &config.AgentConfig{Model: "m", OAuthClientID: "1-x.apps.googleusercontent.com"}}
-	return &service.Service{Config: cfg}
-}
-
 // A proposal ends the turn and comes back as one: the server runs
-// nothing, the person decides (design doc 0142 §4).
+// nothing, the person decides (design doc 0142 §4). No OAuth client is
+// configured here — that is what lets the team web UI run a proposal,
+// not what lets the agent make one.
 func TestAProposalEndsTheTurn(t *testing.T) {
-	svc := withClient()
+	svc := &service.Service{}
 	m := &scripted{turns: []*llm.Turn{call("propose_sql", map[string]any{"query": "SELECT 1", "purpose": "確かめる"})}}
 	svc.Model = m
 	ans, err := Run(context.Background(), svc, []Message{{Role: "user", Text: "q"}})
@@ -149,23 +145,5 @@ func TestAProposalEndsTheTurn(t *testing.T) {
 	}
 	if !strings.Contains(m.seen[0].System, "propose_sql") {
 		t.Error("the model was not told it may propose SQL")
-	}
-}
-
-// Without a client to sign a person in with, nobody could run the query,
-// so the model is not offered the tool and a call to it goes nowhere.
-func TestNoClientNoProposal(t *testing.T) {
-	m := &scripted{turns: []*llm.Turn{call("propose_sql", map[string]any{"query": "SELECT 1"}), text("ok")}}
-	ans, err := Run(context.Background(), &service.Service{Model: m}, []Message{{Role: "user", Text: "q"}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ans.SQL != nil {
-		t.Errorf("a proposal came back with no client configured: %+v", ans.SQL)
-	}
-	for _, tl := range m.seen[0].Tools {
-		if tl.Name == "propose_sql" {
-			t.Error("propose_sql was offered with no client configured")
-		}
 	}
 }

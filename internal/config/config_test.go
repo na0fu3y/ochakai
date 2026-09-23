@@ -534,16 +534,16 @@ func TestOAuthClientNeedsTheAgent(t *testing.T) {
 	}
 }
 
-// The billing project is only read where the page runs queries, and it
-// is spelled as a project id.
-func TestBigQueryProjectNeedsTheClient(t *testing.T) {
+// The billing project is only read where the agent proposes queries, and
+// it is spelled as a project id. It does not need the OAuth client:
+// `ochakai ui` runs a proposal without one.
+func TestBigQueryProjectNeedsTheAgent(t *testing.T) {
 	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
-	t.Setenv("OCHAKAI_AGENT", "gemini-x")
 	t.Setenv("OCHAKAI_BIGQUERY_PROJECT", "analytics-billing")
-	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "OCHAKAI_OAUTH_CLIENT_ID") {
-		t.Errorf("a project without a client: err = %v", err)
+	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "OCHAKAI_AGENT") {
+		t.Errorf("a project without an agent: err = %v", err)
 	}
-	t.Setenv("OCHAKAI_OAUTH_CLIENT_ID", "1-abc.apps.googleusercontent.com")
+	t.Setenv("OCHAKAI_AGENT", "gemini-x")
 	for _, ok := range []string{"analytics-billing", "example.com:my-project"} {
 		t.Setenv("OCHAKAI_BIGQUERY_PROJECT", ok)
 		cfg, err := FromEnv()

@@ -198,7 +198,7 @@ type StatsAgent struct {
 	Variable string `json:"variable,omitempty"`
 	// OAuthClientID is the Google OAuth web client the page signs a
 	// person in with to run a query the agent proposed, as that person
-	// (design doc 0142 §4). Present only when the agent proposes SQL. A
+	// (design doc 0142 §4). Present only where the operator named one. A
 	// public identifier: it is what a browser needs to ask Google for a
 	// token, and nothing the server can act with.
 	OAuthClientID string `json:"oauth_client_id,omitempty"`

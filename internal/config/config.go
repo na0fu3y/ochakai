@@ -175,7 +175,8 @@ type AgentConfig struct {
 	Model    string
 	// OAuthClientID is the web application client the page signs a person
 	// in with, to run a query the agent proposed as that person (design
-	// doc 0142 §4). Empty means the agent proposes no SQL. It is a public
+	// doc 0142 §4). Empty means the team web UI cannot run a proposal —
+	// the agent still proposes, and `ochakai ui` runs it itself. A public
 	// identifier, not a secret: it travels to every browser that opens
 	// the page.
 	OAuthClientID string
@@ -514,10 +515,10 @@ func FromEnv() (*Config, error) {
 		cfg.Agent.OAuthClientID = id
 	}
 	if p := strings.TrimSpace(os.Getenv("OCHAKAI_BIGQUERY_PROJECT")); p != "" {
-		if cfg.Agent == nil || cfg.Agent.OAuthClientID == "" {
-			// Read alone it would bill nothing: the page runs a query
-			// only after signing the person in with the client.
-			return nil, fmt.Errorf("OCHAKAI_BIGQUERY_PROJECT is set but OCHAKAI_OAUTH_CLIENT_ID is not; the project is only where a query the agent proposes is billed (design doc 0142 §4)")
+		if cfg.Agent == nil {
+			// Read alone it would bill nothing: the only query it is for
+			// is one the agent proposed.
+			return nil, fmt.Errorf("OCHAKAI_BIGQUERY_PROJECT is set but OCHAKAI_AGENT is not; the project is only where a query the agent proposes is billed (design doc 0142 §4)")
 		}
 		if !bigQueryProject.MatchString(p) {
 			return nil, fmt.Errorf("OCHAKAI_BIGQUERY_PROJECT is %q; it takes a Google Cloud project id, such as my-project", p)

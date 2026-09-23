@@ -109,18 +109,19 @@ func answer(ctx context.Context, svc *service.Service, msgs []Message) (*Answer,
 	defer cancel()
 
 	r := &run{svc: svc, read: []string{}, seen: map[string]bool{}}
-	req := llm.Request{System: system, Contents: contents, Tools: tools}
-	if proposesSQL(svc) {
-		req.System += systemSQL
-		req.Tools = append(append([]llm.Tool(nil), tools...), proposeSQL)
-	}
+	// Every agent may propose a query. Whether the page in front can run
+	// it is the page's business — `ochakai ui` runs it itself, the team
+	// web UI needs an OAuth client, and anything else shows the SQL for
+	// the person to run (design doc 0142 §4) — so the model is not told
+	// which it is talking to.
+	req := llm.Request{System: system + systemSQL, Contents: contents, Tools: append(append([]llm.Tool(nil), tools...), proposeSQL)}
 	for range maxRounds {
 		turn, err := svc.Model.Generate(ctx, req)
 		if err != nil {
 			return nil, fmt.Errorf("the agent could not answer: %w", err)
 		}
 		calls := turn.Calls()
-		if p := proposal(calls); p != nil && proposesSQL(svc) {
+		if p := proposal(calls); p != nil {
 			// The turn ends here, whatever else the model asked for in
 			// it: the next step is the person's.
 			text := strings.TrimSpace(turn.Text())
@@ -145,12 +146,6 @@ func answer(ctx context.Context, svc *service.Service, msgs []Message) (*Answer,
 		req.Contents = append(req.Contents, turn.Content, llm.Content{Role: "user", Parts: answers})
 	}
 	return nil, fmt.Errorf("the agent did not finish within %d rounds of reading", maxRounds)
-}
-
-// proposesSQL is whether this deployment can have a proposed query run:
-// only where the page has a client to sign a person in with.
-func proposesSQL(svc *service.Service) bool {
-	return svc.Config != nil && svc.Config.Agent != nil && svc.Config.Agent.OAuthClientID != ""
 }
 
 // proposal is the first propose_sql call in a turn, or nil. A call with

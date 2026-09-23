@@ -45,7 +45,7 @@ function save() {
 export function viewAsk() {
   view.innerHTML = `
     <div class="section-title">エージェントに訊く</div>
-    <div class="hint" style="margin-bottom:.6rem">エージェントはナレッジを読んで答え、引いたナレッジが人に確かめられたものかを答えの中で言います。ナレッジの書き込みと裁定はしません — 書き足すべきことを見つけたら、その本文を答えに載せます。<span class="agent-sql-only">データが要る問いには SQL を提案します。走るのは、あなたが「実行して結果を返す」を押したときだけで、あなたの Google アカウントの権限で走ります。</span><span class="agent-no-sql">SQL は書いて見せるだけで、実行はしません。</span></div>
+    <div class="hint" style="margin-bottom:.6rem">エージェントはナレッジを読んで答え、引いたナレッジが人に確かめられたものかを答えの中で言います。ナレッジの書き込みと裁定はしません — 書き足すべきことを見つけたら、その本文を答えに載せます。<span class="agent-sql-only">データが要る問いには SQL を提案します。走るのは、あなたが「実行して結果を返す」を押したときだけで、あなたの Google アカウントの権限で走ります。</span><span class="agent-no-sql">データが要る問いには SQL を提案しますが、このページからは実行できません — 自分で実行して、結果を次のメッセージに貼ってください。</span></div>
     <div id="ask-turns"></div>
     <div class="ask-form">
       <textarea id="ask-text" rows="3" placeholder="例: 先月の売上はどう数えればいい？(⌘/Ctrl + Enter で送る)" aria-label="エージェントへの質問"></textarea>
@@ -162,7 +162,7 @@ function proposalHTML(sql, open) {
     : 'あなたの Google アカウントの権限(BigQuery の読み取りだけ)で実行します。';
   const how = runs
     ? `${who}${AGENT_PROJECT ? `課金はプロジェクト ${AGENT_PROJECT} で、` : ''}一回の上限は ${fmtBytes(MAX_BYTES_BILLED)} です。`
-    : 'このデプロイには実行のためのサインインが設定されていません。自分で実行して、結果を次のメッセージに貼ってください。';
+    : 'このデプロイには、このページから実行するためのサインインが設定されていません。自分で実行して、結果を次のメッセージに貼ってください(手元の ochakai ui からなら、そのまま実行できます)。';
   return `
     <div class="ask-proposal">
       <div class="hint">エージェントはこの SQL の実行を提案しています。${esc(how)}</div>

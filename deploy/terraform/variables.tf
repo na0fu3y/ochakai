@@ -340,11 +340,12 @@ variable "agent_model" {
 
 variable "agent_oauth_client_id" {
   description = <<-EOT
-    OCHAKAI_OAUTH_CLIENT_ID: the Google OAuth web client the web UI signs a
-    person in with to run a query the agent proposes, as that person. A public
-    identifier, not a secret. Terraform cannot create one: make it in the
-    console (guide §4c) with the web UI's origin and <origin>/oauth.html
-    registered. Null: the agent answers from knowledge and proposes no SQL.
+    OCHAKAI_OAUTH_CLIENT_ID: the Google OAuth web client the team web UI signs
+    a person in with to run a query the agent proposes, as that person. A
+    public identifier, not a secret. Terraform cannot create one: make it in
+    the console (guide §4c) with the web UI's origin and <origin>/oauth.html
+    registered. Null: the team web UI shows a proposal for the person to run
+    elsewhere; `ochakai ui` runs it either way.
   EOT
   type        = string
   default     = null
