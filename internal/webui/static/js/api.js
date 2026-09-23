@@ -121,9 +121,6 @@ function markCapabilities(s) {
   // (design doc 0142 §5), so absent — an older server — offers nothing.
   document.body.classList.toggle('has-agent', s.agent?.enabled === true);
   AGENT_CLIENT = s.agent?.oauth_client_id || '';
-  // A class rather than a value read at render: the agent page can be
-  // drawn before this answer arrives, when it is the page first opened.
-  document.body.classList.toggle('agent-sql', !!AGENT_CLIENT || PROXY_RUNS);
   AGENT_PROJECT = s.agent?.bigquery_project || '';
   const files = s.files;
   if (!files || files.enabled !== false) return;

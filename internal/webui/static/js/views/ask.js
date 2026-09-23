@@ -8,9 +8,13 @@
 // closing the tab does, which is the same lifetime a chat window has.
 //
 // The agent reads and answers. It writes nothing, rules on nothing and
-// runs no SQL — where it proposes a query, the person runs it — and the
-// page says so where the question is typed rather than leaving the
-// reader to find out from an answer.
+// runs no SQL — where it proposes a query, the person runs it. The page
+// does not preface the conversation with that: the proposal says who
+// runs it where it is run, and an answer says what it read.
+//
+// What the agent said and what the page says are drawn apart: the
+// answer is the card's body, and the page's own lines — what was read,
+// the proposal's controls, the verdict — sit under a rule beneath it.
 
 import { AGENT_CLIENT, AGENT_PROJECT, PROXY_RUNS, api, toast } from '../api.js';
 import { $, view } from '../dom.js';
@@ -44,8 +48,7 @@ function save() {
 
 export function viewAsk() {
   view.innerHTML = `
-    <div class="section-title">エージェントに訊く</div>
-    <div class="hint" style="margin-bottom:.6rem">エージェントはナレッジを読んで答え、引いたナレッジが人に確かめられたものかを答えの中で言います。ナレッジの書き込みと裁定はしません — 書き足すべきことを見つけたら、その本文を答えに載せます。<span class="agent-sql-only">データが要る問いには SQL を提案します。走るのは、あなたが「実行して結果を返す」を押したときだけで、あなたの Google アカウントの権限で走ります。</span><span class="agent-no-sql">データが要る問いには SQL を提案しますが、このページからは実行できません — 自分で実行して、結果を次のメッセージに貼ってください。</span></div>
+    <div class="section-title">エージェント</div>
     <div id="ask-turns"></div>
     <div class="ask-form">
       <textarea id="ask-text" rows="3" placeholder="例: 先月の売上はどう数えればいい？(⌘/Ctrl + Enter で送る)" aria-label="エージェントへの質問"></textarea>
@@ -71,7 +74,8 @@ function draw(pending) {
   const last = turns.length - 1;
   const out = turns.map((t, i) => t.role === 'user'
     ? `<div class="ask-turn ask-user">${t.sqlResult ? md(t.text) : esc(t.text).replace(/\n/g, '<br>')}</div>`
-    : `<div class="card ask-turn ask-agent">${md(t.text)}${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}${verdictHTML(t, i)}</div>`).join('');
+    : `<div class="card ask-turn ask-agent"><div class="ask-said">${md(t.text)}</div>`
+      + `<div class="ask-meta">${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}${verdictHTML(t, i)}</div></div>`).join('');
   $('#ask-turns').innerHTML = out + (pending
     ? '<div class="empty" id="ask-pending">エージェントが読んでいます…</div>'
     : (turns.length ? '' : '<div class="empty">まだ何も訊いていません。</div>'));
@@ -97,50 +101,43 @@ function tick(start) {
   }, 1000);
 }
 
-// The verdict of the person who asked (design doc 0142 §3). It becomes
-// their own outcome reports — "worked" for what a good answer read,
-// "failed" only for what they say misled a bad one — and verifies
-// nothing. Hidden on a read-only deployment, which refuses reports.
+// The verdict of the person who asked (design doc 0142 §3), offered one
+// way only: a person rarely stops to say an answer was right, so the
+// page asks for nothing until one was wrong, and then for one sentence.
+// It becomes a "failed" outcome on no concept — which concept misled
+// the answer is the triage's question, not something to make the person
+// pick from a list of ids — and verifies nothing. Hidden on a read-only
+// deployment, which refuses reports.
 function verdictHTML(t, i) {
   if (!t.turn) return '';
-  if (t.verdict) {
-    return `<div class="hint">判定: ${t.verdict === 'good' ? '合っている' : '違う'}(記録済み)</div>`;
-  }
-  return `<div class="ask-verdict write-only" data-turn="${i}">
-      <span class="hint">この答えは</span>
-      <button type="button" class="btn small" data-verdict="good" data-i="${i}">合っている</button>
-      <button type="button" class="btn small" data-verdict="bad" data-i="${i}">違う</button>
-      <div class="ask-verdict-form" id="verdict-${i}" hidden></div>
+  if (t.verdict) return '<div class="hint">👎 記録済み</div>';
+  return `<div class="ask-verdict write-only">
+      <button type="button" class="btn small" data-verdict data-i="${i}" title="この答えは違う" aria-label="この答えは違う">👎</button>
+      <div class="ask-verdict-form" id="verdict-${i}" hidden>
+        <textarea id="note-${i}" rows="2" placeholder="何が違っていたか" aria-label="何が違っていたか"></textarea>
+        <button type="button" class="btn primary small" data-judge data-i="${i}">記録する</button>
+      </div>
     </div>`;
 }
 
 function openVerdict(e) {
-  const i = Number(e.currentTarget.dataset.i), verdict = e.currentTarget.dataset.verdict;
-  const t = turns[i], box = $('#verdict-' + i);
-  const read = t.read || [];
-  box.innerHTML = verdict === 'good'
-    ? `<label class="check"><input type="checkbox" id="keep-${i}"> この問いを比較に使う(棚卸しが、これからもこの答えに届くかを確かめる)</label>`
-    : `<div class="hint">どのナレッジが答えを誤らせましたか。分からなければ選ばずに記録してください — そのときはどのナレッジにも失敗を報告しません。</div>`
-      + read.map(id => `<label class="check"><input type="checkbox" data-blame="${esc(id)}"> <code>${esc(id)}</code></label>`).join('<br>');
-  box.innerHTML += `
-      <input type="text" id="note-${i}" placeholder="一言(任意)— 何が合っていた / 違っていたか" style="width:100%;margin:.3rem 0">
-      <button type="button" class="btn primary small" data-judge="${verdict}" data-i="${i}">記録する</button>`;
-  box.hidden = false;
-  box.querySelector('[data-judge]').addEventListener('click', judge);
+  const i = Number(e.currentTarget.dataset.i), box = $('#verdict-' + i);
+  box.hidden = !box.hidden;
+  if (box.hidden) return;
+  box.querySelector('[data-judge]').onclick = judge;
+  $('#note-' + i).focus();
 }
 
 async function judge(e) {
-  const i = Number(e.currentTarget.dataset.i), verdict = e.currentTarget.dataset.judge;
-  const t = turns[i], box = $('#verdict-' + i);
-  const body = { verdict, note: $('#note-' + i).value.trim() };
-  if (verdict === 'good') body.keep = $('#keep-' + i).checked;
-  else body.blame = [...box.querySelectorAll('[data-blame]:checked')].map(c => c.dataset.blame);
+  const i = Number(e.currentTarget.dataset.i);
+  const t = turns[i];
+  const body = { verdict: 'bad', note: $('#note-' + i).value.trim() };
   e.currentTarget.disabled = true;
   try {
-    const res = await api('/api/v1/agent/turns/' + encodeURIComponent(t.turn), { method: 'POST', body });
-    t.verdict = verdict;
+    await api('/api/v1/agent/turns/' + encodeURIComponent(t.turn), { method: 'POST', body });
+    t.verdict = 'bad';
     save();
-    toast(res.reported.length ? `記録しました(${res.reported.length} 件のナレッジに報告)` : '記録しました');
+    toast('記録しました');
     draw();
   } catch (err) {
     e.currentTarget.disabled = false;
@@ -187,7 +184,7 @@ async function runProposal() {
   try {
     const tok = PROXY_RUNS ? null : await signIn(AGENT_CLIENT);
     const res = await run(tok, project, query);
-    turns.push({ role: 'user', text: asMessage(project, query, res), sqlResult: true });
+    turns.push({ role: 'user', text: asMessage(query, res), sqlResult: true });
     save();
     await answer();
   } catch (e) {

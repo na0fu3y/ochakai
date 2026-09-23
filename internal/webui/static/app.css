@@ -794,16 +794,18 @@ body.sandbox .sandbox-note {
 body.no-files .files-only { display: none !important; }
 /* The agent is off unless the deployment says on (design doc 0142 §5). */
 body:not(.has-agent) .agent-only { display: none !important; }
-body:not(.agent-sql) .agent-sql-only, body.agent-sql .agent-no-sql { display: none; }
 #triage { margin: .2rem 0 .8rem; }
 .triage-answer { padding: .6rem .8rem; }
 .ask-turn { margin: .5rem 0; }
 .ask-user { margin-left: auto; max-width: 80%; width: fit-content; padding: .45rem .7rem;
   border-radius: 10px; background: var(--accent-weak); white-space: normal; }
 .ask-agent { padding: .6rem .8rem; }
+/* The page's own lines under the agent's words, never mixed into them. */
+.ask-meta:not(:empty) { margin-top: .6rem; padding-top: .5rem; border-top: 1px solid var(--border); }
 .ask-proposal { margin: .5rem 0; }
 .ask-verdict { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
-.ask-verdict-form { flex-basis: 100%; }
+.ask-verdict-form { flex-basis: 100%; display: flex; gap: .4rem; align-items: flex-end; }
+.ask-verdict-form textarea { flex: 1; box-sizing: border-box; }
 .ask-proposal textarea { width: 100%; box-sizing: border-box; font-family: var(--mono, ui-monospace, monospace); font-size: .85rem; }
 .ask-form { position: sticky; bottom: 0; background: var(--bg); padding: .5rem 0; }
 .ask-form textarea { width: 100%; box-sizing: border-box; }

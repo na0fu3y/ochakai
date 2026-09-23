@@ -91,13 +91,14 @@ function cell(v) {
   return String(v).replace(/[\t\n]/g, ' ');
 }
 
-// asMessage is the result as the person's next message: what ran, where,
-// and the rows as tab-separated text the agent can read.
-export function asMessage(project, query, res) {
+// asMessage is the result as the person's next message: what ran and
+// the rows as tab-separated text the agent can read. The project is not
+// said — it bills the query and changes nothing the agent reads from it.
+export function asMessage(query, res) {
   let table = [res.fields.join('\t'), ...res.rows.map(r => r.join('\t'))].join('\n');
   let cut = res.rows.length < res.total;
   if (table.length > MAX_CHARS) { table = table.slice(0, MAX_CHARS); cut = true; }
-  return `次の SQL をプロジェクト ${project} で実行した(${fmtBytes(res.bytes)} を読んだ)。\n\n`
+  return `実行 SQL(${fmtBytes(res.bytes)} 読み取り)\n\n`
     + '```sql\n' + query + '\n```\n\n'
     + `結果(全 ${res.total} 行${cut ? '、先頭だけ' : ''}):\n\n` + '```\n' + table + '\n```';
 }

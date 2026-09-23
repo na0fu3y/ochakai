@@ -466,15 +466,24 @@ try {
   // CI's deployment has no policy, so the page opens straight on the
   // editor with the sentence that says what no grants means.
   await check('the access policy renders', await waitFor(`${textOf('#view')}.includes('付与が 1 件も無い')`), shown);
-  // A grant is added as a row of controls, and the "no grants yet" line
-  // yields to it.
+  // The first row on an empty policy is the one that says what holds
+  // now — everybody, the whole bundle, read and write — and the "no
+  // grants yet" line yields to it.
+  await evalJS(`document.querySelector('#access-add').click()`);
+  await check('the first grant starts as everybody on the whole bundle',
+    await waitFor(`(() => { const tr = document.querySelector('#access-rows tbody tr');
+      return !!tr && tr.querySelector('[data-f="kind"]').value === '*'
+        && tr.querySelector('[data-f="prefix"]').value === ''
+        && tr.querySelector('[data-f="perm"]').value === 'write'
+        && document.querySelector('#access-empty').hidden; })()`), shown);
+  // A grant after it is a blank row of controls.
   await evalJS(`(() => { document.querySelector('#access-add').click();
-    const tr = document.querySelector('#access-rows tbody tr');
+    const tr = document.querySelector('#access-rows tbody tr:last-child');
     tr.querySelector('[data-f="prefix"]').value = 'metrics';
     tr.querySelector('[data-f="name"]').value = 'tanaka@example.co.jp'; })()`);
   await check('a grant is typed as a row of controls',
-    await waitFor(`(() => { const tr = document.querySelector('#access-rows tbody tr');
-      return !!tr && document.querySelector('#access-empty').hidden; })()`), shown);
+    await waitFor(`document.querySelectorAll('#access-rows tbody tr').length === 2
+      && document.querySelector('#access-rows tbody tr:last-child [data-f="kind"]').value !== '*'`), shown);
 
   await go('#/new');
   await check('the editor renders', await waitFor(`!!document.querySelector('#view textarea')`), shown);
