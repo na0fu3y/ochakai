@@ -202,6 +202,9 @@ type StatsAgent struct {
 	// public identifier: it is what a browser needs to ask Google for a
 	// token, and nothing the server can act with.
 	OAuthClientID string `json:"oauth_client_id,omitempty"`
+	// BigQueryProject is the project the page bills such a query to,
+	// where the operator named one; absent, the person names their own.
+	BigQueryProject string `json:"bigquery_project,omitempty"`
 	// Turns is flow: how many turns the agent answered in the window, and
 	// how the people who asked judged them (design doc 0142 §6). Absent
 	// where there is no agent, and for a caller who reads part of the

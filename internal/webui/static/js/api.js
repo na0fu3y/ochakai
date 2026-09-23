@@ -105,6 +105,9 @@ export let FILES_VARIABLE = '';
 // the agent proposed (design doc 0142 §4). Empty where the agent proposes
 // none.
 export let AGENT_CLIENT = '';
+// The project such a query is billed to, where the operator named one
+// (OCHAKAI_BIGQUERY_PROJECT). Empty: the person names their own.
+export let AGENT_PROJECT = '';
 function markCapabilities(s) {
   // Absent is not "off". A server that predates the field answers
   // nothing here, and the page goes on offering what it always offered
@@ -113,6 +116,10 @@ function markCapabilities(s) {
   // (design doc 0142 §5), so absent — an older server — offers nothing.
   document.body.classList.toggle('has-agent', s.agent?.enabled === true);
   AGENT_CLIENT = s.agent?.oauth_client_id || '';
+  // A class rather than a value read at render: the agent page can be
+  // drawn before this answer arrives, when it is the page first opened.
+  document.body.classList.toggle('agent-sql', !!AGENT_CLIENT);
+  AGENT_PROJECT = s.agent?.bigquery_project || '';
   const files = s.files;
   if (!files || files.enabled !== false) return;
   document.body.classList.add('no-files');

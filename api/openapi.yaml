@@ -3461,6 +3461,12 @@ components:
                 when the agent proposes SQL. A public identifier, not a
                 secret: the server holds no warehouse credential and never
                 sees the token.
+            bigquery_project:
+              type: string
+              description: >
+                The Google Cloud project such a query is billed to
+                (`OCHAKAI_BIGQUERY_PROJECT`). Present only when the operator
+                named one; absent, the page asks the person for their own.
             turns:
               type: object
               description: >

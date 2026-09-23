@@ -794,6 +794,7 @@ body.sandbox .sandbox-note {
 body.no-files .files-only { display: none !important; }
 /* The agent is off unless the deployment says on (design doc 0142 §5). */
 body:not(.has-agent) .agent-only { display: none !important; }
+body:not(.agent-sql) .agent-sql-only, body.agent-sql .agent-no-sql { display: none; }
 #triage { margin: .2rem 0 .8rem; }
 .triage-answer { padding: .6rem .8rem; }
 .ask-turn { margin: .5rem 0; }
