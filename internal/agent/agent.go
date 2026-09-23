@@ -39,10 +39,15 @@ type Message struct {
 // It is a proposal: the server runs nothing (design doc 0142 §4). The
 // person who asked reads it, runs it as themselves if they choose, and
 // sends what came back as their next message.
+//
+// Turn names the kept shape of this turn (design doc 0142 §6), which the
+// person who asked judges with POST /api/v1/agent/turns/{id}. Absent when
+// it could not be kept.
 type Answer struct {
 	Text string    `json:"text"`
 	Read []string  `json:"read"`
 	SQL  *Proposal `json:"sql,omitempty"`
+	Turn string    `json:"turn,omitempty"`
 }
 
 // Proposal is one query the agent asks the person to run.
@@ -67,8 +72,32 @@ const (
 // ErrOff is the answer on a deployment that has no agent.
 var ErrOff = service.Unsupportedf("this deployment has no agent: set OCHAKAI_AGENT to turn it on (design doc 0142)")
 
-// Run answers the last message of msgs.
+// Run answers the last message of msgs, and keeps the turn's shape.
 func Run(ctx context.Context, svc *service.Service, msgs []Message) (*Answer, error) {
+	ans, err := answer(ctx, svc, msgs)
+	if err != nil || svc.Store == nil {
+		return ans, err
+	}
+	sql := ""
+	if ans.SQL != nil {
+		sql = ans.SQL.Query
+	}
+	ans.Turn = svc.RecordAgentTurn(ctx, firstAsked(msgs), msgs[len(msgs)-1].Text, ans.Read, sql)
+	return ans, nil
+}
+
+// firstAsked is the conversation's opening question — what a comparison
+// set wants, where the latest message may be a query's result.
+func firstAsked(msgs []Message) string {
+	for _, m := range msgs {
+		if m.Role == "user" {
+			return m.Text
+		}
+	}
+	return ""
+}
+
+func answer(ctx context.Context, svc *service.Service, msgs []Message) (*Answer, error) {
 	if svc.Model == nil {
 		return nil, ErrOff
 	}
@@ -241,6 +270,8 @@ func (r *run) dispatch(ctx context.Context, c llm.FunctionCall) (any, error) {
 		return r.svc.Stats(ctx, a.int("days", 30), nil)
 	case "get_usage":
 		return r.svc.Usage(ctx, a.str("id"))
+	case "list_turns":
+		return r.svc.AgentTurns(ctx, a.str("verdict"), a.bool("keep"), a.int("limit", 30))
 	case "read_log":
 		doc, err := r.svc.LogDocument(ctx, a.str("prefix"), a.int("limit", 200))
 		if err != nil {
@@ -265,6 +296,11 @@ func (a args) int(k string, def int) int {
 		return int(f)
 	}
 	return def
+}
+
+func (a args) bool(k string) bool {
+	b, _ := a[k].(bool)
+	return b
 }
 
 func (a args) filter() store.Filter {

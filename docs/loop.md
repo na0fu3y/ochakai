@@ -224,6 +224,14 @@ concept は前半だけが載り、後半に書かれたことでは引けない
 二つは対で読む: `vectors` の大半が `truncated` なら窓の広いモデルへ移る話
 であり、数件だけなら長すぎる concept を分ける話である。
 
+デプロイ自身のエージェント([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md))
+を入れていれば、その答えへの判定も数に入る。答えの下の「合っている」は、その
+答えが読んだ concept への worked の報告に、「違う」は、問うた人が選んだ
+concept への failed の報告になる — 選ばなければどれも責めず、判定だけが
+残る。`stats` の `agent.turns` が窓の中の答えと判定を数え、棚卸しを頼まれた
+エージェントは「違う」と言われた問いと、比較に使うと選ばれた問いを読む。
+判定は検証ではない。
+
 エージェントが躓くのを待たずに golden query を信頼できる状態に保つには、
 CI からカナリアとして実行する:
 [golden query canary](guides/golden-query-canary.md)。

@@ -1207,6 +1207,29 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, ans)
 	})
 
+	// POST /api/v1/agent/turns/{id} — the verdict of the person who asked
+	// on one answer (design doc 0142 §3, §6). It becomes that person's own
+	// outcome reports: good is "worked" for every concept the answer read,
+	// bad is "failed" for the ones they blamed, and neither verifies
+	// anything. Once per turn, and only by the person who asked; anybody
+	// else is told the turn is not there.
+	mux.HandleFunc("POST /api/v1/agent/turns/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+			writeError(w, err)
+			return
+		}
+		var in service.Judgment
+		if !readJSON(w, r, &in) {
+			return
+		}
+		res, err := svc.JudgeAgentTurn(r.Context(), r.PathValue("id"), in)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, res)
+	})
+
 	// POST /api/v1/reembed?limit=N&cursor=... — fill in vectors for
 	// concepts and files that have none for the configured model.
 	// The response's cursor feeds the next call: a pass whose concepts all

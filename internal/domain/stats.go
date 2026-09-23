@@ -202,6 +202,19 @@ type StatsAgent struct {
 	// public identifier: it is what a browser needs to ask Google for a
 	// token, and nothing the server can act with.
 	OAuthClientID string `json:"oauth_client_id,omitempty"`
+	// Turns is flow: how many turns the agent answered in the window, and
+	// how the people who asked judged them (design doc 0142 §6). Absent
+	// where there is no agent, and for a caller who reads part of the
+	// bundle — a turn is whoever asked it, and like a miss it has no
+	// concept to be scoped by.
+	Turns *StatsAgentTurns `json:"turns,omitempty"`
+}
+
+// StatsAgentTurns counts the agent's turns in the stats window.
+type StatsAgentTurns struct {
+	Count int64 `json:"count"`
+	Good  int64 `json:"good"`
+	Bad   int64 `json:"bad"`
 }
 
 // StatsConcepts is what the base is made of (state), plus how much of it

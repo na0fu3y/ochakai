@@ -73,7 +73,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 ない。ここがその調節器である — 面ごとに天井を宣言し、超えたら CI が
 落ちる。
 
-- REST: 14
+- REST: 15
 - PARAM: 18
 - HEADER: 13
 - MCP: 6
@@ -130,7 +130,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 規則の下で動く運用であって、規則の変更ではない。増やしたくないものを
 数える仕組みが、自分の数え先を増やすのでは筋が通らない。
 
-## REST (14)
+## REST (15)
 
 - `DELETE /api/v1/bundle/{path}`
 - `GET /api/v1/access`
@@ -139,6 +139,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `GET /api/v1/stats`
 - `GET /api/v1/usage/{id}`
 - `POST /api/v1/agent`
+- `POST /api/v1/agent/turns/{id}`
 - `POST /api/v1/frontmatter`
 - `POST /api/v1/move`
 - `POST /api/v1/reembed`
@@ -220,6 +221,17 @@ Web UI で概念を書く人が、`sources` を一件足すためにも
 関係は [0107](design/0107-the-freeze-holds-the-okf-core.md) が先に
 整えた: コアは bundle の往復と search なので、この操作はその外の
 0.x の面として着地する。
+
+**14 → 15 は [0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)
+§3・§6 の `POST /api/v1/agent/turns/{id}` である。天井を上げる決定であり、
+そう言って上げている。** 三つの問いに答える。**誰が詰まったか**: エージェント
+の答えを読んだ人が、合っていたか間違っていたかを言う場所が無く、ループは
+その判定を一つも受け取れなかった。**既存の面で回避できるか**: 半分だけ
+できる — `POST /api/v1/usage/{id}` は concept 一件への報告で、**答えそのもの
+への判定**(どの concept も責めない 👎、比較に使う問い)を運べない。
+**何が畳めるか — 何も畳めない。** 単調に増やしてよい理由は、これが 0142 の
+言う「人の判定の付いた結果報告」と「正解の付いた問い」を買う唯一の口だから
+である。判定は本人の結果報告に変わるだけで、検証は一つも起きない。
 
 **13 → 14 は [0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) の
 `POST /api/v1/agent` である。天井を上げる決定であり、そう言って上げて

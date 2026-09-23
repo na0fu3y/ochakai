@@ -27,7 +27,9 @@ const system = `あなたは ochakai のデータエージェントである。o
 - 手順のうち書き込みを要する段は、上の「できないこと」のとおり、書くはずだった本文を答えに載せる形で果たす。
 - 手順の前提(問いのセット、書き込み、SQL)が欠けても、欠けていない段は必ず行う。とくに束ねることと振り分けることは、読むだけでできる — 答えられなかった問いを別の言い方(ウェアハウスの語、英語と日本語、上位の語)で search_concepts し直し、在るのに引けないのか(見せ方: 足すべき synonyms を示す)、無いのか(中身: 書くはずだった本文の骨子と、確かめるべき列や SQL を示す)、ノイズかを一件ずつ決める。飛ばした段だけを、飛ばしたと書く。
 - 手順が CLI のコマンドで書かれていたら、同じ読みをする道具に読み替えて自分で行う: ochakai search → search_concepts、ochakai get → get_concept、ochakai list → list_concepts、ochakai stats → get_stats、ochakai usage → get_usage、ochakai log → read_log。書き込むコマンドと SQL だけは読み替えられない。
-- 手順の材料として get_stats(答えられなかった問いと四つのキュー)、list_concepts(sort=failed / usage / stale_after)、get_usage(失敗報告の note)、read_log(却下とその理由)が使える。`
+- 手順の材料として get_stats(答えられなかった問いと四つのキュー)、list_concepts(sort=failed / usage / stale_after)、get_usage(失敗報告の note)、read_log(却下とその理由)、list_turns(あなた自身が答えた問いと、それに人が付けた判定)が使える。
+- list_turns の verdict=bad は、人が「この答えは違う」と言った問いである。blamed が空なら、どの concept も責められていない — 足りないナレッジか見せ方の問題を疑う。keep=true の問いは、人が比較に使うと選んだ問いである。
+- **ここでは questions.txt の代わりに list_turns(keep=true) が問いのセットである。** 手順が questions.txt を求めたら、それを読む。書き込めないので「書いてから比べる」はできないが、比べる段の残り半分は必ず行う: 選ばれた問い(asked)をそれぞれ search_concepts し直し、そのとき読まれた concept(read)がまだ上位 3 件に返るかを一件ずつ確かめ、返らなくなったものを「落ちた問い」として一枚に書く。選ばれた問いが一つも無いときだけ、比較を飛ばしたと書く。`
 
 // systemSQL is added where the agent may propose a query (design doc
 // 0142 §4). The server still runs nothing: a proposal ends the turn, and
@@ -89,6 +91,15 @@ var tools = []llm.Tool{
 		Name:        "get_usage",
 		Description: "concept 一件の利用回数と、結果報告に添えられた note(新しい順に最大 10 件)。",
 		Parameters:  object(map[string]any{"id": str("concept の id")}, "id"),
+	},
+	{
+		Name:        "list_turns",
+		Description: "このエージェントが答えた問いの記録を新しい順に並べる: 最初の問い、読んだ concept、提案した SQL、人の判定(good / bad)と一言、責められた concept、比較に使うかどうか。管理者なら全員の分、そうでなければ自分が訊いた分だけ。",
+		Parameters: object(map[string]any{
+			"verdict": str("good | bad で絞る(省くと全部)"),
+			"keep":    map[string]any{"type": "BOOLEAN", "description": "true なら比較に使うと選ばれた問いだけ"},
+			"limit":   integer("最大件数(既定 30、最大 100)"),
+		}),
 	},
 	{
 		Name:        "read_log",

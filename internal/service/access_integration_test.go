@@ -490,6 +490,12 @@ func TestEveryWriteIsScopedIntegration(t *testing.T) {
 		// ReportOutcome takes a read grant by decision (0109 §4): it is
 		// the machine's observation of a concept it used.
 		"ReportOutcome": true,
+		// The agent's turns are the caller's own measurement, not a
+		// concept (design doc 0142 §6): keeping one writes nothing
+		// under any path, and listing them is narrowed to the caller's
+		// own unless they hold the whole bundle. Judging one is walked
+		// below — its reports go through ReportOutcome's read check.
+		"RecordAgentTurn": true, "AgentTurns": true,
 	}
 	arg := func(ty reflect.Type) reflect.Value {
 		switch ty {

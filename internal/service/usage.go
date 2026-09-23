@@ -234,6 +234,13 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 	st.InsecureDev = s.Config != nil && s.Config.InsecureDev
 	st.Files = s.filesState(sc)
 	st.Agent = s.agentState(sc)
+	if s.Model != nil && !scoped {
+		n, good, bad, err := s.Store.AgentTurnCounts(ctx, now.AddDate(0, 0, -days))
+		if err != nil {
+			return nil, err
+		}
+		st.Agent.Turns = &domain.StatsAgentTurns{Count: n, Good: good, Bad: bad}
+	}
 	// The model is the service's, not the store's — the store holds
 	// vectors and never asks who made them — so the coverage is read
 	// here, beside the other two answers the service alone can give.
