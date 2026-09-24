@@ -3959,3 +3959,98 @@ func TestRESTIntegrationMoveDirectory(t *testing.T) {
 		t.Errorf("the concept named like the directory = %q, want it left at %s", kept.ID, old)
 	}
 }
+
+// TestRESTIntegrationAgentTurns walks a turn some other agent answered
+// through the wire (design doc 0144): kept, listed, judged, and refused
+// where it cannot be kept whole — every request and response checked
+// against api/openapi.yaml on the way.
+func TestRESTIntegrationAgentTurns(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+	root := testdb.Unique(t, "turns")
+	id := root + "/revenue"
+	resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+		"type": "Metric", "id": id, "title": "Revenue", "status": "draft",
+	}), true)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create = %d", resp.StatusCode)
+	}
+	removeEntries(t, srv, id)
+
+	// The status and the body, read and closed here: nothing later needs
+	// the response itself.
+	post := func(path, body string, producer string) (int, []byte) {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		if producer != "" {
+			req.Header.Set("Ochakai-Producer", producer)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, b
+	}
+
+	// Who the turn is by and which producer it names come from
+	// authentication, which this server does not configure; the service
+	// test holds those (TestTurnsFromAnyAgentIntegration).
+	status, body := post("/api/v1/agent/turns", `{"asked":"先月の売上は?","read":["`+id+`"],"sql":"SELECT 1"}`, "insightflow/1.4.0")
+	if status != http.StatusCreated {
+		t.Fatalf("keep = %d: %s", status, body)
+	}
+	var kept struct {
+		Turn struct {
+			ID   string   `json:"id"`
+			By   string   `json:"by"`
+			Read []string `json:"read"`
+		} `json:"turn"`
+	}
+	if err := json.Unmarshal(body, &kept); err != nil {
+		t.Fatal(err)
+	}
+	if kept.Turn.ID == "" || kept.Turn.By == "" || len(kept.Turn.Read) != 1 {
+		t.Errorf("kept turn = %+v", kept.Turn)
+	}
+
+	var page struct {
+		Turns []struct {
+			ID string `json:"id"`
+		} `json:"turns"`
+	}
+	getJSON(t, srv.URL+"/api/v1/agent/turns?limit=100", &page)
+	var listed bool
+	for _, tr := range page.Turns {
+		listed = listed || tr.ID == kept.Turn.ID
+	}
+	if !listed {
+		t.Error("the kept turn is not in the caller's own listing")
+	}
+
+	status, body = post("/api/v1/agent/turns/"+kept.Turn.ID, `{"verdict":"good","keep":true}`, "")
+	if status != http.StatusOK {
+		t.Fatalf("judge = %d: %s", status, body)
+	}
+	getJSON(t, srv.URL+"/api/v1/agent/turns?verdict=good&keep=true&limit=100", &page)
+	listed = false
+	for _, tr := range page.Turns {
+		listed = listed || tr.ID == kept.Turn.ID
+	}
+	if !listed {
+		t.Error("the judged turn is not in the comparison set")
+	}
+
+	// Only bodies the contract admits: one it does not is refused by the
+	// spec check before the handler's answer could be read.
+	for name, body := range map[string]string{
+		"an unknown key":    `{"asked":"q","read":[],"answer":"42"}`,
+		"a missing concept": `{"asked":"q","read":["` + root + `/missing"]}`,
+	} {
+		if status, b := post("/api/v1/agent/turns", body, ""); status != http.StatusBadRequest {
+			t.Errorf("%s: keep = %d, want 400: %s", name, status, b)
+		}
+	}
+}

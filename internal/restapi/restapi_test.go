@@ -180,6 +180,8 @@ var restOperations = []struct{ name, method, url, spec string }{
 	{"move", http.MethodPost, "/api/v1/move", "POST /api/v1/move"},
 	{"frontmatter", http.MethodPost, "/api/v1/frontmatter", "POST /api/v1/frontmatter"},
 	{"agent", http.MethodPost, "/api/v1/agent", "POST /api/v1/agent"},
+	{"keep turn", http.MethodPost, "/api/v1/agent/turns", "POST /api/v1/agent/turns"},
+	{"list turns", http.MethodGet, "/api/v1/agent/turns", "GET /api/v1/agent/turns"},
 	{"judge", http.MethodPost, "/api/v1/agent/turns/x", "POST /api/v1/agent/turns/{id}"},
 	{"reembed", http.MethodPost, "/api/v1/reembed", "POST /api/v1/reembed"},
 	{"access get", http.MethodGet, "/api/v1/access", "GET /api/v1/access"},

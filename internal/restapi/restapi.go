@@ -1207,6 +1207,57 @@ func Handler(svc *service.Service) http.Handler {
 		writeJSON(w, http.StatusOK, ans)
 	})
 
+	// POST /api/v1/agent/turns — keep a turn some other agent answered
+	// (design doc 0144): the question, what it read, the query it
+	// proposed. The turn is the caller's, as the deployment's own agent's
+	// turns are, and it is judged the same way below. It needs no
+	// OCHAKAI_AGENT: the agent that answered is not this deployment's.
+	mux.HandleFunc("POST /api/v1/agent/turns", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+			writeError(w, err)
+			return
+		}
+		var in service.TurnIn
+		if !readJSON(w, r, &in) {
+			return
+		}
+		turn, err := svc.KeepAgentTurn(r.Context(), in)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, struct {
+			Turn *store.AgentTurn `json:"turn"`
+		}{turn})
+	})
+
+	// GET /api/v1/agent/turns — the turns the caller may read, newest
+	// first (design doc 0144 §4): everybody's for an administrator, their
+	// own for anyone else, the scope the agent's list_turns reads under.
+	mux.HandleFunc("GET /api/v1/agent/turns", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if err := rejectUnknownParams(q, "verdict", "keep", "limit", "cursor"); err != nil {
+			writeError(w, err)
+			return
+		}
+		keep, err := queryBool(q, "keep", false)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		limit, err := queryInt(q, "limit")
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		page, err := svc.AgentTurnPage(r.Context(), q.Get("verdict"), keep, limit, q.Get("cursor"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, page)
+	})
+
 	// POST /api/v1/agent/turns/{id} — the verdict of the person who asked
 	// on one answer (design doc 0142 §3, §6). It becomes that person's own
 	// outcome reports: good is "worked" for every concept the answer read,
