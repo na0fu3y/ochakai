@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.28.8] - 2026-09-24
+
 ### Changed
 
 - **The web UI's agent page asks less of the person reading it.** Under
@@ -54,7 +56,11 @@ last entry.
   and a caller granted one directory could list human-reviewed concepts
   from directories they were never granted; the last tier matched
   without the deleted filter, so a deleted concept could come back. One
-  tier was never affected. A test now fails when any filter leaves an OR
+  tier was never affected — but the web UI's "verified" filter on the
+  explore tab sends exactly those two, so a scoped reader reached it by
+  pressing that button, as they would through the CLI's repeated
+  `--trust` or MCP's `trusts`. The prefix half dates from 0.16.0, the
+  scope half from 0.24.1. A test now fails when any filter leaves an OR
   at the top level of the query.
 
 ## [0.28.7] - 2026-09-24
@@ -7268,7 +7274,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.7...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.8...HEAD
+[0.28.8]: https://github.com/na0fu3y/ochakai/compare/v0.28.7...v0.28.8
 [0.28.7]: https://github.com/na0fu3y/ochakai/compare/v0.28.6...v0.28.7
 [0.28.6]: https://github.com/na0fu3y/ochakai/compare/v0.28.5...v0.28.6
 [0.28.5]: https://github.com/na0fu3y/ochakai/compare/v0.28.4...v0.28.5
