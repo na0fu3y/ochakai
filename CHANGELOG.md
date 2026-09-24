@@ -43,6 +43,20 @@ last entry.
   saving it alone changes nothing and the boundary is narrowed from
   there.
 
+### Security
+
+- **Asking for more than one trust tier no longer escapes the read
+  scope.** `trust=human-reviewed&trust=machine-confirmed` (or any two
+  tiers, on search, a listing or `stats`) rendered its OR without
+  parentheses around the whole, so it split the query at the AND chain:
+  the first tier matched with no `prefix` and no access-policy scope
+  (design doc [0109](docs/design/0109-a-directory-has-readers-and-writers.md)),
+  and a caller granted one directory could list human-reviewed concepts
+  from directories they were never granted; the last tier matched
+  without the deleted filter, so a deleted concept could come back. One
+  tier was never affected. A test now fails when any filter leaves an OR
+  at the top level of the query.
+
 ## [0.28.7] - 2026-09-24
 
 ### Added

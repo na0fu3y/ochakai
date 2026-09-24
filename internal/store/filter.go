@@ -130,7 +130,13 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 			}
 		}
 		if len(tiers) > 0 {
-			conds = append(conds, "("+strings.Join(tiers, ") OR (")+")")
+			// The disjunction is one conjunct, so it is parenthesized
+			// whole: every condition here is joined with AND, which binds
+			// tighter than OR, and an unwrapped "(a) OR (b)" split the
+			// query in two — the first tier lost every condition after it,
+			// the read scope a caller was granted among them (0109), and
+			// the last lost every condition before it, deleted_at too.
+			conds = append(conds, "(("+strings.Join(tiers, ") OR (")+"))")
 		}
 	}
 	if len(f.Tags) > 0 {

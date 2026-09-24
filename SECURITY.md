@@ -16,9 +16,14 @@ ochakai's security posture is deliberately narrow (see
 (Japanese)):
 
 - It holds **no warehouse credentials** and never executes SQL.
-- It does **no authorization**: whoever can reach a deployment can read
-  and write, and identity is recorded as provenance only — never checked
-  before it is believed. A deployment must **never run publicly
+- By default it does **no authorization**: whoever can reach a
+  deployment can read and write, and identity is recorded as provenance.
+  The one opt-in exception is the access policy (design doc
+  [0109](docs/design/0109-a-directory-has-readers-and-writers.md)):
+  once an administrator (`OCHAKAI_ADMINS`) writes a rule, each principal
+  reads and writes only the directories granted to it. The policy decides
+  on the identity the platform verified, and does not make a public
+  deployment safe. A deployment must **never run publicly
   invokable**: nothing verified the identity headers' signature, so a
   public one would let any caller name any person. (The publicly
   reachable MCP OAuth connector service existed briefly and was retired
@@ -38,6 +43,9 @@ Especially interesting reports, given that design:
   [deploy/cloudrun/README.md](deploy/cloudrun/README.md) (Japanese).
 - Anything that makes `OCHAKAI_MODE=dev` behavior reachable in a
   non-dev configuration.
+- On a deployment with an access policy, any read that returns — or any
+  write that changes — a concept, file, count or history row outside the
+  caller's grant.
 
 Weaknesses that only manifest when the documented deployment posture is
 not followed (e.g. running the *private* service without Cloud Run IAM
