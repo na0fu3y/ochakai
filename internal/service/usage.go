@@ -234,7 +234,11 @@ func (s *Service) Stats(ctx context.Context, days int, prefixes []string) (*doma
 	st.InsecureDev = s.Config != nil && s.Config.InsecureDev
 	st.Files = s.filesState(sc)
 	st.Agent = s.agentState(sc)
-	if s.Model != nil && !scoped {
+	// Turns are counted whether or not the deployment's own agent is on:
+	// an application's agent keeps them too (design doc 0144 §5), and a
+	// deployment without OCHAKAI_AGENT is the one that most needs to see
+	// them. Enabled still says only whether ochakai's own agent answers.
+	if !scoped {
 		n, good, bad, err := s.Store.AgentTurnCounts(ctx, now.AddDate(0, 0, -days))
 		if err != nil {
 			return nil, err
