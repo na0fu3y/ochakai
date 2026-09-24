@@ -56,7 +56,11 @@ last entry.
   and a caller granted one directory could list human-reviewed concepts
   from directories they were never granted; the last tier matched
   without the deleted filter, so a deleted concept could come back. One
-  tier was never affected. A test now fails when any filter leaves an OR
+  tier was never affected — but the web UI's "verified" filter on the
+  explore tab sends exactly those two, so a scoped reader reached it by
+  pressing that button, as they would through the CLI's repeated
+  `--trust` or MCP's `trusts`. The prefix half dates from 0.16.0, the
+  scope half from 0.24.1. A test now fails when any filter leaves an OR
   at the top level of the query.
 
 ## [0.28.7] - 2026-09-24
