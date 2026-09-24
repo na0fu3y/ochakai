@@ -38,6 +38,13 @@ type Filter struct {
 	// two calls would leave the caller merging two incomparable rankings.
 	// Values arrive normalized by the service — NFC, no trailing slash.
 	Prefixes []string
+	// CreatedBy narrows to entries this instance recorded as created by
+	// one of these principals ("kind:name", the spelling a grant uses).
+	// It is the ledger's answer, not the document's: created_by is a
+	// server observation that no frontmatter key carries, which is why
+	// fm. cannot ask it (design docs 0065, 0136 §5). Repeatable and OR-ed,
+	// like Prefixes: "what my team wrote" is several people.
+	CreatedBy []string
 
 	// Trust asks about the verification ledger rather than the document
 	// (design docs 0043 §3.2, 0046 §3.10). Empty when the question is not
@@ -158,6 +165,11 @@ func (f Filter) buildWhere(prefix string) (string, []any) {
 			alts = append(alts, fmt.Sprintf("%sfrontmatter @> $%d", prefix, len(args)))
 		}
 		conds = append(conds, "("+strings.Join(alts, " OR ")+")")
+	}
+	if len(f.CreatedBy) > 0 {
+		args = append(args, f.CreatedBy)
+		conds = append(conds, fmt.Sprintf("(%screated_by_kind || ':' || %screated_by_name) = ANY($%d)",
+			prefix, prefix, len(args)))
 	}
 	if f.Source != "" {
 		// Containment, so the GIN index on sources answers it directly.

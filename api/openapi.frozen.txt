@@ -97,6 +97,8 @@ GET /api/v1/bundle/{path} response 501 content application/json.error required=t
 GET /api/v1/bundle/{path} response 501 header Ochakai-Read-Only ref=ReadOnly
 GET /api/v1/search
 GET /api/v1/search operationId=searchConcepts
+GET /api/v1/search query created_by required=false type=array
+GET /api/v1/search query created_by[] type=string
 GET /api/v1/search query cursor required=false type=string
 GET /api/v1/search query fm.{key} required=false type=string
 GET /api/v1/search query limit required=false type=integer

@@ -342,7 +342,7 @@ func Handler(svc *service.Service) http.Handler {
 		q := r.URL.Query()
 		if err := rejectUnknownParams(q,
 			"limit", "type", "status", "tag", "source", "links_to",
-			"prefix", "trust", "q", "sort", "cursor", "fm."); err != nil {
+			"prefix", "created_by", "trust", "q", "sort", "cursor", "fm."); err != nil {
 			writeError(w, err)
 			return
 		}
@@ -358,6 +358,7 @@ func Handler(svc *service.Service) http.Handler {
 			Source:      q.Get("source"),
 			LinksTo:     q.Get("links_to"),
 			Prefixes:    q["prefix"],
+			CreatedBy:   q["created_by"],
 			Trust:       domain.ToTrusts(q["trust"]),
 			Frontmatter: frontmatterFilter(q),
 		}

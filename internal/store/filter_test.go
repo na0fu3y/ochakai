@@ -434,6 +434,7 @@ func TestBuildWhereHasNoTopLevelOr(t *testing.T) {
 			Source:      "https://example.com/x",
 			LinksTo:     "metrics/revenue",
 			Prefixes:    []string{"teams/a", "shared"},
+			CreatedBy:   []string{"human:a@example.com", "process:ci"},
 		},
 		"an undefined tier": {Trust: []domain.Trust{domain.TrustHuman, "nobody's"}},
 	}

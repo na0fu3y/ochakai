@@ -287,6 +287,21 @@ paths:
           # literally rather than percent-encoded — as it does for the
           # path of GET /api/v1/bundle/{path}.
           allowReserved: true
+        - name: created_by
+          in: query
+          description: >
+            Only concepts this instance recorded as created by this
+            principal — `human:<email>` or `process:<name>`, spelled as
+            `created_by` is on a read and as a grant names a principal
+            (design doc 0065 §2). It is the ledger's answer: created_by is
+            observed by the server, carried by no frontmatter key, and so
+            not askable with fm. (design doc 0136 §5). A concept imported
+            into this instance was created by whoever imported it (design
+            doc 0009 §3.1). Repeatable and OR-ed — "what my team wrote" is
+            several people. A value that is not kind:name is a 400. Composes
+            with q and with any sort.
+          schema: { type: array, items: { type: string } }
+          explode: true
         - name: limit
           in: query
           description: >

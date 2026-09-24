@@ -278,8 +278,8 @@ func parseRef(s string) (string, error) {
 // on both — surface is counted in distinct names (docs/surface.md), so a
 // filter shared between the two commands costs nothing to learn twice.
 type searchFilters struct {
-	types, statuses, tags, prefixes, trust, fm repeated
-	source, linksTo                            *string
+	types, statuses, tags, prefixes, createdBy, trust, fm repeated
+	source, linksTo                                       *string
 }
 
 func addSearchFilters(fs *flag.FlagSet) *searchFilters {
@@ -289,6 +289,7 @@ func addSearchFilters(fs *flag.FlagSet) *searchFilters {
 	fs.Var(&f.tags, "tag", "filter by tag (repeatable)")
 	fs.Var(&f.prefixes, "prefix", "only concepts under this `path`, e.g. teams/growth — matched on segment boundaries, so it does not reach teams/growth-archive (repeatable, OR-ed)")
 	f.source = fs.String("source", "", "only concepts citing this `resource` (exact match against sources[].resource) — what derives from one piece of material")
+	fs.Var(&f.createdBy, "created-by", "only concepts this instance recorded as created by this `principal` — human:<email> or process:<name>, as the ledger spells it (repeatable, OR-ed)")
 	f.linksTo = fs.String("links-to", "", "only concepts whose body links at this `id` — what points at one concept (its backlinks)")
 	fs.Var(&f.trust, "trust", "filter by who confirmed the concept: "+trustList()+" (repeatable, OR-ed) — independent of --status, which is the lifecycle value")
 	fs.Var(&f.fm, "fm", fmUsage)
@@ -305,7 +306,7 @@ func (f *searchFilters) params(query, sortBy, cursor string, limit int) (apiclie
 	}
 	return apiclient.SearchParams{
 		Query: query, Types: f.types, Statuses: f.statuses, Tags: f.tags,
-		Source: *f.source, LinksTo: *f.linksTo, Prefixes: f.prefixes,
+		Source: *f.source, LinksTo: *f.linksTo, Prefixes: f.prefixes, CreatedBy: f.createdBy,
 		Sort: sortBy, Limit: limit, Trust: f.trust,
 		FM: pairs, Cursor: cursor,
 	}, nil
@@ -367,7 +368,7 @@ func cmdList(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"list",
 		"Usage: ochakai list [flags] [feed]\n\nList concepts as a set rather than a ranking: the review feeds, the two\nreverse lookups, and the plain enumeration. A listing is a total order,\nso it pages — a page with more behind it prints the way on to stderr,\nand passing that back with --cursor reads the next one.\n\nThe feed is the argument; it sets the order and the first column:\n\n  usage         most-read first over the last 90 days, then by\n                lifetime reads, then never-read oldest first at the\n                bottom. With --status draft, the draft review feed\n  verified_at   oldest verification first, never-verified last — the\n                canary feed\n  failed        unanswered failure reports (report_outcome failed),\n                worst first over the last 90 days — the re-verification\n                feed, which `ochakai verify` empties\n  stale_after   past the expiry their author declared, most overdue\n                first. Verifying does not empty this one: the date is\n                the writer's declaration, so clearing it means editing\n                the concept to re-declare an expiry\n\nWithout a feed it lists in address order: the concepts the filters\nmatch, and with no filter at all, the whole base. That is the plain\nenumeration — what is under this directory — and it is a listing like\nany other, so it pages and counts as no read against the concepts it\nnames. The two reverse lookups are the same listing under a filter of\ntheir own: --source is what cites one resource (the reverse of\nsources[].resource), --links-to is what points at one concept (its\nbacklinks). None of the three prints a first column, the address being\nthe first field.\n\nTo rank by relevance instead, use `ochakai search`.",
-		"  ochakai list usage --status draft --limit 50        # the draft review queue\n  ochakai list failed --trust human-reviewed          # the re-verification queue\n  ochakai list stale_after                            # past their declared expiry\n  ochakai list verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai list --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai list --links-to metrics/revenue --type Insight   # which insights read this metric\n  ochakai list --prefix metrics/sales                 # everything under a directory, by id\n  ochakai list --prefix metrics/sales --json | jq -r '.hits[].id'   # the ids, for a script\n")
+		"  ochakai list usage --status draft --limit 50        # the draft review queue\n  ochakai list failed --trust human-reviewed          # the re-verification queue\n  ochakai list stale_after                            # past their declared expiry\n  ochakai list verified_at --type 'Attested Computation' --trust human-reviewed --limit 100\n  ochakai list --source https://wiki.example/finance/revenue-recognition  # what cites this\n  ochakai list --links-to metrics/revenue --type Insight   # which insights read this metric\n  ochakai list --prefix metrics/sales                 # everything under a directory, by id\n  ochakai list usage --status draft --created-by human:tanaka@example.com   # my drafts\n  ochakai list --prefix metrics/sales --json | jq -r '.hits[].id'   # the ids, for a script\n")
 	filters := addSearchFilters(fs)
 	limit := fs.Int("limit", 0, "max results (server default 100, max 1000)")
 	cursor := fs.String("cursor", "", "resume a listing where the last page ended: the `cursor` the previous page printed, with the same feed and filters")

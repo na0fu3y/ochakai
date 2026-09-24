@@ -417,6 +417,8 @@ the first field.
 To rank by relevance instead, use `ochakai search`.
 
 Flags:
+  -created-by principal
+    	only concepts this instance recorded as created by this principal — human:<email> or process:<name>, as the ledger spells it (repeatable, OR-ed)
   -cursor cursor
     	resume a listing where the last page ended: the cursor the previous page printed, with the same feed and filters
   -limit int
@@ -431,6 +433,7 @@ Examples:
   ochakai list --source https://wiki.example/finance/revenue-recognition  # what cites this
   ochakai list --links-to metrics/revenue --type Insight   # which insights read this metric
   ochakai list --prefix metrics/sales                 # everything under a directory, by id
+  ochakai list usage --status draft --created-by human:tanaka@example.com   # my drafts
   ochakai list --prefix metrics/sales --json | jq -r '.hits[].id'   # the ids, for a script
 ```
 
@@ -721,6 +724,8 @@ lookups, which are sets rather than rankings and page with --cursor.
 The filters below narrow either command the same way.
 
 Flags:
+  -created-by principal
+    	only concepts this instance recorded as created by this principal — human:<email> or process:<name>, as the ledger spells it (repeatable, OR-ed)
   -limit int
     	max results (server default 10, max 50)
   # shared with `ochakai list` — see "Shared filters" above

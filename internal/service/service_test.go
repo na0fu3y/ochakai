@@ -808,3 +808,18 @@ func TestTheEmptyAnswerCarriesTheBuildThatRefusedIt(t *testing.T) {
 		t.Errorf("version = %q with no config, want nothing claimed", st.Version)
 	}
 }
+
+// created_by names a principal as the ledger records one. A bare email
+// would match nothing, since the ledger never records one, and an empty
+// page would read as "nobody by that name wrote anything" (design doc
+// 0064); the grant wildcard means nothing in a filter.
+func TestCheckedFilterReadsCreatedByAsAPrincipal(t *testing.T) {
+	for _, bad := range []string{"tanaka@example.com", "*", "robot:x", "human:", "human:a b"} {
+		if _, err := checkedFilter(store.Filter{CreatedBy: []string{bad}}); !errors.As(err, new(*InvalidInputError)) {
+			t.Errorf("created_by=%q error = %v, want an InvalidInputError", bad, err)
+		}
+	}
+	if _, err := checkedFilter(store.Filter{CreatedBy: []string{"human:tanaka@example.com", "process:ci@example.iam.gserviceaccount.com"}}); err != nil {
+		t.Errorf("two principals: %v", err)
+	}
+}

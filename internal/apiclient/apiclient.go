@@ -207,6 +207,10 @@ type SearchParams struct {
 	// (design doc 0041). Repeatable and OR-ed, matched on segment
 	// boundaries. Composes with Query and with any Sort.
 	Prefixes []string
+	// CreatedBy narrows to entries this instance recorded as created by
+	// one of these principals, "human:<email>" or "process:<name>".
+	// Repeatable and OR-ed. Composes with Query and with any Sort.
+	CreatedBy []string
 	// Trust asks about the verification ledger rather than the document
 	// (design doc 0043 §3.2), independently of Statuses. Empty leaves the
 	// question unasked. There is no rejected filter: a rejection is a
@@ -262,6 +266,9 @@ func (c *Client) Search(ctx context.Context, p SearchParams) (*SearchResult, err
 	}
 	for _, pre := range p.Prefixes {
 		q.Add("prefix", pre)
+	}
+	for _, by := range p.CreatedBy {
+		q.Add("created_by", by)
 	}
 	for _, t := range p.Trust {
 		q.Add("trust", t)
