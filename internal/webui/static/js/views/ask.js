@@ -21,7 +21,7 @@ import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { entryHash } from '../format.js';
 import { md } from '../markdown.js';
-import { asMessage, fmtBytes, MAX_BYTES_BILLED, run, signIn } from '../sql.js';
+import { asMessage, fmtBytes, fold, MAX_BYTES_BILLED, run, signIn } from '../sql.js';
 
 // The server refuses a conversation longer than this (internal/agent).
 // Said here so the page can offer a fresh start before the refusal, not
@@ -218,8 +218,16 @@ async function answer() {
     const ans = await api('/api/v1/agent', {
       method: 'POST',
       // A proposal travels back as part of the agent's own message, so
-      // the model reads what it asked for beside what came back.
-      body: { messages: turns.map(t => ({ role: t.role, text: t.sql ? `${t.text}\n\n\`\`\`sql\n${t.sql.query}\n\`\`\`` : t.text })) },
+      // the model reads what it asked for beside what came back. Older
+      // results are folded where the whole would not fit; the page keeps
+      // showing them in full.
+      body: {
+        messages: fold(turns.map(t => ({
+          role: t.role,
+          text: t.sql ? `${t.text}\n\n\`\`\`sql\n${t.sql.query}\n\`\`\`` : t.text,
+          result: !!t.sqlResult,
+        }))).map(({ role, text }) => ({ role, text })),
+      },
     });
     turns.push({ role: 'agent', text: ans.text, read: ans.read || [], sql: ans.sql || null, turn: ans.turn || '' });
     save();

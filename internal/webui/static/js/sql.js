@@ -103,6 +103,32 @@ export function asMessage(query, res) {
     + `結果(全 ${res.total} 行${cut ? '、先頭だけ' : ''}):\n\n` + '```\n' + table + '\n```';
 }
 
+// The server refuses a conversation carrying more text than this
+// (internal/agent). A conversation that runs a few queries reaches it on
+// the results it carries back rather than on anything a person wrote, so
+// fold drops the oldest results first — keeping the SQL that produced
+// each, and the newest result whole — until the conversation fits. What
+// the agent concluded from a folded result is still in its own answer.
+export const MAX_CONVERSATION_BYTES = 64 << 10;
+const FOLDED = '結果: 会話の長さの上限のため省きました。この SQL は実行済みで、そのあとの答えは結果を読んで書かれています。';
+
+// fold takes the conversation as it will be sent — {role, text, result}
+// where result marks a message asMessage wrote — and returns it with as
+// many of the older results folded as it takes to fit in max bytes.
+export function fold(msgs, max = MAX_CONVERSATION_BYTES) {
+  const enc = new TextEncoder();
+  const out = msgs.map(m => ({ ...m }));
+  let size = out.reduce((n, m) => n + enc.encode(m.text).length, 0);
+  const results = out.flatMap((m, i) => (m.result ? [i] : [])).slice(0, -1);
+  for (const i of results) {
+    if (size <= max) break;
+    const folded = out[i].text.replace(/\n\n結果\(全 [\s\S]*$/, '\n\n' + FOLDED);
+    size += enc.encode(folded).length - enc.encode(out[i].text).length;
+    out[i].text = folded;
+  }
+  return out;
+}
+
 export function fmtBytes(n) {
   const u = ['B', 'KB', 'MB', 'GB', 'TB'];
   let i = 0;
