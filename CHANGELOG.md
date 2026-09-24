@@ -23,6 +23,16 @@ last entry.
 
 ### Added
 
+- **Search and listings narrow by who created a concept.**
+  `GET /api/v1/search?created_by=human:<email>` (repeatable, OR-ed;
+  `process:<name>` too) answers from the ledger — `created_by` is a server
+  observation that no frontmatter key carries, so `fm.` could not ask it.
+  "My drafts" and "what my team wrote" no longer need the whole base
+  fetched and filtered client-side. A value that is not `kind:name` is a
+  400. The CLI takes it as `--created-by` on `search` and `list`; MCP does
+  not. A new optional query parameter on the frozen core, which the freeze
+  allows (0082, 0101). PARAM 20 → 21, FLAG 27 → 28.
+
 - **An agent that is not this deployment's can keep a turn, and turns
   are read over REST** (design doc
   [0144](docs/design/0144-a-turn-is-kept-whoever-answered.md)). An

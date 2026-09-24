@@ -152,6 +152,15 @@ func checkedFilter(f store.Filter) (store.Filter, error) {
 			return f, Invalidf("trust must be one of %s, not %q", domain.TrustsHint(), string(t))
 		}
 	}
+	// created_by names a principal the way the ledger records one. A bare
+	// email would match nothing — the ledger never records one — and
+	// answering that with an empty page is the silent kind of wrong
+	// (design doc 0064); the wildcard of a grant means nothing here.
+	for _, p := range f.CreatedBy {
+		if p == domain.AnyPrincipal || !domain.ValidPrincipal(p) {
+			return f, Invalidf("created_by is kind:name — human:<email> or process:<name>, as the ledger records it — not %q", p)
+		}
+	}
 	if len(f.Prefixes) == 0 {
 		return f, nil
 	}

@@ -117,6 +117,7 @@ _ochakai() {
         '*--prefix[only concepts under this path]:prefix:' \
         '--source[only concepts citing this resource]:source:' \
         '--links-to[only concepts whose body links at this concept]:links-to:' \
+        '*--created-by[only concepts created by this principal]:created-by:' \
         '*--trust[filter by who confirmed the concept (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
         '*--fm[filter by an OKF frontmatter key=value]:fm:' \
         '--limit[max results]:limit:' \
@@ -131,6 +132,7 @@ _ochakai() {
         '*--prefix[only concepts under this path]:prefix:' \
         '--source[only concepts citing this resource]:source:' \
         '--links-to[only concepts whose body links at this concept]:links-to:' \
+        '*--created-by[only concepts created by this principal]:created-by:' \
         '*--trust[filter by who confirmed the concept (OKF SPEC §5.3)]:trust:(@TRUSTS@)' \
         '*--fm[filter by an OKF frontmatter key=value]:fm:' \
         '--limit[max results]:limit:' \
@@ -248,13 +250,13 @@ _ochakai() {
   esac
 
   case $cmd in
-    search)        opts="--type --status --tag --prefix --source --links-to --trust --fm --limit --json --url" ;;
+    search)        opts="--type --status --tag --prefix --source --links-to --created-by --trust --fm --limit --json --url" ;;
     list)
       if [[ $prev != -* && $COMP_CWORD -eq 2 && $cur != -* ]]; then
         COMPREPLY=($(compgen -W "verified_at usage failed stale_after" -- "$cur"))
         return
       fi
-      opts="--type --status --tag --prefix --source --links-to --trust --fm --limit --cursor --json --url" ;;
+      opts="--type --status --tag --prefix --source --links-to --created-by --trust --fm --limit --cursor --json --url" ;;
     browse)        opts="--cursor --json --url" ;;
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
@@ -352,6 +354,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from search list' -l prefix -x -d
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l exit-code -d 'exit 2 while any review queue is non-empty'
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l source -x -d 'only concepts citing this resource'
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l links-to -x -d 'only concepts whose body links at this concept'
+complete -c ochakai -n '__fish_seen_subcommand_from search list' -l created-by -x -d 'only concepts created by this principal'
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l trust -x -a '@TRUSTS@' -d 'filter by who confirmed the concept (OKF SPEC §5.3)'
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l fm -x -d 'filter by an OKF frontmatter key=value'
 complete -c ochakai -n '__fish_seen_subcommand_from list' -l cursor -x -d 'resume a listing where the last page ended'

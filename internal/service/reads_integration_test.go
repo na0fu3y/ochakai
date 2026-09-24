@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -146,5 +147,49 @@ func TestGetCarriesBacklinksIntegration(t *testing.T) {
 	}
 	if u.Fetches != 0 {
 		t.Errorf("fetches of the linker = %d after only being named, want 0", u.Fetches)
+	}
+}
+
+// TestCreatedByNarrowsToWhoWroteItIntegration: created_by is the
+// ledger's answer to who created a concept, OR-ed across principals and
+// composed with the other filters.
+func TestCreatedByNarrowsToWhoWroteItIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	root := uid(t, "svcit-author")
+	tanaka := domain.Actor{Kind: domain.ActorHuman, Name: root + "-tanaka@example.com"}
+	ci := domain.Actor{Kind: domain.ActorProcess, Name: root + "-ci"}
+	for id, by := range map[string]domain.Actor{root + "/a": tanaka, root + "/b": tanaka, root + "/c": ci} {
+		if err := svc.Store.Create(ctx, &domain.Knowledge{Type: "Metric", ID: id, Title: id, Status: domain.StatusDraft, CreatedBy: by}, false); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ids := func(by ...domain.Actor) []string {
+		t.Helper()
+		f := store.Filter{Prefixes: []string{root}}
+		for _, a := range by {
+			f.CreatedBy = append(f.CreatedBy, domain.PrincipalOf(a))
+		}
+		page, err := svc.SearchOrList(ctx, "", "", "", f, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, h := range page.Hits {
+			out = append(out, h.ID)
+		}
+		return out
+	}
+	if got := ids(tanaka); !slices.Equal(got, []string{root + "/a", root + "/b"}) {
+		t.Errorf("created_by tanaka = %v", got)
+	}
+	if got := ids(ci); !slices.Equal(got, []string{root + "/c"}) {
+		t.Errorf("created_by ci = %v", got)
+	}
+	if got := ids(tanaka, ci); len(got) != 3 {
+		t.Errorf("created_by tanaka or ci = %v, want all three", got)
+	}
+	if got := ids(domain.Actor{Kind: domain.ActorHuman, Name: root + "-nobody@example.com"}); len(got) != 0 {
+		t.Errorf("created_by nobody = %v, want none", got)
 	}
 }
