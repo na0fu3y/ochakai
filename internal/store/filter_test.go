@@ -415,3 +415,51 @@ func TestPrefixScopeAgreesWithUnderOnTheRoot(t *testing.T) {
 		t.Errorf("the root rendered a condition that domain.Under does not impose: %q", cond)
 	}
 }
+
+// Every condition buildWhere renders is joined with AND, which binds
+// tighter than OR, so a disjunction that is not parenthesized whole
+// splits the query: repeated trust tiers once dropped the read scope a
+// caller was granted from one side of the OR and deleted_at from the
+// other (design doc 0109). The invariant is checked on the text rather
+// than per filter, so the next repeatable filter cannot reintroduce it.
+func TestBuildWhereHasNoTopLevelOr(t *testing.T) {
+	filters := map[string]Filter{
+		"trust": {Trust: []domain.Trust{domain.TrustHuman, domain.TrustMachine, domain.TrustUnverified}},
+		"trust with the rest": {
+			Types:       []domain.Type{"Metric", "Insight"},
+			Statuses:    domain.Statuses[:2],
+			Trust:       []domain.Trust{domain.TrustHuman, domain.TrustMachine},
+			Tags:        []string{"a", "b"},
+			Frontmatter: map[string]string{"required": "true"},
+			Source:      "https://example.com/x",
+			LinksTo:     "metrics/revenue",
+			Prefixes:    []string{"teams/a", "shared"},
+		},
+		"an undefined tier": {Trust: []domain.Trust{domain.TrustHuman, "nobody's"}},
+	}
+	for name, f := range filters {
+		for _, col := range []string{"", "k."} {
+			where, _ := f.buildWhere(col)
+			if topLevel(where, " OR ") {
+				t.Errorf("%s (%q): a top-level OR splits the AND chain: %s", name, col, where)
+			}
+		}
+	}
+}
+
+// topLevel reports whether sep occurs outside every parenthesis.
+func topLevel(sql, sep string) bool {
+	depth := 0
+	for i := 0; i < len(sql); i++ {
+		switch sql[i] {
+		case '(':
+			depth++
+		case ')':
+			depth--
+		}
+		if depth == 0 && strings.HasPrefix(sql[i:], sep) {
+			return true
+		}
+	}
+	return false
+}

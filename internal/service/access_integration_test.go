@@ -253,6 +253,38 @@ func TestScopeNarrowsEveryListingIntegration(t *testing.T) {
 	carries(t, "the log", paths)
 }
 
+// TestScopeHoldsUnderRepeatedTrustIntegration: asking for more than one
+// trust tier is an OR inside the filter, and it once escaped its
+// parentheses — the first tier then matched without the read scope, so
+// a human-reviewed concept in a directory the caller was never granted
+// came back in their listing.
+func TestScopeHoldsUnderRepeatedTrustIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	for _, id := range []string{f.mine, f.theirs} {
+		if _, err := f.svc.Verify(f.adminCtx, id, f.admin); err != nil {
+			t.Fatal(err)
+		}
+	}
+	filter := store.Filter{
+		Prefixes: []string{f.prefix},
+		Trust:    []domain.Trust{domain.TrustHuman, domain.TrustMachine},
+	}
+	hits, err := f.svc.SearchOrList(f.readCt, "", "usage", "", filter, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sawMine bool
+	for _, h := range hits.Hits {
+		if h.ID == f.theirs {
+			t.Errorf("a listing asking for two trust tiers carries %s, which is outside the caller's scope", h.ID)
+		}
+		sawMine = sawMine || h.ID == f.mine
+	}
+	if !sawMine {
+		t.Errorf("a listing asking for two trust tiers lost %s, which is verified and inside the grant", f.mine)
+	}
+}
+
 // TestPolicyBelongsToAdministratorsIntegration: the rules name people
 // and the directories they may see, and what is left of the operations
 // that take the bundle as a whole is refused rather than narrowed
