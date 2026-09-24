@@ -110,8 +110,9 @@ verify / deprecate / reject(理由付き)する。ビルドステップの無い
 サーバーはクエリを実行しない。デプロイが自分のエージェントを入れていれば
 (`OCHAKAI_AGENT`)「エージェント」タブが出て、自分のエージェントを持たない
 人がナレッジについて訊ける。エージェントはナレッジを読んで、引いた concept
-が人に確かめられたものかを添えて答え、何も書かず何も裁定しない
-([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md))。
+が人に確かめられたものかを添えて答え、学んだことは新しい draft として
+書いてレビューの前に置き、何も裁定しない
+([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §3)。
 
 ![レビュー待ちの draft キュー: エージェントが書き戻し、人の verify か
 reject を待っている concept](images/webui-review.png)

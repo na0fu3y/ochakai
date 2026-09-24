@@ -50,6 +50,9 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 		// caller's own measurement, not a change to the base. Listing
 		// them is a read. Judging one is a report, and is guarded.
 		"RecordAgentTurn": true, "AgentTurns": true, "AgentTurnPage": true,
+		// Who the agent's drafts are by: a name, not a write. The write
+		// is CreateKeepingCurated, guarded like every other one.
+		"AgentActor": true,
 		// Whether this caller may take the archive at a path is the same
 		// kind of question, asked of a read (design doc 0127).
 		"MayArchive": true,

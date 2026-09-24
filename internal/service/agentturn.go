@@ -31,11 +31,11 @@ const (
 //
 // The producer is this build, whatever the caller sent: the turn says
 // which agent answered, and here that is ochakai's (design doc 0144 §3).
-func (s *Service) RecordAgentTurn(ctx context.Context, asked, latest string, read []string, sql string) string {
+func (s *Service) RecordAgentTurn(ctx context.Context, asked, latest string, read []string, sql string, drafts []string) string {
 	actor := httpauth.Actor(ctx)
 	actor.Producer = s.agentProducer()
 	id, err := s.Store.RecordAgentTurn(ctx, actor,
-		cutText(asked, maxTurnText), cutText(latest, maxTurnText), read, sql)
+		cutText(asked, maxTurnText), cutText(latest, maxTurnText), read, sql, drafts)
 	if err != nil {
 		if s.Log != nil {
 			s.Log.Warn("agent turn not kept", "error", err)
@@ -43,6 +43,19 @@ func (s *Service) RecordAgentTurn(ctx context.Context, asked, latest string, rea
 		return ""
 	}
 	return id
+}
+
+// AgentActor is who a draft the deployment's own agent writes is by
+// (design doc 0142 §3): the agent, on behalf of the person who asked,
+// using this build. It cannot be mistaken for something the person wrote,
+// and a listing narrowed to created_by=process:ochakai finds every one.
+func (s *Service) AgentActor(ctx context.Context) domain.Actor {
+	return domain.Actor{
+		Kind:     domain.ActorProcess,
+		Name:     "ochakai",
+		Via:      domain.PrincipalOf(httpauth.Actor(ctx)),
+		Producer: s.agentProducer(),
+	}
 }
 
 // agentProducer is the SPEC §7 producer the deployment's own agent's
@@ -107,7 +120,7 @@ func (s *Service) KeepAgentTurn(ctx context.Context, in TurnIn) (*store.AgentTur
 			return nil, Invalidf("read names %q, which is not a concept you can read", id)
 		}
 	}
-	id, err := s.Store.RecordAgentTurn(ctx, httpauth.Actor(ctx), in.Asked, in.Asked, read, in.SQL)
+	id, err := s.Store.RecordAgentTurn(ctx, httpauth.Actor(ctx), in.Asked, in.Asked, read, in.SQL, nil)
 	if err != nil {
 		return nil, err
 	}
