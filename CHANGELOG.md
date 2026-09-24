@@ -21,6 +21,24 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The web UI folds older query results to keep a conversation with
+  the agent under its 64 KiB bound.** A conversation that ran a few
+  queries reached the bound on the results it carried back; the page now
+  sends the oldest results as their SQL alone, keeps the newest whole,
+  and still shows every result in full. The bound and the wire are
+  unchanged.
+
+### Documentation
+
+- **The web UI's links are written down**, for an application whose
+  agent cites a concept and wants to send the reader to it:
+  `#/k/<id>`, the review queue, the feeds and the agent, in
+  [docs/guides/rest-integration.md](docs/guides/rest-integration.md).
+  They sit outside the REST freeze, and the page still refuses to be
+  framed.
+
 ## [0.28.9] - 2026-09-24
 
 ### Added

@@ -167,6 +167,35 @@ curl -X PUT "$OCHAKAI_URL/api/v1/bundle/metrics/revenue.md" \
 `OCHAKAI_MODE` の他の姿勢については
 [要件と設定](../configuration.md#environment-variables)を見よ。
 
+## 人を Web UI に送る: リンクの形
+
+あなたのエージェントの答えが concept を引いたとき、読んだ人がその
+concept を確かめに行ける先は `ochakai serve-ui` のページである。
+リンクは Web UI のオリジンに、次のハッシュを付けて作る。id はパスなので
+`/` はそのまま、各セグメントの中は `encodeURIComponent` で符号化する。
+
+| リンク | 開くもの |
+|---|---|
+| `#/k/<id>` | concept 一件(`#/k/metrics/revenue`) |
+| `#/k/<id>?h=<見出し>` | その concept の、見出し一つの位置 |
+| `#/dir/<パス>` | ディレクトリの一覧(`#/dir/` が根) |
+| `#/search/in/<パス>` | そのディレクトリに絞った検索 |
+| `#/search/cites/<URI>` | その資料を `sources` に持つ concept(URI は一つのセグメントとして符号化) |
+| `#/search/reported-wrong`・`#/search/stale`・`#/search/verification-age`・`#/search/edited` | 裁定のフィード(失敗報告・期限切れ・検証の古い順・検証後に編集されたもの) |
+| `#/review` | レビューのキュー |
+| `#/ask` | デプロイ自身のエージェント(`OCHAKAI_AGENT` を入れたデプロイだけ) |
+
+**安定性は REST の凍結の外である。** この形は Web UI の実装であって
+契約ではなく、[compatibility.md](../compatibility.md) の "unstable" と
+同じ扱いを受ける — 変えるときは CHANGELOG が言う。
+
+**iframe には埋め込めない。** ページは `frame-ancestors 'none'` で配られ、
+`?embed=1` のような枠用の表示も持たない。裁定の面が他人のページの枠の中に
+あると、そこでのクリックが誰の意図だったかをページが言えなくなるからである
+(clickjacking)。あなたの製品に要るのが concept の中身なら、それは
+`GET /api/v1/bundle/{path}` が返す — 描くのはあなたの画面で、裁定を
+下しに行く先がこのリンクである。
+
 ## 関連ページ
 
 - [api/openapi.yaml](../../api/openapi.yaml) — 検査される契約: すべて
