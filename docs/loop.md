@@ -232,6 +232,17 @@ concept は前半だけが載り、後半に書かれたことでは引けない
 エージェントは「違う」と言われた問いと、比較に使うと選ばれた問いを読む。
 判定は検証ではない。
 
+**答えたのが自前のエージェントでも、同じ数に入れられる**(設計ドキュメント
+[0144](design/0144-a-turn-is-kept-whoever-answered.md))。ochakai を読んで
+答えるアプリは、答えるたびに `POST /api/v1/agent/turns` へ問いと読んだ
+concept の id(と提案した SQL)を送り、返った turn の id に、問うた人の
+判定を上と同じ `POST /api/v1/agent/turns/{id}` で付ける。人に代わって送る
+なら `Ochakai-On-Behalf-Of` を載せる — turn はその人のもので、判定できる
+のもその人だけになる。`Ochakai-Producer` を送れば、比較のセットの中で
+どのエージェントの答えかが読める。残した turn と比較のセットは
+`GET /api/v1/agent/turns`(`verdict`・`keep` で絞る)で読み出せる。
+`OCHAKAI_AGENT` を入れていなくてよい。
+
 エージェントが躓くのを待たずに golden query を信頼できる状態に保つには、
 CI からカナリアとして実行する:
 [golden query canary](guides/golden-query-canary.md)。

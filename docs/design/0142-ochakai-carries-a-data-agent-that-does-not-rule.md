@@ -5,7 +5,10 @@ Status: Accepted(2026-09-23)。**全体アーキテクチャの現行ドキュ�
 する。0081 の決定のうち動かないもの(一つのバイナリ、PostgreSQL だけ、配布、
 却下の記憶)は §8 に再掲する。面の配分が動く部分は
 [0143](0143-four-faces-and-an-agent-that-answers-behind-one.md) が持つ(§7)。
-受理の前に確かめた三つは §10
+受理の前に確かめた三つは §10。**§6 の turn を ochakai 以外のエージェントも
+残せて、REST から読めることは
+[0144](0144-a-turn-is-kept-whoever-answered.md) が持つ**(形・保持・export に
+載せないことは動かない)
 Date: 2026-09-23
 
 ## 0. この記録が決めたこと

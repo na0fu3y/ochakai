@@ -1537,6 +1537,120 @@ paths:
         "413": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
         "501": { $ref: "#/components/responses/Error" }
+  /api/v1/agent/turns:
+    post:
+      operationId: keepAgentTurn
+      summary: Keep a turn some other agent answered
+      description: >
+        A turn is what the verification loop learns from: what was asked,
+        which concepts were read to answer it, what query was proposed,
+        and — once the person who asked judges it — whether the answer was
+        right (design doc 0142 §6). The deployment's own agent keeps one
+        for every answer; **this keeps one for an agent that is not this
+        deployment's** — the application's own chat agent that reads this
+        base (design doc 0144). It needs no `OCHAKAI_AGENT`.
+
+
+        The turn belongs to the caller: with `Ochakai-On-Behalf-Of`, to
+        the person named, who is then the only one who can judge it with
+        POST /api/v1/agent/turns/{id}. It records the call's `via` and
+        `Ochakai-Producer`, so a comparison can tell which agent answered.
+        **Never the answer's text or a query's result.**
+
+
+        A value over its bound is a 400, not a cut. Every id in `read` must
+        be a concept the caller can read; one that is missing or outside
+        the caller's grant is a 400 naming it, the same for both (design
+        doc 0109 §4). A read-only deployment refuses it. Kept for 180 days
+        and not exported, like the agent's own turns.
+      parameters:
+        - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
+      requestBody:
+        required: true
+        description: A key outside asked/read/sql is a 400 naming it (design doc 0064).
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [asked, read]
+              properties:
+                asked:
+                  type: string
+                  maxLength: 1000
+                  description: The conversation's first question, in bytes up to the bound.
+                read:
+                  type: array
+                  maxItems: 100
+                  items: { type: string }
+                  description: The concepts the answer read. `[]` when it read none.
+                sql:
+                  type: string
+                  description: The query the answer proposed, if any. At most 16 KiB.
+            example: { asked: "先月の売上は?", read: [metrics/revenue, insights/revenue-seasonality] }
+      responses:
+        "201":
+          description: The kept turn.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [turn]
+                properties:
+                  turn: { $ref: "#/components/schemas/AgentTurn" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "405": { $ref: "#/components/responses/Error" }
+        "413": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+    get:
+      operationId: listAgentTurns
+      summary: The turns the caller may read, newest first
+      description: >
+        A caller who holds the whole bundle — an administrator
+        (`OCHAKAI_ADMINS`), or anyone granted the root — reads everybody's
+        turns; anyone else reads the ones they asked. On a deployment with
+        no access policy every caller holds the whole bundle, so every
+        caller reads every turn, as they read every concept. The same
+        scope the deployment's own agent reads its comparison set under
+        (design docs 0142 §6, 0144 §4). Turns older than 180 days are gone.
+      parameters:
+        - name: verdict
+          in: query
+          description: Only turns the person judged this way.
+          schema: { type: string, enum: [good, bad] }
+        - name: keep
+          in: query
+          description: Only the questions chosen for the comparison set.
+          schema: { type: boolean, default: false }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 30, minimum: 1, maximum: 100 }
+        - name: cursor
+          in: query
+          description: The `cursor` of the previous page. Omit to start from the newest.
+          schema: { type: string }
+      responses:
+        "200":
+          description: One page of turns.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [turns]
+                properties:
+                  turns:
+                    type: array
+                    items: { $ref: "#/components/schemas/AgentTurn" }
+                  cursor:
+                    type: string
+                    description: Present when the page was full; pass it back for the next.
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "405": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
   /api/v1/agent/turns/{id}:
     post:
       operationId: judgeAgentTurn
@@ -1560,7 +1674,7 @@ paths:
           in: path
           required: true
           schema: { type: string }
-          description: The `turn` id POST /api/v1/agent returned.
+          description: The `turn` id POST /api/v1/agent returned, or the id of a turn POST /api/v1/agent/turns kept.
         - $ref: "#/components/parameters/OnBehalfOf"
         - $ref: "#/components/parameters/Producer"
       requestBody:
@@ -1591,21 +1705,7 @@ paths:
                 type: object
                 required: [turn, reported]
                 properties:
-                  turn:
-                    type: object
-                    description: The kept turn — what was asked and read, and the verdict.
-                    properties:
-                      id: { type: string }
-                      at: { type: string, format: date-time }
-                      asked: { type: string }
-                      latest: { type: string }
-                      read: { type: array, items: { type: string } }
-                      proposed_sql: { type: string }
-                      verdict: { type: string }
-                      note: { type: string }
-                      blamed: { type: array, items: { type: string } }
-                      keep: { type: boolean }
-                      judged_at: { type: string, format: date-time }
+                  turn: { $ref: "#/components/schemas/AgentTurn" }
                   reported:
                     type: array
                     items: { type: string }
@@ -4035,3 +4135,38 @@ components:
             is the only thing the format can say about something that is
             gone.
       required: [rev, change, changed_by, changed_at, document]
+    AgentTurn:
+      type: object
+      description: >
+        One kept turn — its shape, not its contents (design docs 0142 §6,
+        0144). What was asked and read, the query proposed, who asked and
+        which agent answered, and the verdict once the person who asked
+        gives one.
+      required: [id, at, by, asked, latest, read]
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        by:
+          type: string
+          description: Who asked, as `kind:name` — the only one who can judge it.
+        via:
+          type: string
+          description: The caller that kept the turn on the asker's behalf, when one did.
+        producer:
+          type: string
+          description: >
+            The `<producer>/<version>` of the agent that answered —
+            `ochakai/<version>` for this deployment's own, the recording
+            call's `Ochakai-Producer` otherwise. Self-declared; empty on
+            turns kept before the field existed and on calls that sent none.
+        asked: { type: string, description: The conversation's first question. }
+        latest:
+          type: string
+          description: The message this turn answered. A turn kept from outside has `asked` here too.
+        read: { type: array, items: { type: string } }
+        proposed_sql: { type: string }
+        verdict: { type: string, enum: [good, bad] }
+        note: { type: string }
+        blamed: { type: array, items: { type: string } }
+        keep: { type: boolean }
+        judged_at: { type: string, format: date-time }

@@ -21,6 +21,34 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **An agent that is not this deployment's can keep a turn, and turns
+  are read over REST** (design doc
+  [0144](docs/design/0144-a-turn-is-kept-whoever-answered.md)). An
+  application whose own chat agent reads the base sends
+  `POST /api/v1/agent/turns` with the question, the concepts it read
+  and any query it proposed — never the answer or a result — and the
+  person it answered judges it with the existing
+  `POST /api/v1/agent/turns/{id}`, into their own outcome reports.
+  Over a bound is a 400 rather than a cut, and an id the caller cannot
+  read is refused the same way as one that does not exist. It needs no
+  `OCHAKAI_AGENT`. `GET /api/v1/agent/turns` lists turns under the
+  scope the agent's `list_turns` already used — a caller holding the
+  whole bundle reads everybody's (on a deployment with no access policy,
+  that is every caller), anyone else their own — filtered by `verdict`
+  and `keep`, paged by `limit` and `cursor`. REST 15 → 17, PARAM
+  18 → 20; not on MCP or the CLI.
+
+### Changed
+
+- **A turn says who asked and which agent answered.** Turns carry `by`,
+  `via` and `producer`; the deployment's own agent's turns name
+  `ochakai/<version>` whatever the caller sent. Migration 0049 adds the
+  two columns; turns kept before it leave them empty rather than have
+  them guessed. `stats.agent.turns` now counts turns kept from outside
+  too.
+
 ## [0.28.8] - 2026-09-24
 
 ### Changed

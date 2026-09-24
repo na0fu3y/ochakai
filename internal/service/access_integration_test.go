@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -285,6 +286,78 @@ func TestScopeHoldsUnderRepeatedTrustIntegration(t *testing.T) {
 	}
 }
 
+// TestKeptTurnReadsOnlyWhatTheCallerCanIntegration: a turn kept from
+// outside names what its answer read, and a name outside the caller's
+// grant is refused in the same words as a name nothing holds — the
+// refusal must not say which one it was (design docs 0109 §4, 0144 §2).
+func TestKeptTurnReadsOnlyWhatTheCallerCanIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	if _, err := f.svc.KeepAgentTurn(f.readCt, TurnIn{Asked: "q", Read: []string{f.mine, f.shared}}); err != nil {
+		t.Fatalf("a turn that read inside the grant: %v", err)
+	}
+	outside := f.prefix + "/personnel/nothing-here"
+	var refusals []string
+	for _, id := range []string{f.theirs, outside} {
+		_, err := f.svc.KeepAgentTurn(f.readCt, TurnIn{Asked: "q", Read: []string{id}})
+		if !errors.As(err, new(*InvalidInputError)) {
+			t.Fatalf("a turn naming %s: err = %v, want invalid input", id, err)
+		}
+		refusals = append(refusals, strings.Replace(err.Error(), id, "<id>", 1))
+	}
+	if refusals[0] != refusals[1] {
+		t.Errorf("an unreadable concept is refused as %q and a missing one as %q; they must read the same", refusals[0], refusals[1])
+	}
+}
+
+// TestTurnsAreReadUnderTheScopeIntegration: where an access policy
+// exists, a caller who does not hold the whole bundle reads only the
+// turns they asked, a page at a time, and an administrator reads them
+// all (design docs 0142 §6, 0144 §4).
+func TestTurnsAreReadUnderTheScopeIntegration(t *testing.T) {
+	f := newAccessFixture(t)
+	var mine []string
+	for _, q := range []string{"一つ目", "二つ目", "三つ目"} {
+		turn, err := f.svc.KeepAgentTurn(f.readCt, TurnIn{Asked: q, Read: []string{f.mine}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		mine = append(mine, turn.ID)
+	}
+	first, err := f.svc.AgentTurnPage(f.readCt, "", false, 2, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Turns) != 2 || first.Cursor == "" {
+		t.Fatalf("first page = %d turns, cursor %q; want 2 and a cursor", len(first.Turns), first.Cursor)
+	}
+	second, err := f.svc.AgentTurnPage(f.readCt, "", false, 2, first.Cursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second.Turns) != 1 || second.Cursor != "" {
+		t.Fatalf("second page = %d turns, cursor %q; want the last one and no cursor", len(second.Turns), second.Cursor)
+	}
+	var paged []string
+	for _, tr := range append(first.Turns, second.Turns...) {
+		paged = append(paged, tr.ID)
+	}
+	if !slices.Equal(paged, []string{mine[2], mine[1], mine[0]}) {
+		t.Errorf("paged %v, want the three turns newest first %v", paged, mine)
+	}
+
+	stranger := httpauth.WithActor(context.Background(), domain.Actor{Kind: domain.ActorHuman, Name: "sato@example.co.jp"})
+	if page, err := f.svc.AgentTurnPage(stranger, "", false, 0, ""); err != nil || len(page.Turns) != 0 {
+		t.Errorf("somebody else's page = %+v, %v; want nothing", page, err)
+	}
+	all, err := f.svc.AgentTurnPage(f.adminCtx, "", false, 100, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all.Turns) != len(mine) {
+		t.Errorf("the administrator reads %d turns, want the reader's %d", len(all.Turns), len(mine))
+	}
+}
+
 // TestPolicyBelongsToAdministratorsIntegration: the rules name people
 // and the directories they may see, and what is left of the operations
 // that take the bundle as a whole is refused rather than narrowed
@@ -527,7 +600,13 @@ func TestEveryWriteIsScopedIntegration(t *testing.T) {
 		// under any path, and listing them is narrowed to the caller's
 		// own unless they hold the whole bundle. Judging one is walked
 		// below — its reports go through ReportOutcome's read check.
-		"RecordAgentTurn": true, "AgentTurns": true,
+		"RecordAgentTurn": true, "AgentTurns": true, "AgentTurnPage": true,
+		// A turn kept from outside writes nothing under a path either.
+		// What it names must be readable, and a name outside the scope
+		// is refused as a missing one is — a 400 naming it, not the 404
+		// this walk wants (design doc 0144 §2) — so
+		// TestKeptTurnReadsOnlyWhatTheCallerCanIntegration holds it.
+		"KeepAgentTurn": true,
 	}
 	arg := func(ty reflect.Type) reflect.Value {
 		switch ty {

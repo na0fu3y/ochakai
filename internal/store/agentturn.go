@@ -10,12 +10,16 @@ import (
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
 
-// AgentTurn is one answered turn of the deployment's own agent, as kept
-// for the loop (design doc 0142 §6): its shape, not its contents.
+// AgentTurn is one answered turn, as kept for the loop (design doc 0142
+// §6): its shape, not its contents. The agent that answered may be the
+// deployment's own or any other that read the base (design doc 0144), and
+// Via and Producer say which.
 type AgentTurn struct {
 	ID          string     `json:"id"`
 	At          time.Time  `json:"at"`
-	Actor       string     `json:"-"`
+	Actor       string     `json:"by"`
+	Via         string     `json:"via,omitempty"`
+	Producer    string     `json:"producer,omitempty"`
 	Asked       string     `json:"asked"`
 	Latest      string     `json:"latest"`
 	Read        []string   `json:"read"`
@@ -34,9 +38,9 @@ func (s *Store) RecordAgentTurn(ctx context.Context, actor domain.Actor, asked, 
 	}
 	var id string
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO agent_turn (actor_kind, actor_name, asked, latest, read_ids, proposed_sql)
-		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id::text`,
-		actor.Kind, actor.Name, asked, latest, read, sql).Scan(&id)
+		INSERT INTO agent_turn (actor_kind, actor_name, actor_via, producer, asked, latest, read_ids, proposed_sql)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id::text`,
+		actor.Kind, actor.Name, actor.Via, actor.Producer, asked, latest, read, sql).Scan(&id)
 	if err != nil {
 		return "", err
 	}
@@ -44,12 +48,12 @@ func (s *Store) RecordAgentTurn(ctx context.Context, actor domain.Actor, asked, 
 	return id, nil
 }
 
-const agentTurnColumns = `id::text, at, actor_kind || ':' || actor_name, asked, latest, read_ids,
+const agentTurnColumns = `id::text, at, actor_kind || ':' || actor_name, actor_via, producer, asked, latest, read_ids,
 	proposed_sql, verdict, note, blamed, keep, judged_at`
 
 func scanAgentTurn(row pgx.Row) (*AgentTurn, error) {
 	t := &AgentTurn{}
-	err := row.Scan(&t.ID, &t.At, &t.Actor, &t.Asked, &t.Latest, &t.Read,
+	err := row.Scan(&t.ID, &t.At, &t.Actor, &t.Via, &t.Producer, &t.Asked, &t.Latest, &t.Read,
 		&t.ProposedSQL, &t.Verdict, &t.Note, &t.Blamed, &t.Keep, &t.JudgedAt)
 	return t, err
 }
@@ -88,15 +92,30 @@ type AgentTurnFilter struct {
 	Verdict string // "", "good" or "bad"
 	Keep    bool
 	Limit   int
+	// After, when set, is the last turn of the previous page: the listing
+	// resumes strictly below it in (at, id) order.
+	After *AgentTurnKey
+}
+
+// AgentTurnKey is a turn's place in the newest-first order.
+type AgentTurnKey struct {
+	At time.Time
+	ID string
 }
 
 // AgentTurns lists turns newest first.
 func (s *Store) AgentTurns(ctx context.Context, f AgentTurnFilter) ([]AgentTurn, error) {
+	var afterAt *time.Time
+	afterID := ""
+	if f.After != nil {
+		afterAt, afterID = &f.After.At, f.After.ID
+	}
 	rows, err := s.pool.Query(ctx, `SELECT `+agentTurnColumns+` FROM agent_turn
 		WHERE ($1 = '' OR actor_kind || ':' || actor_name = $1)
 		  AND ($2 = '' OR verdict = $2)
 		  AND (NOT $3 OR keep)
-		ORDER BY at DESC LIMIT $4`, f.Actor, f.Verdict, f.Keep, f.Limit)
+		  AND ($5::timestamptz IS NULL OR (at, id::text) < ($5, $6))
+		ORDER BY at DESC, id::text DESC LIMIT $4`, f.Actor, f.Verdict, f.Keep, f.Limit, afterAt, afterID)
 	if err != nil {
 		return nil, err
 	}

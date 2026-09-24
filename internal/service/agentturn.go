@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"slices"
+	"strings"
+	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
@@ -11,15 +14,27 @@ import (
 )
 
 // A turn's texts are cut to this, like a miss's query: they are what the
-// loop reads to see what was asked, not a transcript.
+// loop reads to see what was asked, not a transcript. A turn kept from
+// outside is refused over it instead (KeepAgentTurn).
 const maxTurnText = 1000
 
-// RecordAgentTurn keeps the shape of one answered turn and returns its
-// id (design doc 0142 §6). Like a usage event it is best effort: a turn
-// that could not be kept is logged, and the answer still goes out — an
-// id of "" says there is nothing to judge.
+// The other two bounds on a turn kept from outside (design doc 0144 §2).
+const (
+	maxTurnRead = 100
+	maxTurnSQL  = 16 << 10
+)
+
+// RecordAgentTurn keeps the shape of one turn the deployment's own agent
+// answered and returns its id (design doc 0142 §6). Like a usage event it
+// is best effort: a turn that could not be kept is logged, and the answer
+// still goes out — an id of "" says there is nothing to judge.
+//
+// The producer is this build, whatever the caller sent: the turn says
+// which agent answered, and here that is ochakai's (design doc 0144 §3).
 func (s *Service) RecordAgentTurn(ctx context.Context, asked, latest string, read []string, sql string) string {
-	id, err := s.Store.RecordAgentTurn(ctx, httpauth.Actor(ctx),
+	actor := httpauth.Actor(ctx)
+	actor.Producer = s.agentProducer()
+	id, err := s.Store.RecordAgentTurn(ctx, actor,
 		cutText(asked, maxTurnText), cutText(latest, maxTurnText), read, sql)
 	if err != nil {
 		if s.Log != nil {
@@ -28,6 +43,75 @@ func (s *Service) RecordAgentTurn(ctx context.Context, asked, latest string, rea
 		return ""
 	}
 	return id
+}
+
+// agentProducer is the SPEC §7 producer the deployment's own agent's
+// turns carry.
+func (s *Service) agentProducer() string {
+	v := "dev"
+	if s.Config != nil && s.Config.Version != "" {
+		v = s.Config.Version
+	}
+	return "ochakai/" + v
+}
+
+// TurnIn is a turn some other agent answered, as its application sends
+// it (design doc 0144 §2): the question, what was read to answer it, and
+// the query proposed, if any. Never the answer or a query's result.
+type TurnIn struct {
+	Asked string   `json:"asked"`
+	Read  []string `json:"read"`
+	SQL   string   `json:"sql"`
+}
+
+// KeepAgentTurn keeps a turn an agent other than the deployment's own
+// answered, as the calling actor's, and returns it (design doc 0144).
+// Unlike RecordAgentTurn it is a request rather than a side effect, so
+// what it cannot keep whole it refuses rather than cuts, and every
+// concept it names must be one the caller can read — a turn that read
+// what is not there has nobody to report against when it is judged.
+func (s *Service) KeepAgentTurn(ctx context.Context, in TurnIn) (*store.AgentTurn, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
+	switch {
+	case strings.TrimSpace(in.Asked) == "":
+		return nil, Invalidf("asked is required: the question the answer was to")
+	case len(in.Asked) > maxTurnText:
+		return nil, Invalidf("asked exceeds %d bytes", maxTurnText)
+	case in.Read == nil:
+		return nil, Invalidf("read is required: the concepts the answer read, [] for none")
+	case len(in.Read) > maxTurnRead:
+		return nil, Invalidf("read names %d concepts; at most %d", len(in.Read), maxTurnRead)
+	case len(in.SQL) > maxTurnSQL:
+		return nil, Invalidf("sql exceeds %d bytes", maxTurnSQL)
+	}
+	read := make([]string, 0, len(in.Read))
+	for _, id := range in.Read {
+		if id = domain.Normalize(id); !slices.Contains(read, id) {
+			read = append(read, id)
+		}
+	}
+	sc, err := s.scope(ctx)
+	if err != nil {
+		return nil, err
+	}
+	found, err := s.Store.GetManyDocs(ctx, read)
+	if err != nil {
+		return nil, err
+	}
+	for _, id := range read {
+		// Missing and out of scope are one answer: outside a grant the
+		// address holds nothing (design doc 0109 §4).
+		if found[id] == nil || !sc.MayRead(id) {
+			return nil, Invalidf("read names %q, which is not a concept you can read", id)
+		}
+	}
+	id, err := s.Store.RecordAgentTurn(ctx, httpauth.Actor(ctx), in.Asked, in.Asked, read, in.SQL)
+	if err != nil {
+		return nil, err
+	}
+	return s.Store.AgentTurn(ctx, id)
 }
 
 // Judgment is the person's verdict on one answer.
@@ -115,14 +199,77 @@ func (s *Service) JudgeAgentTurn(ctx context.Context, id string, j Judgment) (*J
 // covers everybody, anyone else's only what they asked themselves
 // (design doc 0142 §6).
 func (s *Service) AgentTurns(ctx context.Context, verdict string, keep bool, limit int) ([]store.AgentTurn, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 30
+	}
+	page, err := s.AgentTurnPage(ctx, verdict, keep, limit, "")
+	if err != nil {
+		return nil, err
+	}
+	return page.Turns, nil
+}
+
+// TurnPage is one page of turns, and the cursor to the next when there
+// may be one.
+type TurnPage struct {
+	Turns  []store.AgentTurn `json:"turns"`
+	Cursor string            `json:"cursor,omitempty"`
+}
+
+// AgentTurnPage lists turns newest first under the same scope as
+// AgentTurns — the REST face of what the agent reads (design doc 0144
+// §4). Unlike the agent's tool it says when a value is not one it takes.
+func (s *Service) AgentTurnPage(ctx context.Context, verdict string, keep bool, limit int, cursor string) (*TurnPage, error) {
+	if verdict != "" && verdict != "good" && verdict != "bad" {
+		return nil, Invalidf("verdict is %q; it is good or bad", verdict)
+	}
+	if limit == 0 {
+		limit = 30
+	}
+	if limit < 0 || limit > 100 {
+		return nil, Invalidf("limit is %d; it is 1 to 100", limit)
+	}
 	f := store.AgentTurnFilter{Verdict: verdict, Keep: keep, Limit: limit}
-	if f.Limit <= 0 || f.Limit > 100 {
-		f.Limit = 30
+	if cursor != "" {
+		after, err := decodeTurnCursor(cursor)
+		if err != nil {
+			return nil, err
+		}
+		f.After = after
 	}
 	if err := s.RequireAdmin(ctx, "read other people's agent turns"); err != nil {
 		f.Actor = domain.PrincipalOf(httpauth.Actor(ctx))
 	}
-	return s.Store.AgentTurns(ctx, f)
+	turns, err := s.Store.AgentTurns(ctx, f)
+	if err != nil {
+		return nil, err
+	}
+	page := &TurnPage{Turns: turns}
+	if page.Turns == nil {
+		page.Turns = []store.AgentTurn{}
+	}
+	if len(turns) == limit {
+		last := turns[len(turns)-1]
+		page.Cursor = base64.RawURLEncoding.EncodeToString(
+			[]byte(last.At.UTC().Format(time.RFC3339Nano) + "|" + last.ID))
+	}
+	return page, nil
+}
+
+func decodeTurnCursor(enc string) (*store.AgentTurnKey, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(enc)
+	if err != nil {
+		return nil, malformedCursor()
+	}
+	at, id, ok := strings.Cut(string(raw), "|")
+	if !ok || id == "" {
+		return nil, malformedCursor()
+	}
+	t, err := time.Parse(time.RFC3339Nano, at)
+	if err != nil {
+		return nil, malformedCursor()
+	}
+	return &store.AgentTurnKey{At: t, ID: id}, nil
 }
 
 func cutText(s string, n int) string {

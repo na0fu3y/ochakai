@@ -73,8 +73,8 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 ない。ここがその調節器である — 面ごとに天井を宣言し、超えたら CI が
 落ちる。
 
-- REST: 15
-- PARAM: 18
+- REST: 17
+- PARAM: 20
 - HEADER: 13
 - MCP: 6
 - MCP-BYTES: 10900
@@ -130,15 +130,17 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 規則の下で動く運用であって、規則の変更ではない。増やしたくないものを
 数える仕組みが、自分の数え先を増やすのでは筋が通らない。
 
-## REST (15)
+## REST (17)
 
 - `DELETE /api/v1/bundle/{path}`
 - `GET /api/v1/access`
+- `GET /api/v1/agent/turns`
 - `GET /api/v1/bundle/{path}`
 - `GET /api/v1/search`
 - `GET /api/v1/stats`
 - `GET /api/v1/usage/{id}`
 - `POST /api/v1/agent`
+- `POST /api/v1/agent/turns`
 - `POST /api/v1/agent/turns/{id}`
 - `POST /api/v1/frontmatter`
 - `POST /api/v1/move`
@@ -233,6 +235,21 @@ Web UI で概念を書く人が、`sources` を一件足すためにも
 言う「人の判定の付いた結果報告」と「正解の付いた問い」を買う唯一の口だから
 である。判定は本人の結果報告に変わるだけで、検証は一つも起きない。
 
+**15 → 17 は [0144](design/0144-a-turn-is-kept-whoever-answered.md) の
+`POST /api/v1/agent/turns` と `GET /api/v1/agent/turns` である。天井を
+上げる決定であり、そう言って上げている。** 三つの問いに答える。**誰が
+詰まったか**: 自前のチャットエージェントに ochakai を埋め込んだ運用者が、
+セッションの成否を LLM-as-judge で逆算し、検索の回帰比較を自前のリプレイで
+回していた — 0142 がエージェントを持つ理由に挙げた二つの入力を、ochakai の
+外で作り直していた。`OCHAKAI_AGENT` を入れても、問いを受けるのはその
+アプリのエージェントなので軌跡は一件も集まらない。**既存の面で回避できるか**:
+できない — `report_outcome` は concept 一件への報告で「どの問いに対して」が
+落ち、turn を読む口はエージェントの内部ツールにしか無かった。**何が畳める
+か — ochakai の側では何も畳めない。** 単調に増やしてよい理由は、これが
+C7 を、ochakai のエージェントを使わないデプロイにも届かせる唯一の口だから
+である。畳めるのは埋め込む側の、自前の点数と自前のリプレイである。
+PARAM も同じ決定で 18 → 20 になる(`verdict`・`keep`、下の節)。
+
 **13 → 14 は [0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) の
 `POST /api/v1/agent` である。天井を上げる決定であり、そう言って上げて
 いる。** 三つの問いに、この順で答える。**誰が詰まったか**: 入ってくる
@@ -260,7 +277,7 @@ ochakai に直接問いたいとも言った。**既存の面で回避できる�
 でこの天井が鳴ったとき実際にそうして 15 行返ったのが、その形の唯一の
 実例である。
 
-## PARAM (18)
+## PARAM (20)
 
 クエリパラメータも表面である。**操作の数だけを数えていた間、圧力は
 ここへ逃げていた** — エンドポイントをパラメータや content type に
@@ -310,6 +327,7 @@ ochakai に直接問いたいとも言った。**既存の面で回避できる�
 - `files`
 - `fm.{key}`
 - `history`
+- `keep`
 - `limit`
 - `links_to`
 - `note`
@@ -322,6 +340,14 @@ ochakai に直接問いたいとも言った。**既存の面で回避できる�
 - `tag`
 - `trust`
 - `type`
+- `verdict`
+
+18 → 20 は [0144](design/0144-a-turn-is-kept-whoever-answered.md) の
+`verdict` と `keep` で、上の REST の 15 → 17 と同じ一つの決定である。
+turn の一覧を、判定と比較のセットで絞る。**名前はどちらも新しい語では
+ない** — `POST /api/v1/agent/turns/{id}` の本文が既に同じ意味で使っている
+二語が、クエリの側にも現れただけである。それでも数は動く: この節が数えるの
+はクエリパラメータの名前であり、本文のキーではない。
 
 18 のまま、[0135](design/0135-a-rejection-is-a-deletion.md) が
 `rejected` を落として `note` を足した。**片方が消えて片方が増えたのは偶然

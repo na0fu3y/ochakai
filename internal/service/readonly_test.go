@@ -49,7 +49,7 @@ func TestReadOnlyRefusesEveryWrite(t *testing.T) {
 		// §5) and its turns are kept there the way a miss is — the
 		// caller's own measurement, not a change to the base. Listing
 		// them is a read. Judging one is a report, and is guarded.
-		"RecordAgentTurn": true, "AgentTurns": true,
+		"RecordAgentTurn": true, "AgentTurns": true, "AgentTurnPage": true,
 		// Whether this caller may take the archive at a path is the same
 		// kind of question, asked of a read (design doc 0127).
 		"MayArchive": true,

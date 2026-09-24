@@ -44,7 +44,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、検索の `hits` が順位に徹することは [0143](0143-four-faces-and-an-agent-that-answers-behind-one.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
 | サーフェスの配分 | [0143](0143-four-faces-and-an-agent-that-answers-behind-one.md) が現行 — 各面の役割と載せないもの、MCP の 6 本と stateless な転送、読みが search → get で単読が `linked_from` を運ぶこと、そして**デプロイ自身のエージェントが REST 一本の後ろにいること**(0067 と、それに積まれた 0076 / 0106 / 0108 / 0118 を畳んだ)。足す規則と降ろす規則は [0068](0068-how-a-face-is-added-and-removed.md)。一覧と検索を MCP でも二本に分けることは [0096](0096-a-listing-is-not-a-search-here-either.md)。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0140](0140-one-address-reads-as-well-as-writes.md)。CLI の行の第一列は [0110](0110-the-first-column-is-the-key-you-asked-for.md)、その太字と dim は [0111](0111-weight-for-the-eye-and-only-for-an-eye.md) |
 | Web UI | [0130](0130-the-web-ui-and-the-fields-of-a-document.md) が現行(配信・ページの形・編集を一冊で。0072 / 0092 / 0126 を畳んだ)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**このデプロイができないことをページが出さなくなり、直せる呼び出し元にだけ案内を出すことは [0131](0131-a-deployment-says-what-it-cannot-do.md)** |
-| 検証ループと利用測定 | [0141](0141-a-miss-is-read-off-the-words.md) が現行 — 四つのキュー、立っている検証からの tier、直近 90 日の並び、`stats` と、**どの concept の言葉にも一致しなかった検索をミスとして数えること**(0069・0090・0095・0137・0138 を畳んだ)。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない) |
+| 検証ループと利用測定 | [0141](0141-a-miss-is-read-off-the-words.md) が現行 — 四つのキュー、立っている検証からの tier、直近 90 日の並び、`stats` と、**どの concept の言葉にも一致しなかった検索をミスとして数えること**(0069・0090・0095・0137・0138 を畳んだ)。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない)。**ループの入力になる turn を、ochakai のエージェント以外も残せて REST から読めることは [0144](0144-a-turn-is-kept-whoever-answered.md)**(0142 §6 の書き手を広げる — 形・保持・export に載せないことは動かない) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂)。**却下が削除の一種であり、理由がリビジョンに載ることは [0135](0135-a-rejection-is-a-deletion.md)** — 墓標は塞がず、`knowledge_rejection` は畳まれた |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md)。**番号は領域の決定に与え、その内側の規則には与えないことと、この表の一行が挙げてよい記録の数の天井は [0128](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)**(0048 §2.1 / §2.2 を改訂) |
@@ -1131,6 +1131,21 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   state / flow と `review.weekly`、押すのは数であって通知ではないこと。
   却下した案: ベクトル距離の床、「検索の後に何も fetch されなかった」を
   ミスとすること(呼び出しをまたぐ状態が要る)、二つの数を並べること。
+- [0144 答えたのが誰のエージェントでも、turn は残る](0144-a-turn-is-kept-whoever-answered.md)
+  — **Accepted**。[0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md)
+  §6 の turn の書き手を、ナレッジを読んで答えたすべてのエージェントに広げる。
+  `POST /api/v1/agent/turns` が問い・読んだ id・提案した SQL を受け取り
+  (答えの文と結果は受け取らない、上限超えは切らずに 400、読めない id は
+  存在しない id と同じ 400)、持ち主は記録した呼び出しの actor で、判定は
+  今までどおり本人だけが一度。turn は `via` と `producer` を持ち、
+  ochakai 自身のエージェントの turn は `ochakai/<版>` を名乗る(マイグレー
+  ション 0049、既存の turn は書き戻さない)。`GET /api/v1/agent/turns` が
+  `list_turns` と同じ範囲(バンドル全体を読める呼び出し元は全員分、ほかは
+  自分の分 — ポリシーの無いデプロイでは全員が全員分)で読ませ、
+  `verdict` / `keep` / `limit` / `cursor` で絞る。REST 15 → 17、PARAM
+  18 → 20。MCP と CLI には載せない。却下した案: 委譲する呼び出し元に
+  限ること(限って守れるものが無い)、`usage` に問いを載せること、答えの
+  文を受け取ること、評価の呼び出しを数えないヘッダ。
 - [0069 検証ループと、それを測るもの](0069-the-loop-and-what-measures-it.md)
   — **Superseded by 0141**。
 - [0090 キューは、最近あったことで並ぶ](0090-a-queue-ranks-on-what-happened-lately.md)
