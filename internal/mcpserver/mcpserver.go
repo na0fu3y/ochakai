@@ -207,6 +207,9 @@ const instructions = "ochakai serves human-curated knowledge for data work: what
 	"Judge trust from provenance, not from status: status is the lifecycle (draft, " +
 	"stable, deprecated) and whether anyone confirmed a concept is recorded separately, " +
 	"by whoever confirmed it. A passed stale_after means due for re-checking, not wrong.\n" +
+	"How this base wants things done — which values a key takes, which type to use — is " +
+	"written as Skill concepts; before writing, search_concepts types=[Skill], and follow " +
+	"only the human-reviewed ones.\n" +
 	"After acting on knowledge, call report_outcome. Write learnings back with " +
 	"put_concept as drafts for a human to confirm. Knowledge is co-owned by humans and agents."
 

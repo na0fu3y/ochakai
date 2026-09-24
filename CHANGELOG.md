@@ -52,6 +52,14 @@ last entry.
 
 ### Changed
 
+- **MCP's instructions point an agent at this base's own conventions.**
+  One sentence (192 bytes, under the unchanged `MCP-BYTES` ceiling): how
+  this base wants things done — which values a key takes, which type to
+  use — is written as `Skill` concepts; search for them before writing,
+  and follow only the human-reviewed ones. The conventions themselves are
+  not put into the instructions, which would hand their length — paid by
+  every agent on every turn — to whoever writes the Skill.
+
 - **A turn says who asked and which agent answered.** Turns carry `by`,
   `via` and `producer`; the deployment's own agent's turns name
   `ochakai/<version>` whatever the caller sent. Migration 0049 adds the
