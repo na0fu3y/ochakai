@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.28.8] - 2026-09-24
+
 ### Changed
 
 - **The web UI's agent page asks less of the person reading it.** Under
@@ -7268,7 +7270,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.7...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.8...HEAD
+[0.28.8]: https://github.com/na0fu3y/ochakai/compare/v0.28.7...v0.28.8
 [0.28.7]: https://github.com/na0fu3y/ochakai/compare/v0.28.6...v0.28.7
 [0.28.6]: https://github.com/na0fu3y/ochakai/compare/v0.28.5...v0.28.6
 [0.28.5]: https://github.com/na0fu3y/ochakai/compare/v0.28.4...v0.28.5
