@@ -1592,8 +1592,7 @@ paths:
               properties:
                 asked:
                   type: string
-                  maxLength: 1000
-                  description: The conversation's first question, in bytes up to the bound.
+                  description: The conversation's first question. At most 1000 bytes — UTF-8 bytes, not characters, so about 330 characters of Japanese.
                 read:
                   type: array
                   maxItems: 100
@@ -3586,9 +3585,11 @@ components:
             turns:
               type: object
               description: >
-                Flow: the turns the agent answered in the window, and how the
-                people who asked judged them (design doc 0142 §6). Absent where
-                there is no agent, and for a caller who reads part of the bundle.
+                Flow: the turns kept in the window — the deployment's own
+                agent's and those POST /api/v1/agent/turns kept for any other
+                agent (design doc 0144 §5) — and how the people who asked
+                judged them (design doc 0142 §6). Present whether or not
+                `enabled` is; absent for a caller who reads part of the bundle.
               properties:
                 count: { type: integer }
                 good: { type: integer }

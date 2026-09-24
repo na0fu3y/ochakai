@@ -205,15 +205,15 @@ type StatsAgent struct {
 	// BigQueryProject is the project the page bills such a query to,
 	// where the operator named one; absent, the person names their own.
 	BigQueryProject string `json:"bigquery_project,omitempty"`
-	// Turns is flow: how many turns the agent answered in the window, and
-	// how the people who asked judged them (design doc 0142 §6). Absent
-	// where there is no agent, and for a caller who reads part of the
-	// bundle — a turn is whoever asked it, and like a miss it has no
+	// Turns is flow: how many turns were kept in the window — the
+	// deployment's own agent's and any other agent's (design doc 0144 §5)
+	// — and how the people who asked judged them (design doc 0142 §6).
+	// Absent for a caller who reads part of the bundle — a turn is whoever asked it, and like a miss it has no
 	// concept to be scoped by.
 	Turns *StatsAgentTurns `json:"turns,omitempty"`
 }
 
-// StatsAgentTurns counts the agent's turns in the stats window.
+// StatsAgentTurns counts the turns kept in the stats window.
 type StatsAgentTurns struct {
 	Count int64 `json:"count"`
 	Good  int64 `json:"good"`

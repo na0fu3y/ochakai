@@ -65,7 +65,9 @@ last entry.
   `ochakai/<version>` whatever the caller sent. Migration 0049 adds the
   two columns; turns kept before it leave them empty rather than have
   them guessed. `stats.agent.turns` now counts turns kept from outside
-  too.
+  too, and is there whether or not `OCHAKAI_AGENT` is on —
+  `stats.agent.enabled` still says only whether ochakai's own agent
+  answers.
 
 ## [0.28.8] - 2026-09-24
 
