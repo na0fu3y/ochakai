@@ -67,11 +67,15 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 		// deleted_at IS NULL guards the race with a concurrent delete,
 		// exactly as in SoftDelete: the Get above ran outside this
 		// transaction.
-		tag, err := tx.Exec(ctx,
-			`UPDATE object SET id=$2, path=$8, updated_at=$3, content_changed_at=$3,
+		// The verification rows are still keyed by oldID here; they
+		// follow the entry below.
+		err := tx.QueryRow(ctx,
+			`UPDATE object SET id=$2, path=$8, updated_at=$3, content_changed_at=`+changedAfterVerified("$3")+`,
 			 updated_by_kind=$4, updated_by_name=$5, updated_by_via=$6, updated_by_producer=$7
-			 WHERE id=$1 AND deleted_at IS NULL`,
-			oldID, newID, k.UpdatedAt, actor.Kind, actor.Name, actor.Via, actor.Producer, domain.ConceptPath(newID))
+			 WHERE id=$1 AND deleted_at IS NULL
+			 RETURNING content_changed_at`,
+			oldID, newID, k.UpdatedAt, actor.Kind, actor.Name, actor.Via, actor.Producer, domain.ConceptPath(newID)).
+			Scan(&k.ContentChangedAt)
 		if isUniqueViolation(err) {
 			// The probe above found the destination free, but it took no
 			// lock — a create can land on newID in the window. The primary
@@ -80,11 +84,11 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 			// 500 with a constraint name in it.
 			return fmt.Errorf("%w: %s", ErrAlreadyExists, newID)
 		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
 		if err != nil {
 			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return ErrNotFound
 		}
 		for _, q := range []string{
 			// The entry's namespace moves with it (design doc 0046 §3.3):
@@ -270,8 +274,13 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		}
 		// A repaired link is a change to what the entry says, so
 		// generated moves with it — both halves of it, the actor above
-		// and the timestamp here (design doc 0046 §3.4).
-		r.ContentChangedAt = r.UpdatedAt
+		// and the timestamp here (design doc 0046 §3.4). The moved entry
+		// keeps the move's own stamp, already past its verifications.
+		if self {
+			r.ContentChangedAt = moved.ContentChangedAt
+		} else {
+			r.ContentChangedAt = r.UpdatedAt
+		}
 		// deleted_at IS NULL restates what the locked read already
 		// established, so the statement does not depend on the reader
 		// having filtered: rewriting a tombstone would plant a repaired
@@ -290,18 +299,19 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 			return err
 		}
 		r.ContentHash = hash
-		tag, err := tx.Exec(ctx,
+		err = tx.QueryRow(ctx,
 			`UPDATE object SET links=$2, attrs=$3, body=$4, updated_at=$5,
 			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8, updated_by_producer=$9,
-			 doc=$10, content_hash=$11, content_changed_at=$12, frontmatter=$13
-			 WHERE id=$1 AND deleted_at IS NULL`,
+			 doc=$10, content_hash=$11, content_changed_at=`+changedAfterVerified("$12")+`, frontmatter=$13
+			 WHERE id=$1 AND deleted_at IS NULL
+			 RETURNING content_changed_at`,
 			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, actor.Producer, doc, hash,
-			r.ContentChangedAt, fm)
+			r.ContentChangedAt, fm).Scan(&r.ContentChangedAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return fmt.Errorf("rewriting references to %s: %s changed under the move", oldID, r.ID)
+		}
 		if err != nil {
 			return err
-		}
-		if tag.RowsAffected() == 0 {
-			return fmt.Errorf("rewriting references to %s: %s changed under the move", oldID, r.ID)
 		}
 		if self {
 			// Fold the result back into the caller's entry; the caller
