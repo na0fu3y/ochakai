@@ -807,6 +807,13 @@ body:not(.has-agent) .agent-only { display: none !important; }
 .ask-verdict-form { flex-basis: 100%; display: flex; gap: .4rem; align-items: flex-end; }
 .ask-verdict-form textarea { flex: 1; box-sizing: border-box; }
 .ask-proposal textarea { width: 100%; box-sizing: border-box; font-family: var(--mono, ui-monospace, monospace); font-size: .85rem; }
+/* What a query returned is the page's, not the person's: full width, and
+   a wide result scrolls inside its own box rather than the page. */
+.ask-result { padding: 0 .2rem; }
+.ask-table { overflow-x: auto; max-height: 24rem; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+.ask-table table { border-collapse: collapse; font-size: .84rem; font-variant-numeric: tabular-nums; }
+.ask-table th, .ask-table td { padding: .3rem .6rem; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.ask-table th { position: sticky; top: 0; background: var(--bg); color: var(--muted); font-weight: 500; }
 .ask-form { position: sticky; bottom: 0; background: var(--bg); padding: .5rem 0; }
 .ask-form textarea { width: 100%; box-sizing: border-box; }
 .files-off { display: none; }

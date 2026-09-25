@@ -54,6 +54,13 @@ export function signIn(clientId) {
   });
 }
 
+// hasToken says whether a query can run without asking Google again. A
+// sign-in opens a popup, and a browser lets a popup open only from a
+// click: a query the page runs by itself runs only while this holds.
+export function hasToken() {
+  return !!token && token.expires > Date.now() + 60_000;
+}
+
 // run executes one query in the named billing project and waits for it
 // (up to about a minute) — jobs.query answers at once for a small query
 // and hands back a job to poll for a slow one. With no token it goes to
@@ -101,6 +108,12 @@ export function asMessage(query, res) {
   return `実行 SQL(${fmtBytes(res.bytes)} 読み取り)\n\n`
     + '```sql\n' + query + '\n```\n\n'
     + `結果(全 ${res.total} 行${cut ? '、先頭だけ' : ''}):\n\n` + '```\n' + table + '\n```';
+}
+
+// asFailure is a query that did not run, as the person's next message:
+// the SQL and what BigQuery said, so the agent can correct it.
+export function asFailure(query, err) {
+  return '実行できませんでした\n\n```sql\n' + query + '\n```\n\nエラー: ' + err.message;
 }
 
 // The server refuses a conversation carrying more text than this

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { asMessage, fold } from '../static/js/sql.js';
+import { asFailure, asMessage, fold } from '../static/js/sql.js';
 
 const bytes = msgs => msgs.reduce((n, m) => n + new TextEncoder().encode(m.text).length, 0);
 
@@ -38,4 +38,15 @@ test('a person\'s own words are never folded', () => {
   const long = 'あ'.repeat(30000);
   const msgs = [{ role: 'user', text: long }, { role: 'agent', text: 'はい' }, { role: 'user', text: long }];
   assert.deepEqual(fold(msgs), msgs);
+});
+
+test('a query that failed goes back with its SQL and what BigQuery said', () => {
+  const text = asFailure('SELECT y FROM `p.d.t`', new Error('Unrecognized name: y'));
+  assert.match(text, /SELECT y FROM `p\.d\.t`/);
+  assert.match(text, /Unrecognized name: y/);
+});
+
+test('a failure is never folded: it is short, and the agent corrects from it', () => {
+  const msgs = [{ role: 'user', text: '売上は？' }, { role: 'agent', text: '提案' }, { role: 'user', text: asFailure('SELECT 1', new Error('x')) }];
+  assert.deepEqual(fold(msgs, 1), msgs);
 });
