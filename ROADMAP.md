@@ -77,10 +77,16 @@ section says what the stages are for; it does not approve them in advance.
    are replayed on the operator's own machine, as the operator, so the
    server still runs nothing. Each replay is scored and stamped with the
    model and the version.
-3. **Useful on the first day.** Starting from an empty base, the agent
-   interviews the operator. It reads the warehouse's schema and query
-   history as that person and writes drafts, and triage runs inside the web
-   UI. This is where No FDE (C4) is won or lost.
+3. **Useful on the first day.** The page reads a dataset's schema as the
+   person and writes one draft per table, each with an empty description
+   ([0148](docs/design/0148-the-empty-base-fills-from-the-page-too.md)).
+   The agent then fills that gap with the person
+   ([0149](docs/design/0149-the-agent-proposes-and-the-person-applies.md)):
+   it asks what a table is for, counts rows, freshness and NULLs as that
+   person, and proposes the description, which the person applies. Asked
+   what is used a lot, it reads the query history as that person and
+   drafts the recurring aggregates. Nothing is harvested in bulk. This is
+   where No FDE (C4) is won or lost.
 4. **Where people already ask.** Chat surfaces and assistant connectors, on
    the conditions already written down
    ([0116](docs/design/0116-the-connector-price-changed-not-its-condition.md)).
@@ -96,17 +102,12 @@ section says what the stages are for; it does not approve them in advance.
 
 ## Now
 
-- **Stage 2 of the data agent** (above): a 👎 becomes a diagnosis and a
-  draft waiting for a ruling, and `ochakai eval` replays the kept questions
-  on the operator's machine
-  ([0146](docs/design/0146-a-kept-question-is-replayed-where-the-person-runs-it.md)).
-  What is left is to use it: keep questions, run the replay when the model
-  or the knowledge changes, and let the numbers say whether stage 3 is next.
-  Stage 1 has landed: the person agrees once and the agent runs its own
-  queries, and the answer shows its result as a table and, where the
-  result's shape allows one reading, a chart
-  ([0145](docs/design/0145-four-faces-and-an-answer-that-shows-its-result.md)
-  §5.4).
+- **Stage 3 of the data agent** (above): an empty base fills from the
+  page (0148), and the agent proposes the meaning a person applies
+  (0149). What is left is to use it on a real dataset and see whether the
+  first day ends with descriptions a person would verify. Stages 1 and 2
+  shipped in 0.29.0: automatic runs, answers that show their result, 👍
+  keeping a question, 👎 diagnosing, and `ochakai eval`.
 - **Keep the invariant checks growing with the code**
   ([0035](docs/design/0035-verifiability.md)): exhaustiveness linting, the
   OpenAPI contract test that runs every REST integration request and response

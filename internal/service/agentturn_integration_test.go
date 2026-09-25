@@ -40,8 +40,8 @@ func TestAgentTurnsAreJudgedByWhoAskedIntegration(t *testing.T) {
 		}
 	}
 
-	good := svc.RecordAgentTurn(askerCtx, "売上は?", "売上は?", ids, "", nil)
-	bad := svc.RecordAgentTurn(askerCtx, "粗利は?", "粗利は?", ids, "SELECT 1", nil)
+	good := svc.RecordAgentTurn(askerCtx, "売上は?", "売上は?", ids, "", nil, nil)
+	bad := svc.RecordAgentTurn(askerCtx, "粗利は?", "粗利は?", ids, "SELECT 1", nil, nil)
 	if good == "" || bad == "" {
 		t.Fatal("a turn was not kept")
 	}
@@ -156,7 +156,7 @@ func TestTurnsFromAnyAgentIntegration(t *testing.T) {
 
 	// The deployment's own agent's turns say they are its own, whatever
 	// the caller claimed to be.
-	own := svc.RecordAgentTurn(appCtx, "粗利は?", "粗利は?", ids[:1], "", nil)
+	own := svc.RecordAgentTurn(appCtx, "粗利は?", "粗利は?", ids[:1], "", nil, nil)
 	ownTurn, err := s.AgentTurn(ctx, own)
 	if err != nil {
 		t.Fatal(err)
@@ -190,5 +190,77 @@ func TestTurnsFromAnyAgentIntegration(t *testing.T) {
 		if err := call(); !errors.As(err, new(*InvalidInputError)) {
 			t.Errorf("%s: err = %v, want invalid input", name, err)
 		}
+	}
+}
+
+// A revision the agent proposed is written only when the person who
+// asked applies it, as the agent's on their behalf, and only while the
+// draft is still the unruled draft it was proposed against (design doc
+// 0149).
+func TestAProposedRevisionIsAppliedByWhoAskedIntegration(t *testing.T) {
+	dbURL := testdb.URL(t)
+	ctx := context.Background()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	svc := &Service{Store: s, Log: slog.New(slog.DiscardHandler), Config: &config.Config{Version: "v9"}}
+	run := testdb.Unique(t, "svcit-rev-")
+	asker := domain.Actor{Kind: domain.ActorHuman, Name: run + "@example.com"}
+	askerCtx := httpauth.WithActor(ctx, asker)
+	id := run + "/orders"
+	if err := s.Create(ctx, &domain.Knowledge{Type: domain.TypeTables, ID: id, Title: "orders", Status: domain.StatusDraft, CreatedBy: asker}, false); err != nil {
+		t.Fatal(err)
+	}
+	doc := "---\ntype: BigQuery Table\ntitle: orders\ndescription: 注文一件が一行。キャンセルも残る。\n---\n\n# 注意\n\n- キャンセルは status で見分ける(問うた人の言葉)\n"
+	k, err := svc.RevisableDraft(askerCtx, id, doc)
+	if err != nil {
+		t.Fatalf("an unruled draft is revisable: %v", err)
+	}
+	cur, err := s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	turn := svc.RecordAgentTurn(askerCtx, "orders を説明して", "orders を説明して", []string{id}, "", nil,
+		[]store.TurnRevision{{ID: id, Document: doc, Base: cur.ContentHash}})
+	if turn == "" || k.Description == "" {
+		t.Fatal("the turn was not kept, or the revision did not parse")
+	}
+
+	stranger := httpauth.WithActor(ctx, domain.Actor{Kind: domain.ActorHuman, Name: "stranger@example.com"})
+	if _, err := svc.ApplyAgentRevision(stranger, turn, id); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("a stranger applied it: err = %v, want not found", err)
+	}
+	if _, err := svc.ApplyAgentRevision(askerCtx, turn, run+"/other"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("a concept the turn proposed nothing for: err = %v, want not found", err)
+	}
+
+	got, err := svc.ApplyAgentRevision(askerCtx, turn, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Description != "注文一件が一行。キャンセルも残る。" || got.Status != domain.StatusDraft {
+		t.Errorf("applied = %q, %s", got.Description, got.Status)
+	}
+	if by := got.UpdatedBy; by.Kind != domain.ActorProcess || by.Name != "ochakai" || !strings.Contains(by.Via, asker.Name) {
+		t.Errorf("recorded as %+v, want process:ochakai via the asker", by)
+	}
+
+	// Applied once, the base no longer holds: a second press overwrites
+	// nothing.
+	if _, err := svc.ApplyAgentRevision(askerCtx, turn, id); !errors.Is(err, store.ErrConflict) {
+		t.Errorf("a second apply: err = %v, want a conflict", err)
+	}
+
+	// A ruling closes the draft to proposals.
+	if _, err := svc.Verify(ctx, id, asker); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.RevisableDraft(askerCtx, id, doc); err == nil {
+		t.Error("a verified concept was revisable")
 	}
 }

@@ -31,7 +31,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 
 | 領域 | いま読むドキュメント |
 |---|---|
-| 全体アーキテクチャ | [0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md) が現行 — Context Provider であり、裁定しないデータエージェント(既定 off)を一つ持つ。配る中身を変えるのは人の裁定だけ、サーバーは SQL を実行しない、Go の単一バイナリと PostgreSQL 一本(0081 を置き換えた) |
+| 全体アーキテクチャ | [0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md) が現行 — Context Provider であり、裁定しないデータエージェント(既定 off)を一つ持つ。配る中身を変えるのは人の裁定だけ、サーバーは SQL を実行しない、Go の単一バイナリと PostgreSQL 一本(0081 を置き換えた)。**裁定されていない draft の次の版をエージェントが提案し、問うた人が適用することと、クエリ履歴を問われたときにだけ読むことは [0149](0149-the-agent-proposes-and-the-person-applies.md)**(0142 §3・§2 を改訂) |
 | Google Cloud 前提・secret-zero | [0003](0003-gcp-only.md)。**認証の第二の経路は [0086](0086-a-second-way-to-say-who-is-calling.md)**(OIDC 発行者を名指したデプロイは自分で検証する。secret は増えない)。**残りを撤回してよい条件は [0115](0115-the-second-footing-waits-for-search.md)**(埋め込みが Google Cloud の外でも既定になること — それまで足場は一つ)。**複数の組織の運用を一人が引き受ける形は [0119](0119-an-operated-fleet-is-deployments-or-directories.md)** — 単位はデプロイか 0109 のディレクトリで、テナント列は持たない |
 | 認証と identity | [0065](0065-identity-and-provenance.md)。**認可(ディレクトリごとの閲覧者・編集者)は [0109](0109-a-directory-has-readers-and-writers.md)** — 0065 §1 が自分で置いた改訂条件が満たされた。付与が一つも無いデプロイは 0065 のままである。**ポリシーの置き換えが前提条件を取ることは [0120](0120-the-policy-is-replaced-only-as-it-was-read.md)**(0109 §2 を改訂 — `If-Match` の意味は concept と同じ)。**最初の一行を置けるのも管理者だけであることは [0122](0122-the-first-rule-is-an-administrators-to-write.md)**(0109 §3 を改訂 — 外の呼び出し元は書く前に断る)。**ディレクトリごとの管理者は [0124](0124-a-directory-can-have-its-own-administrator.md)**(0109 §3 を改訂 — `may_admin` は prefix に縛られ、根には置けない)。**subtree のアーカイブを読める者に開いたのは [0134](0134-an-archive-says-which-part-it-is.md)**(0109 §3 を改訂 — アーカイブが自分の範囲を名乗る)。**`stats` が範囲を持つ呼び出し元にも答えることは [0123](0123-the-numbers-say-what-they-counted.md)**(0109 §3 を改訂 — 答えが自分の範囲を宣言する)。**`move` が書き換えの収まる範囲で動くことは [0129](0129-a-move-runs-when-its-rewrite-fits.md)**(0109 §3 を改訂 — はみ出すなら丸ごと断る)。**OIDC 経路で email を持たないトークンが人を process にすることを、そう言うのは [0117](0117-a-person-recorded-as-a-process-says-so.md)**(0086 §4 を改訂 — 記録の仕方は同じで、黙って行わなくなった)。**どの経路がどのヘッダを読むかは [0121](0121-each-path-reads-its-own-header.md)** — 自分で検証するデプロイは `Authorization` だけを読む |
 | デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
@@ -88,6 +88,20 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   化(デプロイが二つになる)、サービスアカウントでの実行、リフレッシュ
   トークンの保管、順位付けへの LLM、👍 を検証にすること。ブラウザからの BigQuery は `bigquery.readonly` で通り、asia-northeast1 で答えるのは
   `gemini-2.5-flash`(3.x 系は `global` だけ)と確かめてから受理した。問いのセットはベースの外に置き export に載せない。
+- [0149 エージェントが提案し、問うた人が適用する](0149-the-agent-proposes-and-the-person-applies.md)
+  — **Accepted**。0142 §3 と §2 を改訂する。エージェントは、裁定されて
+  いない draft(seed の空の description が主な相手)の次の版を
+  `propose_revision` で提案でき、書き込みはしない。提案は答えの `revisions`
+  と turn に残り、問うた人が `POST /api/v1/agent/turns/{id}/revisions/{concept}`
+  で適用する — 本文は受け取らず turn が残した文書を書き、記録は
+  `process:ochakai via <問うた人>`、提案時の内容ハッシュが前提条件で、動いて
+  いれば 412、裁定されていれば 400。適用は裁定ではない。空を埋める手順
+  (一〜三問訊く、行数・鮮度・NULL を SQL で確かめる、出所のある文だけ
+  書く)をプロンプトが持つ。クエリ履歴は問われたときにだけ、問うた人の
+  身元で読み、一回 5 件までの draft にする — 刈り取りではない。REST
+  17 → 18。MCP・CLI には載せない。却下した案: 直接書く、ページが `PUT`
+  する、ページが本文を送る、別の id に書く、署名、履歴を読まない/まとめて
+  読む。
 - [0001 全体アーキテクチャ](0001-architecture.md) — **Superseded by 0081**。
   最初の記録。402 行のうち生きていたのは 4 分の 1 ほどで、残りは後続が
   持つか、もう事実でなかった。

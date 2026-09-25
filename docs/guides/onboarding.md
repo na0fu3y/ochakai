@@ -106,6 +106,16 @@ bq query --max_rows=100000 --format=json --nouse_legacy_sql \
 い([0148](../design/0148-the-empty-base-fills-from-the-page-too.md) §2.1)。ここでで
 きるのは、まだ誰も説明を書いていないテーブルとカラムの一覧である。
 
+**空の説明は、エージェントと一緒に埋められる**(デプロイが `OCHAKAI_AGENT`
+を入れていれば、設計ドキュメント [0149](../design/0149-the-agent-proposes-and-the-person-applies.md))。
+「エージェント」タブで「`tables/<dataset>/<table>` の説明を一緒に埋めて」と
+頼むと、エージェントは何のためのテーブルかを二、三問だけ訊き、行数・鮮度・
+NULL の割合を SQL で確かめ(走らせるのはあなた)、description と注意書きの
+**提案**を出す。提案は差分で読めて、「適用する」を押したときだけ書かれる —
+記録はエージェントの書き込み(`process:ochakai via <あなた>`)で、draft の
+まま、確かめるのはこのあとの裁定である。よく使われている集計を訊けば、
+あなたの権限で読めるクエリ履歴から、候補を Metric の draft にする。
+
 id の prefix は、この日に決めるものの中で唯一、後から変えると高くつく。
 `--prefix` を後で変えても改名は起こらない。二つ目のカタログができるだけで、
 一つ目は誰にも読まれないまま古くなる。毎日の同期、attester、住所の決め方は

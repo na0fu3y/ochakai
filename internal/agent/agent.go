@@ -47,12 +47,18 @@ type Message struct {
 //
 // Drafts names the concepts the agent wrote in this turn, each a new
 // draft awaiting a person's ruling.
+//
+// Revisions are changes the agent proposed to drafts nobody has ruled on
+// — a seeded table's empty description, most often — which it does not
+// write: the person who asked applies each one, and the server writes
+// the document kept with the turn (design doc 0149).
 type Answer struct {
-	Text   string    `json:"text"`
-	Read   []string  `json:"read"`
-	SQL    *Proposal `json:"sql,omitempty"`
-	Drafts []string  `json:"drafts,omitempty"`
-	Turn   string    `json:"turn,omitempty"`
+	Text      string               `json:"text"`
+	Read      []string             `json:"read"`
+	SQL       *Proposal            `json:"sql,omitempty"`
+	Drafts    []string             `json:"drafts,omitempty"`
+	Revisions []store.TurnRevision `json:"revisions,omitempty"`
+	Turn      string               `json:"turn,omitempty"`
 }
 
 // Proposal is one query the agent asks the person to run.
@@ -100,7 +106,12 @@ func Run(ctx context.Context, svc *service.Service, msgs []Message, dryRun bool)
 	if ans.SQL != nil {
 		sql = ans.SQL.Query
 	}
-	ans.Turn = svc.RecordAgentTurn(ctx, firstAsked(msgs), msgs[len(msgs)-1].Text, ans.Read, sql, ans.Drafts)
+	ans.Turn = svc.RecordAgentTurn(ctx, firstAsked(msgs), msgs[len(msgs)-1].Text, ans.Read, sql, ans.Drafts, ans.Revisions)
+	if ans.Turn == "" {
+		// A proposal is applied through its turn; one that could not be
+		// kept cannot be applied, so it is not offered as if it could.
+		ans.Revisions = nil
+	}
 	return ans, nil
 }
 
@@ -142,7 +153,7 @@ func answer(ctx context.Context, svc *service.Service, msgs []Message, dryRun bo
 		sys += systemReplay
 	case svc.Config == nil || !svc.Config.ReadOnly:
 		sys += systemDraft
-		all = append(all, writeDraft)
+		all = append(all, writeDraft, proposeRevision)
 	default:
 		sys += systemNoDraft
 	}
@@ -160,14 +171,14 @@ func answer(ctx context.Context, svc *service.Service, msgs []Message, dryRun bo
 			if text == "" {
 				text = p.Purpose
 			}
-			return &Answer{Text: text, Read: r.read, SQL: p, Drafts: r.drafts}, nil
+			return &Answer{Text: text, Read: r.read, SQL: p, Drafts: r.drafts, Revisions: r.revisions}, nil
 		}
 		if len(calls) == 0 {
 			text := strings.TrimSpace(turn.Text())
 			if text == "" {
 				return nil, fmt.Errorf("the agent could not answer: %w", llm.ErrNoAnswer)
 			}
-			return &Answer{Text: text, Read: r.read, Drafts: r.drafts}, nil
+			return &Answer{Text: text, Read: r.read, Drafts: r.drafts, Revisions: r.revisions}, nil
 		}
 		answers := make([]llm.Part, 0, len(calls))
 		for _, c := range calls {
@@ -232,10 +243,11 @@ func validate(msgs []Message) ([]llm.Content, error) {
 // run is one call's state: what it has read, for the answer's `read`,
 // and what it has written, for its `drafts`.
 type run struct {
-	svc    *service.Service
-	read   []string
-	seen   map[string]bool
-	drafts []string
+	svc       *service.Service
+	read      []string
+	seen      map[string]bool
+	drafts    []string
+	revisions []store.TurnRevision
 }
 
 // call runs one tool and returns what the model is handed back. A tool's
@@ -303,6 +315,8 @@ func (r *run) dispatch(ctx context.Context, c llm.FunctionCall) (any, error) {
 		return r.svc.AgentTurns(ctx, a.str("verdict"), a.bool("keep"), a.int("limit", 30))
 	case "write_draft":
 		return r.writeDraft(ctx, a.str("id"), a.str("document"))
+	case "propose_revision":
+		return r.proposeRevision(ctx, a.str("id"), a.str("document"))
 	case "read_log":
 		doc, err := r.svc.LogDocument(ctx, a.str("prefix"), a.int("limit", 200))
 		if err != nil {
@@ -351,6 +365,36 @@ func (r *run) writeDraft(ctx context.Context, id, document string) (any, error) 
 		out["notes"] = notes
 	}
 	return out, nil
+}
+
+// proposeRevision keeps one change to a draft nobody has ruled on, for
+// the person who asked to apply (design doc 0149). Nothing is written
+// here: the proposal travels in the answer and is kept with the turn,
+// with the content hash it was made against, so a draft that moves
+// before it is applied refuses it rather than losing the edit.
+func (r *run) proposeRevision(ctx context.Context, id, document string) (any, error) {
+	if len(r.revisions) >= maxDrafts {
+		return nil, fmt.Errorf("this turn has proposed %d revisions, the most one turn may; say in the answer what else you would change", maxDrafts)
+	}
+	if id == "" || document == "" {
+		return nil, errors.New("propose_revision needs an id and a document")
+	}
+	id = domain.Normalize(id)
+	for _, rv := range r.revisions {
+		if rv.ID == id {
+			return nil, fmt.Errorf("this turn already proposes a revision of %s; put everything into one document", id)
+		}
+	}
+	if _, err := r.svc.RevisableDraft(ctx, id, document); err != nil {
+		return nil, err
+	}
+	cur, err := r.svc.Store.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	r.revisions = append(r.revisions, store.TurnRevision{ID: id, Document: document, Base: cur.ContentHash})
+	return map[string]any{"id": id, "proposed": true,
+		"note": "問うた人が差分を読んで適用するまで、何も変わらない。答えに、何を根拠に何を変えたかを書く。"}, nil
 }
 
 type args map[string]any

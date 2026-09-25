@@ -1541,6 +1541,18 @@ paths:
                     description: >
                       The drafts the agent wrote in this turn, each new and
                       awaiting a person's ruling. Absent when it wrote none.
+                  revisions:
+                    type: array
+                    items: { $ref: "#/components/schemas/TurnRevision" }
+                    description: >
+                      Changes the agent proposed to drafts nobody has ruled
+                      on — most often a seeded table's empty description —
+                      which it did not write (design doc 0149). The person
+                      who asked applies each with
+                      POST /api/v1/agent/turns/{id}/revisions/{concept}.
+                      At most five, absent when there are none, and absent
+                      too when the turn could not be kept, since a proposal
+                      is applied through its turn.
                   turn:
                     type: string
                     description: >
@@ -1752,6 +1764,56 @@ paths:
         "404": { $ref: "#/components/responses/Error" }
         "405": { $ref: "#/components/responses/Error" }
         "413": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+  /api/v1/agent/turns/{id}/revisions/{concept}:
+    post:
+      operationId: applyAgentRevision
+      summary: Apply a revision the agent proposed to a draft
+      description: >
+        Writes one revision the deployment's own agent proposed in a turn
+        (design doc 0149). **What is written is the document the turn
+        kept, never one the caller sends** — there is no body — and it is
+        recorded as the agent's: `process:ochakai` via the person who
+        asked, using `ochakai/<version>`, so the ledger says the agent
+        wrote it and the person let it.
+
+
+        Only the person who asked may apply it; anybody else, a turn past
+        its 180 days, and a concept the turn proposed nothing for get 404.
+        The draft must still be a draft nobody has ruled on (a ruling is a
+        400 naming it, as `put_concept` refuses one), and still be what
+        the agent read: the kept `base` is the write's precondition, so a
+        draft edited — or this revision applied — since is a 412. It stays
+        a draft and unverified; applying is not a ruling. A read-only
+        deployment refuses it.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+          description: The `turn` id POST /api/v1/agent returned.
+        - name: concept
+          in: path
+          required: true
+          schema: { type: string }
+          description: The draft's id, as in the turn's `revisions`.
+        - $ref: "#/components/parameters/OnBehalfOf"
+        - $ref: "#/components/parameters/Producer"
+      responses:
+        "200":
+          description: The draft as written.
+          headers:
+            ETag:
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/View" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/Error" }
+        "405": { $ref: "#/components/responses/Error" }
+        "412": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }
   /api/v1/move:
     post:
@@ -4183,6 +4245,22 @@ components:
             is the only thing the format can say about something that is
             gone.
       required: [rev, change, changed_by, changed_at, document]
+    TurnRevision:
+      type: object
+      description: >
+        One change the deployment's own agent proposed to a draft nobody
+        has ruled on (design doc 0149): the whole document the draft would
+        become, and the content hash of the draft it was proposed against.
+      required: [id, document, base]
+      properties:
+        id: { type: string, description: The draft's id. }
+        document: { type: string, description: The whole OKF document proposed, frontmatter and body. }
+        base:
+          type: string
+          description: >
+            The content hash the proposal was made against. Applying it
+            carries this as the write's precondition, so a draft that has
+            moved since is a 412 rather than an overwrite.
     AgentTurn:
       type: object
       description: >
@@ -4217,6 +4295,13 @@ components:
           type: array
           items: { type: string }
           description: The drafts this deployment's own agent wrote in the turn. Absent when it wrote none.
+        revisions:
+          type: array
+          items: { $ref: "#/components/schemas/TurnRevision" }
+          description: >
+            What this deployment's own agent proposed to change in drafts
+            nobody has ruled on, for the person who asked to apply (design
+            doc 0149). Absent when it proposed none.
         verdict: { type: string, enum: [good, bad] }
         note: { type: string }
         blamed: { type: array, items: { type: string } }

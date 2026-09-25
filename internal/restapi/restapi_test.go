@@ -183,6 +183,7 @@ var restOperations = []struct{ name, method, url, spec string }{
 	{"keep turn", http.MethodPost, "/api/v1/agent/turns", "POST /api/v1/agent/turns"},
 	{"list turns", http.MethodGet, "/api/v1/agent/turns", "GET /api/v1/agent/turns"},
 	{"judge", http.MethodPost, "/api/v1/agent/turns/x", "POST /api/v1/agent/turns/{id}"},
+	{"apply revision", http.MethodPost, "/api/v1/agent/turns/x/revisions/tables/orders", "POST /api/v1/agent/turns/{id}/revisions/{concept}"},
 	{"reembed", http.MethodPost, "/api/v1/reembed", "POST /api/v1/reembed"},
 	{"access get", http.MethodGet, "/api/v1/access", "GET /api/v1/access"},
 	{"access put", http.MethodPut, "/api/v1/access", "PUT /api/v1/access"},
