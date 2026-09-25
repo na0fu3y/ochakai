@@ -21,6 +21,20 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **A lexical search whose words most of the base holds costs about half
+  of what it did** (issue #883's latency half). Two costs were paid on
+  every candidate: the whole-query bonus lowered each one's entire
+  haystack again (`ILIKE`), and the name was recomputed once per query
+  fragment rather than once per row. Migration 0052 stores the haystack
+  NFKC and lower case, so the bonus is a `LIKE` against a pattern folded
+  once — and a question typed in fullwidth latin now earns it too. On a
+  synthetic base of 7,500 table concepts, queries matching 4,700–7,500
+  of them went from 170–430 ms to 65–215 ms; rankings and the golden set
+  are unchanged. Migration 0052 rewrites the search vectors once at
+  start.
+
 ## [0.28.10] - 2026-09-25
 
 ### Added
