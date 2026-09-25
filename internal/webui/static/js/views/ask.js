@@ -28,7 +28,7 @@ import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { entryHash } from '../format.js';
 import { md } from '../markdown.js';
-import { chartHTML, NUMERIC_TYPES, wire } from '../chart.js';
+import { chartHTML, NUMERIC_TYPES } from '../chart.js';
 import { asFailure, asMessage, fmtBytes, fold, hasToken, MAX_BYTES_BILLED, run, signIn } from '../sql.js';
 
 // The server refuses a conversation longer than this (internal/agent).
@@ -119,7 +119,6 @@ function draw(pending) {
   $('#ask-count').textContent = left <= 6 ? `この会話はあと ${Math.max(0, Math.floor(left / 2))} 往復まで` : '';
   $('#ask-send').disabled = !!pending || left < 1;
   $('#ask-run')?.addEventListener('click', runProposal);
-  wire($('#ask-turns'), i => turns[Number(i)]?.res);
   document.querySelectorAll('[data-verdict]').forEach(b => b.addEventListener('click', openVerdict));
 }
 
@@ -277,7 +276,7 @@ function resultHTML(t, i) {
   const body = r.rows.map(row => `<tr>${row.map((c, i) => td('td', c, i)).join('')}</tr>`).join('');
   return `<div class="ask-turn ask-result">
       <div class="hint">実行結果(${esc(fmtBytes(r.bytes))} 読み取り、全 ${r.total} 行${shown})</div>
-      ${chartHTML(r, i)}
+      ${chartHTML(r)}
       <div class="ask-table"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
     </div>`;
 }

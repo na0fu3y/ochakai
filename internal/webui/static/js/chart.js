@@ -6,11 +6,11 @@
 // support is simply not drawn — the table under it is always there.
 //
 // - The first column labels the rows; every other column is a number.
-// - A date or time label draws lines over a time axis; a text label
-//   draws horizontal bars in the order the query returned them.
-// - A line never stands in for a value the result does not have: it
-//   breaks at a NULL and across a period with no row, and a point with
-//   no neighbour is drawn as a dot rather than vanishing.
+// - A date or time label draws columns placed on a time axis; a text
+//   label draws horizontal bars in the order the query returned them.
+//   Never a line: a line joins its points, and joining is a reading the
+//   page would be choosing for the person. A column stands for its own
+//   row only, so a period with no row, or a NULL, is visibly empty.
 // - One to four series share one axis. Series whose scales differ by
 //   more than SCALE_RATIO are drawn as one small chart each instead:
 //   a second y-axis would let one of them lie.
@@ -34,42 +34,28 @@ export function plan(res) {
   const types = res.types || [];
   if (!res.rows || res.rows.length < 2 || res.fields.length < 2) return null;
   const labelType = types[0];
-  const kind = TIME.has(labelType) ? 'line' : labelType === 'STRING' ? 'bar' : null;
+  const kind = TIME.has(labelType) ? 'column' : labelType === 'STRING' ? 'bar' : null;
   if (!kind) return null;
   const rest = types.slice(1);
   if (rest.length > MAX_SERIES || !rest.every(t => NUMERIC.has(t))) return null;
   if (kind === 'bar' && res.rows.length > MAX_BARS) return null;
   let rows = res.rows.map(r => ({ label: r[0], values: r.slice(1).map(num) }));
-  if (kind === 'line') {
+  if (kind === 'column') {
     rows = rows.map(r => ({ ...r, t: Date.parse(r.label.replace(' UTC', 'Z')) })).filter(r => !Number.isNaN(r.t));
     if (rows.length < 2) return null;
     rows.sort((a, b) => a.t - b.t);
   }
   const series = res.fields.slice(1).map((name, i) => ({ name, values: rows.map(r => r.values[i]) }));
   if (series.every(s => s.values.every(v => v === null))) return null;
-  return { kind, label: res.fields[0], series, rows, step: kind === 'line' ? step(rows) : 0 };
+  return { kind, label: res.fields[0], series, rows, step: kind === 'column' ? step(rows) : 0 };
 }
 
 // step is the interval the rows are usually apart — a day, a week, a
 // month — read as the median gap, so that one missing day does not
-// redefine it. A gap past half again this is a period with no row.
+// redefine it. It is how wide one column's slot is.
 function step(rows) {
   const gaps = rows.slice(1).map((r, i) => r.t - rows[i].t).filter(g => g > 0).sort((a, b) => a - b);
   return gaps.length ? gaps[Math.floor(gaps.length / 2)] : 0;
-}
-
-// segments splits one series into the runs a line may join: a NULL ends
-// a run, and so does a gap wider than the rows' usual step.
-export function segments(p, values) {
-  const out = [];
-  let run = [];
-  values.forEach((v, i) => {
-    const gap = i > 0 && p.step > 0 && p.rows[i].t - p.rows[i - 1].t > p.step * 1.5;
-    if (v === null || gap) { if (run.length) out.push(run); run = []; }
-    if (v !== null) run.push(i);
-  });
-  if (run.length) out.push(run);
-  return out;
 }
 
 function num(v) {
@@ -119,35 +105,43 @@ export function svg(p, group) {
   const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
   const ts = ticks(lo, hi);
   const y0 = ts[0], y1 = ts.at(-1);
-  return p.kind === 'line' ? line(p, group, slot, ts, y0, y1) : bars(p, group, slot, ts, y0, y1);
+  return p.kind === 'column' ? columns(p, group, slot, ts, y0, y1) : bars(p, group, slot, ts, y0, y1);
 }
 
-function line(p, group, slot, ts, y0, y1) {
+function columns(p, group, slot, ts, y0, y1) {
   const iw = W - PAD.left - PAD.right, ih = H - PAD.top - PAD.bottom;
   const t0 = p.rows[0].t, t1 = p.rows.at(-1).t;
-  const x = t => PAD.left + (t1 === t0 ? iw / 2 : (t - t0) / (t1 - t0) * iw);
+  // Each row owns a slot one step wide, centred on its time, so the
+  // first and last columns fit and a missing period is an empty slot.
+  const step = p.step || (t1 - t0) / Math.max(1, p.rows.length - 1) || 1;
+  const a = t0 - step / 2, b = t1 + step / 2;
+  const x = t => PAD.left + (t - a) / (b - a) * iw;
   const y = v => PAD.top + ih - (v - y0) / (y1 - y0) * ih;
+  const slotW = iw * step / (b - a), gap = 1;
+  const groupW = Math.max(1, slotW * 0.8);
+  const cw = Math.max(1, (groupW - gap * (group.length - 1)) / group.length);
   const grid = ts.map(v => `<line class="grid${v === 0 ? ' zero' : ''}" x1="${PAD.left}" x2="${W - PAD.right}" y1="${y(v)}" y2="${y(v)}"/>`
     + `<text class="tick" x="${PAD.left - 6}" y="${y(v) + 4}" text-anchor="end">${esc(fmtNum(v))}</text>`).join('');
   const xt = [0, Math.floor((p.rows.length - 1) / 2), p.rows.length - 1]
-    .filter((v, i, a) => a.indexOf(v) === i)
-    .map((i, k, a) => `<text class="tick" x="${x(p.rows[i].t)}" y="${H - 8}" text-anchor="${k === 0 ? 'start' : k === a.length - 1 ? 'end' : 'middle'}">${esc(p.rows[i].label)}</text>`).join('');
-  const paths = group.map(s => {
-    const runs = segments(p, s.values);
-    const d = runs.filter(r => r.length > 1)
-      .map(r => r.map((i, k) => `${k ? 'L' : 'M'}${x(p.rows[i].t).toFixed(1)},${y(s.values[i]).toFixed(1)}`).join('')).join('');
-    const lone = runs.filter(r => r.length === 1)
-      .map(([i]) => `<circle class="dot lone s${slot(s)}" r="3" cx="${x(p.rows[i].t).toFixed(1)}" cy="${y(s.values[i]).toFixed(1)}"/>`).join('');
-    return (d ? `<path class="series s${slot(s)}" d="${d}"/>` : '') + lone;
-  }).join('');
-  const xs = p.rows.map(r => x(r.t).toFixed(1)).join(',');
-  const ys = group.map(s => s.values.map(v => (v === null ? '' : y(v).toFixed(1))).join(',')).join(';');
-  const series = group.map(s => p.series.indexOf(s)).join(',');
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(group.map(s => s.name).join('・'))} の推移" data-kind="line" data-xs="${xs}" data-ys="${ys}" data-series="${series}">`
-    + grid + xt + paths
-    + `<line class="cross" y1="${PAD.top}" y2="${H - PAD.bottom}" x1="0" x2="0" visibility="hidden"/>`
-    + group.map(s => `<circle class="dot s${slot(s)}" r="4" visibility="hidden"/>`).join('')
-    + `<rect class="hit" x="${PAD.left}" y="${PAD.top}" width="${iw}" height="${ih}"/></svg>`;
+    .filter((v, i, arr) => arr.indexOf(v) === i)
+    .map((i, k, arr) => `<text class="tick" x="${x(p.rows[i].t)}" y="${H - 8}" text-anchor="${k === 0 ? 'start' : k === arr.length - 1 ? 'end' : 'middle'}">${esc(p.rows[i].label)}</text>`).join('');
+  const marks = p.rows.map((r, i) => group.map((s, k) => {
+    const v = s.values[i];
+    if (v === null) return '';
+    const left = x(r.t) - groupW / 2 + k * (cw + gap);
+    return `<path class="bar s${slot(s)}" d="${columnPath(left, cw, y(0), y(v))}"><title>${esc(r.label)} · ${esc(s.name)}: ${esc(fmtNum(v))}</title></path>`;
+  }).join('')).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(group.map(s => s.name).join('・'))} を ${esc(p.label)} ごとに">`
+    + grid + marks + xt + '</svg>';
+}
+
+// columnPath is a column from the baseline to its value with only the
+// data end rounded.
+function columnPath(x, w, ya, yb) {
+  const r = Math.min(3, w / 2, Math.abs(yb - ya));
+  const dir = yb <= ya ? 1 : -1; // up for a positive value
+  const e = yb + dir * r;
+  return `M${x},${ya}V${e}Q${x},${yb} ${x + r},${yb}H${x + w - r}Q${x + w},${yb} ${x + w},${e}V${ya}Z`;
 }
 
 function bars(p, group, slot, ts, y0, y1) {
@@ -188,52 +182,14 @@ function clip(s, n) {
 
 // chartHTML is the chart part of a result, or '' when the shape draws
 // none. A legend names every series of two or more; one series is named
-// by the caption. key is handed back to wire's lookup.
-export function chartHTML(res, key) {
+// by the caption.
+export function chartHTML(res) {
   const p = plan(res);
   if (!p) return '';
   const cut = res.rows.length < res.total ? `(先頭 ${res.rows.length} 行)` : '';
   const legend = p.series.length > 1
     ? `<div class="chart-legend">${p.series.map((s, i) => `<span><i class="swatch s${i + 1}"></i>${esc(s.name)}</span>`).join('')}</div>`
     : `<div class="chart-legend"><span>${esc(p.series[0].name)}</span></div>`;
-  const charts = groups(p.series).map(g => `<div class="chart-box">${groups(p.series).length > 1 ? `<div class="hint">${esc(g[0].name)}</div>` : ''}${svg(p, g)}<div class="chart-tip" hidden></div></div>`).join('');
-  return `<div class="ask-chart" data-key="${esc(key)}">${legend}${charts}${cut ? `<div class="hint">${cut}</div>` : ''}</div>`;
-}
-
-// wire gives each line chart under root its crosshair and tooltip. Bars
-// carry theirs as <title>. The rows come from the result, which lookup
-// returns for a chart's key: nothing is read out of the drawing but
-// positions.
-export function wire(root, lookup) {
-  root.querySelectorAll('.ask-chart').forEach(el => {
-    const res = lookup(el.dataset.key);
-    const p = res && plan(res);
-    if (!p) return;
-    el.querySelectorAll('svg.chart[data-kind="line"]').forEach(svgEl => {
-      const box = svgEl.parentElement, tip = box.querySelector('.chart-tip');
-      const xs = svgEl.dataset.xs.split(',').map(Number);
-      const ys = svgEl.dataset.ys.split(';').map(r => r.split(',').map(v => (v === '' ? null : Number(v))));
-      const idx = svgEl.dataset.series.split(',').map(Number);
-      const cross = svgEl.querySelector('.cross'), dots = svgEl.querySelectorAll('.dot');
-      const hide = () => { cross.setAttribute('visibility', 'hidden'); dots.forEach(d => d.setAttribute('visibility', 'hidden')); tip.hidden = true; };
-      svgEl.addEventListener('mouseleave', hide);
-      svgEl.addEventListener('mousemove', e => {
-        const pt = svgEl.createSVGPoint();
-        pt.x = e.clientX; pt.y = e.clientY;
-        const at = pt.matrixTransform(svgEl.getScreenCTM().inverse());
-        let i = 0;
-        xs.forEach((v, k) => { if (Math.abs(v - at.x) < Math.abs(xs[i] - at.x)) i = k; });
-        cross.setAttribute('x1', xs[i]); cross.setAttribute('x2', xs[i]); cross.setAttribute('visibility', 'visible');
-        dots.forEach((d, k) => {
-          if (ys[k][i] === null) { d.setAttribute('visibility', 'hidden'); return; }
-          d.setAttribute('cx', xs[i]); d.setAttribute('cy', ys[k][i]); d.setAttribute('visibility', 'visible');
-        });
-        tip.innerHTML = `<b>${esc(p.rows[i].label)}</b>` + idx.map(j => `<div><i class="swatch s${j + 1}"></i>${esc(p.series[j].name)} <b>${esc(fmtNum(p.series[j].values[i]))}</b></div>`).join('');
-        tip.hidden = false;
-        const r = box.getBoundingClientRect(), left = e.clientX - r.left;
-        tip.style.left = `${Math.min(left + 12, r.width - tip.offsetWidth - 4)}px`;
-        tip.style.top = '4px';
-      });
-    });
-  });
+  const charts = groups(p.series).map(g => `<div class="chart-box">${groups(p.series).length > 1 ? `<div class="hint">${esc(g[0].name)}</div>` : ''}${svg(p, g)}</div>`).join('');
+  return `<div class="ask-chart">${legend}${charts}${cut ? `<div class="hint">${cut}</div>` : ''}</div>`;
 }
