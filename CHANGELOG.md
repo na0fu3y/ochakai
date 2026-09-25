@@ -49,6 +49,20 @@ last entry.
   because it answers only in `global`. The agent is still off by default,
   and a deployment that set `gemini-2.5-flash` is unaffected.
 
+### Fixed
+
+- **A failure reported just after a verification no longer drops out of
+  the re-verification feed.** A verification is stamped no earlier than
+  the entry's last content change, which comes from the application's
+  clock. When the database clock ran behind it (a Docker VM drifts by
+  milliseconds), the verification was stamped in the database's future.
+  A failure reported within that gap then read as older than the
+  verification, and a second verification got the same instant as the
+  first. Each verification is now stamped strictly after the entry's
+  previous verification and its last failure report, and each outcome
+  strictly after the newest verification. One entry's acts keep the order
+  they happened in, whichever clock is ahead.
+
 ## [0.29.0] - 2026-09-25
 
 A minor although nothing breaks: this is the release in which the

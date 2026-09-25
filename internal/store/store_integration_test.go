@@ -2094,6 +2094,85 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 	}
 }
 
+// Verify clamps its stamp to content_changed_at, which the write path
+// takes from the application clock. An application clock ahead of the
+// database's — a Docker VM on a laptop drifts by milliseconds — therefore
+// puts the verification in the database's future, and anything stamped
+// with plain now() after it reads as earlier: a failure reported after
+// the verification vanished from the feed, and a re-verification did not
+// move the newest one. The skew is forced here by pushing
+// content_changed_at a minute ahead, so the order must come from the
+// entry's own history rather than from which clock ticked.
+func TestIntegrationVerifyOrdersActsUnderClockSkew(t *testing.T) {
+	dbURL := testdb.URL(t)
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	const id = "it-verify-skew"
+	for _, table := range []string{"object", "knowledge_revision", "knowledge_verification"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, table := range []string{"knowledge_event", "knowledge_usage"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE knowledge_id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "reviewer@example.com"}
+	agent := domain.Actor{Kind: domain.ActorProcess, Name: "claude-code"}
+	k := &domain.Knowledge{Type: domain.TypeComputations, ID: id, Title: "月次売上",
+		Status: domain.StatusDraft, CreatedBy: agent}
+	if err := s.Create(ctx, k, false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx,
+		`UPDATE object SET content_changed_at = now() + interval '1 minute' WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+	inFeed := func() bool {
+		hits, err := s.ListByFailed(ctx, Filter{}, nil, 100)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return slices.ContainsFunc(hits, func(h domain.SearchHit) bool { return h.ID == id })
+	}
+
+	first, err := s.Verify(ctx, id, human)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := s.Verify(ctx, id, human)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.LastVerified().At.After(first.LastVerified().At) {
+		t.Errorf("re-verification did not move the newest verification: %v -> %v",
+			first.LastVerified().At, second.LastVerified().At)
+	}
+	if err := s.RecordOutcome(ctx, domain.EventFailed, agent, id, "returned last month"); err != nil {
+		t.Fatal(err)
+	}
+	if !inFeed() {
+		t.Fatal("a failure reported after the verification must put the entry in the feed")
+	}
+	if _, err := s.Verify(ctx, id, human); err != nil {
+		t.Fatal(err)
+	}
+	if inFeed() {
+		t.Error("a verification after the failure report must clear the feed")
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM object WHERE id = $1`, id); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // A move rewrites the links that point at the moved entry — and must also
 // keep the moved entry's own outbound links pointing where they pointed.
 // Relative targets are resolved against the entry's id, so changing the
