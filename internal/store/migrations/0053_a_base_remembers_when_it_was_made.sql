@@ -1,4 +1,4 @@
--- A base remembers how new it was when it was made (design doc 0146).
+-- A base remembers how new it was when it was made (design doc 0147).
 --
 -- What a deployment gets when nobody names an embedding model moved from
 -- gemini-embedding-001 in the deployment's own region to

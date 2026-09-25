@@ -39,7 +39,7 @@ func TestGCSBucket(t *testing.T) {
 	})
 }
 
-// One variable says how a deployment embeds (design doc 0146): unset or
+// One variable says how a deployment embeds (design doc 0147): unset or
 // "on" for the product's default around a discovered project, "off" for
 // none, and a Vertex AI model resource name for a deployment that needs a
 // particular model, region or project. A deployment that wants no Vertex
@@ -66,7 +66,7 @@ func TestEmbeddingsSwitch(t *testing.T) {
 		}
 	})
 
-	// A base made since design doc 0146 embeds with gemini-embedding-2 in
+	// A base made since design doc 0147 embeds with gemini-embedding-2 in
 	// global wherever the deployment runs: that model answers nowhere
 	// else, so the region it was deployed to is not where the text goes.
 	t.Run("a new base gets the product's model in global", func(t *testing.T) {
@@ -97,7 +97,7 @@ func TestEmbeddingsSwitch(t *testing.T) {
 
 	// A base made before keeps what it had: gemini-embedding-001, in the
 	// region it runs in, so two deployments of the same image embed in
-	// two different places, each its own (design doc 0146 §1.2).
+	// two different places, each its own (design doc 0147 §1.2).
 	t.Run("an older base keeps its model in its own region", func(t *testing.T) {
 		for _, region := range []string{"asia-northeast1", "europe-west4", "us-central1"} {
 			cfg, err := FromEnv()
@@ -163,7 +163,7 @@ func TestEmbeddingsSwitch(t *testing.T) {
 			"projects//locations/l/publishers/google/models/gemini-embedding-001",
 			"projects/p/locations/l/models/gemini-embedding-001",
 			// A model ochakai has no width for: guessing one writes
-			// vectors nobody can compare (design doc 0146 §3).
+			// vectors nobody can compare (design doc 0147 §3).
 			"projects/p/locations/l/publishers/google/models/gemini-embedding-99",
 		} {
 			t.Run(v, func(t *testing.T) {

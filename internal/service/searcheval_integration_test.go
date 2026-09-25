@@ -62,7 +62,7 @@ import (
 // without Vertex AI gets; the fused run adds a vector ranking from the
 // stand-in encoder in fakeencoder_test.go and fuses the two exactly as
 // the product does, which is the configuration every Google Cloud
-// deployment runs (design doc 0146 §1.1) and the one nothing measured
+// deployment runs (design doc 0147 §1.1) and the one nothing measured
 // before. Read them for different things: the lexical number is ranking
 // quality, and the fused number is the arithmetic of the merge — the
 // stand-in shares the lexical side's vocabulary, so it cannot stand in

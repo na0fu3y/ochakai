@@ -221,17 +221,17 @@ warning だが、レベルで絞り込むとこの表を素通りする行が三
 ものではないことを意味する — **project はメタデータサーバーから来ており**、
 model と location は**ベースが生まれたとき**の製品既定である(`OCHAKAI_EMBEDDINGS` にモデルの
 resource name を書けば `discovered=false` になる、設計ドキュメント
-[0146](../design/0146-search-and-the-default-a-base-was-made-with.md))。semantic
+[0147](../design/0147-search-and-the-default-a-base-was-made-with.md))。semantic
 search は Google Cloud 上での既定だからである(同 §1)。
 
 **`location=` は監査で訊かれる行である。** この値は「concept の本文と
 検索クエリがどこの Vertex AI に送られたか」そのものであり、何も名指さない
 デプロイでは**ベースがいつ作られたか**で決まる(設計ドキュメント
-[0146](../design/0146-search-and-the-default-a-base-was-made-with.md) §1.2):
+[0147](../design/0147-search-and-the-default-a-base-was-made-with.md) §1.2):
 
 | ベース | model | location |
 |---|---|---|
-| v0.28.10 までに作られた(アップグレードしてきた) | `gemini-embedding-001` | 動いているリージョン(例 `asia-northeast1`) |
+| v0.29.0 までに作られた(アップグレードしてきた) | `gemini-embedding-001` | 動いているリージョン(例 `asia-northeast1`) |
 | それより後のリリースで新しく作った | `gemini-embedding-2` | `global` |
 
 既存のデプロイはアップグレードしても何も変わらない — 保存済みのベクトルも、
@@ -1205,7 +1205,7 @@ apply で意図的にずらすためだけに存在する。見出しの右に�
   `OCHAKAI_VERTEX_PROJECT` / `OCHAKAI_EMBEDDING_DIM` を設定している
   なら、アップグレードの*前*に `OCHAKAI_EMBEDDINGS` を書き換える。**
   四つは 0.18.0 で黙って無視されるようになった(設計ドキュメント
-  [0146](../design/0146-search-and-the-default-a-base-was-made-with.md))。無視された
+  [0147](../design/0147-search-and-the-default-a-base-was-made-with.md))。無視された
   デプロイは既定のモデル・リージョン・幅に落ちる。**そこで起きることは
   ログにしか出ない**: 幅が違えばベクトルテーブルは新しい幅で再構築されて
   空になり、幅が同じでモデルだけ違えば古い行は残るが新しいモデルの
@@ -1214,7 +1214,7 @@ apply で意図的にずらすためだけに存在する。見出しの右に�
   だけである。直すのは `ochakai reembed` で、それは Vertex AI の呼び出し
   をベースの規模ぶん支払う。手で `DROP TABLE` する必要は無い: ベクトルは
   それが記述する concept から導出されるものだからである(設計ドキュメント
-  [0146](../design/0146-search-and-the-default-a-base-was-made-with.md) §3)。
+  [0147](../design/0147-search-and-the-default-a-base-was-made-with.md) §3)。
   **この「黙って無視される」は終わった**: 四つを設定したまま上げると、
   そのリビジョンは名前を挙げて起動を拒む(設計ドキュメント
   [0112](../design/0112-a-start-refuses-a-variable-it-does-not-read.md))。
@@ -1226,7 +1226,7 @@ apply で意図的にずらすためだけに存在する。見出しの右に�
   規模に比例して消費する。
 - **データベースを作り直すと、既定の埋め込みが変わる。** 何も名指さない
   デプロイの既定は、ベースが作られたときに決まる(設計ドキュメント
-  [0146](../design/0146-search-and-the-default-a-base-was-made-with.md)
+  [0147](../design/0147-search-and-the-default-a-base-was-made-with.md)
   §1.2)。export して新しいデータベースに import し直したベースは新しい
   ベースなので、`gemini-embedding-001`(サービスのリージョン)から
   `gemini-embedding-2`(`global`)へ移り、本文と検索クエリの行き先が

@@ -185,7 +185,7 @@ markdown の concept しか保存できない。デプロイ全体の設定で�
 
 **ファイルの中身が検索に出てこない。** ファイル名はどの検索でも常に
 マッチするが、中身は embeddings が on のときだけ合流し、画像や PDF は
-ファイルに対応したモデルを必要とする。v0.28.10 より後に新しく作った
+ファイルに対応したモデルを必要とする。v0.29.0 より後に新しく作った
 ベースは既定でそのモデル(`gemini-embedding-2`)を使う。それ以前から
 あるベースは `gemini-embedding-001` のままなので、名指す —
 `OCHAKAI_EMBEDDINGS=projects/<p>/locations/global/publishers/google/models/gemini-embedding-2`
@@ -247,7 +247,7 @@ import すると、書き込み先は隣のインスタンスである。
 モデルなら vector テーブルはその幅で再構築され、空で戻ってくる。どちらも
 ログに残り、curate されたものは何も失われない: vector は元の concept から
 導出されるものだからである(design doc
-[0146](../design/0146-search-and-the-default-a-base-was-made-with.md) §3)。
+[0147](../design/0147-search-and-the-default-a-base-was-made-with.md) §3)。
 `ochakai reembed` を実行して埋め直す、これがお金を使う工程である。
 それが終わるまでランキングは lexical のみになる。**0.18.0 へ上げた
 直後にこれが起きたなら**、原因は退役した `OCHAKAI_VERTEX_MODEL` /

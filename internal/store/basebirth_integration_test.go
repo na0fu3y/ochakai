@@ -8,7 +8,7 @@ import (
 )
 
 // A base knows whether it was made before gemini-embedding-2 in global
-// became the default (design doc 0146 §1.2). The answer decides where an
+// became the default (design doc 0147 §1.2). The answer decides where an
 // operator's text goes, so both halves are held: a base made from nothing
 // reads as new, and a base that was already there when the record
 // arrived — an upgrade — reads as older, however many times it starts

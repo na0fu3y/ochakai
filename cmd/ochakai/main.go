@@ -308,7 +308,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 		return nil, nil, err
 	}
 	// Which model a deployment that named none embeds with is its base's
-	// answer, not this binary's (design doc 0146 §1.2), so the base is read
+	// answer, not this binary's (design doc 0147 §1.2), so the base is read
 	// before the embedder is built and the vector tables after.
 	olderBase, err := st.PredatesGlobalEmbedding(ctx)
 	if err != nil {
@@ -322,7 +322,7 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 		if err := st.MigrateEmbedding(ctx, cfg.Embedding.Dim); err != nil {
 			// A database that cannot hold vectors is not a reason to
 			// refuse to serve knowledge, unless this deployment asked for
-			// semantic search by name (design doc 0146 §1.4). Everything
+			// semantic search by name (design doc 0147 §1.4). Everything
 			// else is already migrated, so there is nothing to redo here.
 			if !cfg.Embedding.Discovered || !errors.Is(err, store.ErrEmbeddingUnavailable) {
 				return nil, nil, err
@@ -400,11 +400,11 @@ const agentProbeTimeout = 30 * time.Second
 // semanticSearch builds the embedder behind hybrid search, and decides
 // whether this deployment has one at all.
 //
-// Embeddings are the default on Google Cloud (design doc 0146 §1.1): a
+// Embeddings are the default on Google Cloud (design doc 0147 §1.1): a
 // deployment that names no model gets the project it is running in and
 // the product's own model — gemini-embedding-2 in global for a base made
 // since that became the default, gemini-embedding-001 in the region it
-// runs in for a base made before (design doc 0146 §1.2) — and whether it
+// runs in for a base made before (design doc 0147 §1.2) — and whether it
 // may call Vertex AI there is IAM's answer rather than a setting, so the
 // answer is asked for, once, with a probe. That one probe covers two ways
 // of not having it: the identity may not call Vertex AI, or the location
@@ -426,7 +426,7 @@ func semanticSearch(ctx context.Context, cfg *config.Config, log *slog.Logger, o
 			// An older base embeds in its own region, and the project
 			// answered but the region did not. Picking one would send
 			// this deployment's text to a region nobody chose (design doc
-			// 0146 §1.2).
+			// 0147 §1.2).
 			log.Warn("semantic search off: this base embeds in the region it runs in, and that region could not be read from the metadata server. Name one to turn it on: OCHAKAI_EMBEDDINGS=projects/<project>/locations/<region>/publishers/google/models/gemini-embedding-001",
 				"project", discoveredProject)
 		default:

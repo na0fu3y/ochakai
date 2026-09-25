@@ -30,7 +30,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 | C5 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §3) |
 | C6 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)・[0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §1) |
 | C7 | 人間の改善ループが測れる — 検証・結果報告・キューの長さ・答えの無かった問いを、推測ではなく数で持つ([0141](design/0141-a-miss-is-read-off-the-words.md)) |
-| C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — 二文字の日本語語が索引で引け(移行 `0036`)、書き手が与えた別名も索引に入り([0105](design/0105-a-concept-answers-to-its-other-names.md))、埋め込みは既定でデプロイのリージョンで走る([0146](design/0146-search-and-the-default-a-base-was-made-with.md) §1.2) |
+| C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — 二文字の日本語語が索引で引け(移行 `0036`)、書き手が与えた別名も索引に入り([0105](design/0105-a-concept-answers-to-its-other-names.md))、埋め込みは既定でデプロイのリージョンで走る([0147](design/0147-search-and-the-default-a-base-was-made-with.md) §1.2) |
 
 **どれにも当たらない提案は、三つの問いに進むまでもなく no である。**
 逆は成り立たない — 条件に当たることは必要条件であって十分条件では
@@ -810,7 +810,7 @@ PARAM と同じく数えるのは**名前の異なり数**である。`--json` �
 のモデル resource name — **プロジェクト・リージョン・モデルを一度に運ぶ
 綴りが既に存在していた**ので、三つの変数はそれを分解して持っていただけ
 である。次元は消えて戻らない: ベクトルは導出物であって運用者のつまみでは
-なく([0146](design/0146-search-and-the-default-a-base-was-made-with.md) §3)、
+なく([0147](design/0147-search-and-the-default-a-base-was-made-with.md) §3)、
 モデルごとの定数としてコードに移った。
 
 **14 → 15 は [0111](design/0111-weight-for-the-eye-and-only-for-an-eye.md) の

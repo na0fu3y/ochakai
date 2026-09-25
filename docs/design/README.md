@@ -41,7 +41,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md)。**バケットの無いデプロイがそう言い、どの面もファイルを差し出さなくなることは [0131](0131-a-deployment-says-what-it-cannot-do.md)** — `stats` が `files` を答え、直し方(変数の名前)はバンドル全体を持つ呼び出し元にだけ載る |
-| 検索と埋め込み | [0146](0146-search-and-the-default-a-base-was-made-with.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ(0080 を節の番号ごと置き換えた)。**何も名指さないときの既定はベースが生まれたときに決まる** — 前からあるベースは `gemini-embedding-001` を動いているリージョンで、新しいベースは `gemini-embedding-2` を `global` で(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、検索の `hits` が順位に徹することは [0145](0145-four-faces-and-an-answer-that-shows-its-result.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(§3・§7)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(§5)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
+| 検索と埋め込み | [0147](0147-search-and-the-default-a-base-was-made-with.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ(0080 を節の番号ごと置き換えた)。**何も名指さないときの既定はベースが生まれたときに決まる** — 前からあるベースは `gemini-embedding-001` を動いているリージョンで、新しいベースは `gemini-embedding-2` を `global` で(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、検索の `hits` が順位に徹することは [0145](0145-four-faces-and-an-answer-that-shows-its-result.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(§3・§7)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(§5)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
 | サーフェスの配分 | [0145](0145-four-faces-and-an-answer-that-shows-its-result.md) が現行 — 各面の役割と載せないもの、MCP の 6 本と stateless な転送、読みが search → get で単読が `linked_from` を運ぶこと、**デプロイ自身のエージェントが REST 一本の後ろにいること**、そして**答えが自分の結果を表と(形が許せば)グラフで見せること**(0143 を節の番号ごと置き換えた)。足す規則と降ろす規則は [0068](0068-how-a-face-is-added-and-removed.md)。一覧と検索を MCP でも二本に分けることは [0096](0096-a-listing-is-not-a-search-here-either.md)。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0140](0140-one-address-reads-as-well-as-writes.md)。CLI の行の第一列は [0110](0110-the-first-column-is-the-key-you-asked-for.md)、その太字と dim は [0111](0111-weight-for-the-eye-and-only-for-an-eye.md) |
 | Web UI | [0130](0130-the-web-ui-and-the-fields-of-a-document.md) が現行(配信・ページの形・編集を一冊で。0072 / 0092 / 0126 を畳んだ)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**このデプロイができないことをページが出さなくなり、直せる呼び出し元にだけ案内を出すことは [0131](0131-a-deployment-says-what-it-cannot-do.md)** |
 | 検証ループと利用測定 | [0141](0141-a-miss-is-read-off-the-words.md) が現行 — 四つのキュー、立っている検証からの tier、直近 90 日の並び、`stats` と、**どの concept の言葉にも一致しなかった検索をミスとして数えること**(0069・0090・0095・0137・0138 を畳んだ)。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない)。**ループの入力になる turn を、ochakai のエージェント以外も残せて REST から読めることは [0144](0144-a-turn-is-kept-whoever-answered.md)**(0142 §6 の書き手を広げる — 形・保持・export に載せないことは動かない)。**比較に使う問いを再生し、答えがまだ立っているかを言うことは [0146](0146-a-kept-question-is-replayed-where-the-person-runs-it.md)**(`ochakai eval`、エージェントは `dry_run` で何も書かず何も数えず、SQL は打った人の手元で走る) |
@@ -485,7 +485,7 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   なく Go で切るのは、上位 N の本文が既に手元にあり、一致の単位が移行
   0036 の二文字窓というこちらの規則だからである。MCP の応答には出るが、
   ツールの説明文には足さない。
-- [0146 検索が何を融合し、既定の埋め込みはベースが生まれたときに決まる](0146-search-and-the-default-a-base-was-made-with.md)
+- [0147 検索が何を融合し、既定の埋め込みはベースが生まれたときに決まる](0147-search-and-the-default-a-base-was-made-with.md)
   — **Accepted**。**検索と埋め込みの現行ドキュメント**。0080 を節の番号
   ごと置き換え、動かすのは二節だけ — §1.2 と §5。**何も名指さない
   デプロイの既定の埋め込みを、新しく作るベースに限って
@@ -503,7 +503,7 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   なる)。検索は字句・concept のベクトル・ファイルのベクトルの三本を融合し、
   ファイルは独立して返らず、ochakai はファイルを解釈しない — 0080 のまま。
 - [0089 半分しか埋め込まれていない concept は、そう言う](0089-a-half-embedded-concept-says-so.md)
-  — **Accepted**。0080 §3 を改訂する(0146 が節の番号ごと受けた)。モデルの入力窓に収まらなかった
+  — **Accepted**。0080 §3 を改訂する(0147 が節の番号ごと受けた)。モデルの入力窓に収まらなかった
   concept は前半だけがベクトル検索に載り、**それが成功と区別できなかった** —
   ベクトルはあり、順位に乗り、後半で引けないだけである。切り捨てはベクトル
   の行が持つ(同じ concept が別のモデルでは丸ごと入るので、concept の性質
@@ -568,7 +568,7 @@ index の現行 / Superseded の表示が本体のヘッダと一致すること
   面は一つも増えず、検索結果は変わる(それが目的で、変わり方は検索評価
   ハーネスが数で持つ)。
 - [0080 検索が何を融合し、このデプロイがどう埋め込むか](0080-search-and-how-a-deployment-embeds.md)
-  — **Superseded by 0146**。0020 / 0053 / 0073 / 0078 を一冊にした前身。
+  — **Superseded by 0147**。0020 / 0053 / 0073 / 0078 を一冊にした前身。
   埋め込みをデプロイのリージョンで行うと決め、既定のモデルを変えないとした。
 - [0073 検索が何を融合し、埋め込みがいつ効くか](0073-search-and-when-embeddings-apply.md)
   — **Superseded by 0080**。0020 / 0053 を一冊にした前身。
