@@ -23,8 +23,84 @@ Priorities are open to input. Say what you need in
 [Discussions](https://github.com/na0fu3y/ochakai/discussions), or open an issue
 if the proposal is concrete.
 
+## Where the data agent is going
+
+Decided 2026-09-25. **A team that turns on ochakai's own agent should not
+have to build a data agent of its own.** The agent
+([0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md))
+is meant to be a finished product that a person with only a browser asks
+directly. It is in the same class as Databricks Genie, Snowflake Cortex
+Agents and BigQuery Conversational Analytics, and it is not only a reference
+implementation behind other people's agents. Those still read the same
+knowledge over the same contract
+([0144](docs/design/0144-a-turn-is-kept-whoever-answered.md)).
+
+**Why this is worth building.** Every published account of an in-house data
+agent finds that accuracy depends on context, not on the model or the agent
+code. Anthropic's analytics agent answered 21% of its evals correctly without
+curated knowledge and more than 95% with it. Snowflake reports 24% → 86% for
+Cortex Sense. Anthropic also found that giving the agent thousands of past
+queries moved accuracy by less than 1%, while curated structure moved it a
+lot. The large platforms are going the other way, towards context they
+harvest automatically and rank by an algorithm (Genie Ontology, Cortex Sense).
+ochakai competes on what they gave up:
+
+- an answer rests on knowledge a person confirmed;
+- the record says who confirmed it;
+- the knowledge leaves whole, in OKF.
+
+**What does not move.** The goal changes what the agent does, not what the
+agent is allowed to do:
+
+- only a person's ruling changes what is served;
+- the server executes no SQL, and a query runs as the person who asked;
+- no secrets;
+- the agent is off by default;
+- MCP does not carry an agent.
+
+**The stages.** Each stage is aimed at something a team currently builds
+itself. Each still answers
+[docs/surface.md](docs/surface.md)'s three questions in its own PR. This
+section says what the stages are for; it does not approve them in advance.
+
+1. **An agent that corrects itself.** The person agrees once per
+   conversation. After that, the page runs the agent's read-only queries on
+   its own, as that person, under the byte cap BigQuery enforces before it
+   bills anything. The agent reads errors and results and
+   tries again, and the answer shows its result as a table and, where one
+   helps, a chart. Today every query waits for a click. That is the largest
+   gap to the products above, and no property depends on it: the token is
+   read-only, and the page can reach only BigQuery and ochakai.
+2. **A loop that closes.** A 👎 and its note become a diagnosis: which
+   concept misled the agent, or what was missing. The diagnosis becomes a
+   draft that waits for a ruling, together with its evidence. Kept questions
+   are replayed on the operator's own machine, as the operator, so the
+   server still runs nothing. Each replay is scored and stamped with the
+   model and the version.
+3. **Useful on the first day.** Starting from an empty base, the agent
+   interviews the operator. It reads the warehouse's schema and query
+   history as that person and writes drafts, and triage runs inside the web
+   UI. This is where No FDE (C4) is won or lost.
+4. **Where people already ask.** Chat surfaces and assistant connectors, on
+   the conditions already written down
+   ([0116](docs/design/0116-the-connector-price-changed-not-its-condition.md)).
+   A chat surface that needs a secret stays out.
+
+**How it is measured.** Four numbers, and each has to be something
+`stats` or a replay can report:
+
+- accuracy on replayed kept questions;
+- the share of answers whose grounding a person confirmed;
+- the time from a 👎 to a ruling;
+- how many clicks one question costs the person asking.
+
 ## Now
 
+- **Stage 1 of the data agent** (above): the person agrees once and the
+  agent runs its own queries, and the answer shows its result as a table
+  and a chart. This amends the web UI's "no charts" clause
+  ([0143](docs/design/0143-four-faces-and-an-agent-that-answers-behind-one.md)
+  §1, §5.4), so it lands with a design record that restates the whole area.
 - **Keep the invariant checks growing with the code**
   ([0035](docs/design/0035-verifiability.md)): exhaustiveness linting, the
   OpenAPI contract test that runs every REST integration request and response
@@ -73,11 +149,10 @@ if the proposal is concrete.
 
 ## Next
 
-This roadmap is thin right now, and honestly so. Work has been arriving from
-use and from release reviews rather than from a plan; the open issues are the
-current exception, and no design doc is proposed but unlanded. If something you
-need is missing from this list, that is a reason to say so, not a sign it was
-already considered.
+Beyond the data agent's stages, work has been arriving from use and from
+release reviews rather than from a plan. If something you need is missing
+from this list, say so; its absence does not mean it was already
+considered.
 
 - **Spell the demand feed something other than `usage`, at 1.0.** The CLI reads
   `ochakai usage <id>` for one concept's totals and `ochakai list usage` for
@@ -116,7 +191,10 @@ it.
   concept's own `linked_from` names the other
   ([0106](docs/design/0106-a-read-carries-what-points-at-it.md)).
 - **Connector ingestion.** Knowledge is curated by humans and agents, not
-  harvested by pipelines. Trust density over volume.
+  harvested by pipelines. Trust density over volume. The agent may read a
+  warehouse as the person asking, to answer a question or to write drafts
+  for an empty base (stage 3 above). What stays declined is a pipeline, and
+  anything harvested being served without a ruling.
 - **A second format beside OKF — including Apache Ossie (formerly Open
   Semantic Interchange).** Ossie standardizes the definition layer, and
   ochakai stands on the other side of that boundary: nothing in its core spec
@@ -127,13 +205,14 @@ it.
   ([docs/positioning.md](docs/positioning.md#ウェアハウス-native-の-semantic-layer)):
   Ossie leaving incubation with a place in its core for a human having
   confirmed a definition.
-- **Dashboards, or a BI tool.** The bundled web UI is a curation surface: no
-  charts, no dashboards, and no query run by the server. Where a deployment
-  turns on its own agent, the UI can ask it — for the person who has no agent
-  of their own — and it answers from the knowledge, citing whether a person
+- **Dashboards, or a BI tool.** The bundled web UI has no dashboards, and
+  the server runs no query. Where a deployment turns on its own agent, the UI
+  asks it. The agent answers from the knowledge, says whether a person
   confirmed each concept, and rules on nothing
   ([0143](docs/design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §1).
-  It feeds your agents rather than competing with them.
+  An answer may show its own result (stage 1 above). Charts that are saved,
+  pinned, scheduled or shared as a board stay out: that is a BI tool, and
+  the knowledge is what ochakai competes on.
 - **Secrets.** Cloud Run IAM decides who reaches a deployment and Cloud SQL
   authenticates the service account, so there is nothing to issue or rotate by
   default. Features must not introduce a token or a password. This declined
