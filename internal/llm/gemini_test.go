@@ -67,8 +67,8 @@ func TestGenerateRetriesOnlyWhatIsBusy(t *testing.T) {
 		status   int
 		attempts int
 	}{
-		{http.StatusTooManyRequests, 3},
-		{http.StatusServiceUnavailable, 3},
+		{http.StatusTooManyRequests, maxAttempts},
+		{http.StatusServiceUnavailable, maxAttempts},
 		{http.StatusBadRequest, 1},
 		{http.StatusNotFound, 1}, // a model this region does not carry
 	} {

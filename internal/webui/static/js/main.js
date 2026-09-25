@@ -52,8 +52,13 @@ sideResize.addEventListener('dblclick', () => {
 
 refreshTree();
 refreshQueues();
-markPosture();
 markAccessTab();
 initPalette();
 initCopyButtons();
-route();
+// The first view waits for the deployment's answer about itself. A view
+// reads what the deployment can do when it draws — whether it names a
+// billing project, an OAuth client, an agent — and one drawn before the
+// answer arrived asked for a billing project the deployment had already
+// named (the seed view on a reload of #/seed, 2026-09-25). markPosture
+// never rejects, and later views are drawn long after it resolved.
+markPosture().then(route);

@@ -81,6 +81,12 @@ export function viewHome() {
   const box = $('#home-index');
   browse.ready.then(() => {
     if (!box.isConnected) return; // navigated away while the tree loaded
-    loadDirIndex(box, browse.root, 'まだナレッジがありません。最初のナレッジを作成してください。');
+    // An empty base on a deployment that can read BigQuery starts faster
+    // from the import than from a blank editor: the first thing a new
+    // operator looked for on a real run (2026-09-25).
+    const start = document.body.classList.contains('reads-bigquery') && !document.body.classList.contains('read-only')
+      ? '<a href="#/seed">BigQuery から取り込む</a>か、最初のナレッジを作成してください。'
+      : '最初のナレッジを作成してください。';
+    loadDirIndex(box, browse.root, 'まだナレッジがありません。' + start);
   });
 }

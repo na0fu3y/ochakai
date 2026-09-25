@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/llm"
@@ -214,5 +215,51 @@ func TestADryRunWritesNothing(t *testing.T) {
 	}
 	if !strings.Contains(m.seen[0].System, "再生") {
 		t.Error("the model was not told this is a replay")
+	}
+}
+
+// A query the model wrote into its answer instead of proposing becomes
+// the proposal (a real run stopped there with automatic runs agreed);
+// anything that is not a read stays text.
+func TestSQLWrittenInTheAnswerIsReadAsTheProposal(t *testing.T) {
+	m := &scripted{turns: []*llm.Turn{text("status の分布を確かめる\n\n```sql\nSELECT status, COUNT(*) FROM `p.d.orders` GROUP BY status\n```")}}
+	ans, err := Run(context.Background(), &service.Service{Model: m}, []Message{{Role: "user", Text: "q"}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ans.SQL == nil || !strings.HasPrefix(ans.SQL.Query, "SELECT status") || strings.Contains(ans.Text, "```") {
+		t.Errorf("answer = %+v", ans)
+	}
+	for _, body := range []string{"```sql\nDELETE FROM t\n```", "SQL は書かない", "```\nSELECT 1\n```"} {
+		if p, _ := sqlInText(body); p != nil {
+			t.Errorf("%q read as a proposal", body)
+		}
+	}
+}
+
+// The model is told today's date, so a note says when it checked.
+func TestTheModelIsToldTodaysDate(t *testing.T) {
+	defer func(f func() time.Time) { now = f }(now)
+	now = func() time.Time { return time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC) }
+	m := &scripted{turns: []*llm.Turn{text("答え")}}
+	if _, err := Run(context.Background(), &service.Service{Model: m}, []Message{{Role: "user", Text: "q"}}, false); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(m.seen[0].System, "今日は 2026-09-25") {
+		t.Error("the system prompt does not carry today's date")
+	}
+}
+
+// An empty turn is asked again once before it fails the question.
+func TestAnEmptyTurnIsAskedAgainOnce(t *testing.T) {
+	empty := &llm.Turn{Content: llm.Content{Role: "model"}}
+	m := &scripted{turns: []*llm.Turn{empty, text("答え")}}
+	ans, err := Run(context.Background(), &service.Service{Model: m}, []Message{{Role: "user", Text: "q"}}, false)
+	if err != nil || ans.Text != "答え" {
+		t.Fatalf("ans = %+v, err = %v", ans, err)
+	}
+	m = &scripted{turns: []*llm.Turn{empty, empty}}
+	if _, err := Run(context.Background(), &service.Service{Model: m}, []Message{{Role: "user", Text: "q"}}, false); !errors.Is(err, llm.ErrNoAnswer) {
+		t.Errorf("two empty turns: err = %v, want ErrNoAnswer", err)
 	}
 }

@@ -114,6 +114,12 @@ async function write() {
   progress.innerHTML = `
     <p>${created} 件を draft として作りました${kept ? `。${kept} 件は既にあったので触れていません` : ''}。</p>
     ${failed.length ? `<div class="error-banner" role="alert">${failed.length} 件は書けませんでした:<ul>${failed.map(f => `<li><span class="mono">${esc(f.id)}</span> — ${esc(f.message)}</li>`).join('')}</ul></div>` : ''}
-    <p><a href="#/dir/${idPath(dir)}">${esc(dir)} を開く</a> ・ <a href="#/review">レビューキューで中身を書く</a></p>`;
+    <p><a href="#/dir/${idPath(dir)}">${esc(dir)} を開く</a> ・ <a href="#/review">レビューキューで中身を書く</a>${document.body.classList.contains('has-agent') ? ` ・ <a href="#/ask" data-ask="${esc(`${concepts[0].id} の説明を一緒に埋めて`)}">エージェントと説明を埋める</a>` : ''}</p>`;
+  // The agent's link opens the conversation with the first table's
+  // request already written (design doc 0149): what the person came to
+  // do next, a click away, with the words in the box to change.
+  progress.querySelector('[data-ask]')?.addEventListener('click', e => {
+    try { sessionStorage.setItem('ochakai.ask.prefill', e.currentTarget.dataset.ask); } catch { /* the box starts empty */ }
+  });
   pending = { source, concepts: [] };
 }
