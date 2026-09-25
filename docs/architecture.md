@@ -441,7 +441,12 @@ producer キーは索引しない: concept の別名ではなく concept につ�
 `english` 辞書で語幹化され(`revenues` が `revenue` に当たる)、空白で
 区切らない文字列は上と同じ二文字ウィンドウが `simple` の lexeme と
 して入る。`'%売上%'` という部分文字列テストが `売上` という lexeme の
-等値検索になり、コーパスは読まれなくなった。索引を実際に使っている
+等値検索になり、コーパスは読まれなくなった。`order_items` や
+`acme-analytics-prod.sales_mart.orders` のようにつないだ名前は、
+部分の語と並べて**丸ごと一つの lexeme としても入る**(migration 0051 —
+小文字にそろえ、`-` は `_` と読む)。部分の語だけでは、列のどこかに
+`order` と `items` を持つ幅の広いテーブルが、その名前のテーブルと同じ
+だけ名前を「含んで」しまうからである。索引を実際に使っている
 ことは EXPLAIN を読むテストが押さえている
 (`internal/store/searchtsv_integration_test.go`)。クエリ全体が
 そのまま現れるかを見るボーナスだけは今も `search_text` への部分文字列
