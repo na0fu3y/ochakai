@@ -294,3 +294,66 @@ func TestSeedNotesAnInputCutAtAClientsDefault(t *testing.T) {
 		}
 	}
 }
+
+// seedGolden is what the projection makes of testdata/seed-columns.json,
+// and the web UI's copy of it (internal/webui/static/js/seed.js) is held
+// to the same file by internal/webui/jstest/seed.test.js. Two
+// implementations of one projection drift the day one of them learns a
+// rule the other did not (design doc 0148 §3); this file is where that
+// day fails instead. `go test ./cmd/ochakai -run TestSeedGolden -update`
+// rewrites it from the Go side.
+type seedGolden struct {
+	Project  string `json:"project"`
+	Prefix   string `json:"prefix"`
+	Concepts []struct {
+		ID       string `json:"id"`
+		Document string `json:"document"`
+	} `json:"concepts"`
+}
+
+func TestSeedGolden(t *testing.T) {
+	f, err := os.Open(filepath.Join("testdata", "seed-columns.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	cols, err := readSeedColumns(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := seedGolden{Project: "proj", Prefix: "tables"}
+	for _, tb := range foldShards(gatherSeedTables(cols)) {
+		got.Concepts = append(got.Concepts, struct {
+			ID       string `json:"id"`
+			Document string `json:"document"`
+		}{seedID(tb, got.Prefix), seedDocument(tb, got.Project)})
+	}
+	want := filepath.Join("testdata", "seed-golden.json")
+	if *updateGolden {
+		b, err := json.MarshalIndent(got, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(want, append(b, '\n'), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	raw, err := os.ReadFile(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var w seedGolden
+	if err := json.Unmarshal(raw, &w); err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Concepts) != len(got.Concepts) {
+		t.Fatalf("%d concepts, the golden file has %d; rerun with -update if the change is intended", len(got.Concepts), len(w.Concepts))
+	}
+	for i := range got.Concepts {
+		if got.Concepts[i] != w.Concepts[i] {
+			t.Errorf("concept %d:\n got %q\n%s\nwant %q\n%s\nrerun with -update if the change is intended",
+				i, got.Concepts[i].ID, got.Concepts[i].Document, w.Concepts[i].ID, w.Concepts[i].Document)
+		}
+	}
+}

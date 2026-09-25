@@ -13,6 +13,7 @@ import { viewDir, viewHome } from './views/dir.js';
 import { viewEditor } from './views/editor.js';
 import { explore, viewExplore } from './views/explore.js';
 import { viewReview } from './views/review.js';
+import { viewSeed } from './views/seed.js';
 
 // Set by the editor while it holds unsaved changes: route() asks before
 // discarding them on hash navigation, beforeunload warns on real navigation.
@@ -85,6 +86,10 @@ export function route() {
   } else if (head === 'ask') {
     mark('ask');
     viewAsk();
+  } else if (head === 'seed') {
+    // Seeding from BigQuery (design doc 0148). No tab: it is the first
+    // thirty minutes of a base, reached from the home page.
+    viewSeed();
   } else if (head === 'access') {
     // Reachable by typing it even where the tab is hidden, which is what
     // a route is: the view says who may read the policy, and the server

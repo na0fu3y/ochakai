@@ -21,7 +21,33 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The web UI can seed the empty base from a BigQuery dataset**
+  ([0148](docs/design/0148-the-empty-base-fills-from-the-page-too.md),
+  which supersedes 0085). 「BigQuery から取り込む」 on the home page takes
+  `project.dataset` (or one table; a trailing `*` narrows by name prefix)
+  and reads its schema as the person, the way the page already runs an
+  agent's query: with their Google sign-in and the read-only scope, or
+  through `ochakai ui`'s proxy, with the same 10 GiB cap. It shows the
+  concepts it would create, then writes the same `BigQuery Table` drafts
+  `ochakai seed` makes, with column descriptions from BigQuery where they
+  exist. Each draft goes through the existing `PUT` with
+  `If-None-Match: *`. An address that is already taken is left alone and
+  counted, so pressing the button twice does not reset a table somebody
+  described. A listing over 50,000 rows is refused instead of cut.
+  Nothing on the wire changes and the server still runs no SQL. The page's
+  copy of the projection and `seed`'s are held to one golden file.
+
 ### Changed
+
+- **`OCHAKAI_OAUTH_CLIENT_ID` and `OCHAKAI_BIGQUERY_PROJECT` no longer
+  require `OCHAKAI_AGENT`.** Reading a schema to seed from asks no model,
+  so a deployment without the agent can set them. `stats` carries both
+  under `agent` as before, now also when the agent is off.
+- **The `bq query` examples in the README and the onboarding guide
+  selected `description` from `INFORMATION_SCHEMA.COLUMNS`**, which
+  BigQuery does not have, so the first command failed. They no longer do.
 
 - **A new base embeds with `gemini-embedding-2` in `global` by default;
   a base that already exists keeps what it had**

@@ -1,0 +1,124 @@
+[
+ {
+  "table_schema": "shop",
+  "table_name": "orders",
+  "column_name": "id",
+  "data_type": "INT64",
+  "is_nullable": "NO",
+  "description": "The order | its key"
+ },
+ {
+  "table_schema": "shop",
+  "table_name": "orders",
+  "column_name": "amount",
+  "data_type": "NUMERIC",
+  "is_nullable": "YES"
+ },
+ {
+  "table_schema": "ga",
+  "table_name": "events_20260102",
+  "column_name": "event_name",
+  "data_type": "STRING",
+  "is_nullable": "YES"
+ },
+ {
+  "table_schema": "ga",
+  "table_name": "events_20260102",
+  "column_name": "event_ts",
+  "data_type": "TIMESTAMP",
+  "is_nullable": "YES"
+ },
+ {
+  "table_schema": "ga",
+  "table_name": "events_20260101",
+  "column_name": "event_name",
+  "data_type": "STRING",
+  "is_nullable": "YES"
+ },
+ {
+  "table_schema": "ga",
+  "table_name": "events_20260103",
+  "column_name": "event_name",
+  "data_type": "STRING",
+  "is_nullable": "YES"
+ },
+ {
+  "table_schema": "ga",
+  "table_name": "events_20260103",
+  "column_name": "event_ts",
+  "data_type": "TIMESTAMP",
+  "is_nullable": "YES"
+ },
+ {
+  "table_schema": "ga",
+  "table_name": "events_20260103",
+  "column_name": "user_id",
+  "data_type": "STRING",
+  "is_nullable": "YES"
+ },
+ {
+  "table_schema": "shop",
+  "table_name": "snapshot_20250101",
+  "column_name": "id",
+  "data_type": "INT64",
+  "is_nullable": "NO"
+ },
+ {
+  "table_schema": "shop",
+  "table_name": "sales",
+  "column_name": "id",
+  "data_type": "INT64",
+  "is_nullable": "NO"
+ },
+ {
+  "table_schema": "shop",
+  "table_name": "sales20260101",
+  "column_name": "id",
+  "data_type": "INT64",
+  "is_nullable": "NO"
+ },
+ {
+  "table_schema": "shop",
+  "table_name": "sales20260102",
+  "column_name": "id",
+  "data_type": "INT64",
+  "is_nullable": "NO"
+ },
+ {
+  "table_schema": "shop",
+  "table_name": "not_a_date_20261399",
+  "column_name": "x",
+  "data_type": "STRING",
+  "is_nullable": "YES"
+ },
+ {
+  "table_schema": "shop",
+  "table_name": "not_a_date_20261398",
+  "column_name": "x",
+  "data_type": "STRING",
+  "is_nullable": "YES"
+ },
+ {
+  "table_schema": "shop",
+  "table_name": "café",
+  "column_name": "items",
+  "data_type": "ARRAY<STRUCT<sku STRING, qty INT64>>",
+  "is_nullable": "NO",
+  "description": null
+ },
+ {
+  "table_schema": "shop",
+  "table_name": "orders",
+  "column_name": "status",
+  "data_type": "STRING",
+  "is_nullable": "YES",
+  "description": null
+ },
+ {
+  "table_schema": "shop",
+  "table_name": "",
+  "column_name": "ignored",
+  "data_type": "STRING",
+  "is_nullable": "YES"
+ }
+]

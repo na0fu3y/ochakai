@@ -62,6 +62,7 @@ export function viewHome() {
       <!-- Gated twice on purpose: the link is the write affordance, and the
            item around it would otherwise leave a gap in the row. -->
       <li class="write-only"><a class="write-only" href="#/new">＋ ナレッジを作成</a></li>
+      <li class="write-only bigquery-only"><a class="write-only" href="#/seed">BigQuery から取り込む</a> — データセットのスキーマから、テーブルの draft を作ります</li>
       <li><a href="#" id="home-export" title="ナレッジベースを OKF バンドル(tar.gz)として書き出します">OKF の書き出し</a></li>
     </ul>
     <div id="home-index" style="margin-top:1.4rem"><div class="empty">…</div></div>`;

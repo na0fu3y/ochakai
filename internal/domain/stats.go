@@ -202,8 +202,10 @@ type StatsAgent struct {
 	// administrator, and on a posture that refuses the agent.
 	Variable string `json:"variable,omitempty"`
 	// OAuthClientID is the Google OAuth web client the page signs a
-	// person in with to run a query the agent proposed, as that person
-	// (design doc 0142 §4). Present only where the operator named one. A
+	// person in with to read BigQuery as that person: a query the agent
+	// proposed (design doc 0142 §4), or a dataset's schema to seed from
+	// (design doc 0148). Present wherever the operator named one, agent
+	// or no agent — the name is where it first appeared. A
 	// public identifier: it is what a browser needs to ask Google for a
 	// token, and nothing the server can act with.
 	OAuthClientID string `json:"oauth_client_id,omitempty"`

@@ -348,8 +348,10 @@ variable "agent_oauth_client_id" {
     a person in with to run a query the agent proposes, as that person. A
     public identifier, not a secret. Terraform cannot create one: make it in
     the console (guide §4c) with the web UI's origin and <origin>/oauth.html
-    registered. Null: the team web UI shows a proposal for the person to run
-    elsewhere; `ochakai ui` runs it either way.
+    registered. It also lets the home page's "BigQuery から取り込む" read a
+    dataset's schema into draft table concepts, and for that it needs no
+    agent (design doc 0148). Null: the team web UI shows a proposal for the
+    person to run elsewhere; `ochakai ui` runs it either way.
   EOT
   type        = string
   default     = null

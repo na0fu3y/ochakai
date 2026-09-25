@@ -161,6 +161,21 @@ type Config struct {
 	// model resource name says where, and a bare model id is run in the
 	// project and region this process is deployed to.
 	Agent *AgentConfig
+
+	// OAuthClientID is the web application client the page signs a person
+	// in with, to read BigQuery as that person: to run a query the agent
+	// proposed (design doc 0142 §4), and to read a dataset's schema into
+	// draft table concepts (design doc 0148). Empty means the team web UI
+	// reads no warehouse — `ochakai ui` does it through its proxy. A public
+	// identifier, not a secret: it travels to every browser that opens the
+	// page. It does not need the agent: reading a schema asks no model.
+	OAuthClientID string
+	// BigQueryProject is the project a query the page runs is billed to
+	// (OCHAKAI_BIGQUERY_PROJECT). Empty means each person names their
+	// own: which project a person may start a job in is an operator's
+	// fact, and asking everybody who reads an answer to know it is asking
+	// the one person the agent exists for to know the most.
+	BigQueryProject string
 }
 
 // AgentConfig is the generative model behind the agent. Unlike an
@@ -173,19 +188,6 @@ type AgentConfig struct {
 	Project  string
 	Location string
 	Model    string
-	// OAuthClientID is the web application client the page signs a person
-	// in with, to run a query the agent proposed as that person (design
-	// doc 0142 §4). Empty means the team web UI cannot run a proposal —
-	// the agent still proposes, and `ochakai ui` runs it itself. A public
-	// identifier, not a secret: it travels to every browser that opens
-	// the page.
-	OAuthClientID string
-	// BigQueryProject is the project a query the page runs is billed to
-	// (OCHAKAI_BIGQUERY_PROJECT). Empty means each person names their
-	// own: which project a person may start a job in is an operator's
-	// fact, and asking everybody who reads an answer to know it is asking
-	// the one person the agent exists for to know the most.
-	BigQueryProject string
 }
 
 // EmbeddingConfig enables hybrid search via Vertex AI embeddings
@@ -502,28 +504,21 @@ func FromEnv() (*Config, error) {
 		}
 		cfg.Agent = a
 	}
+	// Neither of the two below needs the agent. The page reads BigQuery as
+	// the person for two things — a query the agent proposed, and a
+	// dataset's schema to seed from (design doc 0148) — and the second
+	// asks no model.
 	if id := strings.TrimSpace(os.Getenv("OCHAKAI_OAUTH_CLIENT_ID")); id != "" {
-		if cfg.Agent == nil {
-			// Read alone it would sign people in for nothing: the only
-			// thing the page does with a Google token is run a query the
-			// agent proposed.
-			return nil, fmt.Errorf("OCHAKAI_OAUTH_CLIENT_ID is set but OCHAKAI_AGENT is not; the client is only used to run a query the agent proposes (design doc 0142 §4)")
-		}
 		if !strings.HasSuffix(id, ".apps.googleusercontent.com") {
 			return nil, fmt.Errorf("OCHAKAI_OAUTH_CLIENT_ID is %q; it takes a Google OAuth web client id, <number>-<id>.apps.googleusercontent.com", id)
 		}
-		cfg.Agent.OAuthClientID = id
+		cfg.OAuthClientID = id
 	}
 	if p := strings.TrimSpace(os.Getenv("OCHAKAI_BIGQUERY_PROJECT")); p != "" {
-		if cfg.Agent == nil {
-			// Read alone it would bill nothing: the only query it is for
-			// is one the agent proposed.
-			return nil, fmt.Errorf("OCHAKAI_BIGQUERY_PROJECT is set but OCHAKAI_AGENT is not; the project is only where a query the agent proposes is billed (design doc 0142 §4)")
-		}
 		if !bigQueryProject.MatchString(p) {
 			return nil, fmt.Errorf("OCHAKAI_BIGQUERY_PROJECT is %q; it takes a Google Cloud project id, such as my-project", p)
 		}
-		cfg.Agent.BigQueryProject = p
+		cfg.BigQueryProject = p
 	}
 
 	// The pair is refused at startup rather than half-honoured: an

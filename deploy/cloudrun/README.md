@@ -429,6 +429,11 @@ gcloud run services update ochakai --region=$REGION \
   --update-env-vars=OCHAKAI_OAUTH_CLIENT_ID=123-abc.apps.googleusercontent.com
 ```
 
+このクライアントは、ホームの「BigQuery から取り込む」(データセットの
+スキーマからテーブルの draft を作る)にも使われる。そちらはモデルを
+要らないので、**エージェントを入れないデプロイでも、この手順だけで
+使える**([0148](../../docs/design/0148-the-empty-base-fills-from-the-page-too.md))。
+
 **③ 課金するプロジェクトを運用者が決める。** 決めなければ、ページは
 実行のたびに「課金するプロジェクト」の欄を出し、利用者に自分の
 プロジェクト ID を書かせる。gcloud を持たない人はそれを知らないので、
