@@ -653,6 +653,11 @@ const (
 	foldedFilename = `normalize(` + filenameText + `, NFKC)`
 )
 
+// wholeBonus is what a row earns when the whole query appears in its
+// haystack verbatim — a keyword search outranking an entry that merely
+// shares its terms with a question.
+const wholeBonus = 0.3
+
 // SearchLexical ranks entries by how much of the query they contain and
 // by where it lands, entries with a standing verification boosted —
 // a confirmation of the content as it reads now, not one an edit has
@@ -712,11 +717,16 @@ const (
 // and stays one on purpose. It asks whether the question appears
 // verbatim, which is a question about the raw text rather than about
 // terms; it reads rows the tsquery already chose, so it costs no index.
+// It is a LIKE rather than an ILIKE because the column is stored NFKC
+// and lower case (migration 0052) and the pattern is lowered once here:
+// ILIKE lowered every candidate's whole text again, and on a query whose
+// fragments most of the base holds that was most of the query's time
+// (issue #883).
 func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	// Each pattern is escaped: unescaped, a query containing '%' matches
 	// every entry and flattens the ranking ('_' matches any one character).
-	args = append(args, "%"+escapeLike(query)+"%")
+	args = append(args, "%"+escapeLike(norm.NFKC.String(query))+"%")
 	wholeParam := len(args)
 	// The same escaped query with no wildcards around it: ILIKE without a
 	// pattern is case-insensitive equality, which is the exact-name test.
@@ -792,6 +802,13 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	// corpus of a few thousand, spilling work_mem on the instance size
 	// this is meant to run on. The entries are fetched once the top N is
 	// known.
+	//
+	// The name is computed once per row. Written as a plain LATERAL the
+	// planner pulls the subquery up and pastes its expression into every
+	// fragment's test, so a nine-fragment query ran normalize() and
+	// regexp_replace() nine times a candidate — measured at 97 ms against
+	// 28 over 7,500 rows (issue #883). OFFSET 0 is the idiom that keeps
+	// a subquery from being flattened.
 	// Ties are broken by standing-verification recency, then id. The
 	// score is a fraction over a handful of addends, so a short query
 	// leaves several concepts holding exactly the same number — and
@@ -815,12 +832,12 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 			FROM (
 				SELECT c.*, %[4]s FROM (
 					SELECT k.id, %[5]s, count(*) OVER () AS total,
-						CASE WHEN k.search_text ILIKE $%[6]d THEN 0.3 ELSE 0 END AS whole,
+						CASE WHEN k.search_text LIKE lower($%[6]d) THEN %[11]g ELSE 0 END AS whole,
 						CASE WHEN %[7]s
 							THEN 1 ELSE 0 END AS named,
 						(SELECT max(v.at) FROM knowledge_verification v
 							WHERE v.id = k.id AND v.at >= k.content_changed_at) AS last_verified
-					FROM object k, LATERAL (SELECT `+foldedName+` AS name) nm
+					FROM object k, LATERAL (SELECT `+foldedName+` AS name OFFSET 0) nm
 					WHERE k.search_tsv @@ (%[8]s) AND %[9]s
 				) c
 			) w
@@ -833,7 +850,7 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 		strings.Join(weights, " + "),
 		strings.Join(weight, ", "), strings.Join(hit, ", "), wholeParam,
 		strings.Join(nameTests, " OR "),
-		strings.Join(tests, " || "), where, limit)
+		strings.Join(tests, " || "), where, limit, wholeBonus)
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err

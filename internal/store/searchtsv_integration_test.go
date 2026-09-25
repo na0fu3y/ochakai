@@ -940,3 +940,44 @@ func TestIdentifierOutranksItsScatteredParts(t *testing.T) {
 			"so a name's scattered parts outranked the name", ids)
 	}
 }
+
+// TestWholeQueryBonusIgnoresCaseAndWidth pins what migration 0052 made
+// of the whole-query bonus: the haystack is stored NFKC and lower case,
+// and the pattern is folded the same way, so a question typed in capitals
+// or in fullwidth latin earns the bonus the plain spelling does. Case was
+// always ignored (ILIKE); width was not, because folding at read time
+// would have put normalize() on every candidate's text.
+func TestWholeQueryBonusIgnoresCaseAndWidth(t *testing.T) {
+	ctx := context.Background()
+	s := newSearchStore(t, ctx)
+	run := testdb.Unique(t, "wholefold")
+
+	if err := s.Create(ctx, &domain.Knowledge{
+		Type: domain.TypeTables, ID: run + "/lines", Title: "lines",
+		Body:   "Holds the Order Items of every basket.",
+		Status: domain.StatusStable, CreatedBy: domain.Actor{Kind: domain.ActorHuman, Name: "test"},
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+	score := func(q string) float64 {
+		t.Helper()
+		hits, err := s.SearchLexical(ctx, q, Filter{Prefixes: []string{run}}, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(hits) != 1 {
+			t.Fatalf("%q found %d concepts, want 1", q, len(hits))
+		}
+		return hits[0].Score
+	}
+	want := score("order items")
+	if want < wholeBonus {
+		t.Fatalf("the plain spelling scored %v, below the bonus itself", want)
+	}
+	for _, q := range []string{"ORDER ITEMS", "ｏｒｄｅｒ ｉｔｅｍｓ", "Ｏｒｄｅｒ Ｉｔｅｍｓ"} {
+		if got := score(q); got != want {
+			t.Errorf("%q scored %v, the plain spelling %v: the whole-query bonus "+
+				"is reading a spelling the haystack does not store", q, got, want)
+		}
+	}
+}
