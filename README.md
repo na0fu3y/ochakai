@@ -309,23 +309,33 @@ for what they still don't do:
   that caller was a human, and outcomes counted against it. *Memory layers remember what happened; ochakai
   curates what's true.* They compose — preferences there, verified data
   knowledge here.
-- **Verified answers for any client, and an exit.** Verified-query stores
-  exist inside Snowflake Cortex Analyst, inside Databricks Genie, inside
-  each AI-analyst SaaS — each feeding only its own chat. The same
-  knowledge here serves Claude Code, hosted MCP agents and CI jobs alike,
-  and the whole base round-trips through
+- **Against the data-agent platforms: a ruling on record, and an exit.**
+  Databricks Genie, Snowflake Cortex Agents, BigQuery Conversational
+  Analytics and Hex Threads are finished data agents, and ochakai's own
+  agent ([0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md),
+  Japanese) now competes with them head-on — and today loses on features:
+  BigQuery only, no Slack, mobile or schedules, and an empty base on day
+  one where Genie Ontology and Cortex Sense harvest context automatically
+  and rank it by an algorithm. Answering only from what people endorsed is
+  not ochakai's alone either; Hex's Endorsed Mode does it. What ochakai
+  competes on is what the harvesting side gave up. An answer names the
+  concepts it rests on and whether a person confirmed them, and that
+  confirmation is a ledger row naming the authenticated caller, never a
+  claim typed into a file; the agent proposes and never rules. A rejected
+  draft keeps its reason. And the knowledge leaves whole: the base
+  round-trips through
   [OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format)
   bundles — plain markdown + YAML frontmatter that lives happily in git,
-  with trust in the spec's own keys. Since 2026-08 that format is what
+  with trust in the spec's own keys — and the same content serves Claude
+  Code, hosted MCP agents and CI jobs over the same contract, whether or
+  not you turn ochakai's agent on. Since 2026-08 that format is what
   Google's own Knowledge Catalog ingests and what a ring of local tools
   speaks, so speaking it is no longer the difference; ochakai is the
-  format's **ruling side** — a `verified` entry here is an event the
-  instance observed from an authenticated caller, never a claim typed
-  into a file — with the review loop around it. MIT-licensed and
-  self-hosted per tenant: your knowledge is never a hostage.
+  format's **ruling side**, with the review loop around it. MIT-licensed
+  and self-hosted per tenant: your knowledge is never a hostage.
 
 Each of those has an alternative you may already run — a catalog, a
-memory layer, a markdown vault with an MCP server.
+memory layer, a data-agent platform, a markdown vault with an MCP server.
 [Positioning](docs/positioning.md) (Japanese) takes them one at a time, says where
 ochakai loses, and says who should pick something else.
 
@@ -333,8 +343,8 @@ ochakai loses, and says who should pick something else.
 
 | ochakai has no… | because |
 |---|---|
-| LLM | it returns human-verified golden queries verbatim, and the definitions and caveats around them. Interpretation is the client agent's job. With semantic search on, concept bodies and the queries people type are sent to a Vertex AI embedding model in your own project and region — a deterministic encoder that returns vectors and writes no text. `OCHAKAI_EMBEDDINGS=off` is the switch |
-| SQL execution | it holds no warehouse credentials. Your agent executes |
+| LLM that rules, or one on by default | a deployment can turn on its own data agent (`OCHAKAI_AGENT`, off by default — [0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md), Japanese). It answers from the knowledge and writes new drafts, and it verifies, rejects and rewrites nothing: only a person's ruling changes what is served, and search and reads return what people wrote, verbatim, whether the agent is on or not. Its model runs on Vertex AI in your own project, in the deployment's region unless you name another, called as the service's identity with no API key. With semantic search on, concept bodies and the queries people type are sent to a Vertex AI embedding model in your own project and region — a deterministic encoder that returns vectors and writes no text. `OCHAKAI_EMBEDDINGS=off` is the switch |
+| SQL execution | it holds no warehouse credentials. A query runs as whoever asked — your agent, or a person in the web UI running what the deployment's agent proposed |
 | connector ingestion | knowledge is curated, not harvested. Trust density over volume — and a harvester would need warehouse credentials the server does not hold, so a catalog projection runs as an ordinary client under your own service account ([example](examples/bigquery-catalog) (Japanese)) |
 | dashboards | the bundled web UI is where people curate, and where a person without an agent of their own asks the deployment's agent (off by default). An answer shows the result of the query the person ran, as a table and, when the result's shape allows one reading, a chart. Nothing is saved, pinned or scheduled as a board ([0145](docs/design/0145-four-faces-and-an-answer-that-shows-its-result.md) §5.4, Japanese) |
 | secrets | Cloud Run IAM decides who reaches it and Cloud SQL authenticates the service account — nothing to issue or rotate |
