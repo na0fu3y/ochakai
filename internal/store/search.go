@@ -8,6 +8,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -141,6 +142,13 @@ func queryFragments(query string) []string {
 	if len(runs) == 0 {
 		runs = grammarOnly
 	}
+	// The identifiers go first, so the cap never drops them: a name a
+	// person pasted is the most specific thing a question can carry.
+	var named [][]string
+	for _, id := range identifiers(query) {
+		named = append(named, []string{id})
+	}
+	runs = append(named, runs...)
 
 	var out []string
 	seen := map[string]bool{}
@@ -324,7 +332,13 @@ func katakanaRun(runes []rune) bool {
 // The fragment keeps its own spelling everywhere else: the name test
 // matches it as a substring, and the snippet looks for it in the body.
 // Both want the word a person typed, not the windows it was cut into.
+//
+// An identifier is asked for as the one lexeme migration 0051 stores for
+// it (identifierLexeme), since the english pass has cut it into words.
 func fragmentTerm(frag string) string {
+	if isIdentifier(frag) {
+		return identifierLexeme(frag)
+	}
 	runes := []rune(frag)
 	if len(runes) <= 2 || !katakanaRun(runes) {
 		return frag
@@ -346,6 +360,84 @@ func fragmentWindows(frag string) int {
 		return 1
 	}
 	return len(runes) - 1
+}
+
+// identifierPattern is a name written with its parts joined — order_items,
+// acme-analytics-prod, sales_mart.orders, testdb.Unique — as opposed to
+// the words the rest of a question is made of.
+//
+// **Both halves of the index cut an identifier into its parts**, the
+// document since migration 0036 and the query since there was a query,
+// and each half was right for its own reason: a path segment has to be
+// a term, and "orders" has to find a body that says order_items. What
+// neither kept is that the parts were adjacent. order_items became order
+// and item, and a table with thousands of columns has both somewhere, so
+// it contained the name as fully as the table the name is — and, being
+// the one that says everything, outranked it (issue #883). The same
+// cut turned a project name like acme-analytics-prod into three words
+// that nearly every table in that project holds.
+//
+// So the whole identifier is a term as well, beside its parts rather than
+// instead of them: the parts keep the recall they have, and the whole is
+// the rare lexeme only the concepts that actually spell the name can
+// match, weighted as rare terms are. ochakai_identifiers (migration 0051)
+// is this pattern on the document side, and TestIdentifiersAgreeWithGo
+// holds the two to one reading.
+//
+// ASCII only, on purpose. A warehouse name is ASCII, and a class the two
+// regex engines could read differently — [[:alnum:]] depends on the
+// database's locale — is a term one side extracts and the other never
+// stores.
+var identifierPattern = regexp.MustCompile(`[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)+`)
+
+// maxIdentifier bounds an identifier's length on both sides: a lexeme
+// over 2 kB is an error on write, and nothing this long is a name.
+const maxIdentifier = 255
+
+// identifiers returns the identifiers in a query, each whole and then,
+// for a qualified one (project.dataset.table), each qualifier part that
+// is itself joined: a question naming sales_mart.orders is asking about
+// sales_mart, and a document may qualify it differently.
+func identifiers(query string) []string {
+	var out []string
+	seen := map[string]bool{}
+	add := func(id string) {
+		key := identifierLexeme(id)
+		if len(id) > maxIdentifier || seen[key] {
+			return
+		}
+		seen[key] = true
+		out = append(out, id)
+	}
+	for _, id := range identifierPattern.FindAllString(query, -1) {
+		add(id)
+		if !strings.Contains(id, ".") {
+			continue
+		}
+		for part := range strings.SplitSeq(id, ".") {
+			if strings.ContainsAny(part, "_-") {
+				add(part)
+			}
+		}
+	}
+	return out
+}
+
+// isIdentifier reports whether a fragment is an identifier rather than a
+// word. Nothing else queryFragments produces holds a joining character.
+func isIdentifier(frag string) bool {
+	loc := identifierPattern.FindStringIndex(frag)
+	return loc != nil && loc[0] == 0 && loc[1] == len(frag)
+}
+
+// identifierLexeme is the one spelling an identifier is stored and asked
+// for under: lower case, because the english pass beside it folds case,
+// and with - read as _, because tables/order-items is the file somebody
+// wrote about the order_items table and the two are one name to whoever
+// types either. The dot stays itself — it qualifies a name rather than
+// joining one.
+func identifierLexeme(id string) string {
+	return strings.ReplaceAll(strings.ToLower(id), "-", "_")
 }
 
 // holdsContent reports whether a short run carries a content word
@@ -520,6 +612,12 @@ func fragmentQuery(frag string, n int) string {
 	switch {
 	case len(runes) == 0:
 		return "''::tsquery"
+	case isIdentifier(frag):
+		// Taken as the lexeme it is, not parsed: every text search
+		// parser would cut it back into the words it is here to join.
+		// identifierPattern admits no quote or backslash, so quoting
+		// is the whole of the escaping.
+		return fmt.Sprintf("quote_literal($%d::text)::tsquery", n)
 	case !scriptWithoutSpaces(runes[0]):
 		return fmt.Sprintf("plainto_tsquery('english', $%d::text)", n)
 	case len(runes) == 1:

@@ -43,6 +43,17 @@ last entry.
   and still shows every result in full. The bound and the wire are
   unchanged.
 
+- **A joined name is a search term of its own** (issue #883).
+  `order_items`, `acme-analytics-prod` and
+  `acme-analytics-prod.sales_mart.orders` were cut into their words on
+  both sides of the lexical index, so a wide table holding `order` and
+  `items` somewhere in its columns contained the name as fully as the
+  table it names, and outranked it. The whole identifier is now indexed
+  and asked for beside its parts — lower case, `-` read as `_`, and a
+  dotted name's joined qualifiers too — so the concepts that spell the
+  name carry the rare term. The parts still match what they matched.
+  Migration 0051 rewrites the search vectors once at start.
+
 ### Documentation
 
 - **The web UI's links are written down**, for an application whose
