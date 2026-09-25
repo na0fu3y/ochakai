@@ -21,6 +21,13 @@ last entry.
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-09-25
+
+A minor although nothing breaks: this is the release in which the
+deployment's own agent (off by default) becomes something a team can use
+instead of building one — stages 1 and 2 of the ROADMAP's data-agent
+goal. The wire keeps every existing shape; what is new is additive.
+
 ### Added
 
 - **`ochakai eval` replays the questions kept for comparison and says
@@ -7460,7 +7467,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.10...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/na0fu3y/ochakai/compare/v0.28.10...v0.29.0
 [0.28.10]: https://github.com/na0fu3y/ochakai/compare/v0.28.9...v0.28.10
 [0.28.9]: https://github.com/na0fu3y/ochakai/compare/v0.28.8...v0.28.9
 [0.28.8]: https://github.com/na0fu3y/ochakai/compare/v0.28.7...v0.28.8
