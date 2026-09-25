@@ -65,8 +65,8 @@ section says what the stages are for; it does not approve them in advance.
 
 1. **An agent that corrects itself.** The person agrees once per
    conversation. After that, the page runs the agent's read-only queries on
-   its own, as that person. It checks each query's cost with a dry run first
-   and stays under the byte cap. The agent reads errors and results and
+   its own, as that person, under the byte cap BigQuery enforces before it
+   bills anything. The agent reads errors and results and
    tries again, and the answer shows its result as a table and, where one
    helps, a chart. Today every query waits for a click. That is the largest
    gap to the products above, and no property depends on it: the token is
