@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.28.10] - 2026-09-25
+
 ### Added
 
 - **The deployment's own agent writes drafts** — the "proposes" slice
@@ -7366,7 +7368,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.9...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.28.10...HEAD
+[0.28.10]: https://github.com/na0fu3y/ochakai/compare/v0.28.9...v0.28.10
 [0.28.9]: https://github.com/na0fu3y/ochakai/compare/v0.28.8...v0.28.9
 [0.28.8]: https://github.com/na0fu3y/ochakai/compare/v0.28.7...v0.28.8
 [0.28.7]: https://github.com/na0fu3y/ochakai/compare/v0.28.6...v0.28.7
