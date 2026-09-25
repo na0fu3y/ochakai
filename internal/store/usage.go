@@ -250,6 +250,12 @@ func (s *Store) flushMisses(ctx context.Context, batch []missEvent) error {
 // the caller — an outcome report is a deliberate write, not a side
 // effect of a read — so the error is returned for the transport to
 // surface.
+//
+// The total's last_at is stamped strictly after the entry's newest
+// verification, because the re-verification feed compares the two and
+// Verify may have stamped its row ahead of the database's now() (see
+// Verify). A report that arrives after a verification is then never read
+// as one that preceded it.
 func (s *Store) RecordOutcome(ctx context.Context, event string, actor domain.Actor, id, note string) error {
 	_, err := s.pool.Exec(ctx, `
 		WITH ev AS (
@@ -257,7 +263,8 @@ func (s *Store) RecordOutcome(ctx context.Context, event string, actor domain.Ac
 			VALUES ($1, $2, $3, $4, $5)
 		)
 		INSERT INTO knowledge_usage (knowledge_id, event, count, last_at)
-		VALUES ($1, $2, 1, now())
+		VALUES ($1, $2, 1, GREATEST(now(),
+			(SELECT MAX(at) FROM knowledge_verification WHERE id=$1) + interval '1 microsecond'))
 		ON CONFLICT (knowledge_id, event)
 		DO UPDATE SET count = knowledge_usage.count + 1, last_at = EXCLUDED.last_at`,
 		id, event, actor.Kind, actor.Name, note)

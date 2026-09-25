@@ -941,6 +941,15 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 // content that does not stand for it. The clamp records what the act
 // means — a verification confirms the entry as it stands, so it is never
 // of a moment before the content it confirmed.
+//
+// That clamp puts the stamp in the database's future whenever the
+// application clock runs ahead, so plain now() can no longer order what
+// follows it. The stamp is therefore also strictly after the entry's
+// previous verification and its last failure report, a microsecond past
+// either: a re-verification always moves the newest one, and a
+// verification that answers a report always clears it from the feed.
+// RecordOutcome clamps the other way round, so on one entry's
+// timeline the order of the acts is the order they happened.
 func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
 	var k *domain.Knowledge
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
@@ -949,7 +958,9 @@ func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*dom
 		// statement, closing the race with a concurrent delete.
 		err := tx.QueryRow(ctx, `INSERT INTO knowledge_verification (id, seq, by_kind, by_name, by_via, by_producer, at)
 			SELECT $1, COALESCE((SELECT MAX(seq) FROM knowledge_verification WHERE id=$1), 0) + 1,
-				$2, $3, $4, $5, GREATEST(now(), content_changed_at)
+				$2, $3, $4, $5, GREATEST(now(), content_changed_at,
+					(SELECT MAX(at) FROM knowledge_verification WHERE id=$1) + interval '1 microsecond',
+					(SELECT last_at FROM knowledge_usage WHERE knowledge_id=$1 AND event='failed') + interval '1 microsecond')
 			FROM object WHERE id=$1 AND deleted_at IS NULL
 			RETURNING at`,
 			id, actor.Kind, actor.Name, actor.Via, actor.Producer).Scan(&at)
