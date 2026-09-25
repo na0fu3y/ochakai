@@ -282,6 +282,7 @@ main { max-width: 62rem; margin: 0 auto; width: 100%; padding: 1.4rem 1.2rem 4re
 .chip input { display: none; }
 .chip:has(input:checked) { background: var(--accent-weak); border-color: var(--accent); color: var(--accent-strong); }
 label.check { display: flex; align-items: center; gap: .45rem; cursor: pointer; font-size: .9rem; }
+label.check[hidden] { display: none; }
 input[type=checkbox] { accent-color: var(--accent); }
 .count { color: var(--muted); font-size: .8rem; margin-left: auto; }
 
@@ -811,6 +812,7 @@ body:not(.has-agent) .agent-only { display: none !important; }
 .ask-proposal { margin: .5rem 0; }
 .ask-verdict { margin-top: .5rem; display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 .ask-verdict-form { flex-basis: 100%; display: flex; gap: .4rem; align-items: flex-end; }
+.ask-verdict-form[hidden] { display: none; }
 .ask-verdict-form textarea { flex: 1; box-sizing: border-box; }
 .ask-proposal textarea { width: 100%; box-sizing: border-box; font-family: var(--mono, ui-monospace, monospace); font-size: .85rem; }
 /* What a query returned is the page's, not the person's: full width, and

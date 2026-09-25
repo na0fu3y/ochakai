@@ -23,6 +23,20 @@ last entry.
 
 ### Added
 
+- **The web UI asks for a 👍 as well as a 👎, and a 👍 can keep the
+  question for comparison** (ROADMAP, the data agent's stage 2). Until now
+  the page offered only 👎, so `keep` — good only on
+  `POST /api/v1/agent/turns/{id}` — could never be set from it, and the
+  comparison set never grew there. The 👍 form opens with 「この問いを比較に
+  使う」 ticked.
+- **After a 👎, the agent can be asked to find what went wrong and draft
+  the fix.** 「原因を調べて直させる」 asks, in the same conversation. The
+  agent rereads what it read and checks the log, then names the cause:
+  a concept misled it, a concept was there but not found, nothing was
+  there, or its own SQL or reading was wrong. For each of the first three
+  it writes a draft that links the original and cites the question, the
+  wrong answer and the person's words. It writes nothing when the fault
+  was its own SQL. Drafts only; a person rules.
 - **An agent's answer draws its result as a chart when the result's
   shape allows one reading** ([0145](docs/design/0145-four-faces-and-an-answer-that-shows-its-result.md),
   which supersedes 0143 and keeps its section numbers). The shape is a
@@ -60,6 +74,11 @@ last entry.
   of them went from 170–430 ms to 65–215 ms; rankings and the golden set
   are unchanged. Migration 0052 rewrites the search vectors once at
   start.
+
+### Fixed
+
+- **A verdict form no longer opens before its button is pressed.** The
+  form's own `display` beat the `hidden` attribute.
 
 ## [0.28.10] - 2026-09-25
 
