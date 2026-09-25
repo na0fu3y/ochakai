@@ -82,7 +82,7 @@ ochakai import ./knowledge
 
 import は普通のエンドポイントに対するクライアント側のループである —
 サーバー側の一括 import は決定として存在しない(設計ドキュメント
-0143 §5.2) — なのでリストアには CLI か、そのループを再現するクライアント
+0145 §5.2) — なのでリストアには CLI か、そのループを再現するクライアント
 が要る。それを見込んでおくこと: Web コンソールを前提にした
 disaster-recovery の runbook はここでは動かない。
 
@@ -175,7 +175,7 @@ Cloud Run ではこのプロジェクトの Cloud Logging である(stdout で�
 ログベースの指標にできる — ochakai が `/metrics` を生やさず、二つ目の
 アドレス空間もスクレイプ対象も持たずに済むのはそのためである
 (すべては `/api/v1` に載るか、どこにも載らない、設計ドキュメント
-[0143](../design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §1)。組む
+[0145](../design/0145-four-faces-and-an-answer-that-shows-its-result.md) §1)。組む
 価値があるのは次の三つである。
 
 | 指標 | クエリの骨子 |

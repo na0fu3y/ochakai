@@ -20,7 +20,7 @@
 検索が順位を返し、エージェントは読む価値のある concept を fetch して
 あなたの定義から始める — 自分で定義を作らない。取った concept には
 `linked_from` が付いてくるので、metric を読めばそれを説明する insight の
-存在も見える([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)。
+存在も見える([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §4)。
 
 **書き戻す。** 残す価値のあることを伝える:
 
@@ -106,13 +106,15 @@ Web UI は、人がエージェントの学んだことを裁定する場所で�
 絞って検索し、ナレッジをフォルダツリーとして辿り(階層 id はそのまま
 ディレクトリ)、リンクと利用回数を添えて concept を読み、その場で
 verify / deprecate / reject(理由付き)する。ビルドステップの無い一枚
-のページで、**BI ツールではない** — グラフもダッシュボードも持たず、
+のページで、**BI ツールではない** — ダッシュボードを持たず、
 サーバーはクエリを実行しない。デプロイが自分のエージェントを入れていれば
 (`OCHAKAI_AGENT`)「エージェント」タブが出て、自分のエージェントを持たない
 人がナレッジについて訊ける。エージェントはナレッジを読んで、引いた concept
 が人に確かめられたものかを添えて答え、学んだことは新しい draft として
 書いてレビューの前に置き、何も裁定しない
 ([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §3)。
+提案された SQL は問うた人の身元で走り、答えの隣に結果が表と、形が許せば
+グラフで出る([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §5.4)。
 
 ![レビュー待ちの draft キュー: エージェントが書き戻し、人の verify か
 reject を待っている concept](images/webui-review.png)

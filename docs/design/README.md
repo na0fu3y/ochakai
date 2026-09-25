@@ -41,8 +41,8 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
 | 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
 | ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md)。**バケットの無いデプロイがそう言い、どの面もファイルを差し出さなくなることは [0131](0131-a-deployment-says-what-it-cannot-do.md)** — `stats` が `files` を答え、直し方(変数の名前)はバンドル全体を持つ呼び出し元にだけ載る |
-| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、検索の `hits` が順位に徹することは [0143](0143-four-faces-and-an-agent-that-answers-behind-one.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
-| サーフェスの配分 | [0143](0143-four-faces-and-an-agent-that-answers-behind-one.md) が現行 — 各面の役割と載せないもの、MCP の 6 本と stateless な転送、読みが search → get で単読が `linked_from` を運ぶこと、そして**デプロイ自身のエージェントが REST 一本の後ろにいること**(0067 と、それに積まれた 0076 / 0106 / 0108 / 0118 を畳んだ)。足す規則と降ろす規則は [0068](0068-how-a-face-is-added-and-removed.md)。一覧と検索を MCP でも二本に分けることは [0096](0096-a-listing-is-not-a-search-here-either.md)。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0140](0140-one-address-reads-as-well-as-writes.md)。CLI の行の第一列は [0110](0110-the-first-column-is-the-key-you-asked-for.md)、その太字と dim は [0111](0111-weight-for-the-eye-and-only-for-an-eye.md) |
+| 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、検索の `hits` が順位に徹することは [0145](0145-four-faces-and-an-answer-that-shows-its-result.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
+| サーフェスの配分 | [0145](0145-four-faces-and-an-answer-that-shows-its-result.md) が現行 — 各面の役割と載せないもの、MCP の 6 本と stateless な転送、読みが search → get で単読が `linked_from` を運ぶこと、**デプロイ自身のエージェントが REST 一本の後ろにいること**、そして**答えが自分の結果を表と(形が許せば)グラフで見せること**(0143 を節の番号ごと置き換えた)。足す規則と降ろす規則は [0068](0068-how-a-face-is-added-and-removed.md)。一覧と検索を MCP でも二本に分けることは [0096](0096-a-listing-is-not-a-search-here-either.md)。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0140](0140-one-address-reads-as-well-as-writes.md)。CLI の行の第一列は [0110](0110-the-first-column-is-the-key-you-asked-for.md)、その太字と dim は [0111](0111-weight-for-the-eye-and-only-for-an-eye.md) |
 | Web UI | [0130](0130-the-web-ui-and-the-fields-of-a-document.md) が現行(配信・ページの形・編集を一冊で。0072 / 0092 / 0126 を畳んだ)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**このデプロイができないことをページが出さなくなり、直せる呼び出し元にだけ案内を出すことは [0131](0131-a-deployment-says-what-it-cannot-do.md)** |
 | 検証ループと利用測定 | [0141](0141-a-miss-is-read-off-the-words.md) が現行 — 四つのキュー、立っている検証からの tier、直近 90 日の並び、`stats` と、**どの concept の言葉にも一致しなかった検索をミスとして数えること**(0069・0090・0095・0137・0138 を畳んだ)。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない)。**ループの入力になる turn を、ochakai のエージェント以外も残せて REST から読めることは [0144](0144-a-turn-is-kept-whoever-answered.md)**(0142 §6 の書き手を広げる — 形・保持・export に載せないことは動かない) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂)。**却下が削除の一種であり、理由がリビジョンに載ることは [0135](0135-a-rejection-is-a-deletion.md)** — 墓標は塞がず、`knowledge_rejection` は畳まれた |
@@ -640,19 +640,22 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 
 ## サーフェス(REST / MCP / CLI / Web UI)
 
+- [0145 四つの面と、自分の結果を見せる答え](0145-four-faces-and-an-answer-that-shows-its-result.md)
+  — **Accepted**。**面の配分の現行ドキュメント。** 0143 を節の番号ごと
+  引き継いで置き換える。動く決定は一つ — Web UI は、人が自分の身元で
+  走らせたクエリの結果を答えの隣に表で見せ、結果の形が一つの読み方しか
+  許さないとき(最初の列がラベル、残りが 1〜4 本の数)だけグラフも描く。
+  日付なら時間軸の縦棒、文字列なら横棒で折れ線は描かず、軸は一本で、桁の違う系列は一本ずつの
+  小さなグラフにする。どのグラフにするかはページが形から決め、モデルは
+  軸を選ばない。ダッシュボード(保存・ピン留め・定期実行・共有)は持たない。
+  提案された SQL を以後クリック無しで走らせる同意は会話ごとに一度で、
+  失敗はエラーごとエージェントに返る。0142 §7 の「チャートを持たない」を
+  改訂する。残りは 0143 のまま: エージェントは REST の `POST /api/v1/agent`
+  一本の後ろ、「LLM に裁定させる機能は載せない」、MCP の 6 本、CLI は REST
+  の薄いクライアント、`/mcp` は stateless、読みは search → get で単読は
+  `linked_from` を運ぶ、人が判断を下した concept はエージェントから動かせない。
 - [0143 四つの面と、その一つの後ろで答えるエージェント](0143-four-faces-and-an-agent-that-answers-behind-one.md)
-  — **Accepted**。**面の配分の現行ドキュメント。** 0067 と、それに積まれた
-  0076 / 0106 / 0108 / 0118 を一冊に畳む。動く決定は一つ —
-  [0142](0142-ochakai-carries-a-data-agent-that-does-not-rule.md) のエージェントが
-  REST の `POST /api/v1/agent` 一本の後ろにいて、Web UI はそのクライアントで
-  あること。「LLM を使う機能は載せない」は「LLM に裁定させる機能は載せない」
-  になり、MCP にも CLI にもエージェントは載らない(MCP は予算、CLI の人は自分の
-  エージェントを持つ)。Web UI の結果報告はエージェントの答えへの判定としてだけ
-  置く。畳んだ決定: REST が唯一の契約、MCP の 6 本と「能力は他の面に残るときだけ
-  MCP から降りる」、CLI は REST の薄いクライアント、`mcp-stdio` は経路で `/mcp`
-  は stateless(2026-07-28、名乗りは毎回、構築時の一覧は 5 分)、読みは
-  search → get で pack は無く、単読は `linked_from` の行を運ぶ、人が判断を
-  下した concept はエージェントから動かせない。
+  — **Superseded by 0145**。
 - [0067 四つの面と、それぞれが引き受けないもの](0067-four-faces-and-what-they-decline.md)
   — **Superseded by 0143**。
 - [0118 一回の呼び出しが、必要なものを全部運ぶ](0118-a-call-carries-everything-it-needs.md)

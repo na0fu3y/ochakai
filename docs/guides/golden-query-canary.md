@@ -83,7 +83,7 @@ ochakai は関与しない。
   update は何も書かないので、「もう一度確かめた、まだ正しい」は
   どこにも残らない。それこそが verify の存在理由である(設計
   ドキュメント 0141 §2)。MCP に対応するツールは無い — 裁定はその面に
-  置かない(設計ドキュメント 0143 §5.1)。CI で走るカナリアは CI 自身の
+  置かない(設計ドキュメント 0145 §5.1)。CI で走るカナリアは CI 自身の
   身元で記録され、その検証は machine-confirmed で止まる
   ([FAQ](../faq.md#エージェントは検証できるか))。
 - **失敗または警告の場合**: 影響を受けた concept に対して draft の
@@ -93,7 +93,7 @@ ochakai は関与しない。
   "…"` になる — 却下は理由を添えた削除であり、理由は履歴に残るが
   その id への書き戻しは塞がれない(設計ドキュメント 0135 §3)。裁定は MCP の外(Web UI / CLI / REST)から行う:
   エージェントがカナリアを走らせている場合、検証済み concept の上書きと status の
-  変更はどちらも MCP 経由では拒否されるので(設計ドキュメント 0143 §6)、エージェントの出口は下の `report_outcome failed` と、別
+  変更はどちらも MCP 経由では拒否されるので(設計ドキュメント 0145 §6)、エージェントの出口は下の `report_outcome failed` と、別
   id での draft 作成になる。
 - **どちらの場合も、結果を記録する**: `ochakai report queries/<id>
   worked` / `ochakai report queries/<id> failed --note "何が起きた
@@ -172,7 +172,7 @@ jobs:
 
 `ochakai usage queries/<id>`(REST: `GET /api/v1/usage/queries/<id>`。
 MCP には無い — 設計ドキュメント
-[0143](../design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §5.1)は、そのクエリが実際に
+[0145](../design/0145-four-faces-and-an-answer-that-shows-its-result.md) §5.1)は、そのクエリが実際に
 検索で返された回数や fetch された回数、worked と failed の報告数、
 最後に使われたのがいつかを返す。**長いあいだ誰も使っていない検証済み concept** はカナリアの
 優先度を下げる理由になる — あるいは deprecated を検討する理由にも

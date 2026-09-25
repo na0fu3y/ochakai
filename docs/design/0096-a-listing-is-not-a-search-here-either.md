@@ -8,7 +8,7 @@ Status: Accepted(2026-08-10)。[0068](0068-how-a-face-is-added-and-removed.md)
 **§3(hint の置き場所)は [0108](0108-the-context-pack-retires.md) が
 改訂した** — 乗り物だった pack が退役し、hint は `get_concept` の応答に
 移った。残す理由(0069 の機構、常駐ではない)はそのまま。いまは
-[0143](0143-four-faces-and-an-agent-that-answers-behind-one.md) §4 が持つ。
+[0145](0145-four-faces-and-an-answer-that-shows-its-result.md) §4 が持つ。
 Date: 2026-08-10
 
 ## 0. この記録が決めたこと
