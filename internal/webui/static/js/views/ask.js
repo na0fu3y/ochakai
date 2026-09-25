@@ -2,7 +2,7 @@
 // has no agent of their own.
 //
 // The page holds the conversation and sends all of it on every turn: the
-// server keeps none (design doc 0143 §0), so there is no session to lose
+// server keeps none (design doc 0145 §0), so there is no session to lose
 // and nothing to clean up. It is kept in sessionStorage so that opening a
 // concept the answer cited and coming back does not end the conversation;
 // closing the tab does, which is the same lifetime a chat window has.
@@ -28,6 +28,7 @@ import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { entryHash } from '../format.js';
 import { md } from '../markdown.js';
+import { chartHTML, NUMERIC_TYPES, wire } from '../chart.js';
 import { asFailure, asMessage, fmtBytes, fold, hasToken, MAX_BYTES_BILLED, run, signIn } from '../sql.js';
 
 // The server refuses a conversation longer than this (internal/agent).
@@ -101,7 +102,7 @@ function draw(pending) {
   if (!$('#ask-turns')) return; // the person has moved to another view
   const last = turns.length - 1;
   const out = turns.map((t, i) => t.role === 'user'
-    ? (t.res || t.sqlFailed ? resultHTML(t)
+    ? (t.res || t.sqlFailed ? resultHTML(t, i)
       : `<div class="ask-turn ask-user">${t.sqlResult ? md(t.text) : esc(t.text).replace(/\n/g, '<br>')}</div>`)
     : `<div class="card ask-turn ask-agent"><div class="ask-said">${md(t.text)}</div>`
       + `<div class="ask-meta">${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}${draftLine(t.drafts)}${verdictHTML(t, i)}</div></div>`).join('');
@@ -118,6 +119,7 @@ function draw(pending) {
   $('#ask-count').textContent = left <= 6 ? `この会話はあと ${Math.max(0, Math.floor(left / 2))} 往復まで` : '';
   $('#ask-send').disabled = !!pending || left < 1;
   $('#ask-run')?.addEventListener('click', runProposal);
+  wire($('#ask-turns'), i => turns[Number(i)]?.res);
   document.querySelectorAll('[data-verdict]').forEach(b => b.addEventListener('click', openVerdict));
 }
 
@@ -262,16 +264,20 @@ async function execute(query, proj) {
 
 // resultHTML draws what a query returned, or why it did not run. It is
 // the page's line, not the person's words, so it is not drawn as theirs.
-function resultHTML(t) {
+function resultHTML(t, i) {
   if (t.sqlFailed) {
     return `<div class="ask-turn ask-result"><div class="hint">実行できませんでした(エージェントに返しました)</div><pre><code>${esc(t.error)}</code></pre></div>`;
   }
   const r = t.res;
   const shown = r.rows.length < r.total ? `、先頭 ${r.rows.length} 行` : '';
-  const head = r.fields.map(f => `<th>${esc(f)}</th>`).join('');
-  const body = r.rows.map(row => `<tr>${row.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('');
+  // Numbers line up on their last digit, the way a person compares them.
+  const num = (r.types || []).map(t => NUMERIC_TYPES.has(t));
+  const td = (tag, c, i) => `<${tag}${num[i] ? ' class="num"' : ''}>${esc(c)}</${tag}>`;
+  const head = r.fields.map((f, i) => td('th', f, i)).join('');
+  const body = r.rows.map(row => `<tr>${row.map((c, i) => td('td', c, i)).join('')}</tr>`).join('');
   return `<div class="ask-turn ask-result">
       <div class="hint">実行結果(${esc(fmtBytes(r.bytes))} 読み取り、全 ${r.total} 行${shown})</div>
+      ${chartHTML(r, i)}
       <div class="ask-table"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
     </div>`;
 }

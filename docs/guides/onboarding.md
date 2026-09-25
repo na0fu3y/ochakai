@@ -156,7 +156,7 @@ MCP の instructions は、書く前に `Skill` を探し、human-reviewed の�
 まま置くか、検証した骨格への追記を**別の concept**として書かせ、本文からその
 テーブルにリンクさせるか。後者なら、テーブルを取ったエージェントは
 `linked_from` でその追記に出会う
-([0143](../design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)。拒否のメッセー
+([0145](../design/0145-four-faces-and-an-answer-that-shows-its-result.md) §4)。拒否のメッセー
 ジも同じことを言う。
 
 一ヶ月で verified が 20〜30 個あれば、十分に育ったベースである。骨格のまま残

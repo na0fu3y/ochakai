@@ -71,7 +71,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 五つ目だけが置き方について言う — 丸ごと前置するより引かせるほうがよく、
 採る前に比べる門がループのいちばん重い部品である。ochakai は前者をすでに
 その形で持っている(想起フックが差し込むのはポインタ行だけで、本文は
-エージェントが search → get で取る。[0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)。
+エージェントが search → get で取る。[0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §4)。
 後者の比べる一手は利用者の手順に置いてあり
 ([最初のひと月](guides/onboarding.md) §3)、**育てるループそのものも
 クライアントの側に採った** — 答えられなかった問いと失敗報告を束ね、
@@ -426,7 +426,7 @@ Intelligence が記録するのはエージェントの決定の因果であり�
 
 なお表面を数字で比べるなら、MCP だけは本数で語らないこと — ツール数は
 あちらが多いのに、実測の常駐バイトはツールが書き方を教えるこちらの方が
-重い([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §5.1 が「代金は本数ではなく
+重い([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §5.1 が「代金は本数ではなく
 バイト」と言った当のトレードオフである)。数字を置いておく: ochakai は
 6 ツールで 10,485 バイト(2026-09-04、`tools/list` の応答を丸ごと数え、
 instructions の 1,037 を含む — [surface.md](surface.md) の `MCP-BYTES` が
@@ -449,7 +449,7 @@ instructions の 1,037 を含む — [surface.md](surface.md) の `MCP-BYTES` �
 ochakai の前提はその逆側にある: 人を通った数千の concept(下の「負ける
 ところ」の規模の項)であり、その規模に専用エンジンは要らない。多段の
 辿りは、リンクは本文の導出でどの concept も `linked_from` を連れて
-返るから([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)、
+返るから([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §4)、
 エージェントの search → get で足りる。型付き
 リレーションは持たない — `rel` は機械可読な型として導入され、機械が
 一度も読まなかったので、関係の種類は周囲の散文が運ぶ
@@ -702,7 +702,7 @@ ochakai の中核は人の裁定が台帳に載ることだが、その区別は
 README がそう書いており、[0131](design/0131-a-deployment-says-what-it-cannot-do.md)
 のファイルはローカルのままになる)。本文のリンクは markdown のまま運ばれ、
 カタログのネイティブなエッジにはならないので、`linked_from`
-([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)に当たるものは
+([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §4)に当たるものは
 向こうに無い。そして **`synonyms` は `extra` の JSON に入る** — ochakai では
 索引が読む鍵([0105](design/0105-a-concept-answers-to-its-other-names.md))
 だが、向こうでは検索できる欄ではなくなる。C8 の機構は、バンドルと一緒には

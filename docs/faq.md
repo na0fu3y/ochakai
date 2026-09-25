@@ -69,7 +69,7 @@ AI を呼べるなら hybrid search を有効にする。埋め込みが効く�
 ### エージェントは裁定済みのナレッジを上書き・削除できるか
 
 MCP からはできない。削除はそもそもツールですらない — 設計ドキュメント
-[0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §5.1 が `delete_concept` をこの面
+[0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §5.1 が `delete_concept` をこの面
 から降ろした。ナレッジを消すことは裁定であり、MCP は取り消せる裁定さえ
 運んでいないからである。`put_concept` は裁定の立った concept —
 verified・deprecated — を拒み、拒否は代わりに何をすべきかを
@@ -91,7 +91,7 @@ verified・deprecated — を拒み、拒否は代わりに何をすべきかを
 に業務説明を後から足したいなら、追記は別の concept として書き、本文から
 そのテーブルにリンクする — テーブルを取ったエージェントは `linked_from`
 でその追記に出会う(設計ドキュメント
-[0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §4)。検証は信頼の
+[0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §4)。検証は信頼の
 印であると同時に、この面に対する書き込みの門でもある。
 
 これは認可ではない — 同じデプロイに届く呼び出し元は、REST からも CLI

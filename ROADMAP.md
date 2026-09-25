@@ -96,11 +96,13 @@ section says what the stages are for; it does not approve them in advance.
 
 ## Now
 
-- **Stage 1 of the data agent** (above): the person agrees once and the
-  agent runs its own queries, and the answer shows its result as a table
-  and a chart. This amends the web UI's "no charts" clause
-  ([0143](docs/design/0143-four-faces-and-an-agent-that-answers-behind-one.md)
-  §1, §5.4), so it lands with a design record that restates the whole area.
+- **Stage 2 of the data agent** (above): a 👎 becomes a diagnosis and a
+  draft waiting for a ruling, and the kept questions are replayed locally.
+  Stage 1 has landed: the person agrees once and the agent runs its own
+  queries, and the answer shows its result as a table and, where the
+  result's shape allows one reading, a chart
+  ([0145](docs/design/0145-four-faces-and-an-answer-that-shows-its-result.md)
+  §5.4).
 - **Keep the invariant checks growing with the code**
   ([0035](docs/design/0035-verifiability.md)): exhaustiveness linting, the
   OpenAPI contract test that runs every REST integration request and response
@@ -209,7 +211,7 @@ it.
   the server runs no query. Where a deployment turns on its own agent, the UI
   asks it. The agent answers from the knowledge, says whether a person
   confirmed each concept, and rules on nothing
-  ([0143](docs/design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §1).
+  ([0145](docs/design/0145-four-faces-and-an-answer-that-shows-its-result.md) §1).
   An answer may show its own result (stage 1 above). Charts that are saved,
   pinned, scheduled or shared as a board stay out: that is a BI tool, and
   the knowledge is what ochakai competes on.

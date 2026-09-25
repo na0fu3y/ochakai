@@ -6,7 +6,7 @@
 `ochakai` is a thin client of the REST API — every client command
 below is one HTTP call against the server named by `--url`, `$OCHAKAI_URL`,
 or the `ochakai use` selection, in that order (design docs
-[0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §2). `serve`
+[0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §2). `serve`
 and `serve-ui` are the exception: they are the deployed services, and they
 take their configuration from the environment rather than from flags —
 [Requirements and configuration](configuration.md) (Japanese) lists it.

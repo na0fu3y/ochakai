@@ -87,13 +87,20 @@ export async function run(tok, project, query) {
     }), { method: 'GET' });
   }
   if (!r.jobComplete) throw new Error('クエリが一分以内に終わりませんでした');
-  const fields = (r.schema?.fields || []).map(f => f.name);
-  const rows = (r.rows || []).map(row => row.f.map(c => cell(c.v)));
-  return { fields, rows, total: Number(r.totalRows || rows.length), bytes: Number(r.totalBytesProcessed || 0) };
+  const schema = r.schema?.fields || [];
+  const fields = schema.map(f => f.name);
+  const types = schema.map(f => (f.mode === 'REPEATED' ? 'REPEATED' : f.type));
+  const rows = (r.rows || []).map(row => row.f.map((c, i) => cell(c.v, types[i])));
+  return { fields, types, rows, total: Number(r.totalRows || rows.length), bytes: Number(r.totalBytesProcessed || 0) };
 }
 
-function cell(v) {
+function cell(v, type) {
   if (v === null || v === undefined) return 'NULL';
+  // BigQuery hands a TIMESTAMP back as seconds since the epoch, which
+  // neither a person nor the agent reads as a time.
+  if (type === 'TIMESTAMP' && /^-?[\d.]+(E\d+)?$/i.test(v)) {
+    return new Date(Number(v) * 1000).toISOString().replace('T', ' ').replace(/\.000Z$|Z$/, ' UTC');
+  }
   if (typeof v === 'object') return JSON.stringify(v);
   return String(v).replace(/[\t\n]/g, ' ');
 }

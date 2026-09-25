@@ -24,6 +24,11 @@
      --accent-weak: that tint is a surface behind whole panels, and at
      the size of one word inside a sentence it does not read as marked. */
   --mark-bg: #cfeadb; --mark-fg: #10301f;
+  /* A chart's series, in a fixed order: a series' colour is its column's
+     place in the result. Validated as an adjacent-pair categorical set
+     against --bg in both modes; three light slots sit under 3:1, and the
+     table drawn under every chart is the relief for that. */
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -43,6 +48,7 @@
     --deprecated-fg: #e8a465; --deprecated-bg: #382a1d; --deprecated-bd: #6d4d2e;
     --rejected-fg: #e08e8e; --rejected-bg: #382020; --rejected-bd: #6d3535;
     --mark-bg: #3c6a51; --mark-fg: #f2fbf6;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
   }
 }
 * { box-sizing: border-box; }
@@ -813,7 +819,31 @@ body:not(.has-agent) .agent-only { display: none !important; }
 .ask-table { overflow-x: auto; max-height: 24rem; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
 .ask-table table { border-collapse: collapse; font-size: .84rem; font-variant-numeric: tabular-nums; }
 .ask-table th, .ask-table td { padding: .3rem .6rem; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.ask-table .num { text-align: right; }
 .ask-table th { position: sticky; top: 0; background: var(--bg); color: var(--muted); font-weight: 500; }
+/* A result's chart (design doc 0145 §5.4): thin marks, a recessive grid,
+   text in the text colours and never the series colour. */
+.ask-chart { margin: .3rem 0 .6rem; max-width: 46rem; }
+.chart-box { position: relative; }
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart .grid { stroke: var(--border); stroke-width: 1; }
+.chart .grid.zero { stroke: var(--muted); }
+.chart .tick, .chart .label { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .label { fill: var(--text); }
+.chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .cross { stroke: var(--muted); stroke-width: 1; }
+.chart .dot { stroke: var(--bg); stroke-width: 2; }
+.chart .hit { fill: transparent; }
+.chart .s1 { stroke: var(--series-1); } .chart .bar.s1, .chart .dot.s1, .swatch.s1 { fill: var(--series-1); background: var(--series-1); }
+.chart .s2 { stroke: var(--series-2); } .chart .bar.s2, .chart .dot.s2, .swatch.s2 { fill: var(--series-2); background: var(--series-2); }
+.chart .s3 { stroke: var(--series-3); } .chart .bar.s3, .chart .dot.s3, .swatch.s3 { fill: var(--series-3); background: var(--series-3); }
+.chart .s4 { stroke: var(--series-4); } .chart .bar.s4, .chart .dot.s4, .swatch.s4 { fill: var(--series-4); background: var(--series-4); }
+.chart .bar { stroke: none; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .82rem; color: var(--text); margin-bottom: .2rem; }
+.swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .3rem; vertical-align: -1px; }
+.chart-tip { position: absolute; pointer-events: none; background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: .3rem .5rem; font-size: .8rem;
+  box-shadow: var(--shadow-hover); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ask-form { position: sticky; bottom: 0; background: var(--bg); padding: .5rem 0; }
 .ask-form textarea { width: 100%; box-sizing: border-box; }
 .files-off { display: none; }

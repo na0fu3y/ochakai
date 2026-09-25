@@ -15,7 +15,7 @@ Status: Accepted(2026-07-29)。**BREAKING(文言のみ)。**
 今の MCP を写していない**: `delete_concept` と `get_concept_usage` は
 [0076](0076-two-tools-leave-mcp.md) が降ろし、`get_attachment` は 0064 §6
 が `get_file` に改めたので、**本数は 8 ではなく 6 本**である(いまの 6 本は
-[0143](0143-four-faces-and-an-agent-that-answers-behind-one.md) §1)。改名そのもの
+[0145](0145-four-faces-and-an-answer-that-shows-its-result.md) §1)。改名そのもの
 ——読む語は `concept`——は残る 4 本と散文で現行のまま
 Date: 2026-07-29
 

@@ -75,7 +75,7 @@ Search ranks what bears on the question; `get` hands one concept over in
 full, and its `linked_from` rows name what points back at it — which is
 how the caveat that says *how to read* a metric reaches whoever reads the
 metric ([design doc
-0143 §4](docs/design/0106-a-read-carries-what-points-at-it.md)). Here is
+0145 §4](docs/design/0106-a-read-carries-what-points-at-it.md)). Here is
 part of what the insight above holds, condensed — the quoted sentences
 are verbatim, and the English beside them is this page's rendering of
 what the demo actually says:
@@ -336,7 +336,7 @@ ochakai loses, and says who should pick something else.
 | LLM | it returns human-verified golden queries verbatim, and the definitions and caveats around them. Interpretation is the client agent's job. With semantic search on, concept bodies and the queries people type are sent to a Vertex AI embedding model in your own project and region — a deterministic encoder that returns vectors and writes no text. `OCHAKAI_EMBEDDINGS=off` is the switch |
 | SQL execution | it holds no warehouse credentials. Your agent executes |
 | connector ingestion | knowledge is curated, not harvested. Trust density over volume — and a harvester would need warehouse credentials the server does not hold, so a catalog projection runs as an ordinary client under your own service account ([example](examples/bigquery-catalog) (Japanese)) |
-| chat UI or dashboards | it feeds your agents; it doesn't compete with them. The bundled web UI is a curation surface, not a BI tool |
+| dashboards | the bundled web UI is where people curate, and where a person without an agent of their own asks the deployment's agent (off by default). An answer shows the result of the query the person ran, as a table and, when the result's shape allows one reading, a chart. Nothing is saved, pinned or scheduled as a board ([0145](docs/design/0145-four-faces-and-an-answer-that-shows-its-result.md) §5.4, Japanese) |
 | secrets | Cloud Run IAM decides who reaches it and Cloud SQL authenticates the service account — nothing to issue or rotate |
 | roles, a user database, per-concept permissions | reachability is the access model, and the one boundary ochakai does hold is grants of read and write **under a directory**, off unless you write one ([0109](docs/design/0109-a-directory-has-readers-and-writers.md), Japanese) — see [requirements and configuration](docs/configuration.md#authentication-has-no-configuration) (Japanese) |
 | telemetry | nothing is reported anywhere. The only hosts ochakai contacts are Google Cloud APIs in your own project |
