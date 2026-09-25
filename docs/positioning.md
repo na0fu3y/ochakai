@@ -940,13 +940,13 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
 - **エージェントとしての完成度。** 目標を決めたのは 2026-09-25 で、
   いま比べれば上の「データエージェント製品」に機能で負ける。いまある
   のは、一度の同意の後はエージェントが自分のクエリを走らせ、失敗を読んで
-  直し、結果を表で見せるところまでである(ROADMAP の一段目の前半)。
-  **チャートはまだ無く**(Web UI にチャートを置かないという
-  [0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md)
-  §1・§5.4 を改める記録と一緒に来る)、走るのは BigQuery だけで
+  直し、結果を表と、形が許せばグラフで見せるところまでである(ROADMAP
+  の一段目、[0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md)
+  §1・§5.4)。どのグラフにするかはページが結果の形だけから決めるので、
+  描き方を問いに合わせて選ぶことはできない。走るのは BigQuery だけで
   ([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §4)、
-  Slack もモバイルもスケジュールも無い。ダッシュボードと、保存して共有
-  する板は、目標が動いても作らない。
+  Slack もモバイルもスケジュールも無い。ダッシュボード — 保存し、ピン
+  留めし、定期に走らせ、共有するボード — は、目標が動いても作らない。
 - **初日。** Genie Ontology はチームに hand-curate を求めず、Cortex Sense
   は立ち上げが一日だったと書く。ochakai のエージェントは空のベースから
   始まり、答えの根拠になるのは人が裁定したものである — 裁定が無ければ
@@ -963,7 +963,7 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
 - **書く体験。** Obsidian とそのエコシステムは、書く場所としても眺める
   場所としてもはるかに優れている。同梱の Web UI はキュレーションと
   エージェントに問うための面であって、執筆環境でも BI ツールでもない
-  ([0143](design/0143-four-faces-and-an-agent-that-answers-behind-one.md) §1)。
+  ([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §1)。
 - **Google Cloud なら純正がある。** 上の Knowledge Catalog は同じ IAM の
   上で立てるものが無く、収集は自動で、MCP も持っている。ochakai の
   プロジェクトと Postgres と月 $10 とセットアップは、人の裁定・却下の
@@ -1031,7 +1031,7 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   任せられるなら → semantic の中核と kinetic の定義を最小に持つ、それが
   この枠である。
 - データが一つのプラットフォームに収まっていて、明日から答えるエージェント
-  — チャート、Slack、スケジュール — が要り、どの読み方を採るかを機械の
+  — Slack、モバイル、スケジュール — が要り、どの読み方を採るかを機械の
   順位に任せてよいなら → そのプラットフォームのエージェント(Genie、
   Cortex Agents、Conversational Analytics)。いまの ochakai より完成して
   いる。
