@@ -102,12 +102,14 @@ section says what the stages are for; it does not approve them in advance.
 
 ## Now
 
-- **Stage 3 of the data agent** (above): an empty base fills from the
-  page (0148), and the agent proposes the meaning a person applies
-  (0149). What is left is to use it on a real dataset and see whether the
-  first day ends with descriptions a person would verify. Stages 1 and 2
-  shipped in 0.29.0: automatic runs, answers that show their result, 👍
-  keeping a question, 👎 diagnosing, and `ochakai eval`.
+- **Stage 4 of the data agent** (above): where people already ask. It
+  is not designed yet, and the condition it starts from is that a chat
+  surface needing a secret stays out. Stages 1 and 2 shipped in 0.29.0:
+  automatic runs, answers that show their result, 👍 keeping a question,
+  👎 diagnosing, and `ochakai eval`. Stage 3 shipped in 0.29.1: an empty
+  base fills from the page (0148), and the agent proposes the meaning a
+  person applies (0149). It shipped after a full run against a public
+  dataset and a real model, and the fixes that run found.
 - **Keep the invariant checks growing with the code**
   ([0035](docs/design/0035-verifiability.md)): exhaustiveness linting, the
   OpenAPI contract test that runs every REST integration request and response
