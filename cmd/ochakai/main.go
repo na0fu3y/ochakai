@@ -385,11 +385,30 @@ func agentModel(ctx context.Context, cfg *config.Config, log *slog.Logger) (llm.
 	if _, err := m.Generate(probe, llm.Request{
 		Contents: []llm.Content{{Role: "user", Parts: []llm.Part{{Text: "ochakai"}}}},
 	}); err != nil {
+		if credentialProblem(err) {
+			return nil, fmt.Errorf("OCHAKAI_AGENT: the Google credentials could not be used to call %s — this is the credential, not the model or its permissions. On a laptop run `gcloud auth application-default login`; on Cloud Run check the service account: %w",
+				a.Model, err)
+		}
 		return nil, fmt.Errorf("OCHAKAI_AGENT: %s did not answer in %s (project %s). Grant roles/aiplatform.user to the service identity, enable aiplatform.googleapis.com, and check that this region carries the model — ochakai will not send the text to another region: %w",
 			a.Model, a.Location, a.Project, err)
 	}
 	log.Info("agent enabled", "model", a.Model, "project", a.Project, "location", a.Location)
 	return m, nil
+}
+
+// credentialProblem says whether err is the Google credential failing
+// rather than the model or its permissions — an expired or revoked
+// token, or none at all. The startup message named IAM and the region
+// for every failure, and an operator whose laptop's application-default
+// login had lapsed (invalid_grant, invalid_rapt) went looking at IAM.
+func credentialProblem(err error) bool {
+	msg := err.Error()
+	for _, s := range []string{"oauth2:", "invalid_grant", "invalid_rapt", "could not find default credentials"} {
+		if strings.Contains(msg, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // agentProbeTimeout bounds the one generation that decides whether the

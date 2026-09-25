@@ -110,6 +110,51 @@ last entry.
   strictly after the newest verification. One entry's acts keep the order
   they happened in, whichever clock is ahead.
 
+What a real day-one run found (2026-09-25). The run was
+`bigquery-public-data.thelook_ecommerce` → the page's import → filling the
+descriptions with the agent (`gemini-2.5-flash` and `gemini-3.8-flash`) →
+applying → `ochakai eval`.
+
+- **A query the model writes into its answer becomes the proposal.** The
+  model sometimes put SQL in a fenced block instead of calling
+  `propose_sql`, having seen its own earlier proposals come back that
+  way, and a conversation with automatic runs agreed stopped there. The
+  answer's last fenced `SELECT`/`WITH` block is now read as the proposal,
+  and the prompt says a query only runs when proposed.
+- **The model is told today's date.** A note said "as of 2024-05-15" for a
+  count taken on 2026-09-25.
+- **A proposed revision is kept in canonical form, and the agent sees
+  what it changes.** One proposal announced a description and carried
+  none. `propose_revision` now answers with the fields it changes, the
+  description as parsed, and a warning when the description is still
+  empty. The diff the person reads is the change the write makes, so a
+  `status` line the model left out no longer shows as removed.
+- **A busy model is waited out longer, and its failure keeps the query
+  that ran.** A shared quota's 429 outlasted three attempts over five
+  seconds; there are now six over about half a minute. When the answer
+  still fails, the page keeps the result the person already paid for,
+  offers 「答えをもう一度頼む」, and says the model was busy instead of
+  a bare error. An empty model turn is asked again once before it fails
+  the question.
+- **The agent asks before it writes, removes seed's placeholder, and
+  places drafts beside their tables.** It asks its questions in the same
+  answer as its first check, so they are not lost behind the proposal.
+  It deletes seed's "Nothing below was written by a person yet" once a
+  person's words are in. And it puts drafts in the table's own
+  directory, not a type-named folder or an invented one.
+- **The import leads to the agent, and an empty base leads to the
+  import.** The import's result offers 「エージェントと説明を埋める」 with
+  the request written into the agent's box. An empty home page on a
+  deployment that reads BigQuery points at 「BigQuery から取り込む」.
+- **The first view waits for what the deployment says about itself.** On
+  a reload of `#/seed`, the page asked for a billing project the
+  deployment had already named, because the view drew before `stats`
+  answered.
+- **A startup whose Google credential has lapsed says so.** The agent's
+  probe blamed IAM and the region for an expired application-default
+  login (`invalid_grant`, `invalid_rapt`). It now says the credential is
+  the problem and how to renew it.
+
 ## [0.29.0] - 2026-09-25
 
 A minor although nothing breaks: this is the release in which the

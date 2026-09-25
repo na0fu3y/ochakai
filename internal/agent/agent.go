@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -157,9 +158,18 @@ func answer(ctx context.Context, svc *service.Service, msgs []Message, dryRun bo
 	default:
 		sys += systemNoDraft
 	}
+	// The model does not know what day it is, and a note that says when
+	// something was checked is only as good as its date: on a real run it
+	// wrote "as of 2024-05-15" for a count taken on 2026-09-25.
+	sys += "\n\n今日は " + now().UTC().Format("2006-01-02") + "(UTC)である。確かめた日付を書くときは、この日付を使う。"
 	req := llm.Request{System: sys, Contents: contents, Tools: all}
+	retried := false
 	for range maxRounds {
 		turn, err := svc.Model.Generate(ctx, req)
+		if errors.Is(err, llm.ErrNoAnswer) && !retried {
+			retried = true // the same stumble, reported as no candidate at all
+			continue
+		}
 		if err != nil {
 			return nil, fmt.Errorf("the agent could not answer: %w", err)
 		}
@@ -176,7 +186,23 @@ func answer(ctx context.Context, svc *service.Service, msgs []Message, dryRun bo
 		if len(calls) == 0 {
 			text := strings.TrimSpace(turn.Text())
 			if text == "" {
-				return nil, fmt.Errorf("the agent could not answer: %w", llm.ErrNoAnswer)
+				// A turn with neither text nor a call is the model
+				// stumbling, not answering (seen on a real run after
+				// reading a job log): ask once more before failing the
+				// person's question with it.
+				if !retried {
+					retried = true
+					continue
+				}
+				return nil, fmt.Errorf("the agent could not answer (finish reason %q): %w", turn.FinishReason, llm.ErrNoAnswer)
+			}
+			// A query written into the text instead of proposed runs
+			// nowhere, and a conversation with automatic runs agreed
+			// stops at it. The model does this after seeing its own
+			// earlier proposals, which travel back in its messages as
+			// fenced SQL; the answer is read as the proposal it meant.
+			if p, rest := sqlInText(text); p != nil {
+				return &Answer{Text: rest, Read: r.read, SQL: p, Drafts: r.drafts, Revisions: r.revisions}, nil
 			}
 			return &Answer{Text: text, Read: r.read, Drafts: r.drafts, Revisions: r.revisions}, nil
 		}
@@ -189,6 +215,32 @@ func answer(ctx context.Context, svc *service.Service, msgs []Message, dryRun bo
 		req.Contents = append(req.Contents, turn.Content, llm.Content{Role: "user", Parts: answers})
 	}
 	return nil, fmt.Errorf("the agent did not finish within %d rounds of reading", maxRounds)
+}
+
+// now is the clock the system prompt reads today's date from; a variable
+// so tests can hold it still.
+var now = time.Now
+
+// sqlFence finds a fenced sql block, the way the web UI sends a
+// proposal back in the agent's own message.
+var sqlFence = regexp.MustCompile("(?s)```sql\\s*\\n(.*?)\\n?```")
+
+// sqlInText reads the last fenced SQL block of an answer as the proposal
+// the model meant to make, when it is a read — SELECT or WITH — and
+// returns the text without it. Anything else stays text.
+func sqlInText(text string) (*Proposal, string) {
+	all := sqlFence.FindAllStringSubmatchIndex(text, -1)
+	if len(all) == 0 {
+		return nil, text
+	}
+	m := all[len(all)-1]
+	q := strings.TrimSpace(text[m[2]:m[3]])
+	head := strings.ToUpper(strings.Fields(q + " x")[0])
+	if head != "SELECT" && head != "WITH" {
+		return nil, text
+	}
+	rest := strings.TrimSpace(text[:m[0]] + text[m[1]:])
+	return &Proposal{Query: q, Purpose: rest}, rest
 }
 
 // proposal is the first propose_sql call in a turn, or nil. A call with
@@ -385,16 +437,48 @@ func (r *run) proposeRevision(ctx context.Context, id, document string) (any, er
 			return nil, fmt.Errorf("this turn already proposes a revision of %s; put everything into one document", id)
 		}
 	}
-	if _, err := r.svc.RevisableDraft(ctx, id, document); err != nil {
+	k, err := r.svc.RevisableDraft(ctx, id, document)
+	if err != nil {
 		return nil, err
 	}
 	cur, err := r.svc.Store.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	r.revisions = append(r.revisions, store.TurnRevision{ID: id, Document: document, Base: cur.ContentHash})
-	return map[string]any{"id": id, "proposed": true,
-		"note": "問うた人が差分を読んで適用するまで、何も変わらない。答えに、何を根拠に何を変えたかを書く。"}, nil
+	// Kept in the canonical form rather than as the model wrote it: that
+	// is the form a read renders, so the diff the person reads before
+	// applying is the change the write makes — and not, say, a status
+	// line the model left out that the write puts back.
+	canon, err := okf.Canonical(k)
+	if err != nil {
+		return nil, err
+	}
+	r.revisions = append(r.revisions, store.TurnRevision{ID: id, Document: string(canon), Base: cur.ContentHash})
+	// What the proposal changes, as parsed, so the model can see whether
+	// it said what it meant to: on a real run it announced a description
+	// and proposed a document without one.
+	changed := []string{}
+	if k.Title != cur.Title {
+		changed = append(changed, "title")
+	}
+	if k.Description != cur.Description {
+		changed = append(changed, "description")
+	}
+	if strings.TrimSpace(k.Body) != strings.TrimSpace(cur.Body) {
+		changed = append(changed, "body")
+	}
+	if was, err := okf.Canonical(cur); err == nil && len(changed) == 0 && string(was) != string(canon) {
+		changed = append(changed, "frontmatter")
+	}
+	out := map[string]any{"id": id, "proposed": true, "changes": changed, "description": k.Description,
+		"note": "問うた人が差分を読んで適用するまで、何も変わらない。答えに、何を根拠に何を変えたかを書く。"}
+	switch {
+	case len(changed) == 0:
+		out["warning"] = "今の draft と何も変わらない提案である。"
+	case k.Description == "":
+		out["warning"] = "description がまだ空である。frontmatter の description キーに一文を書くなら、もう一度 propose_revision する(同じ id は一度だけなので、この turn で出し直すことはできない — 答えにそう書く)。"
+	}
+	return out, nil
 }
 
 type args map[string]any

@@ -206,8 +206,13 @@ func (g *Gemini) Generate(ctx context.Context, req Request) (*Turn, error) {
 }
 
 // backoff is the wait before the first retry; each further one waits
-// four times longer. A variable so tests do not sleep for real.
+// twice as long, for maxAttempts in all — about half a minute, which is
+// how long a shared quota's 429 was seen to last on a real deployment
+// (2026-09-25: three attempts over five seconds all met it). A variable
+// so tests do not sleep for real.
 var backoff = time.Second
+
+const maxAttempts = 6
 
 func (g *Gemini) post(ctx context.Context, req any) ([]byte, error) {
 	body, err := json.Marshal(req)
@@ -216,14 +221,14 @@ func (g *Gemini) post(ctx context.Context, req any) ([]byte, error) {
 	}
 	wait := backoff
 	var lastErr error
-	for attempt := range 3 {
+	for attempt := range maxAttempts {
 		if attempt > 0 {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			case <-time.After(wait):
 			}
-			wait *= 4
+			wait *= 2
 		}
 		out, retryable, err := g.postOnce(ctx, body)
 		if err == nil {

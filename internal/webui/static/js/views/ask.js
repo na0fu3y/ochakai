@@ -91,6 +91,13 @@ export function viewAsk() {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
   });
   $('#ask-new').addEventListener('click', () => { turns = []; save(); setAuto(false); draw(); $('#ask-text').focus(); });
+  // A request another view wrote for the person (the import's "fill the
+  // descriptions with the agent"), placed in the box rather than sent:
+  // the person reads it, changes it, and sends it.
+  try {
+    const pre = sessionStorage.getItem('ochakai.ask.prefill');
+    if (pre) { $('#ask-text').value = pre; sessionStorage.removeItem('ochakai.ask.prefill'); }
+  } catch { /* nothing to place */ }
   draw();
 }
 
@@ -104,7 +111,12 @@ function draw(pending) {
       : `<div class="ask-turn ask-user">${t.sqlResult ? md(t.text) : esc(t.text).replace(/\n/g, '<br>')}</div>`)
     : `<div class="card ask-turn ask-agent"><div class="ask-said">${md(t.text)}</div>`
       + `<div class="ask-meta">${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}${draftLine(t.drafts)}${revisionsHTML(t, i)}${verdictHTML(t, i)}</div></div>`).join('');
-  $('#ask-turns').innerHTML = out + (pending
+  // A conversation that ends with a result and no answer is one whose
+  // answer failed: offer to ask for it again rather than to type.
+  const tail = turns.at(-1);
+  const retry = !pending && tail && tail.role === 'user' && (tail.sqlResult || tail.sqlFailed)
+    ? '<div class="ask-retry"><button type="button" id="ask-retry" class="btn small">答えをもう一度頼む</button></div>' : '';
+  $('#ask-turns').innerHTML = out + retry + (pending
     ? `<div class="empty" id="ask-pending">${pending === 'run' ? '提案された SQL を実行しています…' : 'エージェントが読んでいます…'}</div>`
     : (turns.length ? '' : '<div class="empty">まだ何も訊いていません。</div>'));
   clearInterval(ticking);
@@ -117,6 +129,7 @@ function draw(pending) {
   $('#ask-count').textContent = left <= 6 ? `この会話はあと ${Math.max(0, Math.floor(left / 2))} 往復まで` : '';
   $('#ask-send').disabled = !!pending || left < 1;
   $('#ask-run')?.addEventListener('click', runProposal);
+  $('#ask-retry')?.addEventListener('click', () => answer());
   document.querySelectorAll('[data-verdict]').forEach(b => b.addEventListener('click', openVerdict));
   document.querySelectorAll('[data-diagnose]').forEach(b => b.addEventListener('click', diagnose));
   document.querySelectorAll('[data-rev-diff]').forEach(d => d.addEventListener('toggle', showRevisionDiff));
@@ -439,9 +452,14 @@ async function answer() {
     autoRun().catch(e => { toast('実行できませんでした: ' + e.message, 8000); draw(); });
     return true;
   } catch (e) {
-    turns.pop();
+    // A query's result stays: it ran, as the person, and was paid for —
+    // dropping it would put the proposal back to be run again. The person
+    // asks for the answer again instead. Their own words come off, as
+    // before, so the box can hand them back.
+    const last = turns.at(-1);
+    if (!(last && (last.sqlResult || last.sqlFailed))) turns.pop();
     save();
-    toast('答えられませんでした: ' + e.message, 6000);
+    toast('エージェントが答えられませんでした(モデルが混み合っているか、応答しませんでした)。少し待ってからもう一度頼んでください: ' + e.message, 8000);
     draw();
     return false;
   }
