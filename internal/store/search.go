@@ -956,7 +956,7 @@ func efSearch(limit int) int {
 //
 // strict_order rather than relaxed_order, which is the faster of the two
 // and returns rows slightly out of distance order. The ranking is what
-// this repays: a hit's position is what RRF fuses on (design doc 0080),
+// this repays: a hit's position is what RRF fuses on (design doc 0146),
 // so rows out of order are a ranking quietly built on the wrong ranks,
 // and the deployments where the cost of ordering them shows up are far
 // past the size at which the planner reaches for this index at all.

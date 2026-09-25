@@ -39,7 +39,7 @@ func TestGCSBucket(t *testing.T) {
 	})
 }
 
-// One variable says how a deployment embeds (design doc 0080): unset or
+// One variable says how a deployment embeds (design doc 0146): unset or
 // "on" for the product's default around a discovered project, "off" for
 // none, and a Vertex AI model resource name for a deployment that needs a
 // particular model, region or project. A deployment that wants no Vertex
@@ -58,62 +58,69 @@ func TestEmbeddingsSwitch(t *testing.T) {
 		if !cfg.EmbeddingsOff {
 			t.Fatal("OCHAKAI_EMBEDDINGS=off did not turn embeddings off")
 		}
-		cfg.EnableDiscoveredEmbedding("some-project", "asia-northeast1")
-		if cfg.Embedding != nil {
-			t.Errorf("a discovered project turned embeddings back on: %+v", cfg.Embedding)
+		for _, older := range []bool{false, true} {
+			cfg.EnableDiscoveredEmbedding("some-project", "asia-northeast1", older)
+			if cfg.Embedding != nil {
+				t.Errorf("a discovered project turned embeddings back on: %+v", cfg.Embedding)
+			}
 		}
 	})
 
-	t.Run("a discovered default is not a named one", func(t *testing.T) {
-		cfg, err := FromEnv()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cfg.Embedding != nil {
-			t.Fatalf("Embedding = %+v before discovery, want nil", cfg.Embedding)
-		}
-		cfg.EnableDiscoveredEmbedding("some-project", "asia-northeast1")
-		if cfg.Embedding == nil || cfg.Embedding.Project != "some-project" {
-			t.Fatalf("Embedding = %+v, want the discovered project", cfg.Embedding)
-		}
-		// The flag is what decides that a Vertex AI that does not answer
-		// is a fallback rather than a failure to start.
-		if !cfg.Embedding.Discovered {
-			t.Error("a discovered default was recorded as named")
-		}
-		// The location is the discovered region, not a constant: the text
-		// is embedded where the deployment runs (design doc 0080 §1.2).
-		if cfg.Embedding.Model != "gemini-embedding-001" ||
-			cfg.Embedding.Location != "asia-northeast1" || cfg.Embedding.Dim != 768 {
-			t.Errorf("model=%q location=%q dim=%d, want the product's model in the discovered region",
-				cfg.Embedding.Model, cfg.Embedding.Location, cfg.Embedding.Dim)
+	// A base made since design doc 0146 embeds with gemini-embedding-2 in
+	// global wherever the deployment runs: that model answers nowhere
+	// else, so the region it was deployed to is not where the text goes.
+	t.Run("a new base gets the product's model in global", func(t *testing.T) {
+		for _, region := range []string{"asia-northeast1", "us-central1", ""} {
+			cfg, err := FromEnv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.Embedding != nil {
+				t.Fatalf("Embedding = %+v before discovery, want nil", cfg.Embedding)
+			}
+			cfg.EnableDiscoveredEmbedding("some-project", region, false)
+			e := cfg.Embedding
+			if e == nil || e.Project != "some-project" {
+				t.Fatalf("deployed in %q: Embedding = %+v, want the discovered project", region, e)
+			}
+			// The flag is what decides that a Vertex AI that does not
+			// answer is a fallback rather than a failure to start.
+			if !e.Discovered {
+				t.Error("a discovered default was recorded as named")
+			}
+			if e.Model != "gemini-embedding-2" || e.Location != "global" || e.Dim != 768 {
+				t.Errorf("deployed in %q: model=%q location=%q dim=%d, want gemini-embedding-2 in global at 768",
+					region, e.Model, e.Location, e.Dim)
+			}
 		}
 	})
 
-	// The whole point of reading the region: two deployments of the same
-	// image embed in two different places, each its own.
-	t.Run("the discovered region is where the text goes", func(t *testing.T) {
+	// A base made before keeps what it had: gemini-embedding-001, in the
+	// region it runs in, so two deployments of the same image embed in
+	// two different places, each its own (design doc 0146 §1.2).
+	t.Run("an older base keeps its model in its own region", func(t *testing.T) {
 		for _, region := range []string{"asia-northeast1", "europe-west4", "us-central1"} {
 			cfg, err := FromEnv()
 			if err != nil {
 				t.Fatal(err)
 			}
-			cfg.EnableDiscoveredEmbedding("some-project", region)
-			if cfg.Embedding == nil || cfg.Embedding.Location != region {
-				t.Errorf("deployed in %s, embedding at %+v", region, cfg.Embedding)
+			cfg.EnableDiscoveredEmbedding("some-project", region, true)
+			e := cfg.Embedding
+			if e == nil || e.Model != "gemini-embedding-001" || e.Location != region || e.Dim != 768 {
+				t.Errorf("an older base deployed in %s embeds with %+v", region, e)
 			}
 		}
 	})
 
 	// Refusing here is the decision: any region this code picked would be
-	// one nobody chose, and where the text goes is not ochakai's call to
-	// make quietly (design doc 0080 §1.2).
-	t.Run("no region means no discovered embedding", func(t *testing.T) {
+	// one nobody chose, and where an older base's text goes is not
+	// ochakai's call to make quietly.
+	t.Run("an older base with no region has no discovered embedding", func(t *testing.T) {
 		cfg, err := FromEnv()
 		if err != nil {
 			t.Fatal(err)
 		}
-		cfg.EnableDiscoveredEmbedding("some-project", "")
+		cfg.EnableDiscoveredEmbedding("some-project", "", true)
 		if cfg.Embedding != nil {
 			t.Errorf("Embedding = %+v; a region nobody could read was filled in anyway", cfg.Embedding)
 		}
@@ -138,9 +145,11 @@ func TestEmbeddingsSwitch(t *testing.T) {
 		if cfg.Embedding.Dim != 768 {
 			t.Errorf("Dim = %d, want 768 — the width ochakai carries for this model", cfg.Embedding.Dim)
 		}
-		cfg.EnableDiscoveredEmbedding("some-other-project", "asia-northeast1")
-		if cfg.Embedding.Project != "named-project" || cfg.Embedding.Location != "global" {
-			t.Errorf("Embedding = %+v; discovery overrode a named model", cfg.Embedding)
+		for _, older := range []bool{false, true} {
+			cfg.EnableDiscoveredEmbedding("some-other-project", "asia-northeast1", older)
+			if cfg.Embedding.Project != "named-project" || cfg.Embedding.Location != "global" {
+				t.Errorf("Embedding = %+v; discovery overrode a named model", cfg.Embedding)
+			}
 		}
 	})
 
@@ -154,7 +163,7 @@ func TestEmbeddingsSwitch(t *testing.T) {
 			"projects//locations/l/publishers/google/models/gemini-embedding-001",
 			"projects/p/locations/l/models/gemini-embedding-001",
 			// A model ochakai has no width for: guessing one writes
-			// vectors nobody can compare (design doc 0080 §3).
+			// vectors nobody can compare (design doc 0146 §3).
 			"projects/p/locations/l/publishers/google/models/gemini-embedding-99",
 		} {
 			t.Run(v, func(t *testing.T) {
@@ -184,18 +193,21 @@ func TestEmbeddingsErrorNamesTheThreeForms(t *testing.T) {
 	}
 }
 
-// The width follows from the model, so the model ochakai reaches for when
-// nobody names one must be a model it carries a width for. Nothing else
-// in FromEnv can report that it is not.
-func TestTheDefaultModelHasAWidth(t *testing.T) {
-	dim, ok := embed.Dimension(defaultEmbeddingModel)
-	if !ok {
-		t.Fatalf("no width for the default model %q: every discovered deployment would embed at 0",
-			defaultEmbeddingModel)
-	}
-	if dim != 768 {
-		t.Errorf("the default model's width is %d, want 768 — changing it strands every vector "+
-			"already stored by every deployment", dim)
+// The width follows from the model, so the models ochakai reaches for when
+// nobody names one must be models it carries a width for — and the same
+// one, so a base never has to rebuild its vector tables over which
+// default it was made under. Nothing else in FromEnv can report that
+// they are not.
+func TestTheDefaultModelsHaveAWidth(t *testing.T) {
+	for _, model := range []string{defaultEmbeddingModel, regionalEmbeddingModel} {
+		dim, ok := embed.Dimension(model)
+		if !ok {
+			t.Fatalf("no width for the default model %q: every discovered deployment would embed at 0", model)
+		}
+		if dim != 768 {
+			t.Errorf("the default model %q has width %d, want 768 — changing it strands every vector "+
+				"already stored by every deployment", model, dim)
+		}
 	}
 }
 

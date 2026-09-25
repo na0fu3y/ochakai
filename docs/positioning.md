@@ -920,7 +920,7 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   も同じである。ホストされたエージェント、CI ジョブ、そして自分の Web
   サービスに埋め込める REST API は、そこには無い。
 - **検索。** 埋め込みを既定でオンにした hybrid search
-  ([0080](design/0080-search-and-how-a-deployment-embeds.md) §1)、住所で
+  ([0146](design/0146-search-and-the-default-a-base-was-made-with.md) §1)、住所で
   絞る検索、画像や PDF の中身に対するファイル検索 — 人のブラウズでは
   なくエージェントの問いの形に合わせた読み取りである。
 - **型。** vault は型に無関心であり、それはノートには正しく、ここでは
@@ -992,7 +992,7 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   MRR = 0.91(74 問が 1 位、85 問が 3 位以内)である
   ([CONTRIBUTING](../CONTRIBUTING.md) の *The search eval harness*)。
   日本語を二文字窓で引くのは lexical 側の機構である
-  ([0080](design/0080-search-and-how-a-deployment-embeds.md) §1)から、
+  ([0146](design/0146-search-and-the-default-a-base-was-made-with.md) §1)から、
   そうなるのは設計上の筋でもある。**二つ添えて読むこと。** ベースは
   29 concept で、下の「規模」が言う数千ではない — 数が増えれば希釈は
   効くので、これは上限に近い floor であって予測ではない。そして埋め込みが

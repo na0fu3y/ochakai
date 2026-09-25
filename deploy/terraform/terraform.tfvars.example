@@ -29,8 +29,10 @@ invoker_members = [
 # The data agent in the web UI (guide §4c). The model alone answers from the
 # knowledge and proposes SQL, which `ochakai ui` runs as the person; the OAuth
 # client (made in the console) lets the team web UI run it too; the billing
-# project spares people typing one.
-# agent_model            = "gemini-2.5-flash"
+# project spares people typing one. gemini-3.8-flash answers only in global,
+# so it is named with its location; a bare id such as "gemini-2.5-flash" runs
+# in this service's region instead.
+# agent_model            = "projects/your-project/locations/global/publishers/google/models/gemini-3.8-flash"
 # agent_oauth_client_id  = "123-abc.apps.googleusercontent.com"
 # agent_bigquery_project = "your-analytics-project"
 

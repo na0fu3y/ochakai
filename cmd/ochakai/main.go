@@ -293,14 +293,6 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 		cfg.Verifier = v
 		log.Info("authenticating with OIDC", "issuer", cfg.OIDCIssuer, "audience", cfg.OIDCAudience)
 	}
-	embedder, err := semanticSearch(ctx, cfg, log)
-	if err != nil {
-		return nil, nil, err
-	}
-	embedDim := 0
-	if cfg.Embedding != nil {
-		embedDim = cfg.Embedding.Dim
-	}
 	// File bytes live only on GCS (design doc 0013).
 	if cfg.GCSBucket != "" {
 		bs, err := blob.NewGCS(ctx, cfg.GCSBucket)
@@ -312,18 +304,32 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 	} else {
 		log.Info("files disabled (no OCHAKAI_GCS_BUCKET); markdown concepts only")
 	}
-	if err := st.Migrate(ctx, embedDim); err != nil {
-		// A database that cannot hold vectors is not a reason to refuse
-		// to serve knowledge, unless this deployment asked for semantic
-		// search by name (design doc 0080 §1.3). Everything else the
-		// migration does has already run — the vector schema is the last
-		// step — so there is nothing to redo here.
-		if cfg.Embedding == nil || !cfg.Embedding.Discovered ||
-			!errors.Is(err, store.ErrEmbeddingUnavailable) {
-			return nil, nil, err
+	if err := st.Migrate(ctx, 0); err != nil {
+		return nil, nil, err
+	}
+	// Which model a deployment that named none embeds with is its base's
+	// answer, not this binary's (design doc 0146 §1.2), so the base is read
+	// before the embedder is built and the vector tables after.
+	olderBase, err := st.PredatesGlobalEmbedding(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	embedder, err := semanticSearch(ctx, cfg, log, olderBase)
+	if err != nil {
+		return nil, nil, err
+	}
+	if cfg.Embedding != nil {
+		if err := st.MigrateEmbedding(ctx, cfg.Embedding.Dim); err != nil {
+			// A database that cannot hold vectors is not a reason to
+			// refuse to serve knowledge, unless this deployment asked for
+			// semantic search by name (design doc 0146 §1.4). Everything
+			// else is already migrated, so there is nothing to redo here.
+			if !cfg.Embedding.Discovered || !errors.Is(err, store.ErrEmbeddingUnavailable) {
+				return nil, nil, err
+			}
+			log.Warn("semantic search is off: this database cannot hold vectors", "err", err)
+			embedder, cfg.Embedding = nil, nil
 		}
-		log.Warn("semantic search is off: this database cannot hold vectors", "err", err)
-		embedder, cfg.Embedding = nil, nil
 	}
 	// A deployment carrying an access policy but naming no administrator
 	// is one nobody can edit the policy of, and refusing to start is the
@@ -394,32 +400,34 @@ const agentProbeTimeout = 30 * time.Second
 // semanticSearch builds the embedder behind hybrid search, and decides
 // whether this deployment has one at all.
 //
-// Embeddings are the default on Google Cloud (design doc 0080 §1.1): a
-// deployment that names no model gets the project *and the region* it is
-// running in (design doc 0080 §1.2) and the product's own model, and whether
-// it may call Vertex AI there is IAM's answer rather than a setting — so
-// the answer is asked for, once, with a probe. That one probe now covers
-// two ways of not having it: the identity may not call Vertex AI, or the
-// region may not carry the model. A deployment that named a model asked
-// for semantic search and is told when it cannot have it; a discovered
-// one falls back to lexical search, which is what it would have had
-// before this was the default.
-func semanticSearch(ctx context.Context, cfg *config.Config, log *slog.Logger) (embed.Embedder, error) {
+// Embeddings are the default on Google Cloud (design doc 0146 §1.1): a
+// deployment that names no model gets the project it is running in and
+// the product's own model — gemini-embedding-2 in global for a base made
+// since that became the default, gemini-embedding-001 in the region it
+// runs in for a base made before (design doc 0146 §1.2) — and whether it
+// may call Vertex AI there is IAM's answer rather than a setting, so the
+// answer is asked for, once, with a probe. That one probe covers two ways
+// of not having it: the identity may not call Vertex AI, or the location
+// may not carry the model. A deployment that named a model asked for
+// semantic search and is told when it cannot have it; a discovered one
+// falls back to lexical search, which is what it would have had before
+// this was the default.
+func semanticSearch(ctx context.Context, cfg *config.Config, log *slog.Logger, olderBase bool) (embed.Embedder, error) {
 	discoveredProject, discoveredRegion := "", ""
 	if cfg.Embedding == nil && !cfg.EmbeddingsOff {
 		discoveredProject, discoveredRegion = config.DiscoverVertex(ctx)
-		cfg.EnableDiscoveredEmbedding(discoveredProject, discoveredRegion)
+		cfg.EnableDiscoveredEmbedding(discoveredProject, discoveredRegion, olderBase)
 	}
 	if cfg.Embedding == nil {
 		switch {
 		case cfg.EmbeddingsOff:
 			log.Info("semantic search off by configuration (OCHAKAI_EMBEDDINGS=off); using lexical search only")
 		case discoveredProject != "" && discoveredRegion == "":
-			// The project answered but the region did not. Picking one
-			// would send this deployment's text to a region nobody
-			// chose, which is the decision design doc 0080 §1.2 declines to
-			// make for an operator.
-			log.Warn("semantic search off: this deployment's region could not be read from the metadata server, and ochakai will not embed in a region nobody chose. Name one to turn it on: OCHAKAI_EMBEDDINGS=projects/<project>/locations/<region>/publishers/google/models/gemini-embedding-001",
+			// An older base embeds in its own region, and the project
+			// answered but the region did not. Picking one would send
+			// this deployment's text to a region nobody chose (design doc
+			// 0146 §1.2).
+			log.Warn("semantic search off: this base embeds in the region it runs in, and that region could not be read from the metadata server. Name one to turn it on: OCHAKAI_EMBEDDINGS=projects/<project>/locations/<region>/publishers/google/models/gemini-embedding-001",
 				"project", discoveredProject)
 		default:
 			log.Info("semantic search disabled; using lexical search only")
@@ -441,7 +449,7 @@ func semanticSearch(ctx context.Context, cfg *config.Config, log *slog.Logger) (
 		if !cfg.Embedding.Discovered {
 			return nil, err
 		}
-		log.Warn("semantic search off: Vertex AI did not answer for this deployment; using lexical search only. Grant roles/aiplatform.user to the service identity and enable aiplatform.googleapis.com to turn it on. If this region has no such model, name a region that does with OCHAKAI_EMBEDDINGS — knowing that it is where the text will go",
+		log.Warn("semantic search off: Vertex AI did not answer for this deployment; using lexical search only. Grant roles/aiplatform.user to the service identity and enable aiplatform.googleapis.com to turn it on. If this location has no such model, name one that does with OCHAKAI_EMBEDDINGS — knowing that it is where the text will go",
 			"project", cfg.Embedding.Project, "location", cfg.Embedding.Location, "err", err)
 		cfg.Embedding = nil
 		return nil, nil

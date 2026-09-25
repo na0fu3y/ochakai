@@ -274,7 +274,7 @@ for what they still don't do:
   corpus. Latin words stem on the way, so `revenues` finds `revenue`.
   There is no setting for any of this, and semantic search sits beside it
   by default on Google Cloud ([design doc
-  0080](docs/design/0080-search-and-how-a-deployment-embeds.md)).
+  0146](docs/design/0146-search-and-the-default-a-base-was-made-with.md)).
 - **A write-back loop with a memory.** Agents write learnings back as
   drafts and a human promotes them, with provenance on every concept and
   every change kept as a revision. A proposal that doesn't make it is

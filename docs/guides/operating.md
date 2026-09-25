@@ -213,32 +213,40 @@ warning だが、レベルで絞り込むとこの表を素通りする行が三
 
 ```
 "ochakai listening" addr=:8080 version=… insecure_dev=false endpoints=[/mcp /api/v1 /health]
-"semantic search enabled" model=gemini-embedding-001 dim=768 project=… location=asia-northeast1 discovered=true
+"semantic search enabled" model=gemini-embedding-2 dim=768 project=… location=global discovered=true
 "files disabled (no OCHAKAI_GCS_BUCKET); markdown concepts only"
 ```
 
 `discovered=true` は、model・location・project のどれもデプロイが書いた
-ものではないことを意味する — **project と location はメタデータサーバーから
-来ており**、model だけが製品の既定である(`OCHAKAI_EMBEDDINGS` にモデルの
+ものではないことを意味する — **project はメタデータサーバーから来ており**、
+model と location は**ベースが生まれたとき**の製品既定である(`OCHAKAI_EMBEDDINGS` にモデルの
 resource name を書けば `discovered=false` になる、設計ドキュメント
-[0080](../design/0080-search-and-how-a-deployment-embeds.md))。semantic
+[0146](../design/0146-search-and-the-default-a-base-was-made-with.md))。semantic
 search は Google Cloud 上での既定だからである(同 §1)。
 
-**`location=` は監査で訊かれる行である。** 埋め込みは動いているリージョン
-で行われるので、この値は「concept の本文と検索クエリがどこの Vertex AI に
-送られたか」そのものである(設計ドキュメント
-[0080](../design/0080-search-and-how-a-deployment-embeds.md) §1.2)。
-asia-northeast1 のデプロイなら `location=asia-northeast1` が出る。
-`gemini-embedding-2` を名指したデプロイだけは別で、そのモデルは
-`global`/`us`/`eu` にしか居ないため、**名指した時点で埋め込み呼び出しが
-自リージョンの外に出る** — 画像・PDF 検索と引き換えに払うものがそれである。
+**`location=` は監査で訊かれる行である。** この値は「concept の本文と
+検索クエリがどこの Vertex AI に送られたか」そのものであり、何も名指さない
+デプロイでは**ベースがいつ作られたか**で決まる(設計ドキュメント
+[0146](../design/0146-search-and-the-default-a-base-was-made-with.md) §1.2):
+
+| ベース | model | location |
+|---|---|---|
+| v0.28.10 までに作られた(アップグレードしてきた) | `gemini-embedding-001` | 動いているリージョン(例 `asia-northeast1`) |
+| それより後のリリースで新しく作った | `gemini-embedding-2` | `global` |
+
+既存のデプロイはアップグレードしても何も変わらない — 保存済みのベクトルも、
+テキストの行き先も。新しく作るベースは画像・PDF の中身まで検索できる代わりに、
+**埋め込み呼び出しが自リージョンの外(`global`)に出る**。所在地を固定したい
+なら、`OCHAKAI_EMBEDDINGS` に `…/locations/<region>/publishers/google/models/gemini-embedding-001`
+を名指す。既存のベースを新しい既定へ移したいなら、`…/locations/global/publishers/google/models/gemini-embedding-2`
+を名指して `ochakai reembed` を走らせる(それまで検索は字句だけになる)。
 
 これに代わる行はどちらに転んだかを言う:
 
 | 行 | 意味 |
 |---|---|
-| `semantic search off: Vertex AI did not answer for this deployment; …` | 起動時の probe が答えを得られなかった。理由は二つあり、`location=` が見分ける — ロールが無い(`roles/aiplatform.user` を付与して再起動)か、**そのリージョンにモデルが居ない**(`gemini-embedding-001` は大半のリージョンに居るが全部ではない。別リージョンを名指せば直るが、それはテキストがそこへ行くということである) |
-| `semantic search off: this deployment's region could not be read from the metadata server, …` | project は読めたが region が読めなかった。ochakai は誰も選んでいないリージョンでは埋め込まないので、字句検索で動いている。resource name でリージョンを名指せば有効になる |
+| `semantic search off: Vertex AI did not answer for this deployment; …` | 起動時の probe が答えを得られなかった。理由は二つあり、`location=` が見分ける — ロールが無い(`roles/aiplatform.user` を付与して再起動)か、**その場所にモデルが居ない**(古いベースの `gemini-embedding-001` は大半のリージョンに居るが全部ではない。別リージョンを名指せば直るが、それはテキストがそこへ行くということである) |
+| `semantic search off: this base embeds in the region it runs in, and that region could not be read …` | このリリースより前からあるベースで、project は読めたが region が読めなかった。ochakai は誰も選んでいないリージョンでは埋め込まないので、字句検索で動いている。resource name でリージョンを名指せば有効になる |
 | `semantic search is off: this database cannot hold vectors` | pgvector が無く、このロールには作成できないかもしれない。admin ユーザーとして extension を作成せよ(デプロイガイド §3) |
 | `semantic search off by configuration (OCHAKAI_EMBEDDINGS=off); using lexical search only` | 頼んだ通り — ここにある行の中で、調べる価値の無い唯一のものである |
 | `semantic search disabled; using lexical search only` | モデルが名指されておらず、project も発見されなかった — ochakai は Google Cloud 上で動いていない |
@@ -1197,7 +1205,7 @@ apply で意図的にずらすためだけに存在する。見出しの右に�
   `OCHAKAI_VERTEX_PROJECT` / `OCHAKAI_EMBEDDING_DIM` を設定している
   なら、アップグレードの*前*に `OCHAKAI_EMBEDDINGS` を書き換える。**
   四つは 0.18.0 で黙って無視されるようになった(設計ドキュメント
-  [0080](../design/0080-search-and-how-a-deployment-embeds.md))。無視された
+  [0146](../design/0146-search-and-the-default-a-base-was-made-with.md))。無視された
   デプロイは既定のモデル・リージョン・幅に落ちる。**そこで起きることは
   ログにしか出ない**: 幅が違えばベクトルテーブルは新しい幅で再構築されて
   空になり、幅が同じでモデルだけ違えば古い行は残るが新しいモデルの
@@ -1206,7 +1214,7 @@ apply で意図的にずらすためだけに存在する。見出しの右に�
   だけである。直すのは `ochakai reembed` で、それは Vertex AI の呼び出し
   をベースの規模ぶん支払う。手で `DROP TABLE` する必要は無い: ベクトルは
   それが記述する concept から導出されるものだからである(設計ドキュメント
-  [0080](../design/0080-search-and-how-a-deployment-embeds.md) §3)。
+  [0146](../design/0146-search-and-the-default-a-base-was-made-with.md) §3)。
   **この「黙って無視される」は終わった**: 四つを設定したまま上げると、
   そのリビジョンは名前を挙げて起動を拒む(設計ドキュメント
   [0112](../design/0112-a-start-refuses-a-variable-it-does-not-read.md))。
@@ -1216,6 +1224,15 @@ apply で意図的にずらすためだけに存在する。見出しの右に�
   backfill はされない。** 既存の concept は `ochakai reembed` まで
   embedding が無いままである。これは Vertex AI のトークンをベースの
   規模に比例して消費する。
+- **データベースを作り直すと、既定の埋め込みが変わる。** 何も名指さない
+  デプロイの既定は、ベースが作られたときに決まる(設計ドキュメント
+  [0146](../design/0146-search-and-the-default-a-base-was-made-with.md)
+  §1.2)。export して新しいデータベースに import し直したベースは新しい
+  ベースなので、`gemini-embedding-001`(サービスのリージョン)から
+  `gemini-embedding-2`(`global`)へ移り、本文と検索クエリの行き先が
+  変わる。所在地を保ちたいなら、移し替えの前に `OCHAKAI_EMBEDDINGS` で
+  `…/locations/<region>/publishers/google/models/gemini-embedding-001` を
+  名指しておく。
 
 ### バージョンごとの注記
 

@@ -2490,7 +2490,7 @@ paths:
         search stays quietly lexical-only until every concept happens to
         be rewritten. Changing the embedding model leaves the same gap:
         the old vectors sit in a space nothing queries any more (design
-        doc 0080 §3). This fills it.
+        doc 0146 §3). This fills it.
 
 
         File vectors are covered too: only writing a file records one, so

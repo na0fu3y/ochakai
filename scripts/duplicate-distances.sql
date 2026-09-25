@@ -35,19 +35,19 @@
 \set ON_ERROR_STOP on
 
 -- A base with no vectors is an ordinary deployment, not a failure: the
--- lexical half of search works without them (design doc 0080 §5). Say so
+-- lexical half of search works without them (design doc 0146 §5). Say so
 -- once and stop, rather than letting every query below repeat it.
 SELECT to_regclass('knowledge_embedding') IS NULL AS absent \gset
 \if :absent
 \echo 'This base has no vectors — semantic search was never configured here'
-\echo '(OCHAKAI_EMBEDDINGS; design doc 0080 §1). Nothing to measure.'
+\echo '(OCHAKAI_EMBEDDINGS; design doc 0146 §1). Nothing to measure.'
 \quit
 \endif
 
 -- Every embedded live concept, under the model the base actually uses.
 -- A base mid-reembed holds two models at once and comparing across them
 -- is meaningless — vectors from different models live in different
--- spaces (design doc 0080 §3) — so the busiest one wins and the count
+-- spaces (design doc 0146 §3) — so the busiest one wins and the count
 -- below says how many were left out.
 CREATE TEMPORARY VIEW embedded AS
 SELECT e.id, e.embedding, k.title, k.type
