@@ -560,7 +560,7 @@ func Handler(svc *service.Service) http.Handler {
 					if wantsDocument(r) {
 						writeDocument(w, http.StatusOK, k)
 					} else {
-						writeView(w, http.StatusOK, k)
+						writeView(w, k)
 					}
 					return
 				}
@@ -921,7 +921,7 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		w.Header().Set("ETag", etagOf(k))
-		writeView(w, http.StatusOK, k)
+		writeView(w, k)
 	})
 
 	// GET /api/v1/usage/{id...} — how often the concept was actually used
@@ -1120,7 +1120,7 @@ func Handler(svc *service.Service) http.Handler {
 			return
 		}
 		w.Header().Set("ETag", etagOf(moved))
-		writeView(w, http.StatusOK, moved)
+		writeView(w, moved)
 	})
 
 	// POST /api/v1/frontmatter — the structured face of a document
@@ -1272,6 +1272,25 @@ func Handler(svc *service.Service) http.Handler {
 	// bad is "failed" for the ones they blamed, and neither verifies
 	// anything. Once per turn, and only by the person who asked; anybody
 	// else is told the turn is not there.
+	// POST /api/v1/agent/turns/{id}/revisions/{concept} — apply one
+	// revision the deployment's own agent proposed in that turn to a draft
+	// nobody has ruled on (design doc 0149). No body: what is written is
+	// the document the turn kept, recorded as the agent's on behalf of the
+	// person who asked, and only that person may apply it.
+	mux.HandleFunc("POST /api/v1/agent/turns/{id}/revisions/{concept...}", func(w http.ResponseWriter, r *http.Request) {
+		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+			writeError(w, err)
+			return
+		}
+		k, err := svc.ApplyAgentRevision(r.Context(), r.PathValue("id"), r.PathValue("concept"))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		w.Header().Set("ETag", etagOf(k))
+		writeView(w, k)
+	})
+
 	mux.HandleFunc("POST /api/v1/agent/turns/{id}", func(w http.ResponseWriter, r *http.Request) {
 		if err := rejectUnknownParams(r.URL.Query()); err != nil {
 			writeError(w, err)
@@ -1958,8 +1977,8 @@ func refuseNonConcept(w http.ResponseWriter, why string) {
 			" — write these bytes at a path that does not end in `.md` to store them as a file")
 }
 
-func writeView(w http.ResponseWriter, status int, k *domain.Knowledge) {
-	writePlannedView(w, status, k, "", nil)
+func writeView(w http.ResponseWriter, k *domain.Knowledge) {
+	writePlannedView(w, http.StatusOK, k, "", nil)
 }
 
 // writePlannedView is the same answer from a write, carrying the one word

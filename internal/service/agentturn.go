@@ -10,6 +10,7 @@ import (
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/httpauth"
+	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/store"
 )
 
@@ -31,11 +32,11 @@ const (
 //
 // The producer is this build, whatever the caller sent: the turn says
 // which agent answered, and here that is ochakai's (design doc 0144 §3).
-func (s *Service) RecordAgentTurn(ctx context.Context, asked, latest string, read []string, sql string, drafts []string) string {
+func (s *Service) RecordAgentTurn(ctx context.Context, asked, latest string, read []string, sql string, drafts []string, revisions []store.TurnRevision) string {
 	actor := httpauth.Actor(ctx)
 	actor.Producer = s.agentProducer()
 	id, err := s.Store.RecordAgentTurn(ctx, actor,
-		cutText(asked, maxTurnText), cutText(latest, maxTurnText), read, sql, drafts)
+		cutText(asked, maxTurnText), cutText(latest, maxTurnText), read, sql, drafts, revisions)
 	if err != nil {
 		if s.Log != nil {
 			s.Log.Warn("agent turn not kept", "error", err)
@@ -120,7 +121,7 @@ func (s *Service) KeepAgentTurn(ctx context.Context, in TurnIn) (*store.AgentTur
 			return nil, Invalidf("read names %q, which is not a concept you can read", id)
 		}
 	}
-	id, err := s.Store.RecordAgentTurn(ctx, httpauth.Actor(ctx), in.Asked, in.Asked, read, in.SQL, nil)
+	id, err := s.Store.RecordAgentTurn(ctx, httpauth.Actor(ctx), in.Asked, in.Asked, read, in.SQL, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -293,4 +294,76 @@ func cutText(s string, n int) string {
 		n--
 	}
 	return s[:n]
+}
+
+// ApplyAgentRevision writes one revision the deployment's own agent
+// proposed in a turn, at the asking person's say-so (design doc 0149).
+//
+// What is written is the document the turn kept, never one the caller
+// sends: the record says the agent wrote it (process:ochakai via the
+// person), and that has to be true of every byte. Only the person who
+// asked may apply it, as only they may judge the answer. The draft must
+// still be a draft nobody has ruled on, and still be what the agent read
+// — the kept content hash is the write's precondition, so a draft edited
+// or applied since is a 412 rather than an overwrite.
+func (s *Service) ApplyAgentRevision(ctx context.Context, turnID, conceptID string) (*domain.Knowledge, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
+	t, err := s.Store.AgentTurn(ctx, turnID)
+	if err != nil {
+		return nil, err
+	}
+	if t.Actor != domain.PrincipalOf(httpauth.Actor(ctx)) {
+		return nil, store.ErrNotFound
+	}
+	id := domain.Normalize(conceptID)
+	var rev *store.TurnRevision
+	for i := range t.Revisions {
+		if t.Revisions[i].ID == id {
+			rev = &t.Revisions[i]
+		}
+	}
+	if rev == nil {
+		return nil, store.ErrNotFound
+	}
+	k, err := s.RevisableDraft(ctx, id, rev.Document)
+	if err != nil {
+		return nil, err
+	}
+	updated, _, err := s.Update(ctx, k, s.AgentActor(ctx), &rev.Base)
+	return updated, err
+}
+
+// RevisableDraft parses document as the next version of the draft at id
+// and says whether the agent may propose it: the draft is the caller's to
+// write, nobody has ruled on it, it is still a draft, and the document
+// keeps it one (design doc 0149). It returns the knowledge to write.
+func (s *Service) RevisableDraft(ctx context.Context, id, document string) (*domain.Knowledge, error) {
+	if err := s.readOnly(); err != nil {
+		return nil, err
+	}
+	if _, err := s.RefuseIfCurated(ctx, id, "revise"); err != nil {
+		return nil, err
+	}
+	cur, err := s.Store.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if cur.Status != domain.StatusDraft {
+		return nil, Invalidf("%s is %s, not a draft: only a draft nobody has ruled on is revised this way; write a new draft that links it instead", id, cur.Status)
+	}
+	d, _, err := okf.Parse([]byte(document))
+	if err != nil {
+		return nil, err
+	}
+	k := d.Knowledge
+	k.ID = id
+	switch k.Status {
+	case "", domain.StatusDraft:
+		k.Status = domain.StatusDraft
+	default:
+		return nil, Invalidf("the document says status: %s; a revision keeps the draft a draft", k.Status)
+	}
+	return &k, nil
 }

@@ -26,7 +26,8 @@
 import { AGENT_CLIENT, AGENT_PROJECT, PROXY_RUNS, api, toast } from '../api.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
-import { entryHash } from '../format.js';
+import { conceptURL, entryHash } from '../format.js';
+import { diffHTML } from '../diff.js';
 import { md } from '../markdown.js';
 import { chartHTML, NUMERIC_TYPES } from '../chart.js';
 import { asFailure, asMessage, fmtBytes, fold, hasToken, MAX_BYTES_BILLED, PROJECT_KEY, run, signIn } from '../sql.js';
@@ -102,7 +103,7 @@ function draw(pending) {
     ? (t.res || t.sqlFailed ? resultHTML(t, i)
       : `<div class="ask-turn ask-user">${t.sqlResult ? md(t.text) : esc(t.text).replace(/\n/g, '<br>')}</div>`)
     : `<div class="card ask-turn ask-agent"><div class="ask-said">${md(t.text)}</div>`
-      + `<div class="ask-meta">${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}${draftLine(t.drafts)}${verdictHTML(t, i)}</div></div>`).join('');
+      + `<div class="ask-meta">${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}${draftLine(t.drafts)}${revisionsHTML(t, i)}${verdictHTML(t, i)}</div></div>`).join('');
   $('#ask-turns').innerHTML = out + (pending
     ? `<div class="empty" id="ask-pending">${pending === 'run' ? '提案された SQL を実行しています…' : 'エージェントが読んでいます…'}</div>`
     : (turns.length ? '' : '<div class="empty">まだ何も訊いていません。</div>'));
@@ -118,6 +119,8 @@ function draw(pending) {
   $('#ask-run')?.addEventListener('click', runProposal);
   document.querySelectorAll('[data-verdict]').forEach(b => b.addEventListener('click', openVerdict));
   document.querySelectorAll('[data-diagnose]').forEach(b => b.addEventListener('click', diagnose));
+  document.querySelectorAll('[data-rev-diff]').forEach(d => d.addEventListener('toggle', showRevisionDiff));
+  document.querySelectorAll('[data-apply]').forEach(b => b.addEventListener('click', applyRevision));
 }
 
 // tick says how long a pending answer has taken. The server answers in
@@ -336,6 +339,61 @@ function readLine(ids) {
   return `<div class="hint">読んだナレッジ: ${links}</div>`;
 }
 
+// revisionsHTML lists the changes the agent proposed to drafts nobody
+// has ruled on (design doc 0149). It wrote none of them: each waits for
+// the person who asked to read the diff and apply it, and applying writes
+// what the server kept with the turn, recorded as the agent's on their
+// behalf — the page sends no text. Hidden on a read-only deployment,
+// which refuses the write.
+function revisionsHTML(t, i) {
+  if (!t.revisions || !t.revisions.length || !t.turn) return '';
+  return t.revisions.map((r, k) => {
+    const link = `<a href="${esc(entryHash({ id: r.id }))}"><code>${esc(r.id)}</code></a>`;
+    const done = t.applied && t.applied[r.id];
+    return `<div class="ask-revision">
+        <div class="hint">直す提案: ${link}${done ? '(適用しました — まだ draft で、確かめるのは読んだ人です)' : ''}</div>
+        <details data-rev-diff data-i="${i}" data-k="${k}"><summary>差分を見る</summary><div class="rev-diff hint">読み込んでいます…</div></details>
+        ${done ? '' : `<div class="write-only"><button type="button" class="btn small primary" data-apply data-i="${i}" data-k="${k}">適用する</button> <span class="hint">エージェントの書き込みとして、あなたの名で記録されます。</span></div>`}
+      </div>`;
+  }).join('');
+}
+
+// showRevisionDiff draws the proposal against the draft as it is now.
+// Now, not as it was proposed: if somebody has edited it since, the diff
+// shows that too, and applying will be refused rather than undo it.
+async function showRevisionDiff(e) {
+  const d = e.currentTarget;
+  if (!d.open || d.dataset.loaded) return;
+  const r = turns[Number(d.dataset.i)].revisions[Number(d.dataset.k)];
+  const out = d.querySelector('.rev-diff');
+  try {
+    const cur = await api(conceptURL(r.id));
+    const diff = diffHTML(cur.document || '', r.document);
+    out.classList.remove('hint');
+    out.innerHTML = diff || '<span class="hint">今の draft と同じです。</span>';
+    d.dataset.loaded = '1';
+  } catch (err) {
+    out.textContent = '読めませんでした: ' + err.message;
+  }
+}
+
+async function applyRevision(e) {
+  const btn = e.currentTarget;
+  const t = turns[Number(btn.dataset.i)];
+  const r = t.revisions[Number(btn.dataset.k)];
+  btn.disabled = true;
+  try {
+    await api(`/api/v1/agent/turns/${encodeURIComponent(t.turn)}/revisions/${r.id.split('/').map(encodeURIComponent).join('/')}`, { method: 'POST' });
+    t.applied = { ...(t.applied || {}), [r.id]: true };
+    save();
+    toast('適用しました');
+    draw();
+  } catch (err) {
+    btn.disabled = false;
+    toast((err.code === 'precondition_failed' ? 'この draft は提案のあとで変わっています。差分を見直してください: ' : '適用できませんでした: ') + err.message, 8000);
+  }
+}
+
 // draftLine names what the agent wrote, where a person rules on it: each
 // is a draft nobody has confirmed, and the review queue is where it waits.
 function draftLine(ids) {
@@ -373,7 +431,7 @@ async function answer() {
         }))).map(({ role, text }) => ({ role, text })),
       },
     });
-    turns.push({ role: 'agent', text: ans.text, read: ans.read || [], drafts: ans.drafts || [], sql: ans.sql || null, turn: ans.turn || '' });
+    turns.push({ role: 'agent', text: ans.text, read: ans.read || [], drafts: ans.drafts || [], revisions: ans.revisions || [], sql: ans.sql || null, turn: ans.turn || '' });
     save();
     draw();
     // Not awaited: the answer is in, and a sign-in that fails while the

@@ -73,7 +73,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 ない。ここがその調節器である — 面ごとに天井を宣言し、超えたら CI が
 落ちる。
 
-- REST: 17
+- REST: 18
 - PARAM: 21
 - HEADER: 13
 - MCP: 6
@@ -130,7 +130,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 規則の下で動く運用であって、規則の変更ではない。増やしたくないものを
 数える仕組みが、自分の数え先を増やすのでは筋が通らない。
 
-## REST (17)
+## REST (18)
 
 - `DELETE /api/v1/bundle/{path}`
 - `GET /api/v1/access`
@@ -142,6 +142,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `POST /api/v1/agent`
 - `POST /api/v1/agent/turns`
 - `POST /api/v1/agent/turns/{id}`
+- `POST /api/v1/agent/turns/{id}/revisions/{concept}`
 - `POST /api/v1/frontmatter`
 - `POST /api/v1/move`
 - `POST /api/v1/reembed`
@@ -149,6 +150,17 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - `POST /api/v1/usage/{id}`
 - `PUT /api/v1/access`
 - `PUT /api/v1/bundle/{path}`
+
+17 → 18 は [0149](design/0149-the-agent-proposes-and-the-person-applies.md) の
+`POST /api/v1/agent/turns/{id}/revisions/{concept}` である。**天井を上げる
+決定**であり、そう言って上げている。seed が作った draft は description が
+空で(0148 §2.1)、その空をエージェントが問うた人との会話とプロファイルの
+SQL から埋められるのに、書く手段が無かった — デプロイ自身のエージェントは
+空いている id にしか書けない(0142 §3)。**既存の面では回避できない**:
+ページが `PUT` で文書を送れば、記録はその人の書き込みになり、エージェントが
+書いたことが台帳から消える。逆に「エージェントとして書く」をページに許せば、
+誰の文でもエージェントの名で書ける。この一本は本文を受け取らず、turn が
+残した提案だけを書く(0149 §2)。
 
 19 → 14 → 11。前半は
 [0046 §3.5](design/0046-bundle-address-space.md) の畳み込みで、消えた

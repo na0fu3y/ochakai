@@ -23,6 +23,27 @@ last entry.
 
 ### Added
 
+- **The agent proposes what an empty draft should say, and the person
+  who asked applies it**
+  ([0149](docs/design/0149-the-agent-proposes-and-the-person-applies.md),
+  ROADMAP stage 3).
+  - A seeded table is a draft with an empty description. Asked to fill it,
+    the agent asks what the table is for, checks rows, freshness and NULLs
+    by SQL (run as the person), and proposes the next version of the draft
+    with `propose_revision`. It writes nothing itself.
+  - The proposal is in the answer's new `revisions` field and kept with the
+    turn. The web UI shows it as a diff with 「適用する」.
+    `POST /api/v1/agent/turns/{id}/revisions/{concept}` takes no body and
+    writes the document the turn kept, recorded as `process:ochakai` via
+    the person who asked.
+  - Only that person may apply it, and only to a draft nobody has ruled on
+    and that has not changed since. A draft edited since, or a second
+    press, is a 412. Applying is not a ruling: the draft stays a draft.
+  - Asked what is used a lot, the agent reads the query history as the
+    person and drafts up to five recurring aggregates. It does not harvest
+    in bulk.
+  - REST 17 → 18. Migration 0054 adds `agent_turn.revisions`.
+
 - **The web UI can seed the empty base from a BigQuery dataset**
   ([0148](docs/design/0148-the-empty-base-fills-from-the-page-too.md),
   which supersedes 0085). 「BigQuery から取り込む」 on the home page takes

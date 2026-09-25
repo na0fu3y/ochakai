@@ -842,6 +842,8 @@ body:not(.reads-bigquery) .bigquery-only { display: none !important; }
 .chart .bar { stroke: none; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .82rem; color: var(--text); margin-bottom: .2rem; }
 .swatch { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .3rem; vertical-align: -1px; }
+.ask-revision { margin: .4rem 0; }
+.ask-revision details summary { cursor: pointer; color: var(--muted); font-size: .84rem; }
 .ask-form { position: sticky; bottom: 0; background: var(--bg); padding: .5rem 0; }
 .ask-form textarea { width: 100%; box-sizing: border-box; }
 .files-off { display: none; }
