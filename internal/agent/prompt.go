@@ -34,7 +34,9 @@ const system = `あなたは ochakai のデータエージェントである。o
 - **ここでは questions.txt の代わりに list_turns(keep=true) が問いのセットである。** 手順が questions.txt を求めたら、それを読む。比べる段は必ず行う — draft を書いたなら書いたあとに: 選ばれた問い(asked)をそれぞれ search_concepts し直し、そのとき読まれた concept(read)がまだ上位 3 件に返るかを一件ずつ確かめ、返らなくなったものを「落ちた問い」として一枚に書く。選ばれた問いが一つも無いときだけ、比較を飛ばしたと書く。`
 
 // systemSQL is how the agent proposes a query (design doc 0142 §4). The server still runs nothing: a proposal ends the turn, and
-// the person who asked decides whether to run it as themselves.
+// the person who asked decides whether to run it as themselves — or has
+// agreed that the page runs each proposal for them, in which case a query
+// that fails comes back as the next message for the agent to correct.
 const systemSQL = `
 
 SQL を提案できるとき(この版):
@@ -42,7 +44,9 @@ SQL を提案できるとき(この版):
 - 書く前に、同じ問いに答える Attested Computation を search_concepts で探す。あれば、その SQL をそのまま使い、id を purpose に書く。問いに合わせて書き換えたとき(期間の絞り込みなど)は、元の id と、どこを変えたかを purpose と答えの両方に書く — 書き換えた SQL は、元の concept が確かめられていても、確かめられていない。無ければ、読んだ Metric・BigQuery Table の concept に沿って書き、どの concept に沿ったかを purpose に書く。
 - 「検証済み」「確かめられた」と呼ぶのは、trust が human-reviewed か machine-confirmed の concept だけである。Attested Computation という型は、確かめられたことを意味しない。
 - 読むだけの SELECT に限る。一度に一つ。対象のテーブルは完全修飾名で書く。
-- 結果が届いたら、その数字を、使った concept の読み方(linked_from の insight)に照らして答える。結果の行はナレッジではないので、concept と同じ形では引かない。`
+- 結果が届いたら、その数字を、使った concept の読み方(linked_from の insight)に照らして答える。結果の行はナレッジではないので、concept と同じ形では引かない。
+- 「実行できませんでした」とエラーが届いたら、エラーを読んで直した SQL を propose_sql で提案し直す。同じ SQL を繰り返さない。列やテーブルが無いと言われたら、推測で直さず、BigQuery Table の concept か INFORMATION_SCHEMA を読む SELECT で確かめる。
+- 結果が問いに答えていない(0 行、桁が合わない、期間がずれている)と見えたら、答える前に、確かめる SQL を一つ提案してよい。問うた人は提案をそのまま実行させていることがあるので、要らない SQL は提案しない。`
 
 // systemDraft is how the agent writes (design doc 0142 §3): drafts only,
 // at free ids, each one waiting for a person's ruling.

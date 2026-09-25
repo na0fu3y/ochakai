@@ -13,6 +13,12 @@
 // does not preface the conversation with that: the proposal says who
 // runs it where it is run, and an answer says what it read.
 //
+// A person may agree, once per conversation, that the page runs what the
+// agent proposes without asking each time (ROADMAP, stage 1). The query
+// still runs as them, read-only and under the byte cap; what changes is
+// only who clicks. A query that fails goes back to the agent as the
+// person's next message, so it can correct itself instead of stopping.
+//
 // What the agent said and what the page says are drawn apart: the
 // answer is the card's body, and the page's own lines — what was read,
 // the proposal's controls, the verdict — sit under a rule beneath it.
@@ -22,7 +28,7 @@ import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { entryHash } from '../format.js';
 import { md } from '../markdown.js';
-import { asMessage, fmtBytes, fold, MAX_BYTES_BILLED, run, signIn } from '../sql.js';
+import { asFailure, asMessage, fmtBytes, fold, hasToken, MAX_BYTES_BILLED, run, signIn } from '../sql.js';
 
 // The server refuses a conversation longer than this (internal/agent).
 // Said here so the page can offer a fresh start before the refusal, not
@@ -32,8 +38,16 @@ const KEY = 'ochakai.ask';
 // The billing project a person runs proposals in, where the operator
 // named none — remembered per browser, since it is then theirs.
 const PROJECT_KEY = 'ochakai.bq-project';
+// Whether the person agreed to automatic runs in this conversation. Kept
+// beside the conversation, and ended with it.
+const AUTO_KEY = 'ochakai.ask.auto';
+// How many queries the page runs by itself before a person has said
+// anything again. A proposal past this waits for a click: an agent that
+// needs more rounds than this is more likely looping than converging.
+const MAX_AUTO_RUNS = 6;
 
 let turns = load();
+let auto = loadAuto();
 let ticking = 0; // the interval counting a pending answer's seconds
 
 function load() {
@@ -41,6 +55,15 @@ function load() {
     const v = JSON.parse(sessionStorage.getItem(KEY) || '[]');
     return Array.isArray(v) ? v : [];
   } catch { return []; }
+}
+
+function loadAuto() {
+  try { return sessionStorage.getItem(AUTO_KEY) === '1'; } catch { return false; }
+}
+
+function setAuto(on) {
+  auto = on;
+  try { sessionStorage.setItem(AUTO_KEY, on ? '1' : ''); } catch { /* holds for this page only */ }
 }
 
 function save() {
@@ -57,6 +80,7 @@ export function viewAsk() {
         <button type="button" id="ask-send" class="btn primary">送る</button>
         <button type="button" id="ask-new" class="btn">新しい会話</button>
         <span class="grow"></span>
+        <span id="ask-auto-state"></span>
         <span class="hint" id="ask-count"></span>
       </div>
     </div>`;
@@ -67,21 +91,29 @@ export function viewAsk() {
   $('#ask-text').addEventListener('keydown', e => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
   });
-  $('#ask-new').addEventListener('click', () => { turns = []; save(); draw(); $('#ask-text').focus(); });
+  $('#ask-new').addEventListener('click', () => { turns = []; save(); setAuto(false); draw(); $('#ask-text').focus(); });
   draw();
 }
 
+// draw redraws the conversation. pending is 'read' while the agent is
+// answering and 'run' while the page is running its query.
 function draw(pending) {
+  if (!$('#ask-turns')) return; // the person has moved to another view
   const last = turns.length - 1;
   const out = turns.map((t, i) => t.role === 'user'
-    ? `<div class="ask-turn ask-user">${t.sqlResult ? md(t.text) : esc(t.text).replace(/\n/g, '<br>')}</div>`
+    ? (t.res || t.sqlFailed ? resultHTML(t)
+      : `<div class="ask-turn ask-user">${t.sqlResult ? md(t.text) : esc(t.text).replace(/\n/g, '<br>')}</div>`)
     : `<div class="card ask-turn ask-agent"><div class="ask-said">${md(t.text)}</div>`
       + `<div class="ask-meta">${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}${draftLine(t.drafts)}${verdictHTML(t, i)}</div></div>`).join('');
   $('#ask-turns').innerHTML = out + (pending
-    ? '<div class="empty" id="ask-pending">エージェントが読んでいます…</div>'
+    ? `<div class="empty" id="ask-pending">${pending === 'run' ? '提案された SQL を実行しています…' : 'エージェントが読んでいます…'}</div>`
     : (turns.length ? '' : '<div class="empty">まだ何も訊いていません。</div>'));
   clearInterval(ticking);
-  if (pending) tick(Date.now());
+  if (pending === 'read') tick(Date.now());
+  $('#ask-auto-state').innerHTML = auto
+    ? '<span class="hint">この会話では SQL を自動で実行しています</span> <button type="button" id="ask-auto-off" class="btn small">やめる</button>'
+    : '';
+  $('#ask-auto-off')?.addEventListener('click', () => { setAuto(false); draw(); });
   const left = MAX_TURNS - turns.length;
   $('#ask-count').textContent = left <= 6 ? `この会話はあと ${Math.max(0, Math.floor(left / 2))} 往復まで` : '';
   $('#ask-send').disabled = !!pending || left < 1;
@@ -152,6 +184,7 @@ async function judge(e) {
 // back says which SQL actually ran.
 function proposalHTML(sql, open) {
   if (!open) return `<pre><code>${esc(sql.query)}</code></pre>`;
+  const held = auto ? heldBecause() : '';
   let project = '';
   try { project = localStorage.getItem(PROJECT_KEY) || ''; } catch { /* asked each time */ }
   const runs = AGENT_CLIENT || PROXY_RUNS;
@@ -167,27 +200,95 @@ function proposalHTML(sql, open) {
       <textarea id="ask-sql" rows="${Math.min(14, sql.query.split('\n').length + 1)}" aria-label="提案された SQL">${esc(sql.query)}</textarea>
       ${runs ? `<div class="toolbar">
         ${AGENT_PROJECT ? '' : `<label class="check">課金するプロジェクト <input type="text" id="ask-project" value="${esc(project)}" placeholder="my-project" style="width:12rem"></label>`}
+        ${auto ? '' : '<label class="check"><input type="checkbox" id="ask-auto"> この会話では、以後の SQL も確かめずに実行する</label>'}
         <button type="button" id="ask-run" class="btn primary">実行して結果を返す</button>
       </div>` : ''}
+      ${held ? `<div class="hint">${esc(held)}</div>` : ''}
+    </div>`;
+}
+
+// autoRuns counts the queries run since the person last wrote something
+// of their own.
+function autoRuns() {
+  let n = 0;
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const t = turns[i];
+    if (t.role !== 'user') continue;
+    if (!t.sqlResult && !t.sqlFailed) break;
+    n++;
+  }
+  return n;
+}
+
+function project() {
+  if (AGENT_PROJECT) return AGENT_PROJECT;
+  try { return localStorage.getItem(PROJECT_KEY) || ''; } catch { return ''; }
+}
+
+// heldBecause says why a proposal waits for a click although the person
+// agreed to automatic runs, or '' when the page may run it by itself.
+function heldBecause() {
+  if (!AGENT_CLIENT && !PROXY_RUNS) return 'このデプロイでは、このページから実行できません。';
+  if (!project()) return '課金するプロジェクトを入れて、一度実行してください。';
+  if (autoRuns() >= MAX_AUTO_RUNS) return `続けて ${MAX_AUTO_RUNS} 回実行したので止まっています。続けるなら実行するか、何か書いてください。`;
+  if (!PROXY_RUNS && !hasToken()) return 'Google のサインインが切れました。実行するとサインインし直します。';
+  return '';
+}
+
+// autoRun runs the newest proposal where the person agreed to it and
+// nothing holds it back.
+async function autoRun() {
+  const t = turns.at(-1);
+  if (!auto || !t || t.role !== 'agent' || !t.sql || heldBecause()) return;
+  await execute(t.sql.query, project());
+}
+
+// execute runs one query and hands what came back to the agent. A query
+// BigQuery refused goes back too, as the person's next message: the
+// agent reads the error and corrects the SQL. Only a sign-in that failed
+// stops here — that is the page's problem, not the query's.
+async function execute(query, proj) {
+  const tok = PROXY_RUNS ? null : await signIn(AGENT_CLIENT);
+  draw('run');
+  try {
+    const res = await run(tok, proj, query);
+    turns.push({ role: 'user', text: asMessage(query, res), sqlResult: true, res: { query, ...res } });
+  } catch (e) {
+    turns.push({ role: 'user', text: asFailure(query, e), sqlFailed: true, error: e.message, query });
+  }
+  save();
+  await answer();
+}
+
+// resultHTML draws what a query returned, or why it did not run. It is
+// the page's line, not the person's words, so it is not drawn as theirs.
+function resultHTML(t) {
+  if (t.sqlFailed) {
+    return `<div class="ask-turn ask-result"><div class="hint">実行できませんでした(エージェントに返しました)</div><pre><code>${esc(t.error)}</code></pre></div>`;
+  }
+  const r = t.res;
+  const shown = r.rows.length < r.total ? `、先頭 ${r.rows.length} 行` : '';
+  const head = r.fields.map(f => `<th>${esc(f)}</th>`).join('');
+  const body = r.rows.map(row => `<tr>${row.map(c => `<td>${esc(c)}</td>`).join('')}</tr>`).join('');
+  return `<div class="ask-turn ask-result">
+      <div class="hint">実行結果(${esc(fmtBytes(r.bytes))} 読み取り、全 ${r.total} 行${shown})</div>
+      <div class="ask-table"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>
     </div>`;
 }
 
 async function runProposal() {
   const query = $('#ask-sql').value.trim();
-  const project = AGENT_PROJECT || $('#ask-project').value.trim();
-  if (!query || !project) { toast('SQL と課金するプロジェクトが要ります'); return; }
+  const proj = AGENT_PROJECT || $('#ask-project').value.trim();
+  if (!query || !proj) { toast('SQL と課金するプロジェクトが要ります'); return; }
   if (!AGENT_PROJECT) {
-    try { localStorage.setItem(PROJECT_KEY, project); } catch { /* remembered for this run only */ }
+    try { localStorage.setItem(PROJECT_KEY, proj); } catch { /* remembered for this run only */ }
   }
+  if ($('#ask-auto')?.checked) setAuto(true);
   const btn = $('#ask-run');
   btn.disabled = true;
   btn.textContent = '実行しています…';
   try {
-    const tok = PROXY_RUNS ? null : await signIn(AGENT_CLIENT);
-    const res = await run(tok, project, query);
-    turns.push({ role: 'user', text: asMessage(query, res), sqlResult: true });
-    save();
-    await answer();
+    await execute(query, proj);
   } catch (e) {
     toast('実行できませんでした: ' + e.message, 8000);
     btn.disabled = false;
@@ -222,7 +323,7 @@ async function send() {
 // stands. On failure the last message comes off again: left there, the
 // next send would carry it as history the agent never answered.
 async function answer() {
-  draw(true);
+  draw('read');
   try {
     const ans = await api('/api/v1/agent', {
       method: 'POST',
@@ -241,6 +342,9 @@ async function answer() {
     turns.push({ role: 'agent', text: ans.text, read: ans.read || [], drafts: ans.drafts || [], sql: ans.sql || null, turn: ans.turn || '' });
     save();
     draw();
+    // Not awaited: the answer is in, and a sign-in that fails while the
+    // page runs the next query by itself is said where it happened.
+    autoRun().catch(e => { toast('実行できませんでした: ' + e.message, 8000); draw(); });
     return true;
   } catch (e) {
     turns.pop();

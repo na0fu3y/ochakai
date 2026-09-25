@@ -21,6 +21,20 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The web UI can run the agent's queries by itself, once the person
+  asking agrees** (ROADMAP, the data agent's stage 1). The first proposal
+  in a conversation offers "以後の SQL も確かめずに実行する". Once the
+  person ticks it, each later proposal runs with no click, as that person,
+  read-only and under the same 10 GiB cap. A query BigQuery refuses now
+  goes back to the agent as the next message, so the agent corrects the
+  SQL instead of the conversation stopping. That happens on a manual run
+  too. The page stops by itself after six queries in a row with nothing
+  from the person, and when the Google sign-in has expired. The consent
+  ends with the conversation. A result is drawn as a table instead of
+  as text. Nothing on the wire changes, and the server still runs no SQL.
+
 ### Changed
 
 - **A lexical search whose words most of the base holds costs about half
