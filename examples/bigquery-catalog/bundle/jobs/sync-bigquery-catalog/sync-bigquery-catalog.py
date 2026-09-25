@@ -115,12 +115,6 @@ def flatten(fields, prefix: str = "") -> list[dict]:
 # read as t_1 plus a date. `ochakai seed` folds by the same rule.
 SHARD_NAME = re.compile(r"^(.*[^0-9])([0-9]{8})$")
 
-# What a date-sharded table's entry id reads in place of the date: the id
-# is a path, and the wildcard the shards are queried by (events_*) is a
-# glob to every shell it is typed into.
-SHARD_SUFFIX = "YYYYMMDD"
-
-
 def fold_shards(names: list[str]) -> list[tuple[str, list[str]]]:
     """Group a dataset's table names into entries: (entry name, members).
 
@@ -131,9 +125,12 @@ def fold_shards(names: list[str]) -> list[tuple[str, list[str]]]:
     them, and every search one of them matches returns a page of them.
 
     Two or more names in one dataset that are one stem and a calendar date
-    are shards, and become one entry named <stem>YYYYMMDD with its members
-    oldest first. One dated table alone stays itself: it may be a snapshot
-    somebody named.
+    are shards, and become one entry named by the stem (events_) with its
+    members oldest first; only the resource and title carry the wildcard,
+    because events_* in an id is a glob to every shell it is typed into.
+    One dated table alone stays itself: it may be a snapshot somebody
+    named. Neither does a stem that is itself a table's name (sales beside
+    sales20260101), which would put two tables at one address.
     """
     groups: dict[str, list[str]] = {}
     for name in names:
@@ -148,10 +145,10 @@ def fold_shards(names: list[str]) -> list[tuple[str, list[str]]]:
     out: list[tuple[str, list[str]]] = []
     folded: set[str] = set()
     for stem, members in groups.items():
-        if len(members) < 2:
+        if len(members) < 2 or stem in names:
             continue
         folded.update(members)
-        out.append((stem + SHARD_SUFFIX, sorted(members)))
+        out.append((stem, sorted(members)))
     out += [(name, [name]) for name in names if name not in folded]
     return sorted(out)
 
@@ -251,7 +248,7 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
     `title` is absent too — the
     id's last segment is the display name (design doc 0074 §1), and that
     segment is already the table id. A date-sharded table is the
-    exception: its segment is <stem>YYYYMMDD, so it is titled by the
+    exception: its segment is the stem (events_), so it is titled by the
     wildcard it is queried through. The keys this instance owns —
     `generated`, `verified`, `created_by` — are never written from here:
     provenance is the server's observation of who called, not something a
@@ -556,7 +553,7 @@ def main() -> int:
             shards = members if len(members) > 1 else None
             fq = f"{args.project}.{dataset}.{name}"
             if shards:
-                fq = f"{args.project}.{dataset}.{name.removesuffix(SHARD_SUFFIX)}*"
+                fq = f"{args.project}.{dataset}.{name}*"
             entry_id = f"{args.prefix}/{args.project}/{dataset}/{name}"
             # Job history names the shard a query read, so a sharded
             # table's queries are its shards' added up. Its accounts are

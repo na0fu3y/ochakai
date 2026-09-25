@@ -90,7 +90,7 @@ bq query --max_rows=100000 --format=json --nouse_legacy_sql \
 エラーも警告もないまま、一部のテーブルしか入らない。行数は投影の前に確認する。
 `seed` が最後に出す「seeded N tables」の N を自分のテーブル数と突き合わせれ
 ば、その場で分かる。ただし日付シャード(`events_20260101`, `events_20260102`,
-…)は `events_YYYYMMDD` の一件に畳まれ、`events_*` として引かれる。N はその分
+…)は `events_` の一件に畳まれ、`events_*` として引かれる。N はその分
 少なく、畳んだ数は直前の `folded` の行に出る。
 
 投影したものは全件 draft で入る。スキーマは骨格であって、まだナレッジではな

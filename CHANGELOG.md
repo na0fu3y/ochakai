@@ -30,10 +30,11 @@ last entry.
   matched one matched all of them, with the same score, and they filled
   the page ahead of whatever the question was about. Two or more tables
   in a dataset whose names are one stem and a calendar date now become
-  `<prefix>/<dataset>/events_YYYYMMDD` — titled and addressed
-  (`resource`) as the wildcard `events_*`, carrying the latest shard's
+  `<prefix>/<dataset>/events_` — named by the stem, as a foreign OKF
+  bundle already spells a sharded family, and titled and addressed
+  (`resource`) as the wildcard `events_*` — carrying the latest shard's
   columns and a line naming the shard range. A single dated table is
-  left alone. The example `sync-bigquery-catalog` job folds by the same
+  left alone, and so are shards whose stem is itself a table's name. The example `sync-bigquery-catalog` job folds by the same
   rule; its `tables_seen` counts entries, so the first run after this
   drops sharply and is checked without the previous receipt. Neither
   deletes what earlier runs wrote: after re-seeding, `ochakai delete`

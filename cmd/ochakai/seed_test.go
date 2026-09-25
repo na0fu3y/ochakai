@@ -177,6 +177,10 @@ func TestSeedFoldsDateShardedTables(t *testing.T) {
 		seedColumn{Schema: "shop", Table: "batch_87654321", Column: "id", DataType: "STRING"},
 		seedColumn{Schema: "shop", Table: "t_120260101", Column: "id", DataType: "STRING"},
 		seedColumn{Schema: "shop", Table: "t_120260102", Column: "id", DataType: "STRING"},
+		// A stem that is a table of its own keeps its address.
+		seedColumn{Schema: "shop", Table: "sales", Column: "id", DataType: "STRING"},
+		seedColumn{Schema: "shop", Table: "sales20260101", Column: "id", DataType: "STRING"},
+		seedColumn{Schema: "shop", Table: "sales20260102", Column: "id", DataType: "STRING"},
 	)
 	files := seedBundle(t, cols, "proj", "wh")
 
@@ -186,16 +190,17 @@ func TestSeedFoldsDateShardedTables(t *testing.T) {
 	}
 	slices.Sort(paths)
 	want := []string{
-		"wh/ga/events_YYYYMMDD.md", "wh/ga/events_intraday_YYYYMMDD.md",
+		"wh/ga/events_.md", "wh/ga/events_intraday_.md",
 		"wh/shop/batch_12345678.md", "wh/shop/batch_87654321.md",
 		"wh/shop/orders_20250331.md",
+		"wh/shop/sales.md", "wh/shop/sales20260101.md", "wh/shop/sales20260102.md",
 		"wh/shop/t_120260101.md", "wh/shop/t_120260102.md",
 	}
 	if !slices.Equal(paths, want) {
 		t.Fatalf("bundle paths:\n got %v\nwant %v", paths, want)
 	}
 
-	parsed, _, err := okf.Parse([]byte(files["wh/ga/events_YYYYMMDD.md"]))
+	parsed, _, err := okf.Parse([]byte(files["wh/ga/events_.md"]))
 	if err != nil {
 		t.Fatal(err)
 	}

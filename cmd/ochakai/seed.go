@@ -91,7 +91,7 @@ func cmdSeed(_ context.Context, args []string) error {
 			"column_name, data_type, is_nullable, and description where there is one.\n"+
 			"Rows for the same table are gathered however they arrive, and a\n"+
 			"date-sharded table (events_20260101, events_20260102, …) comes out as one\n"+
-			"concept, events_YYYYMMDD, addressed as the wildcard events_* it is\n"+
+			"concept, events_, addressed as the wildcard events_* it is\n"+
 			"queried through, with the latest shard's columns.\n\n"+
 			"ochakai connects to no warehouse and holds no credential of one: you run\n"+
 			"the query, with your own client and your own identity, and pipe the answer\n"+
@@ -239,12 +239,6 @@ func gatherSeedTables(cols []seedColumn) []seedTable {
 // a digit, so t_120260925 is not read as t_1 plus a date.
 var shardName = regexp.MustCompile(`^(.*[^0-9])([0-9]{8})$`)
 
-// shardSuffix is what a date-sharded table's name reads in place of its
-// date, in the entry's id: the id is a path, and the wildcard BigQuery
-// queries the shards by (events_*) is a glob to every shell it is typed
-// into.
-const shardSuffix = "YYYYMMDD"
-
 // foldShards folds each set of date-sharded tables into one entry.
 //
 // A date-sharded table is one table to whoever queries it — BigQuery
@@ -261,9 +255,21 @@ const shardSuffix = "YYYYMMDD"
 // may be a snapshot somebody named, and nothing says there are others.
 // The entry carries the latest shard's columns, which is the schema a
 // wildcard query over them reads.
+//
+// The entry is named by the stem — tables/ga/events_ — and only its
+// resource and title carry the wildcard, the spelling a foreign OKF
+// bundle already uses for a sharded family (the okf package's
+// testdata/foreign-bundle/tables/orders_.md). The id
+// is a path, and events_* in one is a glob to every shell it is typed
+// into. A stem that is itself a table's name (sales beside sales20260101)
+// would put two tables at one address, so those shards stay as they are.
 func foldShards(tables []seedTable) []seedTable {
 	type key struct{ schema, stem string }
 	groups := map[key][]int{}
+	named := map[key]bool{}
+	for _, t := range tables {
+		named[key{t.schema, t.name}] = true
+	}
 	for i, t := range tables {
 		m := shardName.FindStringSubmatch(t.name)
 		if m == nil {
@@ -278,7 +284,7 @@ func foldShards(tables []seedTable) []seedTable {
 	folded := map[int]bool{}
 	var out []seedTable
 	for k, members := range groups {
-		if len(members) < 2 {
+		if len(members) < 2 || named[k] {
 			continue
 		}
 		var suffixes []string
@@ -292,7 +298,7 @@ func foldShards(tables []seedTable) []seedTable {
 		}
 		sort.Strings(suffixes)
 		out = append(out, seedTable{
-			schema: k.schema, name: k.stem + shardSuffix,
+			schema: k.schema, name: k.stem,
 			columns: tables[latest].columns, shards: suffixes,
 		})
 	}
@@ -364,7 +370,7 @@ func seedDocument(t seedTable, project string) string {
 		"when the load is late are the reasons anybody will read this entry, and the\n" +
 		"schema does not know any of them.\n\n")
 	if n := len(t.shards); n > 0 {
-		stem := strings.TrimSuffix(t.name, shardSuffix)
+		stem := t.name
 		fmt.Fprintf(b, "**Date-sharded**: %d tables, `%s%s` to `%s%s`, folded into this one\n"+
 			"entry. Query them as `%s*`, narrowing with `_TABLE_SUFFIX`; the columns\n"+
 			"below are the latest shard's.\n\n",
@@ -387,7 +393,7 @@ func seedDocument(t seedTable, project string) string {
 func seedTitle(t seedTable) string {
 	name := t.name
 	if len(t.shards) > 0 {
-		name = strings.TrimSuffix(name, shardSuffix) + "*"
+		name += "*"
 	}
 	if t.schema == "" {
 		return name

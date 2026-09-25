@@ -64,13 +64,15 @@ view, and an empty `# Caveats` section for a person to fill in.
 A **date-sharded table** — `events_20260101`, `events_20260102`, … —
 is one entry, not one per day: two or more tables in a dataset whose
 names are one stem and a calendar date land at
-`catalog/bigquery/<project>/<dataset>/events_YYYYMMDD`, titled and
+`catalog/bigquery/<project>/<dataset>/events_`, titled and
 addressed as the wildcard `events_*` they are queried through, with the
 latest shard's columns and layout and the shards' query counts added up.
 Seven hundred identical entries tie on every search one of them matches
 and leave no room on the page for anything else; `ochakai seed` folds by
 the same rule. A single dated table stays itself — it may be a snapshot
-somebody named.
+somebody named — and neither does a stem that is itself a table's name
+(`sales` beside `sales20260101`), which would put two tables at one
+address.
 
 And one entry per dataset, at `catalog/bigquery/<project>/<dataset>` —
 the dataset's own description and a table list linking to the entries
@@ -87,7 +89,7 @@ Three of those choices are load-bearing:
 
 - **No `title`.** The id's last segment is the display name, and that
   segment is the table id already — except for a date-sharded table,
-  whose segment is `<stem>YYYYMMDD` and whose title is the wildcard.
+  whose segment is the stem (`events_`) and whose title is the wildcard.
 - **The entry cites the table as its own source**, so
   `ochakai list --source bigquery://my-project.shop.orders` returns the
   catalog entry *and* every insight or computation written against the same
