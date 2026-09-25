@@ -88,6 +88,17 @@ last entry.
   previous verification and its last failure report, and each outcome
   strictly after the newest verification. One entry's acts keep the order
   they happened in, whichever clock is ahead.
+- **An edit made just after a verification no longer inherits it.** A
+  verification stands for the content when it is no older than the
+  entry's last content change ([0138](docs/design/0138-a-verification-stands-until-the-content-moves.md)),
+  but the two were stamped from different clocks. When the database ran
+  ahead of the application, an edit within that gap was recorded as
+  older than the verification it followed, and the entry read
+  human-reviewed for content nobody confirmed — and stayed out of the
+  edited queue. A content change — an update, a move, or a link repaired
+  by one — is now stamped strictly after the entry's newest verification,
+  and the value the write returns is the value stored. A reformat that
+  leaves the content alone still keeps its verifications.
 
 ## [0.29.0] - 2026-09-25
 

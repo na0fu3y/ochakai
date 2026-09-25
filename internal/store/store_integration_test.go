@@ -2173,6 +2173,122 @@ func TestIntegrationVerifyOrdersActsUnderClockSkew(t *testing.T) {
 	}
 }
 
+// The other side of the same skew: a database clock ahead of the
+// application's stamps the verification in the application's future, so
+// an edit made right after it took content_changed_at from NowStored and
+// landed before the verification it followed — which then stood for
+// content nobody confirmed, and the entry read human-reviewed. The skew
+// is forced by pushing the verification a minute ahead; a content change
+// must still unseat it, through every writer that moves
+// content_changed_at, and a reformat must not.
+func TestIntegrationContentChangeUnseatsVerificationUnderClockSkew(t *testing.T) {
+	dbURL := testdb.URL(t)
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	const prefix = "it-edit-skew"
+	id, moved := prefix+"/entry", prefix+"/moved"
+	for _, table := range []string{"object", "knowledge_revision", "knowledge_verification"} {
+		if _, err := s.pool.Exec(ctx, `DELETE FROM `+table+` WHERE starts_with(id, $1)`, prefix); err != nil {
+			t.Fatal(err)
+		}
+	}
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "reviewer@example.com"}
+	agent := domain.Actor{Kind: domain.ActorProcess, Name: "claude-code"}
+	k := &domain.Knowledge{Type: domain.TypeComputations, ID: id, Title: "月次売上",
+		Status: domain.StatusDraft, CreatedBy: agent}
+	if err := s.Create(ctx, k, false); err != nil {
+		t.Fatal(err)
+	}
+	verifyAhead := func(id string) {
+		t.Helper()
+		if _, err := s.Verify(ctx, id, human); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.pool.Exec(ctx, `UPDATE knowledge_verification SET at = now() + interval '1 minute'
+			WHERE id = $1 AND seq = (SELECT MAX(seq) FROM knowledge_verification WHERE id = $1)`, id); err != nil {
+			t.Fatal(err)
+		}
+		if got, err := s.Get(ctx, id); err != nil {
+			t.Fatal(err)
+		} else if got.Trust != domain.TrustHuman {
+			t.Fatalf("after verifying %s: trust %s, want %s", id, got.Trust, domain.TrustHuman)
+		}
+	}
+	unseated := func(what, id string, returned time.Time) {
+		t.Helper()
+		got, err := s.Get(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Trust != domain.TrustUnverified {
+			t.Errorf("%s: trust %s, want %s — the verification stands for content it never saw",
+				what, got.Trust, domain.TrustUnverified)
+		}
+		if !got.ContentChangedAt.Equal(returned) {
+			t.Errorf("%s: returned content_changed_at %v, stored %v", what, returned, got.ContentChangedAt)
+		}
+		c, err := s.QueueCounts(ctx, Filter{Prefixes: []string{prefix}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.Edited != 1 {
+			t.Errorf("%s: edited queue holds %d, want 1", what, c.Edited)
+		}
+	}
+
+	verifyAhead(id)
+	cur, err := s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A reformat carries content_changed_at over (Service.Update) and
+	// leaves the verification standing.
+	cur.Doc = ""
+	if err := s.Update(ctx, cur, human, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Get(ctx, id); err != nil {
+		t.Fatal(err)
+	} else if got.Trust != domain.TrustHuman {
+		t.Errorf("reformat: trust %s, want %s", got.Trust, domain.TrustHuman)
+	}
+	// A content change stamps content_changed_at from the application
+	// clock, the way Service.Update does.
+	cur.Title, cur.Doc = "月次売上（税抜）", ""
+	cur.ContentChangedAt = NowStored()
+	if err := s.Update(ctx, cur, agent, nil); err != nil {
+		t.Fatal(err)
+	}
+	unseated("update", id, cur.ContentChangedAt)
+
+	verifyAhead(id)
+	m, err := s.Move(ctx, id, moved, agent, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unseated("move", moved, m.ContentChangedAt)
+
+	verifyAhead(moved)
+	if _, err := s.MovePrefix(ctx, prefix, prefix+"-2", agent, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.Get(ctx, prefix+"-2/moved"); err != nil {
+		t.Fatal(err)
+	} else if got.Trust != domain.TrustUnverified {
+		t.Errorf("move prefix: trust %s, want %s", got.Trust, domain.TrustUnverified)
+	}
+	if _, err := s.pool.Exec(ctx, `DELETE FROM object WHERE starts_with(id, $1)`, prefix); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // A move rewrites the links that point at the moved entry — and must also
 // keep the moved entry's own outbound links pointing where they pointed.
 // Relative targets are resolved against the entry's id, so changing the

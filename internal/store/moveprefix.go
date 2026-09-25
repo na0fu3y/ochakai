@@ -7,6 +7,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -185,7 +186,10 @@ func rekeyConcept(ctx context.Context, tx pgx.Tx, oldID, newID string, actor dom
 	q := `UPDATE object SET id=$2, path=$3 WHERE id=$1`
 	args := []any{oldID, newID, domain.ConceptPath(newID)}
 	if live {
-		q = `UPDATE object SET id=$2, path=$3, updated_at=$4, content_changed_at=$4,
+		// The verification rows are still keyed by oldID here. The
+		// stored value is read back with the rest of the row by
+		// rewritePrefixReferences.
+		q = `UPDATE object SET id=$2, path=$3, updated_at=$4, content_changed_at=` + changedAfterVerified("$4", "$1") + `,
 		     updated_by_kind=$5, updated_by_name=$6, updated_by_via=$7, updated_by_producer=$8
 		     WHERE id=$1`
 		args = append(args, now, actor.Kind, actor.Name, actor.Via, actor.Producer)
@@ -328,7 +332,9 @@ func (s *Store) rewritePrefixReferences(ctx context.Context, tx pgx.Tx, pairs []
 		// A moved concept's row already carries the move's instant; only
 		// a referrer that stayed put is being changed now.
 		r.UpdatedAt = now
-		r.ContentChangedAt = now
+		if !self {
+			r.ContentChangedAt = now
+		}
 		j, err := marshalJSONFields(r)
 		if err != nil {
 			return nil, err
@@ -342,18 +348,19 @@ func (s *Store) rewritePrefixReferences(ctx context.Context, tx pgx.Tx, pairs []
 			return nil, err
 		}
 		r.ContentHash = hash
-		tag, err := tx.Exec(ctx,
+		err = tx.QueryRow(ctx,
 			`UPDATE object SET links=$2, attrs=$3, body=$4, updated_at=$5,
 			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8, updated_by_producer=$9,
-			 doc=$10, content_hash=$11, content_changed_at=$12, frontmatter=$13
-			 WHERE id=$1 AND deleted_at IS NULL`,
+			 doc=$10, content_hash=$11, content_changed_at=`+changedAfterVerified("$12", "$1")+`, frontmatter=$13
+			 WHERE id=$1 AND deleted_at IS NULL
+			 RETURNING content_changed_at`,
 			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, actor.Producer,
-			doc, hash, r.ContentChangedAt, fm)
+			doc, hash, r.ContentChangedAt, fm).Scan(&r.ContentChangedAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("repairing references into %s: %s changed under the move", olds[0], r.ID)
+		}
 		if err != nil {
 			return nil, err
-		}
-		if tag.RowsAffected() == 0 {
-			return nil, fmt.Errorf("repairing references into %s: %s changed under the move", olds[0], r.ID)
 		}
 		if self {
 			continue // its "move" revision carries this text

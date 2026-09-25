@@ -224,6 +224,23 @@ func standingVerification(prefix, kind string) string {
 		AND v.at >= ` + prefix + `content_changed_at` + cond + `)`
 }
 
+// changedAfterVerified is the content_changed_at a content-changing write
+// stores: at (a placeholder holding the application's NowStored), or a
+// microsecond past the entry's newest verification when that is later.
+// Verify stamps from the database clock, so a database running ahead of
+// the application would otherwise let an edit land "before" the
+// verification it followed, and standingVerification would read that
+// verification as confirming content nobody confirmed. It is Verify's own
+// clamp from the other side: on one entry's timeline, an edit after a
+// verification is after it. id is the placeholder naming the entry the
+// verification rows are keyed by at the moment the statement runs. Every
+// writer using it takes the stored value back with RETURNING, so what the
+// write hands back is what a read returns (design doc 0030).
+func changedAfterVerified(at, id string) string {
+	return `GREATEST(` + at + `::timestamptz, (SELECT MAX(at) FROM knowledge_verification WHERE id=` + id +
+		`) + interval '1 microsecond')`
+}
+
 // anyVerification is the ledger's presence alone, standing or not: has
 // anybody ever confirmed this entry. With standingVerification negated it
 // is the edited queue's predicate — confirmed once, but not as it stands.
@@ -878,17 +895,25 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 			args = append(args, *ifMatch)
 			cond = fmt.Sprintf(" AND content_hash=$%d", len(args))
 		}
-		tag, err := tx.Exec(ctx, `UPDATE object SET
+		// A write that leaves content_changed_at where it was is a
+		// reformat (Service.Update carries the stored value over), and
+		// moving it would unseat the verifications that stand for the
+		// unchanged content. Any other value is a content change, stamped
+		// after the entry's newest verification (changedAfterVerified).
+		err = tx.QueryRow(ctx, `UPDATE object SET
 			type=$2, title=$3, description=$4, resource=$5, tags=$6, status=$7, status_note=$8, stale_after=$9,
 			sources=$10, usage_window=$11, runtime=$12, parameters=$13, computation=$14, executor=$15, attester=$16,
 			updated_by_kind=$17, updated_by_name=$18, updated_by_via=$19, updated_by_producer=$20,
-			links=$21, attrs=$22, body=$23, updated_at=$24, content_changed_at=$25,
+			links=$21, attrs=$22, body=$23, updated_at=$24,
+			content_changed_at=CASE WHEN content_changed_at = $25 THEN content_changed_at
+				ELSE `+changedAfterVerified("$25", "$1")+` END,
 			doc=$26, frontmatter=$27, content_hash=$28, files=$29
-			WHERE id=$1 AND deleted_at IS NULL`+cond, args...)
-		if err != nil {
+			WHERE id=$1 AND deleted_at IS NULL`+cond+`
+			RETURNING content_changed_at`, args...).Scan(&k.ContentChangedAt)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		if tag.RowsAffected() == 0 {
+		if err != nil {
 			// No row matched. With a precondition, tell a live-but-changed
 			// entry (ErrConflict) apart from a missing one (ErrNotFound).
 			if ifMatch != nil {
