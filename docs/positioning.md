@@ -1,11 +1,25 @@
 # ポジショニング
 
-「X を使えばいいのでは」への答えを一箇所に集めたページ。正直な答えは
-たいてい**「使えばよいし、両立する」**である — ochakai はデータ
-エージェントのコンテキストの一層であって、ウェアハウスやカタログ、
-メモリ層やあなたのノートアプリの代わりではない。主張しているのは、
-そのどれも埋めていない一つの枠である: *人が検証したナレッジを、それを
-使うエージェント自身が書き、すべてのクライアントに一つの契約で配る。*
+「X を使えばいいのでは」への答えを一箇所に集めたページ。ochakai には
+二つの顔があり、答えは顔ごとに違う。
+
+**ナレッジの置き場としては、答えはたいてい「使えばよいし、両立する」
+である** — ochakai はデータエージェントのコンテキストの一層であって、
+ウェアハウスやカタログ、メモリ層やあなたのノートアプリの代わりではない。
+主張しているのは、そのどれも埋めていない一つの枠である: *人が検証した
+ナレッジを、それを使うエージェント自身が書き、すべてのクライアントに
+一つの契約で配る。*
+
+**データエージェントとしては、両立では逃げない。** ochakai は自分の
+エージェントを持ち(既定は off、
+[0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md))、
+2026-09-25 にその目標を決めた — **それを入れたチームが、自分でデータ
+エージェントを作らなくて済むこと**
+([ROADMAP](../ROADMAP.md#where-the-data-agent-is-going))。ブラウザしか
+持たない人が直接問う完成品であり、相手は Databricks Genie、Snowflake
+Cortex Agents、BigQuery Conversational Analytics、Hex Threads である。
+ここは正面から競合するので、下の「データエージェント製品」と「負ける
+ところ」は、どこで勝てないかから書く。
 
 このページは評価している人のためのものである。ochakai が断るものは
 [README](../README.md#what-it-refuses) と
@@ -20,7 +34,9 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 こと、同じ名前の `traffic_source` 列が二つあって別物であること、そして
 この問いに対して誰かが sanctioned としたクエリが*その*一本であること
 は、教えてくれない。ochakai はその後半を持ち、一つ一つに人の裁定を残し、
-それを消費するエージェントが次の一つを書き戻せるようにする。
+それを消費するエージェントが次の一つを書き戻せるようにする。自分の
+エージェントを入れたデプロイでは、答えがどの concept に立ち、その concept
+を人が確かめたかどうかを、答えそのものが言う。
 
 ## 外からの実測
 
@@ -94,6 +110,43 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 配るので、特定のモデルに合わせて育てる道は取らない — 合わせた分は、次に
 繋いだクライアントが払う。
 
+**2026 年に出た社内エージェントの報告は、置き方の次の問い — 誰が書くか —
+で割れた。** 四つ挙げる(2026-09-25 に原典を開いて確かめた。どれも
+ochakai を測ったものではない)。
+
+- **Anthropic** の分析エージェントは、skill(必要なときに読む markdown の
+  フォルダ)が無いと正答が「21% を超えなかった」のが、足すと集計で 95% を
+  超えた。**同じ報告は、過去の数千のクエリを生のまま引かせても精度は
+  1 ポイント未満しか動かなかった**と書き、クエリは構造化した文書に蒸留し直して
+  いる。Claude が下書きはするが、キュレーションと所有は人が持つ
+  ([2026-06-03](https://claude.com/blog/how-anthropic-enables-self-service-data-analytics-with-claude))。
+- **OpenAI** の社内データエージェントはコンテキストを六層に分ける —
+  テーブルの使用状況(スキーマ・lineage・過去のクエリ)、人の注釈、
+  Codex がコードから導いた定義、Slack や Notion の社内知識、メモリ、
+  ウェアハウスへのライブクエリ。**人がキュレーションするのは六つのうち
+  注釈の一層だけ**で、メモリは利用者の訂正を保存するかを会話の中で訊く
+  形である。正解の SQL を人が書いた問いの組で回帰を測る
+  ([2026-01-29](https://openai.com/index/inside-our-in-house-data-agent/))。
+- **Vercel** の d0 は専用ツールの 80% を消して bash 一本でファイルを読ませ、
+  成功率を 80% から 100% に、手数を約 12 から約 7 に減らした。そして
+  「semantic layer が既に良い文書だったから効いた」と書く
+  ([2025-12-22](https://vercel.com/blog/we-removed-80-percent-of-our-agents-tools))。
+  ツールを増やすより、よく書かれた層を読ませるほうが効く、という形である。
+- **Snowflake** の Cortex Sense は逆側に立つ。過去のクエリ・変換ツールの
+  モデル・BI のメトリクスから**自動で**文脈を掘り、難問セットで 24.1% を
+  86.3% に上げた。**そして初期の社内評価セットで、手でキュレーションした
+  semantic view に並び、定義が古びたところと view の無い領域で前に出て、
+  人を 10 ポイント上回った** — 効いたのは最近のクエリ履歴だという
+  ([2026-06-30](https://www.snowflake.com/en/blog/enterprise-ai-agents-grounded-context/)、
+  社内の数字)。
+
+**四つは精度を運ぶのがコンテキストだという点で揃い、誰が書くかで割れる。**
+Anthropic と Vercel は人が書いた層が効くと言い、過去のクエリは Anthropic
+では効かず Snowflake では効いた。二つは測った対象も問いも違い、ここでは
+どちらも再現していない。**ochakai は前者に賭けている**が、後者の数字は
+ベンダー自身が出した、人の手を上回ったという実測であり、軽く扱ってよい
+ものではない(下の「負けるところ」)。
+
 このページが扱うのはその次の問い — 誰が確かめたか、どのクライアントに配れるか、
 間違いだと分かったときにどこへ戻すか — であり、外からの実測は ochakai の
 証拠ではなく、**この枠が空いていることの証拠**である。
@@ -107,7 +160,7 @@ semantic layer は revenue = `SUM(price)` だと教えてくれる。100 とい�
 | 「コンテキスト層」になったカタログ(OpenMetadata、DataHub、Atlan) | 技術メタデータ、リネージ、オーナーシップ、大規模な収集 | キュレーションされた側が OSS であること — 解釈とレビューループは商用ティアに置かれがち | 両立、あるいは既に運用しているなら ochakai の代わりになる |
 | エージェントのメモリ層(mem0、Zep / Graphiti、Letta、[MemPalace](https://github.com/mempalace/mempalace)、[remnic](https://github.com/joshuaswarren/remnic)) | ユーザーごと・エージェントごとの記憶、自動抽出・自動注入、チームで共有する形。**MemPalace は書き込みに LLM を使わず、Letta はメモリが git 管理の markdown + frontmatter、remnic は人の承認の門と provenance と訂正ループを持つ** | 認証された呼び出し元を観測する台帳としての裁定、secret を置かないこと(remnic は bearer token) | 両立 — 下記参照 |
 | 自分の文書に対する RAG | 他の理由で書かれた文書からの断片 | 単位としてのレビュー済みの主張、provenance、著者の向き | 両立 |
-| AI アナリスト製品に内蔵された検証済みクエリストア(Cortex Analyst の VQR、Genie) | 問い + 検証済み SQL、一つのベンダーのチャットの中で | 他のクライアント、出口 | 重なる、そしてロックインする |
+| **データエージェント製品**([Genie One / Ontology / Agents](https://www.databricks.com/blog/introducing-genie-one-genie-ontology-and-genie-agents)、Cortex Agents + [Cortex Sense](https://www.snowflake.com/en/blog/enterprise-ai-agents-grounded-context/)、[BigQuery Conversational Analytics](https://docs.cloud.google.com/gemini/docs/conversational-analytics-api/data-agent-system-instructions)、[Hex Threads](https://learn.hex.tech/docs/explore-data/threads)) | 完成したエージェント — チャートと表、Slack / Teams / モバイル、スケジュールと行動、初日から答える自動収集の文脈、その中の検証済みクエリ | 人の裁定を台帳に残す根拠、却下の理由、OKF での丸ごとの出口、他のクライアントへ同じ中身を配ること | **正面から競合する**、そしていまは機能で負ける — 下記参照 |
 | FDE 型オントロジー([Palantir Foundry Ontology](https://www.palantir.com/docs/foundry/ontology/overview)) | 組織のデジタルツイン — オブジェクトとリンク、Action と write-back、ライブデータへの接続、プラットフォーム内のガバナンス | 出口(オントロジーはプラットフォームのもの)、FDE 無しの立ち上げ、テナントごとの安価なセルフホスト | 約束は同じ、買い方を拒む — 下記参照 |
 | OSS の「Palantir 代替」([semantica](https://github.com/semantica-agi/semantica)) | 数十ソースの取り込みと自動抽出、ポリグロットなグラフ・ベクトルストア、OWL/SHACL、PROV-O、エージェントの決定の因果記録、セルフホスト | 人の裁定が中核であること(decision の記録は verify ではない)、secret-zero、単一形式の往復、キュレーションが買う小ささ | 約束の語彙は重なる、軸が違う — 下記参照 |
 | グラフ DB ネイティブのオントロジー基盤([NebulaGraph](https://nebula-graph.io/posts/ontology-and-graph-databases-enterprise-ai-from-theory-to-production-reality)、Neo4j + GraphRAG) | 型システムと書き込み時のスキーマ強制、型間のリレーション制約、数十億ノードへのスケール、多段トラバーサルとグラフアルゴリズム | 検証のループが中核であること(あちらでは成熟モデルの最終段)、markdown での出口、キュレーションされた規模が買う単純さ | 規模が前提から違う — 下記参照 |
@@ -354,15 +407,72 @@ RAG は誰かが他の理由で書いた文書から断片を取ってくる。�
 させる — 書き戻しのループが製品そのものであり、却下された提案はその
 理由を履歴に残す。
 
-### AI アナリスト製品に内蔵された検証済みクエリストア
+### データエージェント製品
 
-AI アナリスト製品はどれもこれを持っており、そのどれもが自分のチャット
-だけに供給する。ochakai の同じナレッジは Claude Code にも、ホストされた
-MCP エージェントにも、CI ジョブにも等しく供給され、ベース全体が OKF
-v0.2 バンドルとして往復する
-([0075](design/0075-the-bundle-is-the-address-space.md) §1) — git に
-置ける素の markdown と YAML である。MIT でテナントごとのセルフホスト:
-あなたのナレッジが人質になることはない。
+*ここは両立ではなく競合であり、いまは機能で負ける。* このページは長く
+この行を「AI アナリスト製品に内蔵された検証済みクエリストア」と呼び、
+ochakai をその下に置く置き場として扱ってきた。2026-09-25 に ochakai が
+自分のエージェントを完成品にすると決めたので、比べる単位はストアでは
+なくエージェントそのものになった(この節の事実は同日に原典を開いて
+確かめた)。
+
+**大きな三つのうち二つは、2026 年に同じ向きへ動いた — 文脈を自動で
+集め、アルゴリズムで順位を付ける。** 三つ目は書く人を残している。
+
+- **Databricks** の Genie Ontology はテーブル・クエリ・ダッシュボード・
+  パイプライン・繋いだアプリから知識の断片を自動で抜き出し、PageRank に
+  似たやり方 — 出どころ、書き手の権威、使われる頻度、certified な資産との
+  近さ、鮮度 — で重みを付け、重いものから答える。発表の言葉では、チームに
+  「hand-curate を求めずに」文脈の問題を解く
+  ([2026-06-16](https://www.databricks.com/blog/introducing-genie-one-genie-ontology-and-genie-agents))。
+  その上の Genie One は Slack・Teams・モバイル・スケジュールを持ち、
+  Genie Agents は外部のシステムへの書き込みまで持つ。
+- **Snowflake** の Cortex Sense は上の実測のとおり過去のクエリから自動で
+  掘り、衝突は Web 検索のように relevance・authority・popularity・
+  freshness で順位を付ける(private preview、2026-06-30 の発表)。**ただし
+  人を外してはいない** — 二つの定義が衝突すると builder に訊き、訂正は
+  会話で渡す。人は衝突を裁く役として残り、起点ではない。
+- **Google** の Conversational Analytics は逆に、テーブルと列の説明・
+  同義語・example query・system instructions を**開発者が書く** authored
+  context を持ち、staging と published の版を分けて戻せる
+  ([docs](https://docs.cloud.google.com/gemini/docs/conversational-analytics-api/data-agent-system-instructions)、
+  2026-09-23 更新)。書く人がいる点で最も ochakai に近いが、その文書は
+  誰が確かめたかを記録するとは書いていない。
+
+**そして Hex Threads は、答えの側で最も近い。** 管理者と editor が資産を
+endorse し、Endorsed Mode ではエージェントが「endorse された資産だけを
+使う」ように縛られる。2026-08-10 からは新しい thread をこのモードで開く
+のを既定にできる([docs](https://learn.hex.tech/docs/explore-data/threads))。
+**人が認めたものだけから答える、は ochakai だけのものではない。**
+
+**違いは三つある。** 自動収集へ動いた二つの発表は、三つのどれにも
+触れていない。
+
+- **根拠が台帳に載る。** ochakai のエージェントの答えは、立った concept と、
+  それを人が確かめたかどうかを言う。確かめたことは status ではなく、
+  認証された呼び出し元を名指す台帳の行である
+  ([0065](design/0065-identity-and-provenance.md))。エージェントは裁定
+  しない — 提案するだけで、配る中身を変えるのは人の裁定だけである
+  ([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §3)。
+  Genie の重みも Cortex Sense の順位も、どの読み方を採るかを機械が決める。
+- **却下が理由ごと残る。** 答えへの 👎 と一言は失敗の結果報告として
+  棚卸しに届き、それから書かれた draft を人が却下すれば、理由ごと履歴に
+  残る([ループ](loop.md))。👎 を診断にして draft まで運ぶのは、まだ
+  ROADMAP の二段目である。
+- **中身が丸ごと出る。** ナレッジは OKF v0.2 のバンドルとして往復し
+  ([0075](design/0075-the-bundle-is-the-address-space.md) §1)、同じ中身を
+  Claude Code にも、ホストされた MCP エージェントにも、CI にも同じ契約で
+  配る。自分のエージェントを持っても、他人のエージェントは同じナレッジを
+  読み、turn を残せる
+  ([0144](design/0144-a-turn-is-kept-whoever-answered.md))。大きな三つの
+  文脈はどれも、その製品の中で引かれるために集められている。
+
+**動かないものも書いておく。** 目標はエージェントが何をするかを変えるが、
+何をしてよいかは変えない — サーバーは SQL を実行せず、問いは問うた本人の
+身元で走り、secret は無く、エージェントは既定で off で、MCP はエージェント
+を運ばない([ROADMAP](../ROADMAP.md#where-the-data-agent-is-going))。
+だからこの節の競合は、上の三つが持っているもののうち、この線の内側で
+作れるものだけに向いている。
 
 ### FDE 型オントロジー
 
@@ -827,10 +937,33 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
 
 はっきり書く。利点しか見つからない評価は、評価ではないからである。
 
+- **エージェントとしての完成度。** 目標を決めたのは 2026-09-25 で、
+  いま比べれば上の「データエージェント製品」に機能で負ける。いまある
+  のは、一度の同意の後はエージェントが自分のクエリを走らせ、失敗を読んで
+  直し、結果を表と、形が許せばグラフで見せるところまでである(ROADMAP
+  の一段目、[0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md)
+  §1・§5.4)。どのグラフにするかはページが結果の形だけから決めるので、
+  描き方を問いに合わせて選ぶことはできない。走るのは BigQuery だけで
+  ([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §4)、
+  Slack もモバイルもスケジュールも無い。ダッシュボード — 保存し、ピン
+  留めし、定期に走らせ、共有するボード — は、目標が動いても作らない。
+- **初日。** Genie Ontology はチームに hand-curate を求めず、Cortex Sense
+  は立ち上げが一日だったと書く。ochakai のエージェントは空のベースから
+  始まり、答えの根拠になるのは人が裁定したものである — 裁定が無ければ
+  「人が確かめた」と言える答えも無い。空のベースからウェアハウスを読んで
+  draft を書くのは ROADMAP の三段目で、まだ無い。**C4(No FDE)が
+  勝つか負けるかはここで決まる**と ROADMAP 自身が書いている。
+- **人の裁定が律速になる。** 自動で集める側は、人が追いつかない量でも
+  文脈を増やせる。ochakai は配る中身を人の裁定でしか変えないので、裁定
+  する人の手がそのまま上限になる — エージェントを持つと決めた理由の一つ
+  が、流入がその手を超えたことだった
+  ([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §1)。
+  そして上の Snowflake の数字は、自動で掘った文脈が、ある評価セットでは
+  人の手を上回ったと言っている。
 - **書く体験。** Obsidian とそのエコシステムは、書く場所としても眺める
-  場所としてもはるかに優れている。同梱の Web UI は方針としてキュレー
-  ションの面であって、執筆環境でも BI ツールでもない
-  ([0067 §1](design/0067-four-faces-and-what-they-decline.md))。
+  場所としてもはるかに優れている。同梱の Web UI はキュレーションと
+  エージェントに問うための面であって、執筆環境でも BI ツールでもない
+  ([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §1)。
 - **Google Cloud なら純正がある。** 上の Knowledge Catalog は同じ IAM の
   上で立てるものが無く、収集は自動で、MCP も持っている。ochakai の
   プロジェクトと Postgres と月 $10 とセットアップは、人の裁定・却下の
@@ -897,24 +1030,36 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   断りたい — そして kinetic の実行(Action、write-back)をエージェントに
   任せられるなら → semantic の中核と kinetic の定義を最小に持つ、それが
   この枠である。
+- データが一つのプラットフォームに収まっていて、明日から答えるエージェント
+  — Slack、モバイル、スケジュール — が要り、どの読み方を採るかを機械の
+  順位に任せてよいなら → そのプラットフォームのエージェント(Genie、
+  Cortex Agents、Conversational Analytics)。いまの ochakai より完成して
+  いる。
 - **エージェントと人が複数いて、足りないのが誰かが確かめたナレッジ** —
   どのクエリが sanctioned か、その数字が何を意味するか、何が既に試され
   却下されたか — であり、Google Cloud で動かせるなら → それがこれの
-  埋める枠である。
+  埋める枠である。自分のエージェントを持っているならその後ろに置き、
+  持っていないなら ochakai のエージェントを入れる — どちらでも同じ
+  ナレッジを読む。
 
 ## いつ戻ってくるか
 
 上の一覧が答えるのは**いま**どれを選ぶかである。評価している人の多くに
 とって正しい答えは「まだ要らない」であり、そのときに役に立つのは、何が
 起きたらこの枠に入るのかという条件のほうである。2026-08 に 41 組織の
-データエージェント利用を調べたときに繰り返し現れたものを四つ挙げる
-([調査記録](https://github.com/na0fu3y/ochakai/issues/703))。
+データエージェント利用を調べたときに繰り返し現れたものを四つ挙げ
+([調査記録](https://github.com/na0fu3y/ochakai/issues/703))、
+プラットフォームが自動収集へ動いたあとに加わった一つを二つ目に置く。
 
 - **単一ベンダーのチャットに閉じないと決めたとき。** 二つ目の
   クライアント — 別のアシスタント、CI、自分のサービス — が同じ検証済み
-  クエリを要求した瞬間に、ベンダーの中の検証済みクエリストアは原本の
-  置き場ではなくなる。上の「重なる、そしてロックインする」が実務で
-  効き始めるのはここである。
+  クエリを要求した瞬間に、ベンダーのエージェントの中の文脈は原本の
+  置き場ではなくなる。上の「データエージェント製品」が挙げた三つ目の
+  違い — 中身が丸ごと出ること — が実務で効き始めるのはここである。
+- **エージェントの答えについて「どの定義を採ったのか」を訊かれて、
+  「順位が高かったから」では足りなくなったとき。** 自動で集めて順位を
+  付ける文脈は、採った理由を重みで言う。人が確かめたかどうかで言いたく
+  なったら、この枠である。
 - **ナレッジの書き手が二人を超えたとき。** vault 節が数えたもの —
   検証の台帳、observer としての identity、*no* の記憶、並行する
   書き込み — は、一人のうちは一つも要らず、二人目から毎日要る。
