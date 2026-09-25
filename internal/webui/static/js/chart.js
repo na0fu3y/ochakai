@@ -8,6 +8,9 @@
 // - The first column labels the rows; every other column is a number.
 // - A date or time label draws lines over a time axis; a text label
 //   draws horizontal bars in the order the query returned them.
+// - A line never stands in for a value the result does not have: it
+//   breaks at a NULL and across a period with no row, and a point with
+//   no neighbour is drawn as a dot rather than vanishing.
 // - One to four series share one axis. Series whose scales differ by
 //   more than SCALE_RATIO are drawn as one small chart each instead:
 //   a second y-axis would let one of them lie.
@@ -44,7 +47,29 @@ export function plan(res) {
   }
   const series = res.fields.slice(1).map((name, i) => ({ name, values: rows.map(r => r.values[i]) }));
   if (series.every(s => s.values.every(v => v === null))) return null;
-  return { kind, label: res.fields[0], series, rows };
+  return { kind, label: res.fields[0], series, rows, step: kind === 'line' ? step(rows) : 0 };
+}
+
+// step is the interval the rows are usually apart — a day, a week, a
+// month — read as the median gap, so that one missing day does not
+// redefine it. A gap past half again this is a period with no row.
+function step(rows) {
+  const gaps = rows.slice(1).map((r, i) => r.t - rows[i].t).filter(g => g > 0).sort((a, b) => a - b);
+  return gaps.length ? gaps[Math.floor(gaps.length / 2)] : 0;
+}
+
+// segments splits one series into the runs a line may join: a NULL ends
+// a run, and so does a gap wider than the rows' usual step.
+export function segments(p, values) {
+  const out = [];
+  let run = [];
+  values.forEach((v, i) => {
+    const gap = i > 0 && p.step > 0 && p.rows[i].t - p.rows[i - 1].t > p.step * 1.5;
+    if (v === null || gap) { if (run.length) out.push(run); run = []; }
+    if (v !== null) run.push(i);
+  });
+  if (run.length) out.push(run);
+  return out;
 }
 
 function num(v) {
@@ -108,13 +133,12 @@ function line(p, group, slot, ts, y0, y1) {
     .filter((v, i, a) => a.indexOf(v) === i)
     .map((i, k, a) => `<text class="tick" x="${x(p.rows[i].t)}" y="${H - 8}" text-anchor="${k === 0 ? 'start' : k === a.length - 1 ? 'end' : 'middle'}">${esc(p.rows[i].label)}</text>`).join('');
   const paths = group.map(s => {
-    let d = '', pen = false;
-    s.values.forEach((v, i) => {
-      if (v === null) { pen = false; return; }
-      d += `${pen ? 'L' : 'M'}${x(p.rows[i].t).toFixed(1)},${y(v).toFixed(1)}`;
-      pen = true;
-    });
-    return `<path class="series s${slot(s)}" d="${d}"/>`;
+    const runs = segments(p, s.values);
+    const d = runs.filter(r => r.length > 1)
+      .map(r => r.map((i, k) => `${k ? 'L' : 'M'}${x(p.rows[i].t).toFixed(1)},${y(s.values[i]).toFixed(1)}`).join('')).join('');
+    const lone = runs.filter(r => r.length === 1)
+      .map(([i]) => `<circle class="dot lone s${slot(s)}" r="3" cx="${x(p.rows[i].t).toFixed(1)}" cy="${y(s.values[i]).toFixed(1)}"/>`).join('');
+    return (d ? `<path class="series s${slot(s)}" d="${d}"/>` : '') + lone;
   }).join('');
   const xs = p.rows.map(r => x(r.t).toFixed(1)).join(',');
   const ys = group.map(s => s.values.map(v => (v === null ? '' : y(v).toFixed(1))).join(',')).join(';');

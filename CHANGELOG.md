@@ -28,7 +28,8 @@ last entry.
   which supersedes 0143 and keeps its section numbers). The shape is a
   label column followed by one to four numeric columns. A date label draws
   lines over a time axis, and a text label draws horizontal bars (up to
-  20). All series share one axis; series whose scales differ twentyfold
+  20). A line never draws a value the result does not have: it breaks at
+  a NULL and across a period with no row, and a lone point is a dot. All series share one axis; series whose scales differ twentyfold
   are drawn as one small chart each. The page decides from the shape, and
   no model picks an axis. Any other shape gets the table alone. The table
   is always drawn, now with numbers right-aligned, and a `TIMESTAMP` reads

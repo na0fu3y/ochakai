@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { chartHTML, groups, plan, ticks } from '../static/js/chart.js';
+import { chartHTML, groups, plan, segments, svg, ticks } from '../static/js/chart.js';
 
 const res = (fields, types, rows, total = rows.length) => ({ fields, types, rows, total, bytes: 0 });
 
@@ -52,4 +52,22 @@ test('a chart of the first rows says it is only the first rows', () => {
   const html = chartHTML(res(['d', 'n'], ['DATE', 'INTEGER'], [['2026-09-01', '1'], ['2026-09-02', '2']], 80), 3);
   assert.match(html, /先頭 2 行/);
   assert.match(html, /data-key="3"/);
+});
+
+test('a line breaks across a period with no row, and at a NULL', () => {
+  const p = plan(res(['day', 'n'], ['DATE', 'INTEGER'], [
+    ['2026-09-01', '1'], ['2026-09-02', '2'], ['2026-09-03', '3'],
+    // 09-04 to 09-06 have no row: nothing may be drawn across them
+    ['2026-09-07', '7'], ['2026-09-08', 'NULL'], ['2026-09-09', '9'], ['2026-09-10', '10'],
+  ]));
+  assert.deepEqual(segments(p, p.series[0].values), [[0, 1, 2], [3], [5, 6]]);
+  const drawn = svg(p, p.series);
+  assert.equal((drawn.match(/M/g) || []).length, 2, 'two runs of line');
+  assert.equal((drawn.match(/class="dot lone/g) || []).length, 1, 'the day alone is a dot, not lost');
+});
+
+test('months a few days apart in length are still one run', () => {
+  const p = plan(res(['month', 'n'], ['DATE', 'INTEGER'],
+    [['2026-01-01', '1'], ['2026-02-01', '2'], ['2026-03-01', '3'], ['2026-04-01', '4'], ['2026-05-01', '5']]));
+  assert.deepEqual(segments(p, p.series[0].values), [[0, 1, 2, 3, 4]]);
 });

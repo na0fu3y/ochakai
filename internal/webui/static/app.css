@@ -833,6 +833,7 @@ body:not(.has-agent) .agent-only { display: none !important; }
 .chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .chart .cross { stroke: var(--muted); stroke-width: 1; }
 .chart .dot { stroke: var(--bg); stroke-width: 2; }
+.chart .dot.lone { stroke-width: 1; }
 .chart .hit { fill: transparent; }
 .chart .s1 { stroke: var(--series-1); } .chart .bar.s1, .chart .dot.s1, .swatch.s1 { fill: var(--series-1); background: var(--series-1); }
 .chart .s2 { stroke: var(--series-2); } .chart .bar.s2, .chart .dot.s2, .swatch.s2 { fill: var(--series-2); background: var(--series-2); }
