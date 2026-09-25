@@ -239,6 +239,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   usage <id>              show usage totals (search hits, fetches, outcomes)
   stats                   the whole loop: what is stored, what each queue holds,
                           what review did, what came back empty
+  eval                    replay the questions kept for comparison against the
+                          agent, and say which answers still stand
   access [-f file]        show or replace the access policy: who may read and
                           write under which directory (administrators only)
   report <id> <outcome>   report an outcome: worked | failed (--note for why)

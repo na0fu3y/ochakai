@@ -192,6 +192,11 @@ type StatsAgent struct {
 	// Enabled is whether POST /api/v1/agent answers. It is off by
 	// default: the agent is something an operator turns on.
 	Enabled bool `json:"enabled"`
+	// Model is the generative model that answers, as the operator named
+	// it — what a replay of the kept questions is stamped with, since a
+	// change of model is the change a replay most often exists to measure
+	// (design doc 0146). Absent when the agent is off.
+	Model string `json:"model,omitempty"`
 	// Variable is OCHAKAI_AGENT, the variable that would enable it.
 	// Absent when the agent is already on, for a caller who is not an
 	// administrator, and on a posture that refuses the agent.

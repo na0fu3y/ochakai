@@ -44,7 +44,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 検索と埋め込み | [0080](0080-search-and-how-a-deployment-embeds.md) が現行 — 何を融合するかと、`OCHAKAI_EMBEDDINGS` 一語でどう埋め込むかを一冊で持つ。**埋め込みはデプロイのリージョンで行う**(§1.2、データ所在地)。住所で絞る `prefix` は [0075](0075-the-bundle-is-the-address-space.md) §6、スコアの床を持たないことは [0068](0068-how-a-face-is-added-and-removed.md) §3、検索の `hits` が順位に徹することは [0145](0145-four-faces-and-an-answer-that-shows-its-result.md) §4。ヒットが運ぶ一致箇所は [0084](0084-a-hit-says-why-it-matched.md)。**入力窓に収まらなかった concept を数えることとチャンク化を断ることは [0089](0089-a-half-embedded-concept-says-so.md)**(0080 §3・§7 を改訂)。**ファイルのベクトルをパスで引き、帰属を検索時に読むことは [0091](0091-a-file-vector-is-keyed-by-its-path.md)**(0080 §5 を改訂)。**書き手が与えた別名(`synonyms`)を索引が読むことは [0105](0105-a-concept-answers-to-its-other-names.md)** |
 | サーフェスの配分 | [0145](0145-four-faces-and-an-answer-that-shows-its-result.md) が現行 — 各面の役割と載せないもの、MCP の 6 本と stateless な転送、読みが search → get で単読が `linked_from` を運ぶこと、**デプロイ自身のエージェントが REST 一本の後ろにいること**、そして**答えが自分の結果を表と(形が許せば)グラフで見せること**(0143 を節の番号ごと置き換えた)。足す規則と降ろす規則は [0068](0068-how-a-face-is-added-and-removed.md)。一覧と検索を MCP でも二本に分けることは [0096](0096-a-listing-is-not-a-search-here-either.md)。**ツールの答えが一通で返ることと、予算がスキーマを両側とも数えることは [0103](0103-the-tool-result-travels-once.md)**。CLI がファイルを名指す綴りは [0140](0140-one-address-reads-as-well-as-writes.md)。CLI の行の第一列は [0110](0110-the-first-column-is-the-key-you-asked-for.md)、その太字と dim は [0111](0111-weight-for-the-eye-and-only-for-an-eye.md) |
 | Web UI | [0130](0130-the-web-ui-and-the-fields-of-a-document.md) が現行(配信・ページの形・編集を一冊で。0072 / 0092 / 0126 を畳んだ)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**このデプロイができないことをページが出さなくなり、直せる呼び出し元にだけ案内を出すことは [0131](0131-a-deployment-says-what-it-cannot-do.md)** |
-| 検証ループと利用測定 | [0141](0141-a-miss-is-read-off-the-words.md) が現行 — 四つのキュー、立っている検証からの tier、直近 90 日の並び、`stats` と、**どの concept の言葉にも一致しなかった検索をミスとして数えること**(0069・0090・0095・0137・0138 を畳んだ)。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない)。**ループの入力になる turn を、ochakai のエージェント以外も残せて REST から読めることは [0144](0144-a-turn-is-kept-whoever-answered.md)**(0142 §6 の書き手を広げる — 形・保持・export に載せないことは動かない) |
+| 検証ループと利用測定 | [0141](0141-a-miss-is-read-off-the-words.md) が現行 — 四つのキュー、立っている検証からの tier、直近 90 日の並び、`stats` と、**どの concept の言葉にも一致しなかった検索をミスとして数えること**(0069・0090・0095・0137・0138 を畳んだ)。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない)。**ループの入力になる turn を、ochakai のエージェント以外も残せて REST から読めることは [0144](0144-a-turn-is-kept-whoever-answered.md)**(0142 §6 の書き手を広げる — 形・保持・export に載せないことは動かない)。**比較に使う問いを再生し、答えがまだ立っているかを言うことは [0146](0146-a-kept-question-is-replayed-where-the-person-runs-it.md)**(`ochakai eval`、エージェントは `dry_run` で何も書かず何も数えず、SQL は打った人の手元で走る) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂)。**却下が削除の一種であり、理由がリビジョンに載ることは [0135](0135-a-rejection-is-a-deletion.md)** — 墓標は塞がず、`knowledge_rejection` は畳まれた |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md)。**番号は領域の決定に与え、その内側の規則には与えないことと、この表の一行が挙げてよい記録の数の天井は [0128](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)**(0048 §2.1 / §2.2 を改訂) |
@@ -1149,6 +1149,20 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   18 → 20。MCP と CLI には載せない。却下した案: 委譲する呼び出し元に
   限ること(限って守れるものが無い)、`usage` に問いを載せること、答えの
   文を受け取ること、評価の呼び出しを数えないヘッダ。
+- [0146 比較に使う問いは、人が走らせる場所で再生される](0146-a-kept-question-is-replayed-where-the-person-runs-it.md)
+  — **Accepted**。`ochakai eval` が、keep された問いをデプロイのエージェントに
+  もう一度問い、一問ずつ合否を言う。エージェントは `POST /api/v1/agent?dry_run=true`
+  で答え、turn・draft・利用イベント・ミスのどれも残さない(再生が測るものを
+  汚さない。語は 0061 の `dry_run` で、PARAM は増えない)。SQL は打った人の
+  手元で `ochakai ui` と同じ関門(dry run・SELECT だけ・10 GiB)を通って走り、
+  サーバーは実行しない。正解は keep された turn の会話 — 同じ人・同じ
+  producer・同じ最初の問いの 2 時間 — の読みの和と最後の SQL で、合格は
+  二つの SQL の結果の行が一致すること(行の順を問わず、数は有効数字 9 桁、
+  1000 行まで)、SQL の無い正解では読みをすべて読んだこと。答えの文は
+  採点しない(LLM に裁定させることになる)。結果は保存せず、`stats` の
+  `agent.model` で答えたモデルを添える。`--exit-code` は不合格で 2。CLI
+  24 → 25。MCP と Web UI には載せない。却下した案: サーバーでの再生、文の
+  LLM 採点、結果の保存、新しい語、turn への会話 id。
 - [0069 検証ループと、それを測るもの](0069-the-loop-and-what-measures-it.md)
   — **Superseded by 0141**。
 - [0090 キューは、最近あったことで並ぶ](0090-a-queue-ranks-on-what-happened-lately.md)

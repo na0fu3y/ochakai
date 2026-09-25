@@ -23,6 +23,22 @@ last entry.
 
 ### Added
 
+- **`ochakai eval` replays the questions kept for comparison and says
+  which answers still stand**
+  ([0146](docs/design/0146-a-kept-question-is-replayed-where-the-person-runs-it.md),
+  ROADMAP stage 2). The command asks the deployment's agent each kept
+  question again and runs every query the agent proposes on your machine,
+  as you, through `ochakai ui`'s guard. Each question is compared with the
+  conversation that was kept: whether the replay read the same concepts,
+  and whether its query returned the same rows (any row order, numbers to
+  nine significant digits, up to 1000 rows). It prints one line per
+  question, then the model that answered. `--exit-code` exits 2 on any
+  failure. CLI 24 → 25; no new flag names.
+- **`POST /api/v1/agent` takes `dry_run=true`.** The agent answers the
+  same way and writes nothing: no turn, no draft, and no usage event or
+  miss for what it read, so a replay does not count itself.
+- **`stats` says which model answers**, as `agent.model`.
+
 - **The web UI asks for a 👍 as well as a 👎, and a 👍 can keep the
   question for comparison** (ROADMAP, the data agent's stage 2). Until now
   the page offered only 👎, so `keep` — good only on

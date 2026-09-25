@@ -1190,7 +1190,14 @@ func Handler(svc *service.Service) http.Handler {
 	// the way it answers frontmatter. A deployment with no agent answers
 	// 501, and says so in stats before anybody asks (agent.enabled).
 	mux.HandleFunc("POST /api/v1/agent", func(w http.ResponseWriter, r *http.Request) {
-		if err := rejectUnknownParams(r.URL.Query()); err != nil {
+		if err := rejectUnknownParams(r.URL.Query(), "dry_run"); err != nil {
+			writeError(w, err)
+			return
+		}
+		// ?dry_run=true answers and writes nothing — no draft, no turn —
+		// which is what a replay of a kept question needs (design doc 0146).
+		dry, err := queryBool(r.URL.Query(), "dry_run", false)
+		if err != nil {
 			writeError(w, err)
 			return
 		}
@@ -1200,7 +1207,7 @@ func Handler(svc *service.Service) http.Handler {
 		if !readJSON(w, r, &in) {
 			return
 		}
-		ans, err := agent.Run(r.Context(), svc, in.Messages)
+		ans, err := agent.Run(r.Context(), svc, in.Messages, dry)
 		if err != nil {
 			writeError(w, err)
 			return

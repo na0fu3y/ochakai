@@ -53,3 +53,46 @@ type BrowseConcept struct {
 	Status      domain.Status `json:"status"`
 	UpdatedAt   time.Time     `json:"updated_at"`
 }
+
+// AgentMessage is one message of a conversation with the deployment's
+// agent (POST /api/v1/agent): the whole conversation travels on every
+// call, since the server keeps none (design doc 0118).
+type AgentMessage struct {
+	Role string `json:"role"` // "user" or "agent"
+	Text string `json:"text"`
+}
+
+// AgentAnswer is the agent's reply. SQL is a proposal for the person to
+// run, never something the server ran (design doc 0142 §4); Turn is
+// absent on a dry run, which keeps none (design doc 0146).
+type AgentAnswer struct {
+	Text   string         `json:"text"`
+	Read   []string       `json:"read"`
+	SQL    *AgentProposal `json:"sql,omitempty"`
+	Drafts []string       `json:"drafts,omitempty"`
+	Turn   string         `json:"turn,omitempty"`
+}
+
+// AgentProposal is one query the agent asks the person to run.
+type AgentProposal struct {
+	Query   string `json:"query"`
+	Purpose string `json:"purpose"`
+}
+
+// AgentTurn is the kept shape of one answer (design doc 0142 §6):
+// what was asked, what was read, what was proposed, and how the person
+// who asked judged it. Never the answer or a query's result.
+type AgentTurn struct {
+	ID          string    `json:"id"`
+	At          time.Time `json:"at"`
+	By          string    `json:"by"`
+	Via         string    `json:"via,omitempty"`
+	Producer    string    `json:"producer,omitempty"`
+	Asked       string    `json:"asked"`
+	Latest      string    `json:"latest"`
+	Read        []string  `json:"read"`
+	ProposedSQL string    `json:"proposed_sql,omitempty"`
+	Verdict     string    `json:"verdict,omitempty"`
+	Note        string    `json:"note,omitempty"`
+	Keep        bool      `json:"keep,omitempty"`
+}

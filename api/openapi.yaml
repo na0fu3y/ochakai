@@ -1480,6 +1480,16 @@ paths:
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
         - $ref: "#/components/parameters/Producer"
+        - name: dry_run
+          in: query
+          description: >
+            Answer and write nothing: no draft, no turn kept (so the reply
+            carries no `turn`), and no usage event or miss for what the
+            agent read (design doc 0146). This is how a kept
+            question is replayed (`ochakai eval`) without the replay
+            counting itself in the loop it measures. `true` or `false`;
+            anything else is a 400.
+          schema: { type: boolean, default: false }
       requestBody:
         required: true
         description: A key outside messages is a 400 naming it (design doc 0064).
@@ -3588,6 +3598,13 @@ components:
                 where the operator named one. A public identifier, not a
                 secret: the server holds no warehouse credential and never
                 sees the token.
+            model:
+              type: string
+              description: >
+                The generative model that answers, as the operator named it
+                in `OCHAKAI_AGENT`. Present only when the agent is on. A
+                replay of the kept questions (`ochakai eval`) is stamped
+                with it (design doc 0146).
             bigquery_project:
               type: string
               description: >

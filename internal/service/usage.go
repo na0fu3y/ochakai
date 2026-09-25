@@ -85,10 +85,26 @@ func (s *Service) ReportOutcome(ctx context.Context, id, outcome, note string) (
 	return s.Store.Usage(ctx, id)
 }
 
+// unmeasuredKey marks a context whose reads are not the loop's to count.
+type unmeasuredKey struct{}
+
+// Unmeasured returns ctx with its reads left out of what the loop
+// measures: no usage event and no miss. A replay of a kept question
+// reads the way an answer does, and counting it would have the
+// measurement inflate the numbers it is measuring (design doc 0146).
+func Unmeasured(ctx context.Context) context.Context {
+	return context.WithValue(ctx, unmeasuredKey{}, true)
+}
+
+func unmeasured(ctx context.Context) bool {
+	v, _ := ctx.Value(unmeasuredKey{}).(bool)
+	return v
+}
+
 // recordUsage writes usage events with the acting caller as provenance.
 // Failures are logged, never returned: usage recording must not fail reads.
 func (s *Service) recordUsage(ctx context.Context, event string, ids []string) {
-	if len(ids) == 0 {
+	if len(ids) == 0 || unmeasured(ctx) {
 		return
 	}
 	if err := s.Store.RecordEvents(ctx, event, httpauth.Actor(ctx), ids); err != nil {
@@ -111,6 +127,9 @@ const maxMissQuery = 500
 // is about what this ochakai keeps, and the store is where things are
 // kept.
 func (s *Service) recordMiss(ctx context.Context, query string) {
+	if unmeasured(ctx) {
+		return
+	}
 	if s.Config != nil && !s.Config.RecordMisses {
 		return
 	}
@@ -338,7 +357,7 @@ func (s *Service) filesState(sc *Scope) *domain.StatsFiles {
 // there stops the start (design doc 0142 §5).
 func (s *Service) agentState(sc *Scope) *domain.StatsAgent {
 	if s.Model != nil {
-		st := &domain.StatsAgent{Enabled: true}
+		st := &domain.StatsAgent{Enabled: true, Model: s.Model.Name()}
 		if s.Config != nil && s.Config.Agent != nil {
 			st.OAuthClientID = s.Config.Agent.OAuthClientID
 			st.BigQueryProject = s.Config.Agent.BigQueryProject

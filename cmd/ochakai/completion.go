@@ -87,6 +87,7 @@ _ochakai() {
     'move:move (rename) a concept, or a whole directory with --directory'
     'usage:show usage totals for a concept'
     'stats:the whole loop: what is stored, what each queue holds, what review did'
+    'eval:replay the kept questions against the agent, and say which answers stand'
     'access:show or replace the access policy (administrators only)'
     'report:report an outcome (worked/failed) for a concept'
     'revisions:list the change history of a concept (newest first)'
@@ -152,6 +153,14 @@ _ochakai() {
         '--days[flow window in days, 1-180]:days:' \
         '*--prefix[measure only this subtree]:path:' \
         '--exit-code[exit 2 while any review queue is non-empty]' \
+        '--json[print JSON]' \
+        '--url[server URL]:url:'
+      ;;
+    eval)
+      _arguments \
+        '--project[project the queries are billed to]:project:' \
+        '--limit[replay at most this many kept questions]:limit:' \
+        '--exit-code[exit 2 when any question fails]' \
         '--json[print JSON]' \
         '--url[server URL]:url:'
       ;;
@@ -238,7 +247,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search list browse get put verify delete purge reembed move usage stats access report revisions export import seed use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search list browse get put verify delete purge reembed move usage stats eval access report revisions export import seed use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
     return
   fi
 
@@ -261,6 +270,7 @@ _ochakai() {
     get)           opts="--json --download --url" ;;
     usage)         opts="--json --url" ;;
     stats)         opts="--days --prefix --exit-code --json --url" ;;
+    eval)          opts="--project --limit --exit-code --json --url" ;;
     access)        opts="-f --if-match --json --url" ;;
     revisions)     opts="--limit --json --url" ;;
     log)           opts="--limit --url" ;;
@@ -317,6 +327,7 @@ complete -c ochakai -n __fish_use_subcommand -a reembed -d 'embed concepts that 
 complete -c ochakai -n __fish_use_subcommand -a move -d 'move (rename) a concept, or a whole directory with --directory'
 complete -c ochakai -n __fish_use_subcommand -a usage -d 'show usage totals for a concept'
 complete -c ochakai -n __fish_use_subcommand -a stats -d 'the whole loop: what is stored, what each queue holds, what review did'
+complete -c ochakai -n __fish_use_subcommand -a eval -d 'replay the kept questions against the agent, and say which answers stand'
 complete -c ochakai -n __fish_use_subcommand -a access -d 'show or replace the access policy (administrators only)'
 complete -c ochakai -n __fish_use_subcommand -a report -d 'report an outcome (worked/failed) for a concept'
 complete -c ochakai -n __fish_use_subcommand -a revisions -d 'list the change history of a concept (newest first)'
@@ -334,13 +345,13 @@ complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web 
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 complete -c ochakai -n __fish_use_subcommand -a help -d 'print the command list'
 
-complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify delete purge reembed move usage stats access report revisions log export import whoami ui mcp-stdio' -l url -x -d 'server URL'
+complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify delete purge reembed move usage stats eval access report revisions log export import whoami ui mcp-stdio' -l url -x -d 'server URL'
 complete -c ochakai -n '__fish_seen_subcommand_from move' -l directory -d 'move a whole directory: both arguments are paths'
 complete -c ochakai -n '__fish_seen_subcommand_from ui' -l port -x -d 'port on 127.0.0.1'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l dry-run -d 'parse and list, write nothing'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -l strict -d 'fail on any note or skip'
 complete -c ochakai -n '__fish_seen_subcommand_from import' -F
-complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify reembed usage stats access report revisions whoami' -l json -d 'print raw JSON'
+complete -c ochakai -n '__fish_seen_subcommand_from search list browse get put verify reembed usage stats eval access report revisions whoami' -l json -d 'print raw JSON'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l days -x -d 'flow window in days, 1-180'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l prefix -x -d 'measure only this subtree'
 complete -c ochakai -n '__fish_seen_subcommand_from report' -l note -x -d 'context recorded with the report'
@@ -352,6 +363,9 @@ complete -c ochakai -n '__fish_seen_subcommand_from list' -a 'verified_at usage 
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l tag -x -d 'filter by tag'
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l prefix -x -d 'only concepts under this path'
 complete -c ochakai -n '__fish_seen_subcommand_from stats' -l exit-code -d 'exit 2 while any review queue is non-empty'
+complete -c ochakai -n '__fish_seen_subcommand_from eval' -l exit-code -d 'exit 2 when any question fails'
+complete -c ochakai -n '__fish_seen_subcommand_from eval' -l project -x -d 'project the queries are billed to'
+complete -c ochakai -n '__fish_seen_subcommand_from eval' -l limit -x -d 'replay at most this many kept questions'
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l source -x -d 'only concepts citing this resource'
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l links-to -x -d 'only concepts whose body links at this concept'
 complete -c ochakai -n '__fish_seen_subcommand_from search list' -l created-by -x -d 'only concepts created by this principal'
