@@ -189,7 +189,7 @@ func rekeyConcept(ctx context.Context, tx pgx.Tx, oldID, newID string, actor dom
 		// The verification rows are still keyed by oldID here. The
 		// stored value is read back with the rest of the row by
 		// rewritePrefixReferences.
-		q = `UPDATE object SET id=$2, path=$3, updated_at=$4, content_changed_at=` + changedAfterVerified("$4", "$1") + `,
+		q = `UPDATE object SET id=$2, path=$3, updated_at=$4, content_changed_at=` + changedAfterVerified("$4") + `,
 		     updated_by_kind=$5, updated_by_name=$6, updated_by_via=$7, updated_by_producer=$8
 		     WHERE id=$1`
 		args = append(args, now, actor.Kind, actor.Name, actor.Via, actor.Producer)
@@ -351,7 +351,7 @@ func (s *Store) rewritePrefixReferences(ctx context.Context, tx pgx.Tx, pairs []
 		err = tx.QueryRow(ctx,
 			`UPDATE object SET links=$2, attrs=$3, body=$4, updated_at=$5,
 			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8, updated_by_producer=$9,
-			 doc=$10, content_hash=$11, content_changed_at=`+changedAfterVerified("$12", "$1")+`, frontmatter=$13
+			 doc=$10, content_hash=$11, content_changed_at=`+changedAfterVerified("$12")+`, frontmatter=$13
 			 WHERE id=$1 AND deleted_at IS NULL
 			 RETURNING content_changed_at`,
 			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, actor.Producer,
