@@ -120,6 +120,7 @@ function draw(pending) {
   $('#ask-send').disabled = !!pending || left < 1;
   $('#ask-run')?.addEventListener('click', runProposal);
   document.querySelectorAll('[data-verdict]').forEach(b => b.addEventListener('click', openVerdict));
+  document.querySelectorAll('[data-diagnose]').forEach(b => b.addEventListener('click', diagnose));
 }
 
 // tick says how long a pending answer has taken. The server answers in
@@ -135,20 +136,27 @@ function tick(start) {
   }, 1000);
 }
 
-// The verdict of the person who asked (design doc 0142 §3), offered one
-// way only: a person rarely stops to say an answer was right, so the
-// page asks for nothing until one was wrong, and then for one sentence.
-// It becomes a "failed" outcome on no concept — which concept misled
-// the answer is the triage's question, not something to make the person
-// pick from a list of ids — and verifies nothing. Hidden on a read-only
-// deployment, which refuses reports.
+// The verdict of the person who asked (design doc 0142 §3), once per
+// answer. Either way it becomes their outcome report and verifies
+// nothing. A 👎 names no concept — which one misled the answer is what
+// the agent is then asked to find out, not something to make the person
+// pick from a list of ids. A 👍 may keep the question for comparison:
+// the question and what the answer read become a pair a later answer is
+// measured against, and without it the comparison set never grows from
+// this page (ROADMAP, stage 2). Hidden on a read-only deployment, which
+// refuses reports.
 function verdictHTML(t, i) {
   if (!t.turn) return '';
-  if (t.verdict) return '<div class="hint">👎 記録済み</div>';
+  if (t.verdict === 'good') return `<div class="hint">👍 記録済み${t.kept ? '(比較に使う問いに入れました)' : ''}</div>`;
+  if (t.verdict) {
+    return `<div class="hint">👎 記録済み</div>${t.diagnosed ? '' : `<div class="write-only"><button type="button" class="btn small" data-diagnose data-i="${i}">原因を調べて直させる</button> <span class="hint">エージェントが、何がこの答えを誤らせたかを調べ、直す下書きをレビューに置きます。</span></div>`}`;
+  }
   return `<div class="ask-verdict write-only">
-      <button type="button" class="btn small" data-verdict data-i="${i}" title="この答えは違う" aria-label="この答えは違う">👎</button>
+      <button type="button" class="btn small" data-verdict="good" data-i="${i}" title="この答えは合っている" aria-label="この答えは合っている">👍</button>
+      <button type="button" class="btn small" data-verdict="bad" data-i="${i}" title="この答えは違う" aria-label="この答えは違う">👎</button>
       <div class="ask-verdict-form" id="verdict-${i}" hidden>
-        <textarea id="note-${i}" rows="2" placeholder="何が違っていたか" aria-label="何が違っていたか"></textarea>
+        <textarea id="note-${i}" rows="2" aria-label="一言"></textarea>
+        <label class="check" id="keep-box-${i}"><input type="checkbox" id="keep-${i}" checked> この問いを比較に使う</label>
         <button type="button" class="btn primary small" data-judge data-i="${i}">記録する</button>
       </div>
     </div>`;
@@ -156,8 +164,12 @@ function verdictHTML(t, i) {
 
 function openVerdict(e) {
   const i = Number(e.currentTarget.dataset.i), box = $('#verdict-' + i);
-  box.hidden = !box.hidden;
+  const verdict = e.currentTarget.dataset.verdict;
+  box.hidden = box.dataset.verdict === verdict ? !box.hidden : false;
+  box.dataset.verdict = verdict;
   if (box.hidden) return;
+  $('#note-' + i).placeholder = verdict === 'good' ? '何が良かったか(省いてよい)' : '何が違っていたか';
+  $('#keep-box-' + i).hidden = verdict !== 'good';
   box.querySelector('[data-judge]').onclick = judge;
   $('#note-' + i).focus();
 }
@@ -165,11 +177,15 @@ function openVerdict(e) {
 async function judge(e) {
   const i = Number(e.currentTarget.dataset.i);
   const t = turns[i];
-  const body = { verdict: 'bad', note: $('#note-' + i).value.trim() };
+  const verdict = $('#verdict-' + i).dataset.verdict;
+  const body = { verdict, note: $('#note-' + i).value.trim() };
+  if (verdict === 'good' && $('#keep-' + i).checked) body.keep = true;
   e.currentTarget.disabled = true;
   try {
     await api('/api/v1/agent/turns/' + encodeURIComponent(t.turn), { method: 'POST', body });
-    t.verdict = 'bad';
+    t.verdict = verdict;
+    t.kept = !!body.keep;
+    t.note = body.note;
     save();
     toast('記録しました');
     draw();
@@ -177,6 +193,22 @@ async function judge(e) {
     e.currentTarget.disabled = false;
     toast('記録できませんでした: ' + err.message, 6000);
   }
+}
+
+// diagnose asks the agent why an answer the person called wrong went
+// wrong, in the same conversation, so it reads its own answer and what
+// it read. What it may do about it is what it may always do: write new
+// drafts for a person to rule on.
+async function diagnose(e) {
+  const i = Number(e.currentTarget.dataset.i);
+  const t = turns[i];
+  t.diagnosed = true;
+  turns.push({
+    role: 'user',
+    text: `この答えは違っていました${t.note ? `: ${t.note}` : '。'}\n何がこの答えを誤らせたかを調べて、直す下書きを書いてください。`,
+  });
+  save();
+  if (!await answer()) { t.diagnosed = false; save(); draw(); }
 }
 
 // A proposal is the agent asking the person to run something. Only the
