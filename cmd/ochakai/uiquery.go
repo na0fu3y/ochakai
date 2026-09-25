@@ -14,6 +14,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -58,7 +59,7 @@ func queryHandler(tokens oauth2.TokenSource) http.Handler {
 			queryError(w, http.StatusBadGateway, "ochakai ui could not get a Google token: "+err.Error())
 			return
 		}
-		kind, status, body := statementType(r, tok.AccessToken, project, sql)
+		kind, status, body := statementType(r.Context(), tok.AccessToken, project, sql)
 		if status != http.StatusOK {
 			relay(w, status, body)
 			return
@@ -81,7 +82,7 @@ func queryHandler(tokens oauth2.TokenSource) http.Handler {
 			}
 		}
 		out, _ := json.Marshal(fwd)
-		status, body = call(r, tok.AccessToken, http.MethodPost, "/bigquery/v2/projects/"+url.PathEscape(project)+"/queries", out)
+		status, body = call(r.Context(), tok.AccessToken, http.MethodPost, "/bigquery/v2/projects/"+url.PathEscape(project)+"/queries", out)
 		relay(w, status, body)
 	})
 	mux.HandleFunc(resultsRoute, func(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +97,7 @@ func queryHandler(tokens oauth2.TokenSource) http.Handler {
 		if r.URL.RawQuery != "" {
 			path += "?" + r.URL.RawQuery
 		}
-		status, body := call(r, tok.AccessToken, http.MethodGet, path, nil)
+		status, body := call(r.Context(), tok.AccessToken, http.MethodGet, path, nil)
 		relay(w, status, body)
 	})
 	return mux
@@ -106,12 +107,12 @@ func queryHandler(tokens oauth2.TokenSource) http.Handler {
 // says it is. jobs.insert rather than jobs.query: only a job's statistics
 // carry the statement type. On anything but 200 the status and body are
 // BigQuery's, so a syntax error reads the same as it would have run.
-func statementType(r *http.Request, token, project, sql string) (string, int, []byte) {
+func statementType(ctx context.Context, token, project, sql string) (string, int, []byte) {
 	dry, _ := json.Marshal(map[string]any{"configuration": map[string]any{
 		"dryRun": true,
 		"query":  map[string]any{"query": sql, "useLegacySql": false},
 	}})
-	status, body := call(r, token, http.MethodPost, "/bigquery/v2/projects/"+url.PathEscape(project)+"/jobs", dry)
+	status, body := call(ctx, token, http.MethodPost, "/bigquery/v2/projects/"+url.PathEscape(project)+"/jobs", dry)
 	if status != http.StatusOK {
 		return "", status, body
 	}
@@ -128,12 +129,12 @@ func statementType(r *http.Request, token, project, sql string) (string, int, []
 	return job.Statistics.Query.StatementType, http.StatusOK, nil
 }
 
-func call(r *http.Request, token, method, path string, body []byte) (int, []byte) {
+func call(ctx context.Context, token, method, path string, body []byte) (int, []byte) {
 	var rd io.Reader
 	if body != nil {
 		rd = bytes.NewReader(body)
 	}
-	req, err := http.NewRequestWithContext(r.Context(), method, bigQueryUpstream+path, rd)
+	req, err := http.NewRequestWithContext(ctx, method, bigQueryUpstream+path, rd)
 	if err != nil {
 		return http.StatusInternalServerError, errorBody(err.Error())
 	}

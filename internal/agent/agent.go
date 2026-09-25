@@ -82,9 +82,18 @@ const (
 var ErrOff = service.Unsupportedf("this deployment has no agent: set OCHAKAI_AGENT to turn it on (design doc 0142)")
 
 // Run answers the last message of msgs, and keeps the turn's shape.
-func Run(ctx context.Context, svc *service.Service, msgs []Message) (*Answer, error) {
-	ans, err := answer(ctx, svc, msgs)
-	if err != nil || svc.Store == nil {
+//
+// A dry run answers the same way and writes nothing: no draft, no turn
+// kept, and no usage event or miss for what it read (design doc 0146). It is how a kept question is replayed —
+// the replay is a measurement of the loop, and a measurement that fed
+// the loop's own counts, or queued drafts for a person, would be
+// measuring itself.
+func Run(ctx context.Context, svc *service.Service, msgs []Message, dryRun bool) (*Answer, error) {
+	if dryRun {
+		ctx = service.Unmeasured(ctx)
+	}
+	ans, err := answer(ctx, svc, msgs, dryRun)
+	if err != nil || svc.Store == nil || dryRun {
 		return ans, err
 	}
 	sql := ""
@@ -106,7 +115,7 @@ func firstAsked(msgs []Message) string {
 	return ""
 }
 
-func answer(ctx context.Context, svc *service.Service, msgs []Message) (*Answer, error) {
+func answer(ctx context.Context, svc *service.Service, msgs []Message, dryRun bool) (*Answer, error) {
 	if svc.Model == nil {
 		return nil, ErrOff
 	}
@@ -128,10 +137,13 @@ func answer(ctx context.Context, svc *service.Service, msgs []Message) (*Answer,
 	// read-only one answers but does not write (0142 §5), and the tool is
 	// left out rather than offered and refused.
 	sys, all := system+systemSQL, append(append([]llm.Tool(nil), tools...), proposeSQL)
-	if svc.Config == nil || !svc.Config.ReadOnly {
+	switch {
+	case dryRun:
+		sys += systemReplay
+	case svc.Config == nil || !svc.Config.ReadOnly:
 		sys += systemDraft
 		all = append(all, writeDraft)
-	} else {
+	default:
 		sys += systemNoDraft
 	}
 	req := llm.Request{System: sys, Contents: contents, Tools: all}

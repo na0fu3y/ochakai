@@ -79,7 +79,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - MCP: 6
 - MCP-BYTES: 10900
 - MCP-BYTES-SLACK: 500
-- CLI: 24
+- CLI: 25
 - FLAG: 28
 - ENV: 18
 - VOCAB: 46
@@ -595,12 +595,13 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 ([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §3)
 と同じである。
 
-## CLI (24)
+## CLI (25)
 
 - `ochakai access`
 - `ochakai browse`
 - `ochakai completion`
 - `ochakai delete`
+- `ochakai eval`
 - `ochakai export`
 - `ochakai get`
 - `ochakai import`
@@ -621,6 +622,16 @@ Web UI に、いずれもそのまま残る(CLI が完全性の面であると�
 - `ochakai use`
 - `ochakai verify`
 - `ochakai whoami`
+
+24 → 25 は [0146](design/0146-a-kept-question-is-replayed-where-the-person-runs-it.md)
+の `ochakai eval` である。**天井を上げる決定**であり、そう言って上げている。
+比較に使う問いは集まっていたが、答えがまだ立っているかを言う手段が無く、
+モデルやナレッジを替えた日に先週の答えと比べられなかった。Web UI に置かない
+のは CI に置けないからで(0146 §5)、**フラグは一つも増えていない** —
+`--project`・`--limit`・`--exit-code`・`--json` はどれも既にある語である。
+REST の側も、操作とパラメータの名前は増えない: 再生は既存の `dry_run` を
+エージェントの一本に許したもので(0146 §1)、`stats` の `agent.model` は
+応答だけの追加である。
 
 25 → 24 は [0135](design/0135-a-rejection-is-a-deletion.md) が退役させた
 却下のコマンドである。却下が削除になった以上**能力は一つ**で、裁定が

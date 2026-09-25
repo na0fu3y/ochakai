@@ -47,3 +47,28 @@ func TestBrowseResultMatchesServerWire(t *testing.T) {
 		t.Errorf("client decoded:\n%+v\nwant:\n%+v", got, want)
 	}
 }
+
+func TestAgentTurnMatchesServerWire(t *testing.T) {
+	when := time.Date(2026, 9, 25, 0, 0, 0, 0, time.UTC)
+	server := service.TurnPage{Turns: []store.AgentTurn{{
+		ID: "t1", At: when, Actor: "human:a@example.com", Producer: "ochakai/v0.29.0",
+		Asked: "先月の売上は?", Latest: "結果", Read: []string{"metrics/revenue"},
+		ProposedSQL: "SELECT 1", Verdict: "good", Note: "合っている", Keep: true,
+	}}}
+	data, err := json.Marshal(server)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Turns []AgentTurn `json:"turns"`
+	}
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("client cannot decode the server response: %v", err)
+	}
+	want := AgentTurn{ID: "t1", At: when, By: "human:a@example.com", Producer: "ochakai/v0.29.0",
+		Asked: "先月の売上は?", Latest: "結果", Read: []string{"metrics/revenue"},
+		ProposedSQL: "SELECT 1", Verdict: "good", Note: "合っている", Keep: true}
+	if len(got.Turns) != 1 || !reflect.DeepEqual(got.Turns[0], want) {
+		t.Errorf("client decoded:\n%+v\nwant:\n%+v", got.Turns, want)
+	}
+}

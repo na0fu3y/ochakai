@@ -674,6 +674,53 @@ func (c *Client) Stats(ctx context.Context, days int, prefixes []string) (*domai
 	return &st, nil
 }
 
+// Ask sends a conversation to the deployment's agent and returns its
+// reply (POST /api/v1/agent). With dryRun the agent answers the same way
+// and writes nothing — no draft and no turn — which is how a kept
+// question is replayed without the replay counting itself (design doc
+// 0146).
+func (c *Client) Ask(ctx context.Context, msgs []AgentMessage, dryRun bool) (*AgentAnswer, error) {
+	q := url.Values{}
+	if dryRun {
+		q.Set("dry_run", "true")
+	}
+	var ans AgentAnswer
+	if err := c.doJSON(ctx, http.MethodPost, "/api/v1/agent", q, map[string]any{"messages": msgs}, &ans); err != nil {
+		return nil, err
+	}
+	return &ans, nil
+}
+
+// Turns lists every turn the caller may read, newest first, following
+// the cursor to the end (GET /api/v1/agent/turns). keep narrows it to the
+// questions kept for comparison. Turns are few — one per answer, kept 180
+// days — so the whole list is read rather than a page.
+func (c *Client) Turns(ctx context.Context, keep bool) ([]AgentTurn, error) {
+	var all []AgentTurn
+	cursor := ""
+	for {
+		q := url.Values{"limit": {"100"}}
+		if keep {
+			q.Set("keep", "true")
+		}
+		if cursor != "" {
+			q.Set("cursor", cursor)
+		}
+		var page struct {
+			Turns  []AgentTurn `json:"turns"`
+			Cursor string      `json:"cursor"`
+		}
+		if err := c.doJSON(ctx, http.MethodGet, "/api/v1/agent/turns", q, nil, &page); err != nil {
+			return nil, err
+		}
+		all = append(all, page.Turns...)
+		if page.Cursor == "" || len(page.Turns) == 0 {
+			return all, nil
+		}
+		cursor = page.Cursor
+	}
+}
+
 // Export streams the knowledge base as an OKF tar.gz bundle. The caller
 // must close the reader.
 //

@@ -64,6 +64,14 @@ const systemDraft = `
 - どの draft の本文にも、根拠として、問い、誤った答えの要点、問うた人の言葉を書く。レビューする人はそれを読んで裁定する。
 - 答えには、決めた原因と、書いた draft の id を並べる。原因が決められないときは、決められないと書き、確かめるべきことを書く。`
 
+// systemReplay is a dry run (design doc 0146): a kept question asked
+// again to measure the answer, where nothing is written.
+const systemReplay = `
+
+この呼び出しは、比較に使う問いの再生である:
+- 下書きは書けない。書き足すべきことに気づいても、答えに載せなくてよい。
+- 答え方はふだんと同じにする。数字が要るなら SQL を提案し、結果を読んで答える。`
+
 // systemNoDraft is the same rule on a deployment that writes nothing.
 const systemNoDraft = `
 

@@ -47,6 +47,8 @@ Client commands (talk to a server; --url > $OCHAKAI_URL > "use" selection):
   usage <id>              show usage totals (search hits, fetches, outcomes)
   stats                   the whole loop: what is stored, what each queue holds,
                           what review did, what came back empty
+  eval                    replay the questions kept for comparison against the
+                          agent, and say which answers still stand
   access [-f file]        show or replace the access policy: who may read and
                           write under which directory (administrators only)
   report <id> <outcome>   report an outcome: worked | failed (--note for why)
@@ -218,6 +220,51 @@ Examples:
   ochakai delete terms/obsolete-kpi
   ochakai delete metrics/bad-revenue --note "double-counts refunds; see policies/revenue-recognition"
   ochakai delete insights/reading-revenue/weekly.png
+```
+
+## ochakai eval
+
+```
+Usage: ochakai eval [flags]
+
+Replay the questions people kept for comparison (a 👍 with "use this
+question for comparison") against this deployment's agent, and say for
+each whether the answer still stands: whether the replay read the
+concepts the kept answer read, and whether its query returned the same
+rows as the kept answer's query.
+
+Nothing is written, and nothing is counted: the agent answers with
+?dry_run=true, so a replay keeps no turn, writes no draft and adds no
+usage event. Every query runs from this machine as you — the same
+identity `ochakai ui` runs one with — as a SELECT only, capped at
+10 GiB billed; the server runs none (design doc 0142 §4).
+
+A question passes when its query's rows match the reference's (row
+order, and numbers to nine significant digits, do not matter), or, when
+the kept answer ran no query, when the replay read every concept it
+read. A line per question, then one line saying which model answered —
+the number to watch when the model, the prompt or the knowledge changes.
+With --exit-code the command exits 2 when any question fails, and 1 on
+an error, so a scheduled job goes red on a regression.
+
+Flags:
+  -exit-code
+    	exit 2 when any question fails (0 when all pass, 1 on error) — for cron and CI
+  -json
+    	print JSON
+  -limit int
+    	replay at most this many kept questions, newest first (default: all of them)
+  -project project
+    	the Google Cloud project the queries are billed to (default: the deployment's OCHAKAI_BIGQUERY_PROJECT)
+  -url ochakai use
+    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+
+Examples:
+  ochakai eval
+  ochakai eval --limit 10                 # the ten newest kept questions
+  ochakai eval --project my-billing       # where the deployment names none
+  ochakai eval --json | jq '.questions[] | select(.pass | not)'
+  ochakai eval --exit-code                # in CI: red when an answer stops standing
 ```
 
 ## ochakai export

@@ -41,7 +41,7 @@ func call(name string, a map[string]any) *llm.Turn {
 }
 
 func TestADeploymentWithoutAModelSaysSo(t *testing.T) {
-	_, err := Run(context.Background(), &service.Service{}, []Message{{Role: "user", Text: "hi"}})
+	_, err := Run(context.Background(), &service.Service{}, []Message{{Role: "user", Text: "hi"}}, false)
 	var unsupported *service.UnsupportedError
 	if !errors.As(err, &unsupported) || !strings.Contains(err.Error(), "OCHAKAI_AGENT") {
 		t.Errorf("err = %v, want the unsupported error naming OCHAKAI_AGENT", err)
@@ -58,7 +58,7 @@ func TestMessagesAreChecked(t *testing.T) {
 		"too long":   {{Role: "user", Text: strings.Repeat("あ", maxTextBytes)}},
 		"too many":   make([]Message, maxMessages+1),
 	} {
-		_, err := Run(context.Background(), svc, msgs)
+		_, err := Run(context.Background(), svc, msgs, false)
 		if _, ok := errors.AsType[*service.InvalidInputError](err); !ok {
 			t.Errorf("%s: err = %v, want invalid input", name, err)
 		}
@@ -69,7 +69,7 @@ func TestTheConversationReachesTheModelWithItsRoles(t *testing.T) {
 	m := &scripted{turns: []*llm.Turn{text("答え")}}
 	ans, err := Run(context.Background(), &service.Service{Model: m}, []Message{
 		{Role: "user", Text: "売上は?"}, {Role: "agent", Text: "どの期間?"}, {Role: "user", Text: "先月"},
-	})
+	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestTheConversationReachesTheModelWithItsRoles(t *testing.T) {
 // of the turn; the answer goes back as a function response.
 func TestAToolFailureGoesBackToTheModel(t *testing.T) {
 	m := &scripted{turns: []*llm.Turn{call("drop_table", nil), call("search_concepts", map[string]any{}), text("ok")}}
-	if _, err := Run(context.Background(), &service.Service{Model: m}, []Message{{Role: "user", Text: "q"}}); err != nil {
+	if _, err := Run(context.Background(), &service.Service{Model: m}, []Message{{Role: "user", Text: "q"}}, false); err != nil {
 		t.Fatal(err)
 	}
 	for i, want := range []string{`no tool named "drop_table"`, "needs a query"} {
@@ -119,7 +119,7 @@ func TestALoopingModelIsStopped(t *testing.T) {
 	for i := range turns {
 		turns[i] = call("no_such_tool", nil)
 	}
-	_, err := Run(context.Background(), &service.Service{Model: &scripted{turns: turns}}, []Message{{Role: "user", Text: "q"}})
+	_, err := Run(context.Background(), &service.Service{Model: &scripted{turns: turns}}, []Message{{Role: "user", Text: "q"}}, false)
 	if err == nil || !strings.Contains(err.Error(), "rounds") {
 		t.Errorf("err = %v, want the round limit", err)
 	}
@@ -139,7 +139,7 @@ func TestAProposalEndsTheTurn(t *testing.T) {
 	svc := &service.Service{}
 	m := &scripted{turns: []*llm.Turn{call("propose_sql", map[string]any{"query": "SELECT 1", "purpose": "確かめる"})}}
 	svc.Model = m
-	ans, err := Run(context.Background(), svc, []Message{{Role: "user", Text: "q"}})
+	ans, err := Run(context.Background(), svc, []Message{{Role: "user", Text: "q"}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +158,7 @@ func TestAReadOnlyDeploymentOffersNoWrite(t *testing.T) {
 	for _, readOnly := range []bool{false, true} {
 		m := &scripted{turns: []*llm.Turn{text("ok")}}
 		svc := &service.Service{Model: m, Config: &config.Config{ReadOnly: readOnly}}
-		if _, err := Run(context.Background(), svc, []Message{{Role: "user", Text: "q"}}); err != nil {
+		if _, err := Run(context.Background(), svc, []Message{{Role: "user", Text: "q"}}, false); err != nil {
 			t.Fatal(err)
 		}
 		offered := slices.ContainsFunc(m.seen[0].Tools, func(tl llm.Tool) bool { return tl.Name == writeDraft.Name })
@@ -179,7 +179,7 @@ func TestAWriteThatCannotHappenIsAnAnswer(t *testing.T) {
 		call("write_draft", map[string]any{"id": "a/b", "document": "---\ntype: Metric\nstatus: deprecated\n---\nx\n"}),
 		text("書けませんでした"),
 	}}
-	ans, err := Run(context.Background(), &service.Service{Model: m}, []Message{{Role: "user", Text: "q"}})
+	ans, err := Run(context.Background(), &service.Service{Model: m}, []Message{{Role: "user", Text: "q"}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,5 +191,28 @@ func TestAWriteThatCannotHappenIsAnAnswer(t *testing.T) {
 	}
 	if len(ans.Drafts) != 0 {
 		t.Errorf("drafts = %v", ans.Drafts)
+	}
+}
+
+func TestADryRunWritesNothing(t *testing.T) {
+	m := &scripted{turns: []*llm.Turn{text("答え")}}
+	svc := &service.Service{Model: m, Config: &config.Config{}}
+	ans, err := Run(context.Background(), svc, []Message{{Role: "user", Text: "q"}}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ans.Turn != "" {
+		t.Errorf("a dry run kept turn %q", ans.Turn)
+	}
+	for _, tool := range m.seen[0].Tools {
+		if tool.Name == writeDraft.Name {
+			t.Error("a dry run was offered write_draft: a replay would queue drafts for a person")
+		}
+	}
+	if !slices.ContainsFunc(m.seen[0].Tools, func(tl llm.Tool) bool { return tl.Name == proposeSQL.Name }) {
+		t.Error("a dry run must still propose SQL: the replay measures the answer as it would be given")
+	}
+	if !strings.Contains(m.seen[0].System, "再生") {
+		t.Error("the model was not told this is a replay")
 	}
 }

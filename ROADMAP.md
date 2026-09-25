@@ -97,7 +97,11 @@ section says what the stages are for; it does not approve them in advance.
 ## Now
 
 - **Stage 2 of the data agent** (above): a 👎 becomes a diagnosis and a
-  draft waiting for a ruling, and the kept questions are replayed locally.
+  draft waiting for a ruling, and `ochakai eval` replays the kept questions
+  on the operator's machine
+  ([0146](docs/design/0146-a-kept-question-is-replayed-where-the-person-runs-it.md)).
+  What is left is to use it: keep questions, run the replay when the model
+  or the knowledge changes, and let the numbers say whether stage 3 is next.
   Stage 1 has landed: the person agrees once and the agent runs its own
   queries, and the answer shows its result as a table and, where the
   result's shape allows one reading, a chart

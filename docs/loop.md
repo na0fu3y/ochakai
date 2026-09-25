@@ -252,6 +252,19 @@ concept の id(と提案した SQL)を送り、返った turn の id に、問�
 `GET /api/v1/agent/turns`(`verdict`・`keep` で絞る)で読み出せる。
 `OCHAKAI_AGENT` を入れていなくてよい。
 
+**比較に使う問いは、再生して答えがまだ立っているかを確かめられる**(設計
+ドキュメント [0146](design/0146-a-kept-question-is-replayed-where-the-person-runs-it.md))。
+`ochakai eval` が keep された問いをデプロイのエージェントにもう一度問い、
+提案された SQL を打った人として手元で走らせ、keep した会話の SQL と結果の
+行が同じか、同じ concept を読んだかを一問一行で出す。最後の行が答えた
+モデルを言うので、モデル・プロンプト・ナレッジを替えた前後で走らせて並べる
+のが使い方である。再生は `dry_run` で問うので、turn も draft も利用の数も
+ミスも増えない。`--exit-code` は不合格が一つでもあれば 2 を返す:
+
+```sh
+ochakai eval --exit-code        # CI で: 答えが立たなくなったら赤くなる
+```
+
 エージェントが躓くのを待たずに golden query を信頼できる状態に保つには、
 CI からカナリアとして実行する:
 [golden query canary](guides/golden-query-canary.md)。
