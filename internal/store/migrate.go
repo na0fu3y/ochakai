@@ -33,6 +33,28 @@ const migrateLockKey = 0x6f636861
 // unapplied and both run it — the second then fails (or worse, rewrites
 // data twice) against the schema the first already changed.
 func (s *Store) Migrate(ctx context.Context, embedDim int) error {
+	return s.withMigrateLock(ctx, func() error {
+		if err := s.migrateSchema(ctx); err != nil {
+			return err
+		}
+		if embedDim > 0 {
+			return s.migrateEmbedding(ctx, embedDim)
+		}
+		return nil
+	})
+}
+
+// MigrateEmbedding ensures the pgvector schema alone, for a start that
+// has to read the base before it knows how it embeds: which model a
+// discovered deployment uses depends on when its base was made (design
+// doc 0147 §1.2), and that is only readable once Migrate(ctx, 0) has run.
+func (s *Store) MigrateEmbedding(ctx context.Context, dim int) error {
+	return s.withMigrateLock(ctx, func() error { return s.migrateEmbedding(ctx, dim) })
+}
+
+// withMigrateLock runs fn holding the session advisory lock Migrate's doc
+// comment describes.
+func (s *Store) withMigrateLock(ctx context.Context, fn func() error) error {
 	lock, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return fmt.Errorf("acquire migration lock connection: %w", err)
@@ -45,10 +67,21 @@ func (s *Store) Migrate(ctx context.Context, embedDim int) error {
 	// pool discards broken connections on Release, which ends the session
 	// and releases the lock server-side.
 	defer func() { _, _ = lock.Exec(ctx, `SELECT pg_advisory_unlock($1)`, migrateLockKey) }()
+	return fn()
+}
 
+func (s *Store) migrateSchema(ctx context.Context) error {
 	if _, err := s.pool.Exec(ctx,
 		`CREATE TABLE IF NOT EXISTS schema_migrations (version text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
 		return fmt.Errorf("create schema_migrations: %w", err)
+	}
+	// Read before anything is applied: an empty table is the one moment a
+	// base can be told apart from one that was already there (migration
+	// 0053, design doc 0147 §1.2).
+	var made bool
+	if err := s.pool.QueryRow(ctx,
+		`SELECT NOT EXISTS (SELECT 1 FROM schema_migrations)`).Scan(&made); err != nil {
+		return err
 	}
 
 	entries, err := migrationFS.ReadDir("migrations")
@@ -103,12 +136,33 @@ func (s *Store) Migrate(ctx context.Context, embedDim int) error {
 		return fmt.Errorf("backfill frontmatter: %w", err)
 	}
 
-	if embedDim > 0 {
-		if err := s.migrateEmbedding(ctx, embedDim); err != nil {
-			return err
+	// Migration 0053 wrote the older answer; only a base this call made
+	// from nothing is newer than that.
+	if made {
+		if _, err := s.pool.Exec(ctx,
+			`UPDATE base_birth SET migration = $1`, names[len(names)-1]); err != nil {
+			return fmt.Errorf("record when this base was made: %w", err)
 		}
 	}
 	return nil
+}
+
+// birthRecorded is the migration that began recording when a base was
+// made. A base whose birth reads older than it existed before the record
+// did.
+const birthRecorded = "0053_a_base_remembers_when_it_was_made.sql"
+
+// PredatesGlobalEmbedding reports whether this base was made before a
+// deployment that names no embedding model began embedding with
+// gemini-embedding-2 in global. Such a base keeps gemini-embedding-001
+// in the deployment's own region: its vectors are in that space, and its
+// text has only ever gone there (design doc 0147 §1.2).
+func (s *Store) PredatesGlobalEmbedding(ctx context.Context) (bool, error) {
+	var born string
+	if err := s.pool.QueryRow(ctx, `SELECT migration FROM base_birth`).Scan(&born); err != nil {
+		return false, fmt.Errorf("read when this base was made: %w", err)
+	}
+	return born < birthRecorded, nil
 }
 
 // backfillDocuments composes the canonical document (and its hash) for
@@ -487,7 +541,7 @@ func (s *Store) migrateEmbedding(ctx context.Context, dim int) error {
 // backfill would have to guess exactly the mapping this key was
 // ambiguous about. The log line names `ochakai reembed`, as the resize
 // does; until it runs, files are found by name, which is where a
-// deployment without embeddings already is (design doc 0080 §5).
+// deployment without embeddings already is (design doc 0147 §5).
 //
 // Schema-qualified for resizeVectorSpace's reason: a store whose
 // search_path carries a second schema must not drop that schema's table.

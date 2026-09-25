@@ -30,7 +30,9 @@ apply` 一回と、下の手作業ひとつ(スキーマの bootstrap)で済み�
 
 Vertex AI embeddings(§4)はサーバーと合わせて**既定で on** である: モジュ
 ールが `roles/aiplatform.user` を付与して API を有効化し、ochakai はそこか
-ら自分のプロジェクトを見つける(設計ドキュメント 0080)。既定で off なのは
+ら自分のプロジェクトを見つける(設計ドキュメント 0147)。新しく作るベースは
+`gemini-embedding-2` を `global` で使うので、本文と検索クエリはサービスの
+リージョンの外へ出る(`embedding_model` で名指せば留められる)。既定で off なのは
 private IP(§2b)、GCS files(§4b)、IAP 越しの web UI(§5b)。
 
 ### パスワードはどこにも無い
@@ -133,8 +135,8 @@ GRANT "<database_user output>" TO "you@your-org.example";
 |---|---|---|
 | `enable_private_ip` | §2b | Cloud SQL の公開エンドポイントを落とす。peering range と Cloud Run 側の Direct VPC egress。無料。ローカルの `cloud-sql-proxy` アクセスには、その後 VPC に接続したワークステーションか一時的なパブリック IP が要る。 |
 | `enable_vertex_embeddings` | §4 | **既定で on**: `roles/aiplatform.user` を付与し `aiplatform.googleapis.com` を有効化する。on にすると何が手に入るか、デプロイ後に何をすべきかは[デプロイガイド](../cloudrun/README.md#4-hybrid-semantic-search-vertex-ai-on-by-default)にある。`false` にすると `OCHAKAI_EMBEDDINGS=off` を渡し、何も付与しない。 |
-| `embedding_model` | §4 | 既定は null — ochakai が自分のプロジェクトと製品既定のモデルを使う。モデル・リージョン・プロジェクトを選ぶなら Vertex AI のモデル resource name をそのまま渡す(`OCHAKAI_EMBEDDINGS` はこの一つで三つを運ぶ、設計ドキュメント 0080)。名指したデプロイは semantic search を**要求する**ので、pgvector の bootstrap を先に済ませておくこと。次元は設定できない — モデルのものであってデプロイのものではない。 |
-| `agent_model` | §4c | `OCHAKAI_AGENT` — データエージェントを入れ、モデルを名指す。`roles/aiplatform.user` と API は `enable_vertex_embeddings` が false でも付く。 |
+| `embedding_model` | §4 | 既定は null — ochakai が自分のプロジェクトと製品既定のモデルを使う。モデル・リージョン・プロジェクトを選ぶなら Vertex AI のモデル resource name をそのまま渡す(`OCHAKAI_EMBEDDINGS` はこの一つで三つを運ぶ、設計ドキュメント 0147)。名指したデプロイは semantic search を**要求する**ので、pgvector の bootstrap を先に済ませておくこと。次元は設定できない — モデルのものであってデプロイのものではない。 |
+| `agent_model` | §4c | `OCHAKAI_AGENT` — データエージェントを入れ、モデルを名指す。勧めるのは `global` の `gemini-3.8-flash`(resource name で名指す)。`roles/aiplatform.user` と API は `enable_vertex_embeddings` が false でも付く。 |
 | `agent_oauth_client_id` | §4c | `OCHAKAI_OAUTH_CLIENT_ID` — エージェントが提案した SQL を、チームの Web UI が本人の権限で走らせる(`ochakai ui` はこれが無くても走らせる)。クライアントはコンソールで作る(Terraform では作れない)。 |
 | `agent_bigquery_project` | §4c | `OCHAKAI_BIGQUERY_PROJECT` — 提案されたクエリの課金先。利用者は欄に何も書かずに済む。`enable_webui` なら `webui_iap_members` に `roles/bigquery.jobUser` を付与する。 |
 | `enable_gcs_files` | §4b | バケット + `roles/storage.objectUser` + `OCHAKAI_GCS_BUCKET`。無いとファイルの書き込みは 501 を返す。 |

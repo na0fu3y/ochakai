@@ -62,7 +62,7 @@ OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
 デモもそうしてある。上の `ochakai search "なぜ売上が落ちているのか"` が
 答えを返すのはこのためで、`売上` のような二文字語が索引で引けることが何を
 意味するかも、ここで実際に見える(設計ドキュメント
-[0080](../docs/design/0080-search-and-how-a-deployment-embeds.md))。
+[0147](../docs/design/0147-search-and-the-default-a-base-was-made-with.md))。
 
 このファイルが `demo/` の中に無いのは意図的である。OKF 適合はバンドル内の
 予約名でない*すべて*の `.md` が `type` を持つ frontmatter を運ぶことを求めて

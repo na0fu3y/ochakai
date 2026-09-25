@@ -21,6 +21,34 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **A new base embeds with `gemini-embedding-2` in `global` by default;
+  a base that already exists keeps what it had**
+  ([0147](docs/design/0147-search-and-the-default-a-base-was-made-with.md),
+  which supersedes 0080 and keeps its section numbers). A deployment that
+  names no model used to embed with `gemini-embedding-001` in the region
+  it runs in. A database created by a release after 0.29.0 now gets
+  `gemini-embedding-2`, which also finds images and PDFs by their content
+  and takes four times as much text per concept. That model answers only
+  in `global` (and `us`/`eu`), so **a new base's concept bodies and search
+  queries go to Vertex AI in `global`, not to the service's region.** A
+  database that already exists is told apart on its first start with this
+  release (migration 0053 records whether `schema_migrations` was empty).
+  It keeps `gemini-embedding-001` in its own region, so its vectors, its
+  search and where its text goes are unchanged, and nothing needs to be
+  re-embedded. To keep a new base in its region, name
+  `projects/<p>/locations/<region>/publishers/google/models/gemini-embedding-001`
+  in `OCHAKAI_EMBEDDINGS`. To move an existing base, name
+  `…/locations/global/publishers/google/models/gemini-embedding-2` and run
+  `ochakai reembed`. A base exported and imported into a new database
+  counts as new. The vector width stays 768. No variable is added.
+- **The deployment guide, the Terraform example and the configuration
+  page now recommend `gemini-3.8-flash` for the data agent**, named as
+  `projects/<p>/locations/global/publishers/google/models/gemini-3.8-flash`
+  because it answers only in `global`. The agent is still off by default,
+  and a deployment that set `gemini-2.5-flash` is unaffected.
+
 ## [0.29.0] - 2026-09-25
 
 A minor although nothing breaks: this is the release in which the

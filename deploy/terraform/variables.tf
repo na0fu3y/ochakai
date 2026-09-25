@@ -253,7 +253,7 @@ variable "enable_vertex_embeddings" {
     Search is hybrid (trigram + vector, reciprocal rank fusion) using Vertex AI
     embeddings through the service identity — no API keys. On by default: this
     grants roles/aiplatform.user and enables the API, and ochakai finds the
-    project it runs in by itself (design doc 0080 §1.1). It is what makes search work
+    project it runs in by itself (design doc 0147 §1.1). It is what makes search work
     on a Japanese knowledge base, where the trigram index degrades to a scan.
 
     Set it to false to run lexical-only: the role is not granted and
@@ -272,18 +272,20 @@ variable "embedding_model" {
     OCHAKAI_EMBEDDINGS as a Vertex AI model resource name, for a deployment that
     needs a particular model, region or project:
     "projects/<project>/locations/<location>/publishers/google/models/<model>".
-    Leave null for the product's default — the project ochakai runs in,
-    gemini-embedding-001 in the region this service runs in (design doc 0080
-    §1.2), so text is embedded where you deployed it rather than in a region
-    the product picked. Use
-    .../locations/global/publishers/google/models/gemini-embedding-2 to also
-    search image and PDF files by content; that model wants a location of
-    global, us or eu — which means naming it moves the embedding call out of
-    this service's own region.
+    Leave null for the product's default, which the database decides (design
+    doc 0147 §1.2): a base made by this release or later embeds with
+    gemini-embedding-2 in global, which also searches image and PDF files by
+    content and means the embedding call leaves this service's own region; a
+    base made before keeps gemini-embedding-001 in the region this service
+    runs in. To keep a new base's text in its region, name
+    .../locations/<region>/publishers/google/models/gemini-embedding-001; to
+    move an older base to the new default, name
+    .../locations/global/publishers/google/models/gemini-embedding-2 and run
+    `ochakai reembed`.
 
     Naming a model asks for semantic search by name, so the service refuses to
     start where Vertex AI or pgvector is unavailable, where the default would
-    have degraded to lexical search (design doc 0080 §1.3) — the pgvector
+    have degraded to lexical search (design doc 0147 §1.3) — the pgvector
     bootstrap below is manual, so run it first. Changing the model leaves the
     vectors already stored invisible to the new one: `ochakai reembed` refills
     them, and search is lexical-only meanwhile. The vector width is not
@@ -327,9 +329,11 @@ variable "gcs_force_destroy" {
 variable "agent_model" {
   description = <<-EOT
     OCHAKAI_AGENT: turns on the deployment's own data agent and names its
-    model — a bare model id such as "gemini-2.5-flash", run in this project
-    and region, or a Vertex AI model resource name to run it elsewhere
-    (design doc 0142 §5). Null, the default, leaves the agent off. Setting it
+    model — a Vertex AI model resource name such as
+    "projects/<project>/locations/global/publishers/google/models/gemini-3.8-flash"
+    (the recommended model, which answers only in global), or a bare model id
+    such as "gemini-2.5-flash", run in this project and region (design doc
+    0142 §5). Null, the default, leaves the agent off. Setting it
     grants roles/aiplatform.user and enables the API even where
     enable_vertex_embeddings is false. A model the region does not carry stops
     the start rather than sending the text to another region.

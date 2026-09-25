@@ -33,7 +33,7 @@ import (
 // authorization — whoever the issuer vouches for can still read and
 // write everything, exactly as on Cloud Run (0065 §1). And it is not a
 // second embedding provider: semantic search is Vertex AI or nothing
-// (0080), so a deployment off Google Cloud is lexical-only, which since
+// (0147), so a deployment off Google Cloud is lexical-only, which since
 // migration 0036 means Japanese terms are looked up in an index rather
 // than scanned for — a smaller search, not a broken one.
 

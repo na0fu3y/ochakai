@@ -133,7 +133,7 @@ func (g *Gemini) Name() string { return g.model }
 
 // endpoint is the regional generateContent URL. A regional location gets
 // its regional host so the text is processed where the operator chose
-// (design doc 0142 §5, the rule 0080 §1.2 set for embeddings); global and
+// (design doc 0142 §5, the rule 0147 §1.2 set for embeddings); global and
 // the us/eu multi-regions use the plain one.
 func endpoint(project, location, model string) string {
 	host := location + "-aiplatform.googleapis.com"

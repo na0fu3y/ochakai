@@ -1,5 +1,5 @@
 // Search: the hybrid read. Lexical and vector results come back as two
-// rankings and are fused here (design doc 0080), and the miss — a question
+// rankings and are fused here (design doc 0147), and the miss — a question
 // nothing answered — is recorded on the way out (0051).
 package service
 
@@ -113,7 +113,7 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 		// say so in the answer, not only here. The log is where an
 		// operator looks afterwards; the caller is the one holding a
 		// ranking that is worse than this deployment ordinarily gives,
-		// and until design doc 0114 nothing told them (0080 §1 fuses
+		// and until design doc 0114 nothing told them (0147 §1 fuses
 		// three lists, and this is two of them missing).
 		s.Log.Warn("query embedding failed; falling back to lexical-only", "error", err)
 		return cut(), worded, true, nil

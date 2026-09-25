@@ -259,7 +259,7 @@ markdown 以外の書き込みは拒否される。Files は検索対象でも�
 ところではハイブリッド検索に加わる — テキストはどの embedding
 model でも、画像と PDF は `gemini-embedding-2` で。ヒットは常に
 それを持つ concept であって、ファイル自身がヒットすることは無い
-(設計ドキュメント [0080](design/0080-search-and-how-a-deployment-embeds.md) §4)。
+(設計ドキュメント [0147](design/0147-search-and-the-default-a-base-was-made-with.md) §4)。
 
 **trust はナレッジと一緒に旅をする。** OKF v0.2 のスキーマは
 ochakai のスキーマでもある: spec が定義するキーはすべて第一級の
@@ -456,7 +456,7 @@ producer キーは索引しない: concept の別名ではなく concept につ�
 キーは無い。字句面の ranking とは reciprocal rank fusion で融合
 される — は、**ochakai が Google Cloud 上で動いているところでは
 既定で on になる**(設計ドキュメント
-[0080](design/0080-search-and-how-a-deployment-embeds.md) §1。何がそれを決めるか、
+[0147](design/0147-search-and-the-default-a-base-was-made-with.md) §1。何がそれを決めるか、
 どう断るかは[要件と設定](configuration.md#environment-variables)に
 ある)。ベクトルは concept が書かれたときに書かれるので、embeddings
 が届く前に読み込んだベースや、model を変えた後のベースは、
