@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -837,5 +838,105 @@ func TestSynonymsAreSearchable(t *testing.T) {
 		t.Fatal(err)
 	} else if len(hits) != 0 {
 		t.Errorf("a removed name still answers: %+v", hits)
+	}
+}
+
+// TestIdentifiersAgreeWithGo holds the two readings of an identifier to
+// one: store.identifiers on the query, ochakai_identifiers (migration
+// 0051) on the document. A name one side extracts and the other never
+// stores is a term that cannot be found, and nothing else would say so.
+func TestIdentifiersAgreeWithGo(t *testing.T) {
+	ctx := context.Background()
+	s := newSearchStore(t, ctx)
+
+	for _, text := range []string{
+		"order_items",
+		"Order_Items and order-items",
+		"bigquery/acme-analytics-prod/sales_mart/orders",
+		"select * from acme-analytics-prod.sales_mart.orders;",
+		"see sales_mart.orders.",
+		"testdb.Unique, DOC-LINES and v0.28.4",
+		"_leading trailing_ -dash- a..b a__b",
+		"注文はorder_itemsにある",
+		"ｏｒｄｅｒ＿ｉｔｅｍｓ",
+		"https://example.com/a-b/c_d?x=y-z",
+		"plain words only",
+		strings.Repeat("a_", 200) + "a",
+	} {
+		var want []string
+		for _, id := range identifiers(norm.NFKC.String(text)) {
+			want = append(want, identifierLexeme(id))
+		}
+		var got []string
+		if err := s.pool.QueryRow(ctx,
+			`SELECT ochakai_identifiers(normalize($1::text, NFKC))`, text).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		slices.Sort(want)
+		slices.Sort(got)
+		if !slices.Equal(got, want) {
+			t.Errorf("%q: ochakai_identifiers stores %q, the query asks for %q", text, got, want)
+		}
+	}
+}
+
+// TestIdentifierOutranksItsScatteredParts is issue #883. A wide raw
+// table holds order, items, sales, mart, user and sessions somewhere in
+// its columns, so a query naming three tables by their joined names
+// found every part of every name in it — and ranked it above the tables
+// the names are, because it matched all of them and each of those
+// matched one. The whole identifier is the term only the named tables
+// hold.
+//
+// The parts are common here because they are common in the base the
+// issue measured, where a project name's pieces matched 94% of the
+// tables: rarity is the weight, and three concepts alone would make
+// every term equally rare.
+func TestIdentifierOutranksItsScatteredParts(t *testing.T) {
+	ctx := context.Background()
+	s := newSearchStore(t, ctx)
+	run := testdb.Unique(t, "identwhole")
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+
+	create := func(id, body string) {
+		t.Helper()
+		k := &domain.Knowledge{
+			Type: domain.TypeTables, ID: run + "/" + id,
+			Body: body, Status: domain.StatusStable, CreatedBy: actor,
+		}
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatalf("create %s: %v", k.ID, err)
+		}
+	}
+	for id, body := range map[string]string{
+		"acme-prod/sales_mart/order_items": "One row per line of a customer's basket.",
+		"acme-prod/web/user_sessions":      "One row per visit.",
+		"acme-prod/raw/events_wide": "Columns: order_id, order_status, line_items_count, " +
+			"items_json, sales_channel, sales_region, mart_version, user_id, " +
+			"user_agent, sessions_today, session_start.",
+	} {
+		create(id, body)
+	}
+	for i := range 6 {
+		create(fmt.Sprintf("acme-prod/other/t%d", i),
+			"Joins order and items to user sessions for the sales mart.")
+	}
+
+	hits, err := s.SearchLexical(ctx, "order_items sales_mart user_sessions",
+		Filter{Prefixes: []string{run}}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, h := range hits {
+		ids = append(ids, strings.TrimPrefix(h.ID, run+"/acme-prod/"))
+	}
+	// Before identifiers were terms, the two named tables came last of
+	// nine — below the wide table and below every table that merely
+	// says the words.
+	if len(ids) < 2 || !slices.Contains(ids[:2], "sales_mart/order_items") ||
+		!slices.Contains(ids[:2], "web/user_sessions") {
+		t.Errorf("ranking %v: the tables the query names are not the first two, "+
+			"so a name's scattered parts outranked the name", ids)
 	}
 }

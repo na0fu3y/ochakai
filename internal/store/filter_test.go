@@ -265,6 +265,17 @@ func TestQueryFragments(t *testing.T) {
 		{"a grammar-only query keeps its runs", "か", []string{"か"}},
 		{"grammar-only runs survive when nothing else does", "の と は",
 			[]string{"の", "と", "は"}},
+		// An identifier is a fragment of its own, ahead of its parts:
+		// the parts keep their recall, and the whole is the term only
+		// the concepts spelling the name hold (issue #883).
+		{"an identifier is asked for beside its parts", "order_items schema",
+			[]string{"order_items", "order", "items", "schema"}},
+		{"a qualified name brings its joined qualifiers",
+			"acme-analytics-prod.sales_mart.orders",
+			[]string{"acme-analytics-prod.sales_mart.orders", "acme-analytics-prod",
+				"sales_mart", "acme", "analytics", "prod", "sales", "mart", "orders"}},
+		{"a trailing full stop is not part of a name", "see testdb.Unique.",
+			[]string{"testdb.Unique", "see", "testdb", "Unique"}},
 		{"mixed scripts", "revenue 売上高", []string{"revenue", "売上", "上高"}},
 		{"punctuation only falls back to the query", "???", []string{"???"}},
 		{"duplicate windows collapse", "ををを", []string{"をを"}},
