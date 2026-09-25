@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -68,10 +69,14 @@ type seedColumn struct {
 	Comment    string `json:"description"` // BigQuery's column description, when selected
 }
 
-// seedTable is the rows of one table, gathered.
+// seedTable is the rows of one table, gathered — or, for a date-sharded
+// table, of its latest shard, with the shards it stands for.
 type seedTable struct {
 	schema, name string
 	columns      []seedColumn
+	// shards are the date suffixes of the tables folded into this one,
+	// oldest first; empty for a table that is not sharded (foldShards).
+	shards []string
 }
 
 func cmdSeed(_ context.Context, args []string) error {
@@ -84,7 +89,10 @@ func cmdSeed(_ context.Context, args []string) error {
 			"Reads JSON rows (an array, or one object per line) with the\n"+
 			"INFORMATION_SCHEMA.COLUMNS column names: table_schema, table_name,\n"+
 			"column_name, data_type, is_nullable, and description where there is one.\n"+
-			"Rows for the same table are gathered however they arrive.\n\n"+
+			"Rows for the same table are gathered however they arrive, and a\n"+
+			"date-sharded table (events_20260101, events_20260102, …) comes out as one\n"+
+			"concept, events_, addressed as the wildcard events_* it is\n"+
+			"queried through, with the latest shard's columns.\n\n"+
 			"ochakai connects to no warehouse and holds no credential of one: you run\n"+
 			"the query, with your own client and your own identity, and pipe the answer\n"+
 			"here. Every concept comes out as a draft, because a projected schema is a\n"+
@@ -121,12 +129,22 @@ func cmdSeed(_ context.Context, args []string) error {
 	if note := seedTruncationNote(len(cols)); note != "" {
 		fmt.Fprintln(os.Stderr, "note:", note)
 	}
-	tables := gatherSeedTables(cols)
+	tables := foldShards(gatherSeedTables(cols))
 	if len(tables) == 0 {
 		return fmt.Errorf("no rows with a table_name: is this the output of a SELECT over INFORMATION_SCHEMA.COLUMNS?")
 	}
 	if err := writeSeedBundle(os.Stdout, tables, *project, *prefix); err != nil {
 		return err
+	}
+	folded, shards := 0, 0
+	for _, t := range tables {
+		if len(t.shards) > 0 {
+			folded++
+			shards += len(t.shards)
+		}
+	}
+	if folded > 0 {
+		fmt.Fprintf(os.Stderr, "folded %d date-sharded tables into %d entries\n", shards, folded)
 	}
 	fmt.Fprintf(os.Stderr, "seeded %d tables as drafts; pipe into `ochakai import -` to write them\n", len(tables))
 	return nil
@@ -216,6 +234,88 @@ func gatherSeedTables(cols []seedColumn) []seedTable {
 	return tables
 }
 
+// shardName is a table name ending in a date — events_20260925 — split
+// into its stem and the date. The character before the date must not be
+// a digit, so t_120260925 is not read as t_1 plus a date.
+var shardName = regexp.MustCompile(`^(.*[^0-9])([0-9]{8})$`)
+
+// foldShards folds each set of date-sharded tables into one entry.
+//
+// A date-sharded table is one table to whoever queries it — BigQuery
+// reads events_* with _TABLE_SUFFIX as a single wildcard table, and its
+// console lists the shards as one row — but INFORMATION_SCHEMA lists
+// every day as a table of its own. Projected as they come, two years of
+// a GA4 export are 730 entries with one body between them, and every
+// search one of them matches returns a page of them: a lexical score
+// cannot tell identical documents apart, so they tie, and the page has
+// no room left for the table the question was about.
+//
+// Two or more tables in one dataset whose names are one stem and a
+// calendar date are shards. One dated table alone is left as it is: it
+// may be a snapshot somebody named, and nothing says there are others.
+// The entry carries the latest shard's columns, which is the schema a
+// wildcard query over them reads.
+//
+// The entry is named by the stem — tables/ga/events_ — and only its
+// resource and title carry the wildcard, the spelling a foreign OKF
+// bundle already uses for a sharded family (the okf package's
+// testdata/foreign-bundle/tables/orders_.md). The id
+// is a path, and events_* in one is a glob to every shell it is typed
+// into. A stem that is itself a table's name (sales beside sales20260101)
+// would put two tables at one address, so those shards stay as they are.
+func foldShards(tables []seedTable) []seedTable {
+	type key struct{ schema, stem string }
+	groups := map[key][]int{}
+	named := map[key]bool{}
+	for _, t := range tables {
+		named[key{t.schema, t.name}] = true
+	}
+	for i, t := range tables {
+		m := shardName.FindStringSubmatch(t.name)
+		if m == nil {
+			continue
+		}
+		if _, err := time.Parse("20060102", m[2]); err != nil {
+			continue
+		}
+		k := key{t.schema, m[1]}
+		groups[k] = append(groups[k], i)
+	}
+	folded := map[int]bool{}
+	var out []seedTable
+	for k, members := range groups {
+		if len(members) < 2 || named[k] {
+			continue
+		}
+		var suffixes []string
+		latest := members[0]
+		for _, i := range members {
+			folded[i] = true
+			suffixes = append(suffixes, strings.TrimPrefix(tables[i].name, k.stem))
+			if tables[i].name > tables[latest].name {
+				latest = i
+			}
+		}
+		sort.Strings(suffixes)
+		out = append(out, seedTable{
+			schema: k.schema, name: k.stem,
+			columns: tables[latest].columns, shards: suffixes,
+		})
+	}
+	for i, t := range tables {
+		if !folded[i] {
+			out = append(out, t)
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].schema != out[j].schema {
+			return out[i].schema < out[j].schema
+		}
+		return out[i].name < out[j].name
+	})
+	return out
+}
+
 // writeSeedBundle prints the tables as an OKF bundle: one markdown
 // document per table, at the path its id gives it (design doc 0046 §3.5).
 func writeSeedBundle(w io.Writer, tables []seedTable, project, prefix string) error {
@@ -269,6 +369,13 @@ func seedDocument(t seedTable, project string) string {
 		"written by a person yet** — what this table is for, which column lies, and\n" +
 		"when the load is late are the reasons anybody will read this entry, and the\n" +
 		"schema does not know any of them.\n\n")
+	if n := len(t.shards); n > 0 {
+		stem := t.name
+		fmt.Fprintf(b, "**Date-sharded**: %d tables, `%s%s` to `%s%s`, folded into this one\n"+
+			"entry. Query them as `%s*`, narrowing with `_TABLE_SUFFIX`; the columns\n"+
+			"below are the latest shard's.\n\n",
+			n, stem, t.shards[0], stem, t.shards[n-1], stem)
+	}
 	b.WriteString("| Column | Type | Null | Note |\n|---|---|---|---|\n")
 	for _, c := range t.columns {
 		null := ""
@@ -281,11 +388,17 @@ func seedDocument(t seedTable, project string) string {
 	return b.String()
 }
 
+// seedTitle is the table's name as a query spells it: a date-sharded
+// table by the wildcard its shards are queried through.
 func seedTitle(t seedTable) string {
-	if t.schema == "" {
-		return t.name
+	name := t.name
+	if len(t.shards) > 0 {
+		name += "*"
 	}
-	return t.schema + "." + t.name
+	if t.schema == "" {
+		return name
+	}
+	return t.schema + "." + name
 }
 
 // seedResource is the table's address in the warehouse, in the spelling

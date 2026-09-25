@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -47,7 +48,7 @@ func bundleOf(t *testing.T, raw []byte) map[string]string {
 func seedBundle(t *testing.T, cols []seedColumn, project, prefix string) map[string]string {
 	t.Helper()
 	buf := &bytes.Buffer{}
-	if err := writeSeedBundle(buf, gatherSeedTables(cols), project, prefix); err != nil {
+	if err := writeSeedBundle(buf, foldShards(gatherSeedTables(cols)), project, prefix); err != nil {
 		t.Fatal(err)
 	}
 	return bundleOf(t, buf.Bytes())
@@ -150,6 +151,70 @@ func TestSeedKeepsColumnOrderAndSortsTables(t *testing.T) {
 	}
 	if _, ok := files["tables/shop/zeta.md"]; !ok {
 		t.Errorf("bundle: %v", files)
+	}
+}
+
+// A date-sharded table is one table to whoever queries it. Projected a
+// shard at a time, a GA4 export is hundreds of identical entries that tie
+// on every search they match and push the rest off the page — so the
+// shards fold into one entry, addressed by the wildcard they are queried
+// through, carrying the latest shard's columns.
+func TestSeedFoldsDateShardedTables(t *testing.T) {
+	var cols []seedColumn
+	for _, day := range []string{"20260101", "20260102", "20260103"} {
+		cols = append(cols, seedColumn{Schema: "ga", Table: "events_" + day, Column: "event_name", DataType: "STRING"})
+	}
+	cols = append(cols,
+		// The latest shard gained a column: it is the schema the wildcard reads.
+		seedColumn{Schema: "ga", Table: "events_20260103", Column: "is_active_user", DataType: "BOOL"},
+		// Two stems in one dataset stay two entries.
+		seedColumn{Schema: "ga", Table: "events_intraday_20260103", Column: "event_name", DataType: "STRING"},
+		seedColumn{Schema: "ga", Table: "events_intraday_20260104", Column: "event_name", DataType: "STRING"},
+		// One dated table alone may be a snapshot somebody named.
+		seedColumn{Schema: "shop", Table: "orders_20250331", Column: "order_id", DataType: "STRING"},
+		// Eight digits that are not a date, and a date glued to a digit.
+		seedColumn{Schema: "shop", Table: "batch_12345678", Column: "id", DataType: "STRING"},
+		seedColumn{Schema: "shop", Table: "batch_87654321", Column: "id", DataType: "STRING"},
+		seedColumn{Schema: "shop", Table: "t_120260101", Column: "id", DataType: "STRING"},
+		seedColumn{Schema: "shop", Table: "t_120260102", Column: "id", DataType: "STRING"},
+		// A stem that is a table of its own keeps its address.
+		seedColumn{Schema: "shop", Table: "sales", Column: "id", DataType: "STRING"},
+		seedColumn{Schema: "shop", Table: "sales20260101", Column: "id", DataType: "STRING"},
+		seedColumn{Schema: "shop", Table: "sales20260102", Column: "id", DataType: "STRING"},
+	)
+	files := seedBundle(t, cols, "proj", "wh")
+
+	var paths []string
+	for p := range files {
+		paths = append(paths, p)
+	}
+	slices.Sort(paths)
+	want := []string{
+		"wh/ga/events_.md", "wh/ga/events_intraday_.md",
+		"wh/shop/batch_12345678.md", "wh/shop/batch_87654321.md",
+		"wh/shop/orders_20250331.md",
+		"wh/shop/sales.md", "wh/shop/sales20260101.md", "wh/shop/sales20260102.md",
+		"wh/shop/t_120260101.md", "wh/shop/t_120260102.md",
+	}
+	if !slices.Equal(paths, want) {
+		t.Fatalf("bundle paths:\n got %v\nwant %v", paths, want)
+	}
+
+	parsed, _, err := okf.Parse([]byte(files["wh/ga/events_.md"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := parsed.Knowledge
+	if k.Title != "ga.events_*" {
+		t.Errorf("title = %q, want the wildcard the shards are queried through", k.Title)
+	}
+	if k.Resource != "bigquery://proj.ga.events_*" {
+		t.Errorf("resource = %q", k.Resource)
+	}
+	for _, s := range []string{"3 tables", "`events_20260101` to `events_20260103`", "`is_active_user`", "_TABLE_SUFFIX"} {
+		if !strings.Contains(k.Body, s) {
+			t.Errorf("body lacks %q:\n%s", s, k.Body)
+		}
 	}
 }
 

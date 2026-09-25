@@ -28,6 +28,7 @@ import base64
 import datetime
 import json
 import os
+import re
 import sys
 
 import google.auth
@@ -109,8 +110,61 @@ def flatten(fields, prefix: str = "") -> list[dict]:
     return out
 
 
-def build_body(table, columns: list[dict], usage: dict | None, window: tuple[str, str]) -> str:
-    lines = ["# Columns", "", "| column | type | description |", "|---|---|---|"]
+# A table name ending in a date, split into its stem and the date. The
+# character before the date must not be a digit, so t_120260925 is not
+# read as t_1 plus a date. `ochakai seed` folds by the same rule.
+SHARD_NAME = re.compile(r"^(.*[^0-9])([0-9]{8})$")
+
+def fold_shards(names: list[str]) -> list[tuple[str, list[str]]]:
+    """Group a dataset's table names into entries: (entry name, members).
+
+    A date-sharded table is one table to whoever queries it — BigQuery
+    reads events_* with _TABLE_SUFFIX as a single wildcard table — but
+    the listing returns every day as a table of its own. Projected as they
+    come, two years of a GA4 export are 730 entries with one body between
+    them, and every search one of them matches returns a page of them.
+
+    Two or more names in one dataset that are one stem and a calendar date
+    are shards, and become one entry named by the stem (events_) with its
+    members oldest first; only the resource and title carry the wildcard,
+    because events_* in an id is a glob to every shell it is typed into.
+    One dated table alone stays itself: it may be a snapshot somebody
+    named. Neither does a stem that is itself a table's name (sales beside
+    sales20260101), which would put two tables at one address.
+    """
+    groups: dict[str, list[str]] = {}
+    for name in names:
+        m = SHARD_NAME.match(name)
+        if not m:
+            continue
+        try:
+            datetime.datetime.strptime(m[2], "%Y%m%d")
+        except ValueError:
+            continue
+        groups.setdefault(m[1], []).append(name)
+    out: list[tuple[str, list[str]]] = []
+    folded: set[str] = set()
+    for stem, members in groups.items():
+        if len(members) < 2 or stem in names:
+            continue
+        folded.update(members)
+        out.append((stem, sorted(members)))
+    out += [(name, [name]) for name in names if name not in folded]
+    return sorted(out)
+
+
+def build_body(table, columns: list[dict], usage: dict | None, window: tuple[str, str],
+               shards: list[str] | None = None) -> str:
+    lines = []
+    if shards:
+        stem = SHARD_NAME.match(shards[0])[1]
+        lines += [
+            f"**Date-sharded**: {len(shards)} tables, `{shards[0]}` to `{shards[-1]}`, "
+            f"folded into this one entry. Query them as `{stem}*`, narrowing with "
+            "`_TABLE_SUFFIX`; the columns and layout below are the latest shard's.",
+            "",
+        ]
+    lines += ["# Columns", "", "| column | type | description |", "|---|---|---|"]
     for c in columns:
         kind = c["type"] + (" (required)" if c["required"] else "")
         lines.append(f"| `{c['name']}` | {kind} | {c['description']} |")
@@ -169,7 +223,8 @@ def frontmatter(keys: dict) -> str:
 
 
 def build_document(table, fq: str, dataset: str, usage: dict | None,
-                   window: tuple[str, str], frequent: int) -> str:
+                   window: tuple[str, str], frequent: int,
+                   shards: list[str] | None = None) -> str:
     """The entry as an OKF document: YAML frontmatter, then the body.
 
     A concept *is* the document (design doc 0075 §3) — there is no typed
@@ -192,7 +247,9 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
 
     `title` is absent too — the
     id's last segment is the display name (design doc 0074 §1), and that
-    segment is already the table id. The keys this instance owns —
+    segment is already the table id. A date-sharded table is the
+    exception: its segment is the stem (events_), so it is titled by the
+    wildcard it is queried through. The keys this instance owns —
     `generated`, `verified`, `created_by` — are never written from here:
     provenance is the server's observation of who called, not something a
     caller asserts (design doc 0009).
@@ -220,6 +277,7 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
     keys = {
         "type": "BigQuery Table",
         "resource": resource,
+        "title": fq.rsplit(".", 1)[1] if shards else "",
         "description": (table.description or "").split("\n")[0][:280],
         "tags": tags,
         "status": "draft",
@@ -227,7 +285,7 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
     }
     if usage:
         keys["usage_window"] = {"from": window[0], "to": window[1]}
-    body = build_body(table, flatten(table.schema), usage, window)
+    body = build_body(table, flatten(table.schema), usage, window, shards)
     return f"---\n{frontmatter(keys)}---\n\n{body}"
 
 
@@ -485,19 +543,30 @@ def main() -> int:
         # (name, first line of its description) for the dataset entry: the
         # tables this run actually read, which is the only list it may claim.
         tables: list[tuple[str, str]] = []
-        for item in client.list_tables(dataset):
-            if item.table_type not in ("TABLE", "VIEW"):
-                continue
+        listed = [item.table_id for item in client.list_tables(dataset)
+                  if item.table_type in ("TABLE", "VIEW")]
+        # A date-sharded table is one entry, read through its latest
+        # shard, so tables_seen counts entries: one outcome each is what
+        # the attester's fidelity check conserves.
+        for name, members in fold_shards(listed):
             counts["tables_seen"] += 1
-            name = item.table_id
+            shards = members if len(members) > 1 else None
             fq = f"{args.project}.{dataset}.{name}"
+            if shards:
+                fq = f"{args.project}.{dataset}.{name}*"
             entry_id = f"{args.prefix}/{args.project}/{dataset}/{name}"
+            # Job history names the shard a query read, so a sharded
+            # table's queries are its shards' added up. Its accounts are
+            # the most any one shard saw — a floor, because one account
+            # reading two shards is still one account.
+            hits = [usage[f"{dataset}.{m}"] for m in members if f"{dataset}.{m}" in usage]
+            used = {"queries": sum(h["queries"] for h in hits),
+                    "users": max(h["users"] for h in hits)} if hits else None
             try:
-                table = client.get_table(f"{args.project}.{dataset}.{name}")
+                table = client.get_table(f"{args.project}.{dataset}.{members[-1]}")
                 tables.append((name, (table.description or "").split("\n")[0]))
-                document = build_document(table, fq, dataset,
-                                          usage.get(f"{dataset}.{name}"), window,
-                                          args.frequent_threshold)
+                document = build_document(table, fq, dataset, used, window,
+                                          args.frequent_threshold, shards)
                 if args.dry_run:
                     # The document, exactly as it would be written: what
                     # goes over the wire is what an export brings back and

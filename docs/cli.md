@@ -748,7 +748,10 @@ with its columns as a markdown table and its address as `resource`.
 Reads JSON rows (an array, or one object per line) with the
 INFORMATION_SCHEMA.COLUMNS column names: table_schema, table_name,
 column_name, data_type, is_nullable, and description where there is one.
-Rows for the same table are gathered however they arrive.
+Rows for the same table are gathered however they arrive, and a
+date-sharded table (events_20260101, events_20260102, …) comes out as one
+concept, events_, addressed as the wildcard events_* it is
+queried through, with the latest shard's columns.
 
 ochakai connects to no warehouse and holds no credential of one: you run
 the query, with your own client and your own identity, and pipe the answer

@@ -63,6 +63,23 @@ last entry.
 
 ### Changed
 
+- **`ochakai seed` folds a date-sharded table into one concept.**
+  INFORMATION_SCHEMA lists every day of `events_20260101`,
+  `events_20260102`, … as a table of its own, so two years of a GA4
+  export seeded 730 concepts with one body between them. A search that
+  matched one matched all of them, with the same score, and they filled
+  the page ahead of whatever the question was about. Two or more tables
+  in a dataset whose names are one stem and a calendar date now become
+  `<prefix>/<dataset>/events_` — named by the stem, as a foreign OKF
+  bundle already spells a sharded family, and titled and addressed
+  (`resource`) as the wildcard `events_*` — carrying the latest shard's
+  columns and a line naming the shard range. A single dated table is
+  left alone, and so are shards whose stem is itself a table's name. The example `sync-bigquery-catalog` job folds by the same
+  rule; its `tables_seen` counts entries, so the first run after this
+  drops sharply and is checked without the previous receipt. Neither
+  deletes what earlier runs wrote: after re-seeding, `ochakai delete`
+  the per-shard concepts.
+
 - **A lexical search whose words most of the base holds costs about half
   of what it did** (issue #883's latency half). Two costs were paid on
   every candidate: the whole-query bonus lowered each one's entire

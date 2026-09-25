@@ -61,6 +61,19 @@ partition filter is mandatory, which is the thing an agent most needs to
 know before it writes a query — the row count, the view SQL when it is a
 view, and an empty `# Caveats` section for a person to fill in.
 
+A **date-sharded table** — `events_20260101`, `events_20260102`, … —
+is one entry, not one per day: two or more tables in a dataset whose
+names are one stem and a calendar date land at
+`catalog/bigquery/<project>/<dataset>/events_`, titled and
+addressed as the wildcard `events_*` they are queried through, with the
+latest shard's columns and layout and the shards' query counts added up.
+Seven hundred identical entries tie on every search one of them matches
+and leave no room on the page for anything else; `ochakai seed` folds by
+the same rule. A single dated table stays itself — it may be a snapshot
+somebody named — and neither does a stem that is itself a table's name
+(`sales` beside `sales20260101`), which would put two tables at one
+address.
+
 And one entry per dataset, at `catalog/bigquery/<project>/<dataset>` —
 the dataset's own description and a table list linking to the entries
 under it, which is the address "what is in shop?" resolves to. The
@@ -75,7 +88,8 @@ than have it recite tables the run never saw.
 Three of those choices are load-bearing:
 
 - **No `title`.** The id's last segment is the display name, and that
-  segment is the table id already.
+  segment is the table id already — except for a date-sharded table,
+  whose segment is the stem (`events_`) and whose title is the wildcard.
 - **The entry cites the table as its own source**, so
   `ochakai list --source bigquery://my-project.shop.orders` returns the
   catalog entry *and* every insight or computation written against the same
@@ -198,7 +212,12 @@ reference bundle's `sql_equality.py` asks of a SQL run:
    so on night two.
 4. **Continuity** — given the previous passing receipt, `tables_seen` has
    not halved. A dataset silently losing read access looks exactly like a
-   warehouse that got smaller.
+   warehouse that got smaller. `tables_seen` counts entries, so a sharded
+   table is one: the first run after shards began folding reports far
+   fewer than the run before it, and is checked without the previous
+   receipt. The per-shard entries earlier runs wrote stay where they are
+   (the job deletes nothing); `ochakai delete` them once the folded entry
+   is in.
 
 Check 1 is the one worth dwelling on, because it is the check a platform
 with an ontology manager runs before it saves an object type: **a primary
