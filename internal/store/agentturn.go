@@ -24,6 +24,7 @@ type AgentTurn struct {
 	Latest      string     `json:"latest"`
 	Read        []string   `json:"read"`
 	ProposedSQL string     `json:"proposed_sql,omitempty"`
+	Drafts      []string   `json:"drafts,omitempty"`
 	Verdict     string     `json:"verdict,omitempty"`
 	Note        string     `json:"note,omitempty"`
 	Blamed      []string   `json:"blamed,omitempty"`
@@ -31,16 +32,20 @@ type AgentTurn struct {
 	JudgedAt    *time.Time `json:"judged_at,omitempty"`
 }
 
-// RecordAgentTurn keeps one turn and returns its id.
-func (s *Store) RecordAgentTurn(ctx context.Context, actor domain.Actor, asked, latest string, read []string, sql string) (string, error) {
+// RecordAgentTurn keeps one turn and returns its id. drafts are the
+// concepts the turn wrote, which only the deployment's own agent does.
+func (s *Store) RecordAgentTurn(ctx context.Context, actor domain.Actor, asked, latest string, read []string, sql string, drafts []string) (string, error) {
 	if read == nil {
 		read = []string{}
 	}
+	if drafts == nil {
+		drafts = []string{}
+	}
 	var id string
 	err := s.pool.QueryRow(ctx, `
-		INSERT INTO agent_turn (actor_kind, actor_name, actor_via, producer, asked, latest, read_ids, proposed_sql)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id::text`,
-		actor.Kind, actor.Name, actor.Via, actor.Producer, asked, latest, read, sql).Scan(&id)
+		INSERT INTO agent_turn (actor_kind, actor_name, actor_via, producer, asked, latest, read_ids, proposed_sql, drafts)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id::text`,
+		actor.Kind, actor.Name, actor.Via, actor.Producer, asked, latest, read, sql, drafts).Scan(&id)
 	if err != nil {
 		return "", err
 	}
@@ -49,12 +54,12 @@ func (s *Store) RecordAgentTurn(ctx context.Context, actor domain.Actor, asked, 
 }
 
 const agentTurnColumns = `id::text, at, actor_kind || ':' || actor_name, actor_via, producer, asked, latest, read_ids,
-	proposed_sql, verdict, note, blamed, keep, judged_at`
+	proposed_sql, drafts, verdict, note, blamed, keep, judged_at`
 
 func scanAgentTurn(row pgx.Row) (*AgentTurn, error) {
 	t := &AgentTurn{}
 	err := row.Scan(&t.ID, &t.At, &t.Actor, &t.Via, &t.Producer, &t.Asked, &t.Latest, &t.Read,
-		&t.ProposedSQL, &t.Verdict, &t.Note, &t.Blamed, &t.Keep, &t.JudgedAt)
+		&t.ProposedSQL, &t.Drafts, &t.Verdict, &t.Note, &t.Blamed, &t.Keep, &t.JudgedAt)
 	return t, err
 }
 

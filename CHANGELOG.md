@@ -21,6 +21,37 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **The deployment's own agent writes drafts** — the "proposes" slice
+  of design doc 0142 §3, which it had been doing by pasting the text it
+  would have written into the answer. It creates at a free id or not at
+  all, never replaces a concept (a draft included), writes at most five
+  a turn, and each lands as `process:ochakai via <the person who asked>
+  using ochakai/<version>`: unverified, in the review queue, and in the
+  asker's scope, so an access policy narrows it as it narrows them.
+  `POST /api/v1/agent` names them in a new `drafts` field and the kept
+  turn does too. A `read-only` deployment still answers and writes
+  nothing. Migration 0050 adds the turn's column.
+
+### Changed
+
+- **The web UI folds older query results to keep a conversation with
+  the agent under its 64 KiB bound.** A conversation that ran a few
+  queries reached the bound on the results it carried back; the page now
+  sends the oldest results as their SQL alone, keeps the newest whole,
+  and still shows every result in full. The bound and the wire are
+  unchanged.
+
+### Documentation
+
+- **The web UI's links are written down**, for an application whose
+  agent cites a concept and wants to send the reader to it:
+  `#/k/<id>`, the review queue, the feeds and the agent, in
+  [docs/guides/rest-integration.md](docs/guides/rest-integration.md).
+  They sit outside the REST freeze, and the page still refuses to be
+  framed.
+
 ## [0.28.9] - 2026-09-24
 
 ### Added

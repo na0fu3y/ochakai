@@ -1455,10 +1455,16 @@ paths:
         confirmed them; `read` lists what it fetched, in order.
 
 
-        **The agent rules on nothing and, in this release, writes
-        nothing**: no draft, no verification, no rejection, no report.
-        Where a procedure it follows would write, it puts the text it
-        would have written in the reply for a person to write.
+        **The agent rules on nothing, and its one write is a draft**
+        (design doc 0142 §3): no verification, no rejection, no report,
+        and never a replacement — it creates at a free id or not at all,
+        at most five a turn, listed in `drafts`. A draft is recorded as
+        `process:ochakai` via the caller, using `ochakai/<version>`, so it
+        cannot be mistaken for something the caller wrote, and it is
+        written in the caller's scope, so an access policy narrows it as
+        it narrows them. A read-only deployment answers but writes
+        nothing, and the agent puts the text it would have written in the
+        reply instead.
 
 
         **The server runs no SQL.** The agent may end a turn by proposing
@@ -1468,7 +1474,7 @@ paths:
         where it can — from the browser with their own token where the
         deployment names an OAuth client (`OCHAKAI_OAUTH_CLIENT_ID`),
         through `ochakai ui`'s own proxy on their machine — capped by
-        `maximumBytesBilled`. Nothing is stored, so a read-only deployment answers it.
+        `maximumBytesBilled`.
         The model runs in the deployment's region (design doc 0142 §5); a
         failure to reach it is a 500 naming the model's answer.
       parameters:
@@ -1519,6 +1525,12 @@ paths:
                     type: array
                     items: { type: string }
                     description: The ids of the concepts the agent fetched to write it, in the order it fetched them.
+                  drafts:
+                    type: array
+                    items: { type: string }
+                    description: >
+                      The drafts the agent wrote in this turn, each new and
+                      awaiting a person's ruling. Absent when it wrote none.
                   turn:
                     type: string
                     description: >
@@ -4181,6 +4193,10 @@ components:
           description: The message this turn answered. A turn kept from outside has `asked` here too.
         read: { type: array, items: { type: string } }
         proposed_sql: { type: string }
+        drafts:
+          type: array
+          items: { type: string }
+          description: The drafts this deployment's own agent wrote in the turn. Absent when it wrote none.
         verdict: { type: string, enum: [good, bad] }
         note: { type: string }
         blamed: { type: array, items: { type: string } }

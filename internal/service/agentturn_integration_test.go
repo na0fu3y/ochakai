@@ -40,8 +40,8 @@ func TestAgentTurnsAreJudgedByWhoAskedIntegration(t *testing.T) {
 		}
 	}
 
-	good := svc.RecordAgentTurn(askerCtx, "売上は?", "売上は?", ids, "")
-	bad := svc.RecordAgentTurn(askerCtx, "粗利は?", "粗利は?", ids, "SELECT 1")
+	good := svc.RecordAgentTurn(askerCtx, "売上は?", "売上は?", ids, "", nil)
+	bad := svc.RecordAgentTurn(askerCtx, "粗利は?", "粗利は?", ids, "SELECT 1", nil)
 	if good == "" || bad == "" {
 		t.Fatal("a turn was not kept")
 	}
@@ -156,7 +156,7 @@ func TestTurnsFromAnyAgentIntegration(t *testing.T) {
 
 	// The deployment's own agent's turns say they are its own, whatever
 	// the caller claimed to be.
-	own := svc.RecordAgentTurn(appCtx, "粗利は?", "粗利は?", ids[:1], "")
+	own := svc.RecordAgentTurn(appCtx, "粗利は?", "粗利は?", ids[:1], "", nil)
 	ownTurn, err := s.AgentTurn(ctx, own)
 	if err != nil {
 		t.Fatal(err)

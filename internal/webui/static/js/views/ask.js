@@ -7,8 +7,9 @@
 // concept the answer cited and coming back does not end the conversation;
 // closing the tab does, which is the same lifetime a chat window has.
 //
-// The agent reads and answers. It writes nothing, rules on nothing and
-// runs no SQL — where it proposes a query, the person runs it. The page
+// The agent reads and answers, and may write drafts. It rules on nothing,
+// replaces nothing and runs no SQL — where it proposes a query, the
+// person runs it; where it writes a draft, a person rules on it. The page
 // does not preface the conversation with that: the proposal says who
 // runs it where it is run, and an answer says what it read.
 //
@@ -21,7 +22,7 @@ import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { entryHash } from '../format.js';
 import { md } from '../markdown.js';
-import { asMessage, fmtBytes, MAX_BYTES_BILLED, run, signIn } from '../sql.js';
+import { asMessage, fmtBytes, fold, MAX_BYTES_BILLED, run, signIn } from '../sql.js';
 
 // The server refuses a conversation longer than this (internal/agent).
 // Said here so the page can offer a fresh start before the refusal, not
@@ -75,7 +76,7 @@ function draw(pending) {
   const out = turns.map((t, i) => t.role === 'user'
     ? `<div class="ask-turn ask-user">${t.sqlResult ? md(t.text) : esc(t.text).replace(/\n/g, '<br>')}</div>`
     : `<div class="card ask-turn ask-agent"><div class="ask-said">${md(t.text)}</div>`
-      + `<div class="ask-meta">${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}${verdictHTML(t, i)}</div></div>`).join('');
+      + `<div class="ask-meta">${t.sql ? proposalHTML(t.sql, i === last && !pending) : ''}${readLine(t.read)}${draftLine(t.drafts)}${verdictHTML(t, i)}</div></div>`).join('');
   $('#ask-turns').innerHTML = out + (pending
     ? '<div class="empty" id="ask-pending">エージェントが読んでいます…</div>'
     : (turns.length ? '' : '<div class="empty">まだ何も訊いていません。</div>'));
@@ -200,6 +201,14 @@ function readLine(ids) {
   return `<div class="hint">読んだナレッジ: ${links}</div>`;
 }
 
+// draftLine names what the agent wrote, where a person rules on it: each
+// is a draft nobody has confirmed, and the review queue is where it waits.
+function draftLine(ids) {
+  if (!ids || !ids.length) return '';
+  const links = ids.map(id => `<a href="${esc(entryHash({ id }))}"><code>${esc(id)}</code></a>`).join(' ');
+  return `<div class="hint">書いた下書き(<a href="#/review">レビュー</a>で裁定を待っています): ${links}</div>`;
+}
+
 async function send() {
   const box = $('#ask-text');
   const text = box.value.trim();
@@ -218,10 +227,18 @@ async function answer() {
     const ans = await api('/api/v1/agent', {
       method: 'POST',
       // A proposal travels back as part of the agent's own message, so
-      // the model reads what it asked for beside what came back.
-      body: { messages: turns.map(t => ({ role: t.role, text: t.sql ? `${t.text}\n\n\`\`\`sql\n${t.sql.query}\n\`\`\`` : t.text })) },
+      // the model reads what it asked for beside what came back. Older
+      // results are folded where the whole would not fit; the page keeps
+      // showing them in full.
+      body: {
+        messages: fold(turns.map(t => ({
+          role: t.role,
+          text: t.sql ? `${t.text}\n\n\`\`\`sql\n${t.sql.query}\n\`\`\`` : t.text,
+          result: !!t.sqlResult,
+        }))).map(({ role, text }) => ({ role, text })),
+      },
     });
-    turns.push({ role: 'agent', text: ans.text, read: ans.read || [], sql: ans.sql || null, turn: ans.turn || '' });
+    turns.push({ role: 'agent', text: ans.text, read: ans.read || [], drafts: ans.drafts || [], sql: ans.sql || null, turn: ans.turn || '' });
     save();
     draw();
     return true;

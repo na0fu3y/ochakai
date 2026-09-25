@@ -3,9 +3,11 @@ package agent
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/llm"
 	"github.com/na0fu3y/ochakai/internal/service"
 )
@@ -99,9 +101,10 @@ func TestAToolFailureGoesBackToTheModel(t *testing.T) {
 	}
 }
 
-// The agent has no tool that writes: whatever the model asks for, the
-// base cannot change through this package (design doc 0142 §3).
-func TestNoToolWrites(t *testing.T) {
+// The reads write nothing: the agent's one write is write_draft, kept
+// apart so a deployment that writes nothing can leave it out (design doc
+// 0142 §3, §5).
+func TestNoReadWrites(t *testing.T) {
 	for _, tl := range tools {
 		for _, verb := range []string{"put", "write", "delete", "verify", "reject", "report", "move"} {
 			if strings.Contains(tl.Name, verb) {
@@ -145,5 +148,48 @@ func TestAProposalEndsTheTurn(t *testing.T) {
 	}
 	if !strings.Contains(m.seen[0].System, "propose_sql") {
 		t.Error("the model was not told it may propose SQL")
+	}
+}
+
+// A read-only deployment answers but does not write (design doc 0142 §5):
+// the model is not offered the tool, and is told to put the text in the
+// answer instead.
+func TestAReadOnlyDeploymentOffersNoWrite(t *testing.T) {
+	for _, readOnly := range []bool{false, true} {
+		m := &scripted{turns: []*llm.Turn{text("ok")}}
+		svc := &service.Service{Model: m, Config: &config.Config{ReadOnly: readOnly}}
+		if _, err := Run(context.Background(), svc, []Message{{Role: "user", Text: "q"}}); err != nil {
+			t.Fatal(err)
+		}
+		offered := slices.ContainsFunc(m.seen[0].Tools, func(tl llm.Tool) bool { return tl.Name == writeDraft.Name })
+		if offered == readOnly {
+			t.Errorf("read-only %v: write_draft offered = %v", readOnly, offered)
+		}
+		if told := strings.Contains(m.seen[0].System, "このデプロイではできない"); told != readOnly {
+			t.Errorf("read-only %v: told it cannot write = %v", readOnly, told)
+		}
+	}
+}
+
+// What the model is handed back for a write that cannot happen: the
+// refusal, so it can say so, and nothing in drafts.
+func TestAWriteThatCannotHappenIsAnAnswer(t *testing.T) {
+	m := &scripted{turns: []*llm.Turn{
+		call("write_draft", map[string]any{"id": "a/b"}),
+		call("write_draft", map[string]any{"id": "a/b", "document": "---\ntype: Metric\nstatus: deprecated\n---\nx\n"}),
+		text("書けませんでした"),
+	}}
+	ans, err := Run(context.Background(), &service.Service{Model: m}, []Message{{Role: "user", Text: "q"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{"needs an id and a document", "drafts only"} {
+		resp := m.seen[i+1].Contents[len(m.seen[i+1].Contents)-1].Parts[0].FunctionResponse
+		if e, _ := resp.Response["error"].(string); !strings.Contains(e, want) {
+			t.Errorf("write %d handed back %v, want %q", i+1, resp.Response, want)
+		}
+	}
+	if len(ans.Drafts) != 0 {
+		t.Errorf("drafts = %v", ans.Drafts)
 	}
 }

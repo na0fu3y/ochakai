@@ -607,6 +607,9 @@ func TestEveryWriteIsScopedIntegration(t *testing.T) {
 		// this walk wants (design doc 0144 §2) — so
 		// TestKeptTurnReadsOnlyWhatTheCallerCanIntegration holds it.
 		"KeepAgentTurn": true,
+		// Names who the agent's drafts are by; it writes nothing. The
+		// draft itself goes through CreateKeepingCurated, walked here.
+		"AgentActor": true,
 	}
 	arg := func(ty reflect.Type) reflect.Value {
 		switch ty {

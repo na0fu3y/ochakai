@@ -3,9 +3,10 @@
 // every face calls, as the person who asked, and answers — citing what it
 // read and whether a person confirmed it. It rules on nothing.
 //
-// This is the read-only cut: it answers and prepares a ruling packet, and
-// writes nothing. Drafts, SQL and the outcome loop arrive in later slices
-// (0142 §7-§8).
+// It answers, proposes a query for the person to run, and writes drafts
+// for a person to rule on (0142 §3). It never replaces a concept, and a
+// draft it writes is recorded as the agent's, on behalf of the person who
+// asked — never as theirs.
 package agent
 
 import (
@@ -43,11 +44,15 @@ type Message struct {
 // Turn names the kept shape of this turn (design doc 0142 §6), which the
 // person who asked judges with POST /api/v1/agent/turns/{id}. Absent when
 // it could not be kept.
+//
+// Drafts names the concepts the agent wrote in this turn, each a new
+// draft awaiting a person's ruling.
 type Answer struct {
-	Text string    `json:"text"`
-	Read []string  `json:"read"`
-	SQL  *Proposal `json:"sql,omitempty"`
-	Turn string    `json:"turn,omitempty"`
+	Text   string    `json:"text"`
+	Read   []string  `json:"read"`
+	SQL    *Proposal `json:"sql,omitempty"`
+	Drafts []string  `json:"drafts,omitempty"`
+	Turn   string    `json:"turn,omitempty"`
 }
 
 // Proposal is one query the agent asks the person to run.
@@ -67,6 +72,10 @@ const (
 	// maxResultBytes bounds one tool result handed back to the model: a
 	// long concept is cut rather than spent whole out of the context.
 	maxResultBytes = 24 << 10
+	// maxDrafts bounds what one turn may write. A person rules on each
+	// draft one at a time, and the triage procedure asks for five at most
+	// a round for the same reason.
+	maxDrafts = 5
 )
 
 // ErrOff is the answer on a deployment that has no agent.
@@ -82,7 +91,7 @@ func Run(ctx context.Context, svc *service.Service, msgs []Message) (*Answer, er
 	if ans.SQL != nil {
 		sql = ans.SQL.Query
 	}
-	ans.Turn = svc.RecordAgentTurn(ctx, firstAsked(msgs), msgs[len(msgs)-1].Text, ans.Read, sql)
+	ans.Turn = svc.RecordAgentTurn(ctx, firstAsked(msgs), msgs[len(msgs)-1].Text, ans.Read, sql, ans.Drafts)
 	return ans, nil
 }
 
@@ -114,7 +123,18 @@ func answer(ctx context.Context, svc *service.Service, msgs []Message) (*Answer,
 	// web UI needs an OAuth client, and anything else shows the SQL for
 	// the person to run (design doc 0142 §4) — so the model is not told
 	// which it is talking to.
-	req := llm.Request{System: system + systemSQL, Contents: contents, Tools: append(append([]llm.Tool(nil), tools...), proposeSQL)}
+	//
+	// It may write drafts unless the deployment writes nothing: a
+	// read-only one answers but does not write (0142 §5), and the tool is
+	// left out rather than offered and refused.
+	sys, all := system+systemSQL, append(append([]llm.Tool(nil), tools...), proposeSQL)
+	if svc.Config == nil || !svc.Config.ReadOnly {
+		sys += systemDraft
+		all = append(all, writeDraft)
+	} else {
+		sys += systemNoDraft
+	}
+	req := llm.Request{System: sys, Contents: contents, Tools: all}
 	for range maxRounds {
 		turn, err := svc.Model.Generate(ctx, req)
 		if err != nil {
@@ -128,14 +148,14 @@ func answer(ctx context.Context, svc *service.Service, msgs []Message) (*Answer,
 			if text == "" {
 				text = p.Purpose
 			}
-			return &Answer{Text: text, Read: r.read, SQL: p}, nil
+			return &Answer{Text: text, Read: r.read, SQL: p, Drafts: r.drafts}, nil
 		}
 		if len(calls) == 0 {
 			text := strings.TrimSpace(turn.Text())
 			if text == "" {
 				return nil, fmt.Errorf("the agent could not answer: %w", llm.ErrNoAnswer)
 			}
-			return &Answer{Text: text, Read: r.read}, nil
+			return &Answer{Text: text, Read: r.read, Drafts: r.drafts}, nil
 		}
 		answers := make([]llm.Part, 0, len(calls))
 		for _, c := range calls {
@@ -197,11 +217,13 @@ func validate(msgs []Message) ([]llm.Content, error) {
 	return contents, nil
 }
 
-// run is one call's state: what it has read, for the answer's `read`.
+// run is one call's state: what it has read, for the answer's `read`,
+// and what it has written, for its `drafts`.
 type run struct {
-	svc  *service.Service
-	read []string
-	seen map[string]bool
+	svc    *service.Service
+	read   []string
+	seen   map[string]bool
+	drafts []string
 }
 
 // call runs one tool and returns what the model is handed back. A tool's
@@ -267,6 +289,8 @@ func (r *run) dispatch(ctx context.Context, c llm.FunctionCall) (any, error) {
 		return r.svc.Usage(ctx, a.str("id"))
 	case "list_turns":
 		return r.svc.AgentTurns(ctx, a.str("verdict"), a.bool("keep"), a.int("limit", 30))
+	case "write_draft":
+		return r.writeDraft(ctx, a.str("id"), a.str("document"))
 	case "read_log":
 		doc, err := r.svc.LogDocument(ctx, a.str("prefix"), a.int("limit", 200))
 		if err != nil {
@@ -275,6 +299,46 @@ func (r *run) dispatch(ctx context.Context, c llm.FunctionCall) (any, error) {
 		return map[string]string{"log": string(doc)}, nil
 	}
 	return nil, fmt.Errorf("no tool named %q", c.Name)
+}
+
+// writeDraft creates one draft (design doc 0142 §3). It only ever
+// creates: an id that is taken is refused with what holds it, so the
+// agent proposes beside a concept rather than over it — the guard MCP's
+// put_concept applies to a ruled concept, applied here to every one.
+//
+// The draft is the agent's, on behalf of the person who asked:
+// process:ochakai via their principal, using this build. The write is
+// still made in the person's scope, so an access policy narrows what
+// the agent may write exactly as it narrows what they may (0109).
+func (r *run) writeDraft(ctx context.Context, id, document string) (any, error) {
+	if len(r.drafts) >= maxDrafts {
+		return nil, fmt.Errorf("this turn has written %d drafts, the most one turn may; say in the answer what else you would have written", maxDrafts)
+	}
+	if id == "" || document == "" {
+		return nil, errors.New("write_draft needs an id and a document")
+	}
+	d, notes, err := okf.Parse([]byte(document))
+	if err != nil {
+		return nil, err
+	}
+	k := d.Knowledge
+	k.ID = id
+	switch k.Status {
+	case "", domain.StatusDraft:
+		k.Status = domain.StatusDraft
+	default:
+		return nil, fmt.Errorf("the document says status: %s; the agent writes drafts only — leave status out or write draft", k.Status)
+	}
+	created, err := r.svc.CreateKeepingCurated(ctx, &k, r.svc.AgentActor(ctx))
+	if err != nil {
+		return nil, err
+	}
+	r.drafts = append(r.drafts, created.ID)
+	out := map[string]any{"id": created.ID, "status": created.Status}
+	if len(notes) > 0 {
+		out["notes"] = notes
+	}
+	return out, nil
 }
 
 type args map[string]any
