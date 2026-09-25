@@ -215,7 +215,7 @@ concepts across two domains that share nothing but the language they are
 written in. It runs the set twice — lexical only,
 which is the search a deployment without Vertex AI gets, and lexical
 fused with a vector ranking from the stand-in encoder beside it, which
-is the configuration every Google Cloud deployment runs (design doc 0080
+is the configuration every Google Cloud deployment runs (design doc 0147
 §1.1). The stand-in is deterministic, so the fused half needs no API key
 and reaches no network.
 

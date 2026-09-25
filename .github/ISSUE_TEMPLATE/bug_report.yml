@@ -73,7 +73,7 @@ body:
         means and their scores are not comparable, so search reports need this.
       options:
         - "Off: OCHAKAI_EMBEDDINGS=off, or Vertex AI unreachable, lexical-only"
-        - "On: the default (project discovered, gemini-embedding-001)"
+        - "On: the default (project discovered; gemini-embedding-2 in global for a new base, gemini-embedding-001 in its region for an older one)"
         - "On: a model named in OCHAKAI_EMBEDDINGS"
         - Not sure, or not about search
     validations:

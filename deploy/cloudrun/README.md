@@ -12,7 +12,7 @@ Cloud SQL インスタンス一つでナレッジベース全体を賄う — �
 |---|---|---|
 | Cloud SQL | `db-f1-micro`(shared core)、10 GB SSD、単一ゾーン、バックアップ無し | ~$9–10 |
 | Cloud Run | リクエスト従量課金、`min-instances=0` | アイドル時 ~$0 |
-| Vertex AI embeddings(既定で on、§4) | `gemini-embedding-001`、トークン従量課金 | このガイドの規模では数セント |
+| Vertex AI embeddings(既定で on、§4) | `gemini-embedding-2`(`global`)、トークン従量課金 | このガイドの規模では数セント |
 
 料金のほとんどは Cloud SQL が占める。アジアのリージョン(例:
 `asia-northeast1`)はやや高くなる — レイテンシの要件に合わせて選べば
@@ -279,8 +279,14 @@ curl http://localhost:8787/health
 
 Cloud Run 上では、ochakai はメタデータサーバーに自分がどのプロジェク
 トで動いているかを尋ね、それに合わせてセマンティック検索を有効にする
-(設計ドキュメント 0080)— 設定する変数は無く、認証は ADC 経由のサー
-ビス identity なので、ここでも API キーは無い。
+(設計ドキュメント 0147)— 設定する変数は無く、認証は ADC 経由のサー
+ビス identity なので、ここでも API キーは無い。このガイドで新しく作る
+ベースは `gemini-embedding-2` を **`global`** で使い、画像と PDF も中身で
+検索できる。**本文と検索クエリはこのサービスのリージョンではなく
+`global` の Vertex AI へ送られる**(同 §1.2)。リージョン内に留めたいなら、
+下の resource name で `gemini-embedding-001` とリージョンを名指す。
+このリリースより前に作ったベースは、何もしなければ今までどおり
+`gemini-embedding-001` をサービスのリージョンで使い続ける。
 
 **実際に使えるかどうかを決めるのは設定ではなく IAM である。**
 `roles/aiplatform.user` が無ければサービス identity は Vertex AI を呼
@@ -318,11 +324,12 @@ Vertex AI の呼び出しを引き起こせる** — キュレーションされ
 ベースの規模では数セントで済む。
 
 別のモデル・リージョン・プロジェクトを使うなら、変数は同じ一つで、値が
-Vertex AI のモデル resource name になる(設計ドキュメント 0080):
+Vertex AI のモデル resource name になる(設計ドキュメント 0147)。
+たとえばテキストをサービスのリージョンに留めるなら:
 
 ```sh
 gcloud run services update ochakai --region=$REGION \
-  --update-env-vars=OCHAKAI_EMBEDDINGS=projects/$PROJECT_ID/locations/global/publishers/google/models/gemini-embedding-2
+  --update-env-vars=OCHAKAI_EMBEDDINGS=projects/$PROJECT_ID/locations/$REGION/publishers/google/models/gemini-embedding-001
 ```
 
 これは**セマンティック検索を要求する**綴りである — 使えなければ起動を
@@ -374,17 +381,22 @@ Web UI の「エージェント」タブで、Claude Code を持たない人が�
 **既定は off で、設定するのは運用者だけである** — 利用者の画面に設定の
 欄は出ない。要るのは①だけで、②③は使い方に合わせて足す。
 
-**① エージェントを入れる。** モデルを一語で名指す。サービス identity が
+**① エージェントを入れる。** モデルを名指す。サービス identity が
 Vertex AI を呼ぶので、§4 の二コマンド(API の有効化と
-`roles/aiplatform.user`)が済んでいればよい:
+`roles/aiplatform.user`)が済んでいればよい。勧めるのは
+`gemini-3.8-flash` で、これは `global` にしか居ないので resource name で
+場所ごと名指す:
 
 ```sh
 gcloud run services update ochakai --region=$REGION \
-  --update-env-vars=OCHAKAI_AGENT=gemini-2.5-flash
+  --update-env-vars=OCHAKAI_AGENT=projects/$PROJECT_ID/locations/global/publishers/google/models/gemini-3.8-flash
 ```
 
-モデルはこのサービスのリージョンで動く。リージョンにモデルが無ければ
-起動を拒否し、直前のリビジョンが答え続ける(どのモデルがどこで答えるかは
+問いと、エージェントが読んだ concept は `global` の Vertex AI で処理される。
+サービスのリージョンに留めたいなら、そこで答えるモデルを id だけで
+名指す(asia-northeast1 なら `OCHAKAI_AGENT=gemini-2.5-flash`)— id だけの
+モデルはこのサービスのリージョンで動き、無ければ起動を拒否して直前の
+リビジョンが答え続ける(どのモデルがどこで答えるかは
 [環境変数](../../docs/configuration.md#environment-variables)の
 `OCHAKAI_AGENT` の行)。
 

@@ -145,11 +145,11 @@ type Config struct {
 	// the model resource name in OCHAKAI_EMBEDDINGS here, and by
 	// EnableDiscoveredEmbedding when the deployment is running on Google
 	// Cloud and named nothing — semantic search is the default there
-	// (design doc 0080 §1).
+	// (design doc 0147 §1).
 	Embedding *EmbeddingConfig
 
 	// EmbeddingsOff says the deployment refuses semantic search it would
-	// otherwise get (OCHAKAI_EMBEDDINGS=off, design doc 0080 §2). It is
+	// otherwise get (OCHAKAI_EMBEDDINGS=off, design doc 0147 §2). It is
 	// not the same as naming nothing, which means "discover it": this is
 	// the one way to run lexical-only on Google Cloud, and it is what a
 	// deployment sets when it wants no Vertex AI call made on its behalf
@@ -189,9 +189,9 @@ type AgentConfig struct {
 }
 
 // EmbeddingConfig enables hybrid search via Vertex AI embeddings
-// (ADC auth, no API keys); see design doc 0080 §1.1.
+// (ADC auth, no API keys); see design doc 0147 §1.1.
 // Model gemini-embedding-2 (locations global/us/eu) also embeds image
-// and PDF files for search (design doc 0080 §5).
+// and PDF files for search (design doc 0147 §5).
 type EmbeddingConfig struct {
 	Project  string
 	Location string // e.g. "us-central1"; "global" for gemini-embedding-2
@@ -203,7 +203,7 @@ type EmbeddingConfig struct {
 	// decides what a failure means — a deployment that named a model
 	// asked for semantic search and is told when it is not there, while
 	// a discovered one falls back to lexical search rather than refusing
-	// to start (design doc 0080 §1.3).
+	// to start (design doc 0147 §1.3).
 	Discovered bool
 }
 
@@ -478,7 +478,7 @@ func FromEnv() (*Config, error) {
 		// refusal "false" would pay Vertex AI for every write it asked
 		// not to make, and one that misspelled a model would find out
 		// from its search results rather than from its logs (design doc
-		// 0080 §2).
+		// 0147 §2).
 		e, err := embeddingFromResourceName(v)
 		if err != nil {
 			return nil, err
@@ -549,21 +549,29 @@ func FromEnv() (*Config, error) {
 }
 
 // Embedding spellings OCHAKAI_EMBEDDINGS takes besides a Vertex AI model
-// resource name (design doc 0080 §2).
+// resource name (design doc 0147 §2).
 const (
 	embeddingsOn  = "on"
 	embeddingsOff = "off"
 )
 
-// The product's own choice of model, used wherever nobody named one.
-// Changing it here would leave every deployment's stored vectors in a
-// space nothing queries, so it is a decision rather than a default to
-// tune (design doc 0080 §5).
-//
-// There is no companion default location: the location is the region the
-// deployment is running in, which discovery reads rather than the product
-// choosing (design doc 0080 §1.2).
-const defaultEmbeddingModel = "gemini-embedding-001"
+// The product's own choice of model and location, used wherever nobody
+// named one — for a base made since design doc 0147. gemini-embedding-2
+// takes images and PDFs and a window four times as wide, and it answers
+// only in global (and the us/eu multi-regions), so choosing it chose
+// where the text goes as well, which is why the location is a constant
+// here and not the discovered region.
+const (
+	defaultEmbeddingModel    = "gemini-embedding-2"
+	defaultEmbeddingLocation = "global"
+)
+
+// regionalEmbeddingModel is the default a base made before that keeps,
+// in the region the deployment runs in (design doc 0147 §1.2). Moving such
+// a base would strand every vector it holds in a space nothing queries
+// and send its text somewhere it has never gone, so the move is left to
+// the operator to name.
+const regionalEmbeddingModel = "gemini-embedding-001"
 
 // embeddingResourceForm is the third spelling, quoted back in every error
 // that refuses one.
@@ -603,7 +611,7 @@ func agentFromName(v string) (*AgentConfig, error) {
 // a location and a model at once — the Vertex AI model resource name, the
 // same string the API is called with. A deployment that writes it has
 // asked for semantic search by name, so Discovered stays false and a
-// Vertex AI that does not answer stops the start (design doc 0080 §1.3).
+// Vertex AI that does not answer stops the start (design doc 0147 §1.3).
 func embeddingFromResourceName(v string) (*EmbeddingConfig, error) {
 	unreadable := fmt.Errorf("OCHAKAI_EMBEDDINGS is %q; it takes %q, %q, or a Vertex AI model resource name (%s)",
 		v, embeddingsOn, embeddingsOff, embeddingResourceForm)
@@ -615,7 +623,7 @@ func embeddingFromResourceName(v string) (*EmbeddingConfig, error) {
 	}
 	// The dimension is the model's, not the deployment's: ochakai carries
 	// one per model it knows, and for a model it does not know it has no
-	// width to ask for (design doc 0080 §3).
+	// width to ask for (design doc 0147 §3).
 	dim, ok := embed.Dimension(p[7])
 	if !ok {
 		return nil, fmt.Errorf("OCHAKAI_EMBEDDINGS names the model %q, which ochakai does not know a vector width for; it knows %s",
@@ -626,27 +634,36 @@ func embeddingFromResourceName(v string) (*EmbeddingConfig, error) {
 
 // EnableDiscoveredEmbedding turns semantic search on for a deployment
 // nobody configured — it is running on Google Cloud, and that is where
-// embeddings are the default (design doc 0080 §1). What discovery
-// supplies is the project *and the region*; the model and the width that
-// follows from it are the product's own.
+// embeddings are the default (design doc 0147 §1). What discovery
+// supplies is the project, and for an older base the region too; the
+// model and the width that follows from it are the product's own.
 //
-// Both are required. Embedding somewhere the deployment did not choose
-// is a data-residency decision, and this is not the place to make one on
-// an operator's behalf — a region nobody could read leaves semantic
-// search to be asked for by name (design doc 0080 §1.2).
+// Which default applies is the base's, not the binary's: a base made
+// before gemini-embedding-2 became the default keeps gemini-embedding-001
+// in the region it runs in (design doc 0147 §1.2). That older default needs
+// the region, and a region nobody could read leaves it to be asked for by
+// name rather than filled in — where the text goes is not this
+// function's call to make on an operator's behalf.
 //
 // A deployment that set OCHAKAI_EMBEDDINGS=off never reaches here, and
 // one that named a model keeps it.
-func (c *Config) EnableDiscoveredEmbedding(project, region string) {
-	if c.EmbeddingsOff || c.Embedding != nil || project == "" || region == "" {
+func (c *Config) EnableDiscoveredEmbedding(project, region string, olderBase bool) {
+	if c.EmbeddingsOff || c.Embedding != nil || project == "" {
 		return
 	}
-	// Known by construction: TestTheDefaultModelHasAWidth holds it.
-	dim, _ := embed.Dimension(defaultEmbeddingModel)
+	model, location := defaultEmbeddingModel, defaultEmbeddingLocation
+	if olderBase {
+		if region == "" {
+			return
+		}
+		model, location = regionalEmbeddingModel, region
+	}
+	// Known by construction: TestTheDefaultModelsHaveAWidth holds it.
+	dim, _ := embed.Dimension(model)
 	c.Embedding = &EmbeddingConfig{
 		Project:    project,
-		Location:   region,
-		Model:      defaultEmbeddingModel,
+		Location:   location,
+		Model:      model,
 		Dim:        dim,
 		Discovered: true,
 	}
@@ -661,12 +678,12 @@ func (c *Config) EnableDiscoveredEmbedding(project, region string) {
 // The region is half the answer because it decides where the text goes:
 // ochakai embeds in the region it was deployed to, so a deployment in
 // asia-northeast1 does not send concept bodies and search queries to
-// another continent to have them embedded (design doc 0080 §1.2).
+// another continent to have them embedded (design doc 0147 §1.2).
 //
 // Together they say where ochakai runs, not what it may do there:
 // whether the service identity can call Vertex AI, and whether the model
 // exists in that region at all, is one answer given by the probe at
-// startup (design doc 0080 §1.3).
+// startup (design doc 0147 §1.3).
 func DiscoverVertex(ctx context.Context) (project, region string) {
 	if !metadata.OnGCE() {
 		return "", ""

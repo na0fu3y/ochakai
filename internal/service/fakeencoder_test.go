@@ -16,7 +16,7 @@ import (
 // The eval harness beside this file measured the lexical half alone,
 // because the vector half needed a network call to Vertex AI and a test
 // suite does not make one. That left the *default* configuration
-// unmeasured (design doc 0080 §1.1: embeddings are on unless a
+// unmeasured (design doc 0147 §1.1: embeddings are on unless a
 // deployment turns them off), which is the half of the product where a
 // ranking change is least visible by reading the code.
 //

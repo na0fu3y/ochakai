@@ -26,10 +26,10 @@ README が前提にしているのに、一箇所では書いていないこと�
 Google Cloud API だけである: 常に Cloud SQL、`OCHAKAI_GCS_BUCKET` を
 設定していれば GCS、そして意味的検索が有効なら Vertex AI — Google Cloud
 の上で動く以上、これが既定である(設計ドキュメント
-[0080](design/0080-search-and-how-a-deployment-embeds.md))。
+[0147](design/0147-search-and-the-default-a-base-was-made-with.md))。
 `OCHAKAI_EMBEDDINGS=off` — このデプロイがどう埋め込むかを言う唯一の変数
 (設計ドキュメント
-[0080](design/0080-search-and-how-a-deployment-embeds.md))— がそれを断り、
+[0147](design/0147-search-and-the-default-a-base-was-made-with.md))— がそれを断り、
 `roles/aiplatform.user` を与えないことでも同じことになる。どちらでも、
 インスタンスは自分のデータベースとしか話さなくなる。
 
