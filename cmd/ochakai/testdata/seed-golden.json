@@ -1,0 +1,42 @@
+{
+  "project": "proj",
+  "prefix": "tables",
+  "concepts": [
+    {
+      "id": "tables/ga/events_",
+      "document": "---\ntype: BigQuery Table\nresource: bigquery://proj.ga.events_*\ntitle: ga.events_*\nstatus: draft\n---\n\nProjected from the warehouse's own schema listing. **Nothing below was\nwritten by a person yet** — what this table is for, which column lies, and\nwhen the load is late are the reasons anybody will read this entry, and the\nschema does not know any of them.\n\n**Date-sharded**: 3 tables, `events_20260101` to `events_20260103`, folded into this one\nentry. Query them as `events_*`, narrowing with `_TABLE_SUFFIX`; the columns\nbelow are the latest shard's.\n\n| Column | Type | Null | Note |\n|---|---|---|---|\n| `event_name` | STRING | yes |  |\n| `event_ts` | TIMESTAMP | yes |  |\n| `user_id` | STRING | yes |  |\n"
+    },
+    {
+      "id": "tables/shop/café",
+      "document": "---\ntype: BigQuery Table\nresource: bigquery://proj.shop.café\ntitle: shop.café\nstatus: draft\n---\n\nProjected from the warehouse's own schema listing. **Nothing below was\nwritten by a person yet** — what this table is for, which column lies, and\nwhen the load is late are the reasons anybody will read this entry, and the\nschema does not know any of them.\n\n| Column | Type | Null | Note |\n|---|---|---|---|\n| `items` | ARRAY\u003cSTRUCT\u003csku STRING, qty INT64\u003e\u003e |  |  |\n"
+    },
+    {
+      "id": "tables/shop/not_a_date_20261398",
+      "document": "---\ntype: BigQuery Table\nresource: bigquery://proj.shop.not_a_date_20261398\ntitle: shop.not_a_date_20261398\nstatus: draft\n---\n\nProjected from the warehouse's own schema listing. **Nothing below was\nwritten by a person yet** — what this table is for, which column lies, and\nwhen the load is late are the reasons anybody will read this entry, and the\nschema does not know any of them.\n\n| Column | Type | Null | Note |\n|---|---|---|---|\n| `x` | STRING | yes |  |\n"
+    },
+    {
+      "id": "tables/shop/not_a_date_20261399",
+      "document": "---\ntype: BigQuery Table\nresource: bigquery://proj.shop.not_a_date_20261399\ntitle: shop.not_a_date_20261399\nstatus: draft\n---\n\nProjected from the warehouse's own schema listing. **Nothing below was\nwritten by a person yet** — what this table is for, which column lies, and\nwhen the load is late are the reasons anybody will read this entry, and the\nschema does not know any of them.\n\n| Column | Type | Null | Note |\n|---|---|---|---|\n| `x` | STRING | yes |  |\n"
+    },
+    {
+      "id": "tables/shop/orders",
+      "document": "---\ntype: BigQuery Table\nresource: bigquery://proj.shop.orders\ntitle: shop.orders\nstatus: draft\n---\n\nProjected from the warehouse's own schema listing. **Nothing below was\nwritten by a person yet** — what this table is for, which column lies, and\nwhen the load is late are the reasons anybody will read this entry, and the\nschema does not know any of them.\n\n| Column | Type | Null | Note |\n|---|---|---|---|\n| `id` | INT64 |  | The order \\| its key |\n| `amount` | NUMERIC | yes |  |\n| `status` | STRING | yes |  |\n"
+    },
+    {
+      "id": "tables/shop/sales",
+      "document": "---\ntype: BigQuery Table\nresource: bigquery://proj.shop.sales\ntitle: shop.sales\nstatus: draft\n---\n\nProjected from the warehouse's own schema listing. **Nothing below was\nwritten by a person yet** — what this table is for, which column lies, and\nwhen the load is late are the reasons anybody will read this entry, and the\nschema does not know any of them.\n\n| Column | Type | Null | Note |\n|---|---|---|---|\n| `id` | INT64 |  |  |\n"
+    },
+    {
+      "id": "tables/shop/sales20260101",
+      "document": "---\ntype: BigQuery Table\nresource: bigquery://proj.shop.sales20260101\ntitle: shop.sales20260101\nstatus: draft\n---\n\nProjected from the warehouse's own schema listing. **Nothing below was\nwritten by a person yet** — what this table is for, which column lies, and\nwhen the load is late are the reasons anybody will read this entry, and the\nschema does not know any of them.\n\n| Column | Type | Null | Note |\n|---|---|---|---|\n| `id` | INT64 |  |  |\n"
+    },
+    {
+      "id": "tables/shop/sales20260102",
+      "document": "---\ntype: BigQuery Table\nresource: bigquery://proj.shop.sales20260102\ntitle: shop.sales20260102\nstatus: draft\n---\n\nProjected from the warehouse's own schema listing. **Nothing below was\nwritten by a person yet** — what this table is for, which column lies, and\nwhen the load is late are the reasons anybody will read this entry, and the\nschema does not know any of them.\n\n| Column | Type | Null | Note |\n|---|---|---|---|\n| `id` | INT64 |  |  |\n"
+    },
+    {
+      "id": "tables/shop/snapshot_20250101",
+      "document": "---\ntype: BigQuery Table\nresource: bigquery://proj.shop.snapshot_20250101\ntitle: shop.snapshot_20250101\nstatus: draft\n---\n\nProjected from the warehouse's own schema listing. **Nothing below was\nwritten by a person yet** — what this table is for, which column lies, and\nwhen the load is late are the reasons anybody will read this entry, and the\nschema does not know any of them.\n\n| Column | Type | Null | Note |\n|---|---|---|---|\n| `id` | INT64 |  |  |\n"
+    }
+  ]
+}

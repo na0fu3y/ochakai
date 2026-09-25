@@ -29,16 +29,13 @@ import { esc } from '../escape.js';
 import { entryHash } from '../format.js';
 import { md } from '../markdown.js';
 import { chartHTML, NUMERIC_TYPES } from '../chart.js';
-import { asFailure, asMessage, fmtBytes, fold, hasToken, MAX_BYTES_BILLED, run, signIn } from '../sql.js';
+import { asFailure, asMessage, fmtBytes, fold, hasToken, MAX_BYTES_BILLED, PROJECT_KEY, run, signIn } from '../sql.js';
 
 // The server refuses a conversation longer than this (internal/agent).
 // Said here so the page can offer a fresh start before the refusal, not
 // after it.
 const MAX_TURNS = 40;
 const KEY = 'ochakai.ask';
-// The billing project a person runs proposals in, where the operator
-// named none — remembered per browser, since it is then theirs.
-const PROJECT_KEY = 'ochakai.bq-project';
 // Whether the person agreed to automatic runs in this conversation. Kept
 // beside the conversation, and ended with it.
 const AUTO_KEY = 'ochakai.ask.auto';

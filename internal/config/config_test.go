@@ -524,21 +524,18 @@ func TestAnAnonymousPostureRefusesTheAgent(t *testing.T) {
 	}
 }
 
-// The OAuth client exists only to run what the agent proposes, so it
-// needs the agent, and it is spelled the one way Google issues it.
-func TestOAuthClientNeedsTheAgent(t *testing.T) {
+// The OAuth client and the billing project do not need the agent: the
+// page reads a schema to seed from with them, and that asks no model
+// (design doc 0148). Each is spelled the one way Google issues it.
+func TestOAuthClientStandsWithoutTheAgent(t *testing.T) {
 	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
 	t.Setenv("OCHAKAI_OAUTH_CLIENT_ID", "1-abc.apps.googleusercontent.com")
-	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "OCHAKAI_AGENT") {
-		t.Errorf("a client without an agent: err = %v", err)
-	}
-	t.Setenv("OCHAKAI_AGENT", "gemini-x")
 	cfg, err := FromEnv()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("a client without an agent: %v", err)
 	}
-	if cfg.Agent.OAuthClientID != "1-abc.apps.googleusercontent.com" {
-		t.Errorf("client = %q", cfg.Agent.OAuthClientID)
+	if cfg.OAuthClientID != "1-abc.apps.googleusercontent.com" {
+		t.Errorf("client = %q", cfg.OAuthClientID)
 	}
 	t.Setenv("OCHAKAI_OAUTH_CLIENT_ID", "not-a-client")
 	if _, err := FromEnv(); err == nil {
@@ -546,24 +543,16 @@ func TestOAuthClientNeedsTheAgent(t *testing.T) {
 	}
 }
 
-// The billing project is only read where the agent proposes queries, and
-// it is spelled as a project id. It does not need the OAuth client:
-// `ochakai ui` runs a proposal without one.
-func TestBigQueryProjectNeedsTheAgent(t *testing.T) {
+func TestBigQueryProjectStandsWithoutTheAgent(t *testing.T) {
 	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x/y")
-	t.Setenv("OCHAKAI_BIGQUERY_PROJECT", "analytics-billing")
-	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "OCHAKAI_AGENT") {
-		t.Errorf("a project without an agent: err = %v", err)
-	}
-	t.Setenv("OCHAKAI_AGENT", "gemini-x")
 	for _, ok := range []string{"analytics-billing", "example.com:my-project"} {
 		t.Setenv("OCHAKAI_BIGQUERY_PROJECT", ok)
 		cfg, err := FromEnv()
 		if err != nil {
 			t.Fatalf("%s: %v", ok, err)
 		}
-		if cfg.Agent.BigQueryProject != ok {
-			t.Errorf("project = %q, want %q", cfg.Agent.BigQueryProject, ok)
+		if cfg.BigQueryProject != ok {
+			t.Errorf("project = %q, want %q", cfg.BigQueryProject, ok)
 		}
 	}
 	for _, bad := range []string{"My-Project", "123456789012", "projects/x", "ab"} {

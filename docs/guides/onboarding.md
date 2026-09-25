@@ -75,11 +75,20 @@
 
 ## 1. 骨格を投影する
 
-スキーマは自分で取得して、その答えを渡す。ochakai はウェアハウスに接続しない。
+スキーマは自分の身元で読む。ochakai のサーバーはウェアハウスに接続しない。
+
+**シェルを使わないなら、Web UI のホームの「BigQuery から取り込む」**に
+`project.dataset` を渡す(パブリックデータなら
+`bigquery-public-data.thelook_ecommerce` のように)。ページが本人の権限で
+スキーマを読み、作られる id を見せてから、下と同じ draft を書く。既に
+ある住所は上書きしない。使えるのは手元の `ochakai ui` か、運用者が
+`OCHAKAI_OAUTH_CLIENT_ID` を設定したチームの Web UI で、エージェントは
+要らない([0148](../design/0148-the-empty-base-fills-from-the-page-too.md))。
+シェルからなら、クエリを自分で撃って答えを渡す:
 
 ```sh
 bq query --max_rows=100000 --format=json --nouse_legacy_sql \
-  'SELECT table_schema, table_name, column_name, data_type, is_nullable, description
+  'SELECT table_schema, table_name, column_name, data_type, is_nullable
      FROM `your-project.your_dataset.INFORMATION_SCHEMA.COLUMNS`
     ORDER BY ordinal_position' \
   | ochakai seed --project your-project - | ochakai import -
@@ -94,7 +103,7 @@ bq query --max_rows=100000 --format=json --nouse_legacy_sql \
 少なく、畳んだ数は直前の `folded` の行に出る。
 
 投影したものは全件 draft で入る。スキーマは骨格であって、まだナレッジではな
-い([0085](../design/0085-the-empty-base-and-what-fills-it.md) §3)。ここでで
+い([0148](../design/0148-the-empty-base-fills-from-the-page-too.md) §2.1)。ここでで
 きるのは、まだ誰も説明を書いていないテーブルとカラムの一覧である。
 
 id の prefix は、この日に決めるものの中で唯一、後から変えると高くつく。

@@ -3593,9 +3593,11 @@ components:
               type: string
               description: >
                 The Google OAuth web client a page signs a person in with to
-                run a query the agent proposed, as that person
-                (`OCHAKAI_OAUTH_CLIENT_ID`, design doc 0142 §4). Present only
-                where the operator named one. A public identifier, not a
+                read BigQuery as that person (`OCHAKAI_OAUTH_CLIENT_ID`): to
+                run a query the agent proposed (design doc 0142 §4), and to
+                read a dataset's schema into draft table concepts (design doc
+                0148). Present wherever the operator named one, whether or
+                not the agent is on — the second use asks no model. A public identifier, not a
                 secret: the server holds no warehouse credential and never
                 sees the token.
             model:
@@ -3609,8 +3611,9 @@ components:
               type: string
               description: >
                 The Google Cloud project such a query is billed to
-                (`OCHAKAI_BIGQUERY_PROJECT`). Present only when the operator
-                named one; absent, the page asks the person for their own.
+                (`OCHAKAI_BIGQUERY_PROJECT`), whether or not the agent is on.
+                Present only when the operator named one; absent, the page
+                asks the person for their own.
             turns:
               type: object
               description: >

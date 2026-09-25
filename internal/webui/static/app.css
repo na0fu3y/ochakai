@@ -801,6 +801,10 @@ body.sandbox .sandbox-note {
 body.no-files .files-only { display: none !important; }
 /* The agent is off unless the deployment says on (design doc 0142 §5). */
 body:not(.has-agent) .agent-only { display: none !important; }
+body:not(.reads-bigquery) .bigquery-only { display: none !important; }
+.seed-form { display: flex; flex-direction: column; gap: .35rem; max-width: 36rem; margin: 1rem 0; }
+.seed-form label { display: flex; flex-direction: column; gap: .2rem; font-weight: 600; }
+.seed-form .hint { margin: 0 0 .5rem; }
 #triage { margin: .2rem 0 .8rem; }
 .triage-answer { padding: .6rem .8rem; }
 .ask-turn { margin: .5rem 0; }

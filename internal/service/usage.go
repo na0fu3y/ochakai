@@ -356,15 +356,18 @@ func (s *Service) filesState(sc *Scope) *domain.StatsFiles {
 // A posture that refuses the agent names no variable, because setting it
 // there stops the start (design doc 0142 §5).
 func (s *Service) agentState(sc *Scope) *domain.StatsAgent {
+	st := &domain.StatsAgent{}
+	// The page reads BigQuery as the person with these whether or not
+	// the agent is on: seeding from a schema asks no model (design doc
+	// 0148).
+	if s.Config != nil {
+		st.OAuthClientID = s.Config.OAuthClientID
+		st.BigQueryProject = s.Config.BigQueryProject
+	}
 	if s.Model != nil {
-		st := &domain.StatsAgent{Enabled: true, Model: s.Model.Name()}
-		if s.Config != nil && s.Config.Agent != nil {
-			st.OAuthClientID = s.Config.Agent.OAuthClientID
-			st.BigQueryProject = s.Config.Agent.BigQueryProject
-		}
+		st.Enabled, st.Model = true, s.Model.Name()
 		return st
 	}
-	st := &domain.StatsAgent{}
 	if sc != nil && sc.Everything() && (s.Config == nil || !s.Config.Anonymous()) {
 		st.Variable = "OCHAKAI_AGENT"
 	}

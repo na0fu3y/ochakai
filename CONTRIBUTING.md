@@ -820,7 +820,7 @@ the check enforces are one list, for the reason `RECORD-LINES` is:
 
     COPY-ENGLISH-TERMS: OKF SPEC YAML MiB REST MCP CLI API
       frontmatter markdown export import ochakai ui serve-ui access
-      draft stable deprecated rejected unverified
+      draft stable deprecated rejected unverified seed BigQuery Table
       machine-confirmed human-reviewed outcome failed
 
 Two or more English words in a row fail the check unless every word in

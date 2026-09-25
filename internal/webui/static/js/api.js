@@ -101,10 +101,11 @@ function servedBy() {
 // the files tab — the one place somebody meets the refusal — rather
 // than as a page-wide banner.
 export let FILES_VARIABLE = '';
-// The Google OAuth client the page signs a person in with to run a query
-// the agent proposed (design doc 0142 §4). Empty where the team web UI
-// cannot run one: the agent still proposes, and the page shows the SQL
-// for the person to run elsewhere.
+// The Google OAuth client the page signs a person in with to read
+// BigQuery as them — a query the agent proposed (design doc 0142 §4), or
+// a schema to seed from (design doc 0148). Empty where the team web UI
+// cannot: the agent still proposes, and the page shows the SQL for the
+// person to run elsewhere.
 export let AGENT_CLIENT = '';
 // Whether the proxy in front runs such a query itself, as the person at
 // the keyboard — `ochakai ui` does, and says so in the page's markup;
@@ -122,6 +123,10 @@ function markCapabilities(s) {
   document.body.classList.toggle('has-agent', s.agent?.enabled === true);
   AGENT_CLIENT = s.agent?.oauth_client_id || '';
   AGENT_PROJECT = s.agent?.bigquery_project || '';
+  // The page reads BigQuery as the person where either way to do it is
+  // here — the operator's OAuth client, or `ochakai ui`'s proxy — agent
+  // or no agent: seeding from a schema asks no model (design doc 0148).
+  document.body.classList.toggle('reads-bigquery', !!AGENT_CLIENT || PROXY_RUNS);
   const files = s.files;
   if (!files || files.enabled !== false) return;
   document.body.classList.add('no-files');

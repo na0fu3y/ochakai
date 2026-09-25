@@ -17,6 +17,12 @@ export const MAX_BYTES_BILLED = 10 * 1024 ** 3;
 const MAX_ROWS = 50;
 const MAX_CHARS = 8000;
 
+// Where the person's billing project is remembered, per browser, when
+// the operator named none (OCHAKAI_BIGQUERY_PROJECT). One key for both
+// readers: the project a person may start a job in does not change with
+// what the job is for.
+export const PROJECT_KEY = 'ochakai.bq-project';
+
 let token = null; // { value, expires }
 
 // signIn opens Google's consent screen in a popup and resolves with a
@@ -67,6 +73,40 @@ export function hasToken() {
 // the same paths on this origin, where `ochakai ui` runs it as the person
 // and adds the credential itself.
 export async function run(tok, project, query) {
+  const { r } = await start(tok, project, query, MAX_ROWS);
+  const schema = r.schema?.fields || [];
+  const fields = schema.map(f => f.name);
+  const types = schema.map(f => (f.mode === 'REPEATED' ? 'REPEATED' : f.type));
+  const rows = (r.rows || []).map(row => row.f.map((c, i) => cell(c.v, types[i])));
+  return { fields, types, rows, total: Number(r.totalRows || rows.length), bytes: Number(r.totalBytesProcessed || 0) };
+}
+
+// runAll is run for a result the page reads whole rather than shows —
+// a dataset's schema listing (design doc 0148) — paging through every
+// row up to limit, and refusing past it rather than returning a part: a
+// listing cut short looks exactly like a smaller dataset (seed.go's
+// seedTruncationNote is the same lesson). Rows come back as objects
+// keyed by column name, with BigQuery's own values.
+export async function runAll(tok, project, query, limit) {
+  const { r: first, call } = await start(tok, project, query, 10000);
+  const total = Number(first.totalRows || 0);
+  if (total > limit) throw new Error(`結果が ${total} 行あり、上限の ${limit} 行を超えています。テーブル一つか、名前の先頭(例: county_*)で絞ってください`);
+  const fields = (first.schema?.fields || []).map(f => f.name);
+  const out = [];
+  const take = r => (r.rows || []).forEach(row => out.push(Object.fromEntries(row.f.map((c, i) => [fields[i], c.v]))));
+  take(first);
+  const job = first.jobReference;
+  for (let page = first.pageToken; page;) {
+    const r = await call(`/queries/${encodeURIComponent(job.jobId)}?` + new URLSearchParams({
+      location: job.location || '', pageToken: page, maxResults: '10000',
+    }), { method: 'GET' });
+    take(r);
+    page = r.pageToken;
+  }
+  return { rows: out, bytes: Number(first.totalBytesProcessed || 0) };
+}
+
+async function start(tok, project, query, maxResults) {
   const base = `${tok ? 'https://bigquery.googleapis.com' : ''}/bigquery/v2/projects/${encodeURIComponent(project)}`;
   const call = async (path, init) => {
     const headers = { 'Content-Type': 'application/json' };
@@ -78,20 +118,16 @@ export async function run(tok, project, query) {
   };
   let r = await call('/queries', {
     method: 'POST',
-    body: JSON.stringify({ query, useLegacySql: false, maximumBytesBilled: String(MAX_BYTES_BILLED), timeoutMs: 20000, maxResults: MAX_ROWS }),
+    body: JSON.stringify({ query, useLegacySql: false, maximumBytesBilled: String(MAX_BYTES_BILLED), timeoutMs: 20000, maxResults }),
   });
   for (let i = 0; !r.jobComplete && i < 6; i++) {
     const job = r.jobReference;
     r = await call(`/queries/${encodeURIComponent(job.jobId)}?` + new URLSearchParams({
-      location: job.location || '', timeoutMs: '10000', maxResults: String(MAX_ROWS),
+      location: job.location || '', timeoutMs: '10000', maxResults: String(maxResults),
     }), { method: 'GET' });
   }
   if (!r.jobComplete) throw new Error('クエリが一分以内に終わりませんでした');
-  const schema = r.schema?.fields || [];
-  const fields = schema.map(f => f.name);
-  const types = schema.map(f => (f.mode === 'REPEATED' ? 'REPEATED' : f.type));
-  const rows = (r.rows || []).map(row => row.f.map((c, i) => cell(c.v, types[i])));
-  return { fields, types, rows, total: Number(r.totalRows || rows.length), bytes: Number(r.totalBytesProcessed || 0) };
+  return { r, call };
 }
 
 function cell(v, type) {

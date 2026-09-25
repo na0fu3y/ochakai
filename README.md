@@ -170,11 +170,18 @@ seeds only the tables the first 100 rows reached.
 
 ```sh
 bq query --max_rows=100000 --format=json --nouse_legacy_sql \
-  'SELECT table_schema, table_name, column_name, data_type, is_nullable, description
+  'SELECT table_schema, table_name, column_name, data_type, is_nullable
      FROM `your-project.your_dataset.INFORMATION_SCHEMA.COLUMNS`
     ORDER BY ordinal_position' \
   | ochakai seed - | ochakai import -
 ```
+
+The web UI does the same without a shell: **BigQuery から取り込む** on
+its home page takes `project.dataset` — a public one such as
+`bigquery-public-data.thelook_ecommerce` works — reads the schema as you,
+and writes the same drafts, leaving any table somebody already described
+alone. It needs `ochakai ui`, or a team web UI whose operator set
+`OCHAKAI_OAUTH_CLIENT_ID`; the agent does not have to be on.
 
 Every concept lands as a **draft**, because a projected schema is a
 skeleton somebody still has to say something about — which is what the
