@@ -12,6 +12,9 @@ Status: Accepted(2026-08-03)。**「やらないと決めたこと」の現行
 **§5 のコネクタの再実装の出発点は
 [0116](0116-the-connector-price-changed-not-its-condition.md) が差し替えた** —
 戻す条件は同じで、その日に開くのは 0010 の認可サーバではなくなった。
+**§2・§5 のコネクタは [0151](0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md)
+が改訂した** — 条件が満たされ、ochakai は認可サーバにならずに、クライアントへ
+認証の行き先を教える形で戻った。
 Date: 2026-08-03
 
 ## 0. この記録が決めたこと

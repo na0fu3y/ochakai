@@ -1321,6 +1321,11 @@ Computation` が canary としてそれを継続実行する — が、**三つ�
   なし・CDN なし」の一枚という形の制約で、数ではない。
 - **`serve` / `serve-ui` / `version` / `help`。** バイナリの動かし方で
   あって、ochakai が知っていることではない。
+- **`/.well-known/oauth-protected-resource/mcp` と `/mcp` の 401 の
+  `WWW-Authenticate`**([0151](design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md))。
+  自分で検証するデプロイが、トークンを持たないクライアントに認証の行き先を
+  教える握手で、覚える語は無く、変数も増えない。`/api/v1` の外の住所で、
+  REST と HEADER の節は `api/openapi.yaml` から数えるので、そこには出ない。
 - **改名前の名前。** あるリリースが改名した MCP ツール名・CLI コマンド名は
   一リリースだけ答え続ける
   ([0088](design/0088-a-retired-name-answers-for-one-release.md))が、MCP は

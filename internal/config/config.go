@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -539,6 +540,15 @@ func FromEnv() (*Config, error) {
 		return nil, fmt.Errorf(
 			"OCHAKAI_OIDC_ISSUER cannot be combined with OCHAKAI_MODE=%s: that posture reads no identity",
 			os.Getenv("OCHAKAI_MODE"))
+	}
+	if cfg.OIDCIssuer != "" && slices.Contains(cfg.Delegators, "*") {
+		// A deployment that verifies its own tokens can be reached by
+		// anybody the issuer signs in — the Claude connector's shape
+		// (design doc 0151). "*" there would let every such person send
+		// Ochakai-On-Behalf-Of and be recorded as anyone they like
+		// (0116 §5). Name the delegating callers one by one instead.
+		return nil, fmt.Errorf(
+			"OCHAKAI_DELEGATING_CALLERS=* cannot be combined with OCHAKAI_OIDC_ISSUER: every caller the issuer verifies could name anyone as the author; list the delegating callers instead (design doc 0151)")
 	}
 	return cfg, nil
 }

@@ -87,10 +87,11 @@ section says what the stages are for; it does not approve them in advance.
    what is used a lot, it reads the query history as that person and
    drafts the recurring aggregates. Nothing is harvested in bulk. This is
    where No FDE (C4) is won or lost.
-4. **Where people already ask.** Chat surfaces and assistant connectors, on
-   the conditions already written down
-   ([0116](docs/design/0116-the-connector-price-changed-not-its-condition.md)).
-   A chat surface that needs a secret stays out.
+4. **Where people already ask.** Assistant connectors: Claude, signed in
+   with the person's Google Workspace account
+   ([0151](docs/design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md)).
+   A chat surface that needs a secret, or that cannot run a query as the
+   person, stays out.
 
 **How it is measured.** Four numbers, and each has to be something
 `stats` or a replay can report:
@@ -105,9 +106,10 @@ section says what the stages are for; it does not approve them in advance.
 - **Stage 4 of the data agent** (above): where people already ask —
   Google Chat, Claude and Slack at the companies running ochakai. The
   Claude connector is the path: Claude answers, reads the knowledge over
-  MCP and runs BigQuery as the person with its own connector. This
-  reopens [0116](docs/design/0116-the-connector-price-changed-not-its-condition.md)'s
-  condition and pays for public reachability. Slack is reached through
+  MCP and runs BigQuery as the person with its own connector
+  ([0151](docs/design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md),
+  confirmed on claude.ai with Google Workspace as the issuer). It pays
+  for public reachability. Slack is reached through
   Claude. A Google Chat bridge was built, run on a real deployment and
   withdrawn (below). Stages 1 and 2 shipped in 0.29.0:
   automatic runs, answers that show their result, 👍 keeping a question,
@@ -268,10 +270,12 @@ it.
   `linked_from`, so an agent reaching a metric sees the insight explaining it
   without a lookup of its own
   ([0106](docs/design/0106-a-read-carries-what-points-at-it.md)).
-- **A publicly reachable MCP OAuth connector service.** It existed briefly and
-  was retired in 0.9.0 ([0070 §2](docs/design/0070-what-was-retired-and-why.md));
-  [0070 §5](docs/design/0070-what-was-retired-and-why.md) names revert as the starting point
-  if it ever comes back.
+- **ochakai as an OAuth authorization server.** The connector service it once
+  ran was retired in 0.9.0 ([0070 §2](docs/design/0070-what-was-retired-and-why.md)).
+  The connector came back without it
+  ([0151](docs/design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md)):
+  the deployment tells a client which issuer to sign in with, and verifies
+  what comes back. It holds no client secret, including Google's.
 - **A tenant column, or a hosted edition.** There is no hosted ochakai,
   and a process that holds several organizations behind a tenant column is
   refused: the boundary between organizations is an address that already

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -55,6 +56,11 @@ func Middleware(cfg *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		actor, status, err := ActorFromHeader(cfg, r.Header)
 		if err != nil {
+			// The reason goes to the operator's log as well as to the
+			// caller: a client that shows its user a spinner rather than
+			// the body leaves the operator nothing else to read. The
+			// token itself never appears here.
+			slog.Default().Warn("refused a caller", "path", oneLogLine(r.URL.Path), "status", status, "reason", oneLogLine(err.Error()))
 			writeError(w, status, "auth: "+err.Error())
 			return
 		}
@@ -363,4 +369,12 @@ func Actor(ctx context.Context) domain.Actor {
 		return a
 	}
 	return domain.Actor{Kind: domain.ActorProcess, Name: "unknown"}
+}
+
+// oneLogLine keeps a value that came with a request on one log line. The
+// JSON handler already escapes it; this makes that independent of which
+// handler a deployment runs, since a caller chooses the path and parts of
+// the reason (what a token claimed).
+func oneLogLine(v string) string {
+	return strings.NewReplacer("\n", " ", "\r", " ").Replace(v)
 }

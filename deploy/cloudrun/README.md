@@ -247,9 +247,11 @@ GRANT "ochakai-run@<PROJECT_ID>.iam" TO "ochakai";
   を見よ。
 - **サービスを公開 invoke 可能(`allUsers`)にしては絶対にいけない** —
   ochakai が読む identity ヘッダーは、Cloud Run の IAM チェックの背後
-  にあってはじめて信用できる。唯一の例外は、identity を一切読まず何
-  も書き込まないデプロイ(§5d のデモ)であり、書き込み可能なものには
-  この規則に例外は無い。
+  にあってはじめて信用できる。例外は、identity を一切読まず何も書き
+  込まないデプロイ(§5d のデモ)と、**トークンを自分で検証するデプロイ**
+  (`OCHAKAI_OIDC_ISSUER`、§5e の Claude のコネクタ)だけである — 後者は
+  Cloud Run の手前のチェックに頼らず、どの呼び出しのトークンもプロセスの
+  中で確かめる。§3 のこのデプロイには、どちらでもない限り例外は無い。
 - このデプロイに `allUsers` 付与は要らないので、Domain Restricted
   Sharing の org policy(`iam.allowedPolicyMemberDomains`)と両立する
   — そしてそれを維持しておく良い理由でもある。
@@ -527,12 +529,69 @@ provenance が崩れる。
 [REST API を自分のサービスに組み込む](../../docs/guides/rest-integration.md)
 にある。
 
+<a id="5e-optional-the-claude-connector"></a>
+
+## 5e. 任意: Claude のコネクタ(Google Workspace でサインイン)
+
+claude.ai・Claude Desktop・Cowork から、ochakai のナレッジを**本人の
+Google のサインインで**読めるようにする(設計ドキュメント
+[0151](../../docs/design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md))。
+答えるのは Claude で、BigQuery も Claude が自分のコネクタで本人として
+走らせる。**ochakai は secret を持たない** — OAuth クライアントの secret は
+Claude の組織設定に入れる。
+
+**代金は公開到達である。** Claude は Anthropic の基盤から呼ぶので、Cloud Run
+は認証なしの呼び出しを受ける(`allUsers`)。それでも**どの呼び出しも、
+Google が発行し ochakai が確かめたトークンを要る** — 無ければ 401 である。
+公開到達を既存のデプロイに足したくなければ、同じデータベースを読む別の
+サービスとして立てる(下の手順はそうしている)。
+
+```sh
+# 1. OAuth クライアント(コンソールの「API とサービス → 認証情報」で作る)
+#    - 種類: ウェブ アプリケーション
+#    - 承認済みのリダイレクト URI: https://claude.ai/api/mcp/auth_callback
+#    - OAuth 同意画面の種類は「内部」— その Workspace の人だけがサインインできる
+#    client secret は手元に控え、ochakai には渡さない。
+CLIENT_ID=<作った OAuth クライアント ID>.apps.googleusercontent.com
+
+# 2. 公開到達の MCP サービス(§3 の ochakai と同じイメージ・同じデータベース)
+gcloud run deploy ochakai-mcp \
+  --image=$IMAGE --region=$REGION \
+  --service-account=$SERVICE_ACCOUNT \
+  --allow-unauthenticated \
+  --min-instances=0 --max-instances=1 --cpu=1 --memory=512Mi \
+  --add-cloudsql-instances=$PROJECT_ID:$REGION:ochakai \
+  --set-env-vars="^|^OCHAKAI_DB_IAM_AUTH=true|OCHAKAI_DATABASE_URL=<§3 と同じ>|OCHAKAI_OIDC_ISSUER=https://accounts.google.com|OCHAKAI_OIDC_AUDIENCE=$CLIENT_ID"
+# §3 の ochakai が private IP の Cloud SQL を VPC で読んでいるなら、同じ
+# --network / --subnet / --vpc-egress を付ける。
+MCP_URL=$(gcloud run services describe ochakai-mcp --region=$REGION --format='value(status.url)')/mcp
+
+# 3. 握手を確かめる: トークン無しは 401 で、行き先を名指す
+curl -s -D - -o /dev/null -X POST $MCP_URL | grep -i www-authenticate
+```
+
+4. Claude の組織設定(オーナー)→ **コネクタ** → **カスタムコネクタを追加**:
+   URL に `$MCP_URL`、詳細設定に OAuth クライアント ID と client secret を
+   入れる。各人が「接続」を押し、Google でサインインする。
+5. 書き込みを許すかは、このサービスの姿勢で決める。読むだけにするなら
+   `OCHAKAI_MODE=read-only` を足す。書けるデプロイでは、Claude の書き込みは
+   draft として本人の名で記録され、人が裁定する。
+
+**繋がらないとき。** Google のサインインのあと読み込み中のまま戻ってこず、
+このサービスのログに Claude からのトークン付きの呼び出しが一度も無いなら、
+Claude の側で失敗した接続の状態が残っている。**コネクタを削除し、別の名前で
+足し直す**と通ることがある(2026-09-26 に実機で確かめた)。client secret を
+空にしたままでも同じ症状になる — Google のウェブ クライアントはトークンの
+交換に secret を要る。ochakai が断った呼び出しは、ログに `refused a caller`
+と理由が残る。
+
 <a id="5d-optional-a-public-read-only-demo"></a>
 
 ## 5d. 任意: 公開の read-only なデモ
 
-ここまでは一貫して `allUsers` を禁じており、それは書き込み可能なあら
-ゆるデプロイについて変わらない。例外は二つの姿勢だけで、どちらも手放
+ここまでは一貫して `allUsers` を禁じており、それは Cloud Run の IAM に
+身元を任せる書き込み可能なあらゆるデプロイについて変わらない(トークンを
+自分で検証する §5e は別である)。例外は二つの姿勢だけで、どちらも手放
 すものがあるからこそ許される。一つはこのデモで、`OCHAKAI_MODE=public`
 は identity を一切読まず、書き込みも伴わない(設計ドキュメント
 0066 §3)。もう一つは `OCHAKAI_MODE=sandbox`(設計ドキュメント
