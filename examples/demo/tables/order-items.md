@@ -2,7 +2,7 @@
 type: BigQuery Table
 resource: bigquery://bigquery-public-data.thelook_ecommerce.order_items
 title: order_items
-description: 商品1点につき1行の注文明細。このバンドルの金額はすべてここから出る
+description: 商品1点につき1行の注文明細。このバンドルの金額・状態はすべてここから出る
 tags: [sales, orders, bigquery]
 generated: { by: analysis_agent/claude-fable-5, at: 2026-07-25T03:40:00Z }
 verified:
@@ -10,33 +10,49 @@ verified:
 status: stable
 ---
 
-注文明細である。[売上](/metrics/revenue.md)も
-[返品率](/metrics/return-rate.md)も、このバンドルで金額と呼ぶものは
-すべてこのテーブルの `sale_price` から出る。
-[注文ヘッダ](/tables/orders.md)には金額の列が無い。
+注文明細である。[売上](/metrics/revenue.md)も[返品率](/metrics/return-rate.md)
+も[粗利](/metrics/gross-margin.md)も、このバンドルで金額と呼ぶものは
+すべてこのテーブルの `sale_price` から出る。[orders](/tables/orders.md)
+には金額の列が無い。
 
 **1行は商品1点で、数量の列は無い。** 同じ商品を2点買った注文は明細が
-2行になる。1行が在庫の個体1つ(`inventory_item_id`)に対応しているので、
-行数がそのまま個数になる。`SUM(quantity * price)` のような式は書けない。
+2行になり、行数がそのまま個数になる。`SUM(quantity * price)` のような式は
+書けない。
 
-## 注記のある列
+# Schema
 
 | 列 | 型 | 注記 |
 |---|---|---|
-| `sale_price` | FLOAT64 | 実売価格、USD。税と送料はこのデータセットのモデルに存在しない |
-| `status` | STRING | 明細ごとの状態。注文の status とは別に持つ([完了した注文](/glossary/completed-order.md)) |
-| `order_id` | INT64 | [注文ヘッダ](/tables/orders.md)へ |
-| `product_id` | INT64 | [商品](/tables/products.md)へ。定価・原価・カテゴリはあちら |
-| `user_id` | INT64 | [顧客](/tables/users.md)へ。ヘッダを経由せずに客へ辿れる |
-| `inventory_item_id` | INT64 | 在庫の個体。数量列が無いのはこのためである |
-| `created_at` | TIMESTAMP | UTC。売上はこの列で束ねる |
-| `returned_at` | TIMESTAMP | 返品されていなければ null |
+| `id` | INT64 | 主キー |
+| `order_id` | INT64 | [orders](/tables/orders.md) の `order_id` へ |
+| `user_id` | INT64 | [users](/tables/users.md) へ。注文の客と常に同じ |
+| `product_id` | INT64 | [products](/tables/products.md) へ |
+| `inventory_item_id` | INT64 | 在庫の個体を指すように見えるが、**売れた個体を指していない**(下の Joins) |
+| `status` | STRING | 5 値、大文字始まり。意味は[完了した注文](/glossary/completed-order.md) |
+| `sale_price` | FLOAT64 | 実売価格、USD。税・送料・値引きはこのデータのモデルに無い |
+| `created_at` | TIMESTAMP | UTC。売上はこの列で月に束ねる |
+| `shipped_at` / `delivered_at` / `returned_at` | TIMESTAMP | 状態に応じて入る。出荷日時が受注日時より前の行が 3 割近くある |
 
-## status を明細ごとに持つ
+# Joins
 
-そのため、3点のうち1点だけ返った一部返品も、明細1行が `Returned` に
-なるだけで正しく数えられる。常に明細側で集計するという規則は、ここから
-来ている。注文側だけを読む集計は、その1行を見落とす。
+- [orders](/tables/orders.md) — `oi.order_id = o.order_id`。主キーの名前が
+  両側で違う(明細は `id`、注文は `order_id`)。注文の列は明細の数だけ
+  複製されるので、件数は `COUNT(DISTINCT oi.order_id)` で数える。
+- [products](/tables/products.md) — `p.id = oi.product_id`。カテゴリで
+  割るときの JOIN。明細は必ず商品を指し、JOIN で行は減らない。
+- [users](/tables/users.md) — `u.id = oi.user_id`。注文を経由しなくてよい。
+- [inventory_items](/tables/inventory-items.md) — `inventory_item_id` では
+  **ない**。`ii.product_id = oi.product_id AND ii.sold_at = oi.created_at`
+  で結ぶ。理由は[inventory_item_id は売れた在庫を指さない](/insights/inventory-item-id.md)。
+- [events](/tables/events.md) — キーの列が無い。購入セッションとは客・
+  商品・時刻で 1 対 1 に結べる。[セッションと明細のつなぎ方](/insights/sessions-and-order-items.md)。
 
-このテーブルに対する検証済みのクエリは
-[月次売上](/queries/sales/monthly-revenue.md)である。
+# Metrics
+
+- [売上](/metrics/revenue.md)と、それを分解する[受注点数](/metrics/booked-items.md)・
+  [完了率](/metrics/completion-rate.md)・[明細単価](/metrics/average-item-price.md)
+- [返品率](/metrics/return-rate.md)、[粗利](/metrics/gross-margin.md)、
+  [リピート購入率](/metrics/repeat-purchase-rate.md)
+
+このテーブルに対する検証済みのクエリは、[月次売上](/computations/monthly-revenue.md)
+と[月次売上の要因分解](/computations/revenue-drivers.md)である。

@@ -133,9 +133,11 @@ This runs with `OCHAKAI_MODE=dev`: authentication is off and every
 request acts as `human:anonymous` — never do this on a deployment
 ([every mode](docs/configuration.md#environment-variables) (Japanese)).
 
-Point the same CLI at it and load the demo knowledge base — [eighteen
+Point the same CLI at it and load the demo knowledge base — [thirty-six
 concepts](examples/demo) about Google's public `thelook_ecommerce`
-dataset, linked to each other, some of them drafts. Everything goes
+dataset, linked to each other, some of them drafts. It is built around
+one question an agent is asked: revenue fell — which driver moved, what
+to do about it, and where the data runs out. Everything goes
 through the API, so plain curl reaches it too:
 
 ```sh
@@ -148,7 +150,8 @@ ochakai search "なぜ売上が落ちている?"   # the judgment, asked in Japa
 The two searches are not translations of each other. The base is written
 the way a Japanese team writes its own — Japanese where the judgment is,
 English where the warehouse columns are — so the first reaches the table
-and the second reaches the insight that says how to read it. `売上` is a
+and the second reaches the metric, whose decomposition points at the
+insight that says which driver to look at next. `売上` is a
 two-character term, which is the shape a Japanese knowledge base is
 mostly made of and the shape a trigram index cannot look up; here it is
 an index lookup with nothing installed and nothing configured.

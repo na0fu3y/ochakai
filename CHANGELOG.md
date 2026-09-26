@@ -33,9 +33,45 @@ last entry.
   and only then by verification recency and id. It breaks ties only, so
   nothing the score distinguishes changes order, and what a query
   reaches is unchanged. The search eval went 0.91 → 0.93 lexical and
-  0.89 → 0.90 fused, four cases up and none down. How often a term
+  0.89 → 0.90 fused, four cases up and none down, on the
+  corpus before the demo rebuild below; over the rebuilt demo it took
+  0.84 → 0.85 lexical and 0.81 → 0.82 fused, seven cases up and three
+  down by one rank each. How often a term
   appears was measured beside it and rejected: it moved four cases down
   for five up.
+
+- **`examples/demo` answers "revenue fell — why, and what now"**, and
+  grows from 18 concepts to 36. It is laid out as OKF's own sample
+  bundles are: `datasets/`, `tables/` with `# Schema`, `# Joins` and
+  `# Metrics`, and `computations/` in place of `queries/sales/`.
+  `references/thelook-dataset` became `datasets/thelook-ecommerce`. No
+  new types.
+  - `metrics/revenue` splits into booked items × completion rate ×
+    average item price, and each factor is its own Metric.
+    `computations/revenue-drivers` gives each factor's month-on-month
+    contribution in one run.
+  - `insights/why-revenue-falls` says, per factor, which computation to
+    run next, which action it leads to, and where the data runs out.
+    `insights/missing-data` lists those dead ends and the data that would
+    have answered them. `skills/diagnose-a-metric` is the procedure.
+    `insights/cases/2025-07-revenue-dip` is a draft diagnosis an agent
+    wrote back, with its BigQuery job ids as receipts.
+  - Findings about joins are Insights linked from the tables' `# Joins`,
+    not concepts of their own. `order_items.inventory_item_id` never
+    points at a sold inventory item. Sessions join order items one to
+    one on customer, product and time.
+  - Corrected against the data. The dataset regenerates its whole
+    history daily, so past months move because the rows move, not
+    because of returns. Status does not progress with time: half of
+    items from 2019 are still `Processing` or `Shipped`.
+  - Checked over three snapshots. In the months where revenue fell,
+    booked items still held level or grew. Completion rate and item mix
+    each explain about half of the fall.
+  - The search eval golden set grows from 88 cases to 107. Recall stays
+    1.00. MRR moves from 0.91 to 0.84 (lexical) and from 0.89 to 0.81
+    (fused), mostly from old cases that fall to rank 2 behind a new
+    concept sharing their words. Reach is 18.91 of 47, which is 40% of
+    the base (36% before).
 
 ## [0.29.2] - 2026-09-26
 

@@ -218,7 +218,7 @@ id で答えを見分けられる(設計ドキュメント
 境界で行われる: `metrics` は `metrics-legacy` には届かない。これが
 どれだけ役に立つかはディレクトリが何を意味するかによる —
 [examples/demo](../examples/demo) は種類でグループ化しており
-(`metrics/`、`glossary/`、`queries/sales/`)、そこでは `--type` が
+(`metrics/`、`glossary/`、`computations/`)、そこでは `--type` が
 すでに同じことのほとんどをやっている。これが効いてくるのは、共有の
 vocabulary の隣にあるチーム独自の vocabulary のように、ディレクトリ
 が `--type` では言えない何かを意味しているときである。ochakai は
@@ -542,7 +542,7 @@ ochakai の不変条件のほとんどは Go の型システムでは表現で�
   分野別にまとめた索引。上のすべてについて権威ある情報源である。
 - [api/openapi.yaml](../api/openapi.yaml) — ワイヤサーフェス。
 - [examples/demo](../examples/demo) — このページが説明するレイアウト・
-  type・リンクを備えた、18 concept のナレッジベース。
+  type・リンクを備えた、36 concept のナレッジベース。
 - [deploy/cloudrun/README.md](../deploy/cloudrun/README.md) —
   デプロイの手順と hardening のチェックリスト。
 - [docs/guides/golden-query-canary.md](guides/golden-query-canary.md)

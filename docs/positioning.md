@@ -696,7 +696,7 @@ export` のバンドルは YAML frontmatter を持つ markdown ファイルの
 何も競合しない。
 
 **export は第三者の検証器を通る。** 2026-09-03、`ochakai export` した
-53 concept のバンドルと `examples/demo` の 18 concept を、okfcli v0.5.0 の
+53 concept のバンドルと、当時の `examples/demo` の十八文書を、okfcli v0.5.0 の
 `validate` と okf-skills の §11 conformance checker に通した。どちらも
 エラー 0 で、警告はバンドルの外のファイルを指すリンクと期限を過ぎた
 `stale_after` だけである。C3 は自分のテストではなく他人の検証器で守れる
@@ -829,7 +829,7 @@ README がそう書いており、[0131](design/0131-a-deployment-says-what-it-c
 裁定だけである([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md))。
 その代表実装 [llm-wiki-compiler](https://github.com/atomicstrata/llm-wiki-compiler)
 (2.0k、MIT、OKF の producer と consumer、レビューキュー、MCP サーバー)
-の v1.1.0 に、2026-09-05、`examples/demo` の 18 concept と `kb/bundle` の
+の v1.1.0 に、2026-09-05、当時の `examples/demo` の十八文書と `kb/bundle` の
 9 文書を `import --okf` で入れ、`lint` を通し、`export --target okf` で
 戻した。
 
