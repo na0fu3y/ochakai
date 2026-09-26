@@ -540,6 +540,12 @@ Google のサインインで**読めるようにする(設計ドキュメント
 走らせる。**ochakai は secret を持たない** — OAuth クライアントの secret は
 Claude の組織設定に入れる。
 
+**Claude Desktop だけなら、公開到達は要らない。** 手元で動く `.mcpb`
+バンドルが、各人の gcloud の身元で非公開のデプロイに届く — どちらを選ぶかは
+[MCP クライアントを繋ぐ](../../docs/guides/mcp-clients.md#mcpb-or-claude-connector)
+の表にある。Web やモバイル、Cowork から問う人がいるなら、このコネクタに
+なる(Desktop もこれで足りる)。
+
 **代金は公開到達である。** Claude は Anthropic の基盤から呼ぶので、Cloud Run
 は認証なしの呼び出しを受ける(`allUsers`)。それでも**どの呼び出しも、
 Google が発行し ochakai が確かめたトークンを要る** — 無ければ 401 である。
