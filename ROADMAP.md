@@ -103,20 +103,40 @@ section says what the stages are for; it does not approve them in advance.
 
 ## Now
 
-- **Stage 4 of the data agent** (above): where people already ask —
-  Google Chat, Claude and Slack at the companies running ochakai. The
-  Claude connector is the path: Claude answers, reads the knowledge over
-  MCP and runs BigQuery as the person with its own connector
-  ([0151](docs/design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md),
-  confirmed on claude.ai with Google Workspace as the issuer). It pays
-  for public reachability. Slack is reached through
-  Claude. A Google Chat bridge was built, run on a real deployment and
-  withdrawn (below). Stages 1 and 2 shipped in 0.29.0:
-  automatic runs, answers that show their result, 👍 keeping a question,
-  👎 diagnosing, and `ochakai eval`. Stage 3 shipped in 0.29.1: an empty
-  base fills from the page (0148), and the agent proposes the meaning a
-  person applies (0149). It shipped after a full run against a public
-  dataset and a real model, and the fixes that run found.
+- **Measuring the data agent against its four numbers** (above). All four
+  stages have shipped: stages 1 and 2 in 0.29.0 (automatic runs, answers
+  that show their result, 👍 keeping a question, 👎 diagnosing, and
+  `ochakai eval`), stage 3 in 0.29.1 (an empty base fills from the page,
+  0148, and the agent proposes the meaning a person applies, 0149), and
+  stage 4 in 0.29.2 (the Claude connector, 0151, confirmed on claude.ai
+  with Google Workspace as the issuer; Slack is reached through Claude,
+  and a Google Chat bridge was built, run and withdrawn, below). What is
+  left is to find out whether it works, and the four numbers are not
+  equally ready:
+  - **Accuracy on replayed kept questions** exists: `ochakai eval` scores
+    each kept question and names the model and the client version. There
+    is no history; an operator who wants the trend keeps `--json` from a
+    scheduled run.
+  - **The share of answers whose grounding a person confirmed** can be
+    derived but is not reported. A turn keeps the ids it read (0144), and
+    `stats` counts turns and verdicts, but nothing joins the two with the
+    trust of what was read.
+  - **The time from a 👎 to a ruling** can be derived only loosely. The
+    turn that diagnoses names the drafts it wrote, and it shares the
+    conversation's first question and the person with the 👎 turn, so
+    the join is by question and person rather than by a key. The ruling is
+    the draft's next verify or delete.
+  - **The clicks one question costs** are not recorded anywhere, and
+    recording them would mean the page reporting its own events.
+
+  None of the three gaps gets built ahead of use. The next step is a
+  deployment where people ask real questions for a few weeks, through the
+  web UI and the Claude connector, with the three missing numbers read by
+  hand from `GET /api/v1/agent/turns`, the drafts' history and the review
+  queue. Whatever turns
+  out to be tedious to count by hand is what earns a field in `stats`,
+  and each one still answers docs/surface.md's three questions in its own
+  PR.
 - **Keep the invariant checks growing with the code**
   ([0035](docs/design/0035-verifiability.md)): exhaustiveness linting, the
   OpenAPI contract test that runs every REST integration request and response
