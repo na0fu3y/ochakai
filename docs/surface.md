@@ -1275,7 +1275,7 @@ Computation` が canary としてそれを継続実行する — が、**三つ�
   `RECORD-LINES` と、Superseded を墓標に縮める規則は残る — **積み上がる
   総量ではなく、一冊の厚さと、読まれない一冊が場所を取らないこと**が、
   そこで守られているものである。
-- **OKF ドキュメント。** `examples/demo` の 18 件も
+- **OKF ドキュメント。** `examples/demo` の 36 件も
   `examples/bigquery-catalog/bundle` も、プロジェクト自身のナレッジで
   ある `kb/bundle` も、ochakai が**保存するもの**であって ochakai に
   ついての説明ではない。frontmatter を持つ md は知識であり、ここでは
