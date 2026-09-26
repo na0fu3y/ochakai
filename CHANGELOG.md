@@ -45,6 +45,15 @@ last entry.
     the token.
   - No REST operation, variable or flag is added.
 
+### Fixed
+
+- **A lapsed Google login at startup is named as one even when its
+  refresh hangs.** 0.29.1 recognized `invalid_grant` in the agent's probe,
+  but a login waiting to be reauthenticated can also run the probe out
+  of time. That again read as "grant roles/aiplatform.user". The start
+  now gets one token on its own first, within 10 seconds, and names the
+  credential when that fails.
+
 ## [0.29.1] - 2026-09-26
 
 ### Added
