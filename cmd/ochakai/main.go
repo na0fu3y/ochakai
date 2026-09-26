@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"time"
 
+	"golang.org/x/oauth2/google"
+
 	"github.com/na0fu3y/ochakai/internal/blob"
 	"github.com/na0fu3y/ochakai/internal/config"
 	"github.com/na0fu3y/ochakai/internal/embed"
@@ -380,6 +382,14 @@ func agentModel(ctx context.Context, cfg *config.Config, log *slog.Logger) (llm.
 	if err != nil {
 		return nil, err
 	}
+	// The credential first, on its own: a lapsed login whose refresh
+	// hangs looks, from inside the probe below, like a model that did not
+	// answer in time — and the probe's message sends the operator to IAM
+	// (2026-09-26: an expired application-default login did exactly that).
+	if err := credentialWorks(ctx); err != nil {
+		return nil, fmt.Errorf("OCHAKAI_AGENT: the Google credentials could not be used to call %s — this is the credential, not the model or its permissions. On a laptop run `gcloud auth application-default login`; on Cloud Run check the service account: %w",
+			a.Model, err)
+	}
 	probe, cancel := context.WithTimeout(ctx, agentProbeTimeout)
 	defer cancel()
 	if _, err := m.Generate(probe, llm.Request{
@@ -394,6 +404,31 @@ func agentModel(ctx context.Context, cfg *config.Config, log *slog.Logger) (llm.
 	}
 	log.Info("agent enabled", "model", a.Model, "project", a.Project, "location", a.Location)
 	return m, nil
+}
+
+// credentialTimeout bounds getting one token. The metadata server
+// answers in milliseconds and a user's refresh in well under a second; a
+// refresh still going after this is one waiting on a reauthentication
+// nobody can answer from a server.
+const credentialTimeout = 10 * time.Second
+
+// credentialWorks gets one access token from the application-default
+// credential, within credentialTimeout.
+func credentialWorks(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, credentialTimeout)
+	defer cancel()
+	ts, err := google.DefaultTokenSource(ctx, "https://www.googleapis.com/auth/cloud-platform")
+	if err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() { _, err := ts.Token(); done <- err }()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return fmt.Errorf("no token within %s — the login is probably waiting to be reauthenticated", credentialTimeout)
+	}
 }
 
 // credentialProblem says whether err is the Google credential failing
