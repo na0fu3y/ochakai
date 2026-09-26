@@ -20,12 +20,16 @@ attester:
 question: 取り扱いを見直すべき商品はどれか?
 ---
 
-このバンドルにひとつだけあるアクションである。数字を読むための計算では
-なく、決定の入口にあたる。Palantir で言う Action type がこのバンドルで
-どうなるかは[オントロジー](/glossary/ontology.md)にある。パラメータと
-検証はこの concept が持ち、実行の手順は
-[アクションの実行](/skills/run-an-action.md)が持ち、決定そのものは draft
-として書き戻され、裁定は人に残る。
+このバンドルのアクションの一つで、もう一つは
+[滞留在庫の処分提案](/actions/propose-aged-inventory-clearance.md)である。
+数字を読むための計算ではなく、決定の入口にあたる。パラメータと検証は
+この concept が持ち、実行の手順は[アクションを実行する](/skills/run-an-action.md)
+が持ち、決定そのものは draft として書き戻され、裁定は人に残る。
+
+売上が落ちた月に[完了率](/metrics/completion-rate.md)が下がり、その分が
+返品に流れていたときに提案する([売上が落ちるときの因果](/insights/why-revenue-falls.md))。
+このデータでは完了率の下がりはたいてい未完了に流れていて、返品に流れる
+ことは少ない。流れた先を確かめずにこれを回さないこと。
 
 [返品率](/metrics/return-rate.md)が `threshold` を超えた
 [商品](/tables/products.md)を、母数 `min_sold` 以上のものに絞って列挙する。

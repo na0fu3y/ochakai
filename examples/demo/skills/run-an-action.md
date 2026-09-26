@@ -11,9 +11,10 @@ status: stable
 
 `actions/` の concept が `executor` として名指す手順である。いま名指して
 いるのは[返品率の高い商品の見直し](/actions/review-high-return-products.md)
-ひとつ。計算だけの concept と違って、実行の出口は決定草案の書き戻しに
-なる。Palantir の語彙でこれが何にあたるかは
-[オントロジー](/glossary/ontology.md)にある。
+と[滞留在庫の処分提案](/actions/propose-aged-inventory-clearance.md)の
+二つ。計算だけの concept と違って、実行の出口は決定草案の書き戻しに
+なる。どのアクションをいつ提案するかは[売上が落ちるときの因果](/insights/why-revenue-falls.md)
+が決めていて、この手順はそれを受けて動く。
 
 ## 手順
 

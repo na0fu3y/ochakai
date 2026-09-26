@@ -32,12 +32,11 @@ ORDER BY month
 # deprecated であって、削除ではない
 
 FY2026 の[売上計上ポリシー](/policies/revenue-recognition.md)は売上を
-配達完了ベースに決めたので、正は
-[月次売上](/queries/sales/monthly-revenue.md)である。この計算は
-`Returned` を含み、まだ届いていない `Processing` と `Shipped` も含むので、
-[売上](/metrics/revenue.md)より常に大きい。
+配達完了ベースに決めたので、正は[月次売上](/computations/monthly-revenue.md)
+である。この計算は `Returned` も、まだ届いていない `Processing` と
+`Shipped` も含むので、[売上](/metrics/revenue.md)の 3 倍ほどになる。
 
-それでも消していないのは、FY2025 のレポートがこの数字で書かれているから
-である。古い資料の「月商」を今の売上と突き合わせて合わないと言う前に、
+それでも消していないのは、FY2025 のレポートがこの数字で書かれている
+からである。古い資料の「月商」を今の売上と突き合わせて合わないと言う前に、
 これを一度走らせて、読んでいた数字がどちらだったのかを確かめること。
 新しく引く数字ではないので、`attester` は付けていない。

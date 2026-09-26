@@ -210,7 +210,7 @@ The standing measurement is `TestSearchEvalIntegration`
 questions, each paired with the concept a good ranking puts in front of
 the reader, scored as recall@10 and MRR over one base holding two of the
 bundles this repository ships — `examples/demo` and `kb/bundle`,
-which with the two concepts the file defines inline is twenty-nine
+which with the two concepts the file defines inline is forty-seven
 concepts across two domains that share nothing but the language they are
 written in. It runs the set twice — lexical only,
 which is the search a deployment without Vertex AI gets, and lexical
