@@ -5,7 +5,7 @@ description: actions/ の concept を動かす手順。検証、実行、決定�
 tags: [action, executor, runbook]
 generated: { by: human:sato@example.co.jp, at: 2026-08-03T05:30:00Z }
 verified:
-  - { by: human:tanaka@example.co.jp, at: 2026-08-05T01:20:00Z }
+  - { by: human:tanaka@example.co.jp, at: 2026-09-26T03:00:00Z }
 status: stable
 ---
 
@@ -13,7 +13,7 @@ status: stable
 いるのは[返品率の高い商品の見直し](/actions/review-high-return-products.md)
 と[滞留在庫の処分提案](/actions/propose-aged-inventory-clearance.md)の
 二つ。計算だけの concept と違って、実行の出口は決定草案の書き戻しに
-なる。どのアクションをいつ提案するかは[売上が落ちるときの因果](/insights/why-revenue-falls.md)
+なる。どのアクションをいつ提案するかは[売上が落ちるときの要因](/insights/why-revenue-falls.md)
 が決めていて、この手順はそれを受けて動く。
 
 ## 手順

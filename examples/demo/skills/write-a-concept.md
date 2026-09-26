@@ -5,7 +5,7 @@ description: どの型をどこに置き、何の節を持たせるか。そし�
 tags: [conventions, runbook]
 generated: { by: human:sato@example.co.jp, at: 2026-08-10T02:00:00Z }
 verified:
-  - { by: human:tanaka@example.co.jp, at: 2026-08-12T01:00:00Z }
+  - { by: human:tanaka@example.co.jp, at: 2026-09-26T03:00:00Z }
 status: stable
 ---
 
@@ -32,7 +32,7 @@ frontmatter にキーを足しても `linked_from` には現れない。
   条件を一行で書く。
 - **結合について分かったこと**、つまり名前どおりに結べない・キーが無い
   のに結べる、といった知見は Insight にし、`# Joins` からリンクする。
-- **指標どうしの因果**は、指標の本文の「分解」と、それを読む Insight に
+- **指標どうしの関係**は、指標の本文の「分解」と、それを読む Insight に
   書く。どの指標が沈んだら次に何を見るかは、表にして Insight に置く。
 
 ## 最初の数枚

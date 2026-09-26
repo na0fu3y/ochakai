@@ -24,7 +24,7 @@ last entry.
 ### Changed
 
 - **`examples/demo` answers "revenue fell — why, and what now"**, and
-  grows from 18 concepts to 36. It is laid out as OKF's own sample
+  grows from 18 concepts to 37. It is laid out as OKF's own sample
   bundles are: `datasets/`, `tables/` with `# Schema`, `# Joins` and
   `# Metrics`, and `computations/` in place of `queries/sales/`.
   `references/thelook-dataset` became `datasets/thelook-ecommerce`. No
@@ -32,13 +32,25 @@ last entry.
   - `metrics/revenue` splits into booked items × completion rate ×
     average item price, and each factor is its own Metric.
     `computations/revenue-drivers` gives each factor's month-on-month
-    contribution in one run.
+    contribution in one run, with a `z_` column per factor: how many
+    times the month's usual swing the move was, estimated from how much
+    its orders differ from one another.
   - `insights/why-revenue-falls` says, per factor, which computation to
-    run next, which action it leads to, and where the data runs out.
-    `insights/missing-data` lists those dead ends and the data that would
-    have answered them. `skills/diagnose-a-metric` is the procedure.
-    `insights/cases/2025-07-revenue-dip` is a draft diagnosis an agent
-    wrote back, with its BigQuery job ids as receipts.
+    run next, which action it leads to, and where the data runs out. It
+    calls the decomposition what it is, an identity that says which
+    number moved and not why. Most of its action column is empty, and it
+    says so. `insights/missing-data` lists those dead ends and the data
+    that would have answered them, including the record of an
+    intervention that a causal claim needs. `skills/diagnose-a-metric`
+    is the procedure. Its first step after the definition is whether the
+    move is beyond the usual swing at all.
+  - Two draft diagnoses an agent wrote back, with BigQuery job ids as
+    receipts. `insights/cases/2024-05-revenue-dip` is a 13% fall that is
+    inside the swing, so the agent names no cause and proposes nothing.
+    `insights/cases/2026-03-flat-revenue` is a month where booked items
+    rose 17% and revenue did not. Six tenths of the rise is three more
+    days, and the completion rate that fell was February's outlier
+    coming back.
   - Findings about joins are Insights linked from the tables' `# Joins`,
     not concepts of their own. `order_items.inventory_item_id` never
     points at a sold inventory item. Sessions join order items one to
@@ -47,13 +59,18 @@ last entry.
     history daily, so past months move because the rows move, not
     because of returns. Status does not progress with time: half of
     items from 2019 are still `Processing` or `Shipped`.
-  - Checked over three snapshots. In the months where revenue fell,
-    booked items still held level or grew. Completion rate and item mix
-    each explain about half of the fall.
-  - The search eval golden set grows from 88 cases to 107. Recall stays
+  - Checked against the data. Over 43 months, revenue fell below the
+    month before in 13, and in none of them by more than twice the
+    usual swing. Booked items per day grow about 4% a month, and the month total moves by
+    a tenth with the length of the month.
+  - `examples/demo-eval` asks nine questions of Claude Code twice, with
+    BigQuery alone and with this bundle served over MCP, and grades the
+    answers against a rubric. The truth for a numeric question is
+    computed at run time.
+  - The search eval golden set grows from 88 cases to 109. Recall stays
     1.00. MRR moves from 0.91 to 0.84 (lexical) and from 0.89 to 0.81
     (fused), mostly from old cases that fall to rank 2 behind a new
-    concept sharing their words. Reach is 18.91 of 47, which is 40% of
+    concept sharing their words. Reach is 19.91 of 48, which is 41% of
     the base (36% before).
 
 ## [0.29.2] - 2026-09-26

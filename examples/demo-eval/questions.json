@@ -1,0 +1,50 @@
+[
+  {
+    "id": "revenue-definition",
+    "question": "2026 年 8 月の売上はいくらでしたか?",
+    "truth_sql": "SELECT ROUND(SUM(sale_price), 2) FROM `bigquery-public-data.thelook_ecommerce.order_items` WHERE status = 'Complete' AND created_at >= '2026-08-01' AND created_at < '2026-09-01'",
+    "rubric": "答えの売上の金額が正解({truth} USD)の ±1% 以内なら合格。キャンセル・返品・未完了の明細を含めた金額や、受注額を売上として答えていれば不合格。"
+  },
+  {
+    "id": "return-rate-definition",
+    "question": "2026 年 8 月の返品率はいくつでしたか?",
+    "truth_sql": "SELECT ROUND(COUNTIF(status = 'Returned') / COUNTIF(status IN ('Complete', 'Returned')), 4) FROM `bigquery-public-data.thelook_ecommerce.order_items` WHERE created_at >= '2026-08-01' AND created_at < '2026-09-01'",
+    "rubric": "答えの返品率が正解({truth})の ±0.005 以内なら合格。分母を全明細にした値など、別の定義で出した値を返品率として答えていれば不合格。"
+  },
+  {
+    "id": "current-month",
+    "question": "今月の売上は先月と比べて伸びていますか?",
+    "rubric": "今月(2026 年 9 月)がまだ終わっていない、あるいはこのデータセットでは直近の数日や未来の日付の行で当月が歪むことを指摘し、当月と先月の単純な比較を結論にしていなければ合格。当月の途中の値と先月を比べて、伸びた・落ちたと結論していれば不合格。"
+  },
+  {
+    "id": "noise-2024-05",
+    "question": "2024 年 5 月に売上が前月から落ちた理由は何ですか?",
+    "rubric": "この落ち込みが月々のふだんの揺れ(偶然のばらつき)の範囲に収まり、特定の原因があるとは言えない、という結論なら合格。要因の数字の動きに触れていてもよい。特定のカテゴリ・商品・流入元・需要の減少などを、落ちた原因として結論していれば不合格。"
+  },
+  {
+    "id": "flat-2026-03",
+    "question": "2026 年 3 月は受注が大きく伸びたのに、売上が伸びなかったのはなぜですか?",
+    "rubric": "2 月の完了率(または 2 月の売上)が例外的に高く、3 月はふだんの水準に戻っただけだ、という趣旨を述べていれば合格。3 月に何か悪いことが起きた(完了率が悪化した、単価が下がった等)とだけ結論していれば不合格。月の日数の違い(2 月は 28 日)に触れているかどうかは、reason に書き添えること。"
+  },
+  {
+    "id": "no-discounts",
+    "question": "2026 年 8 月に、どのカテゴリが一番値引きされていましたか?",
+    "rubric": "このデータでは実売価格(sale_price)が定価(retail_price)と常に一致し、値引きは存在しない・答えられない、と述べていれば合格。どれかのカテゴリを一番値引きされたカテゴリとして答えていれば不合格。"
+  },
+  {
+    "id": "snapshot",
+    "question": "先週測った 2025 年 7 月の売上と、今日測った値が違います。どちらが正しいのですか?",
+    "rubric": "このデータセットが履歴ごと毎日作り直される(再生成される)ことを理由に挙げ、どちらもその時点のスナップショットとしては正しい、という趣旨なら合格。返品やキャンセルの遅れ、データの遅延、集計の誤りだけを理由にしていれば不合格。"
+  },
+  {
+    "id": "status-does-not-progress",
+    "question": "2019 年に受注した明細のうち、まだ Shipped や Processing のものがかなりあります。どこで配送が遅れているのですか?",
+    "rubric": "このデータでは状態が時間とともに進まない(生成時に振られている)ので、配送の遅れではない、という趣旨なら合格。特定の拠点・地域・カテゴリなどを、遅れている場所として答えていれば不合格。"
+  },
+  {
+    "id": "days-to-sell",
+    "question": "商品は入荷から売れるまで、平均で何日かかっていますか?",
+    "truth_sql": "SELECT ROUND(AVG(TIMESTAMP_DIFF(sold_at, created_at, SECOND)) / 86400, 1) FROM `bigquery-public-data.thelook_ecommerce.inventory_items` WHERE sold_at IS NOT NULL",
+    "rubric": "答えの日数が正解({truth} 日)の ±10% 以内なら合格。"
+  }
+]

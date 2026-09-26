@@ -1,6 +1,6 @@
 # サンプル
 
-- **[demo/](demo)** — 36 concept のナレッジベース丸ごと。コマンド一つで
+- **[demo/](demo)** — 37 concept のナレッジベース丸ごと。コマンド一つで
   import できる。下で説明する。
 - **[bigquery-catalog/](bigquery-catalog)** — 空のベースを BigQuery から
   埋める二つのジョブ。一つはテーブルのメタデータを毎日投影するもの、もう
@@ -18,7 +18,7 @@
 
 Google の公開データセット
 [`bigquery-public-data.thelook_ecommerce`](https://console.cloud.google.com/marketplace/product/bigquery-public-data/thelook-ecommerce)
-(Looker が生成する架空の衣料品店)についての 36 concept を、
+(Looker が生成する架空の衣料品店)についての 37 concept を、
 [OKF](https://github.com/GoogleCloudPlatform/open-knowledge-format)
 v0.2 バンドルとして書いたものである。実在のデータセットなので、
 **`# Computation` フェンスの SQL はどれも実際に走る**。
@@ -27,23 +27,29 @@ v0.2 バンドルとして書いたものである。実在のデータセット
 
 このバンドルは、データエージェントがよく訊かれる一つの問いに、最後まで
 答えられるように組んである。**「売上が落ちた。なぜか、何をすればいいか」**
-である。
+である。そしてこのデータでの正しい答えは、たいてい**「揺れの範囲で、
+理由は無い。何もしなくてよい」**になる。
 
 1. [売上](demo/metrics/revenue.md)は `受注点数 × 完了率 × 明細単価` に
    分解してあり、三つはそれぞれ Metric になっている。
 2. [月次売上の要因分解](demo/computations/revenue-drivers.md)が、どの要因が
-   何ポイント落としたかを一度に出す。
-3. [売上が落ちるときの因果](demo/insights/why-revenue-falls.md)が、要因ごとに
-   次に走らせる計算、取れるアクション、行き止まるデータを表にしている。
-   このデータで実際に売上を落とすのは需要ではなく、完了率と構成だという
-   ことも、日を変えた三つのスナップショットで確かめて書いてある。
+   何ポイント動かしたかと、その動きがふだんの揺れの何倍か(`z_`)を
+   一度に出す。
+3. [売上が落ちるときの要因](demo/insights/why-revenue-falls.md)に、43 か月を
+   分解して分かったことがある。売上が前月を割った 13 か月のうち、揺れの幅を
+   超えて落ちた月は一つも無かった。揺れを超えた要因があったときに次に
+   走らせる計算、取れる行動、行き止まるデータも表にしてある。「取れる
+   行動」の列がほとんど空であることも、そのまま書いてある。
 4. 行き止まりは[不足しているデータ](demo/insights/missing-data.md)に集め、
-   「何があれば答えられたか」まで書いてある。
+   「何があれば答えられたか」まで書いてある。因果を言うのに要る介入の
+   記録も、その一行である。
 5. 手順は[メトリクスが沈んだときの調べ方](demo/skills/diagnose-a-metric.md)
-   にあり、エージェントが書き戻した診断の見本
-   ([2025 年 7 月の売上減の診断](demo/insights/cases/2025-07-revenue-dip.md))が
-   receipt 付きの draft として入っている。人が verify するまで、それは
-   信用されない。
+   にある。エージェントが書き戻した診断の見本が二つ、receipt 付きの draft
+   として入っている。人が verify するまで、それは信用されない。
+   - [2024 年 5 月の売上減](demo/insights/cases/2024-05-revenue-dip.md):
+     −13% でも揺れの範囲で、理由を探さずに止まった例。
+   - [2026 年 3 月、受注が伸びて売上が伸びなかった件](demo/insights/cases/2026-03-flat-revenue.md):
+     揺れを超えていたのは 2 月のほうで、3 月は戻っただけだった例。
 
 ### OKF のサンプルと同じ形
 
@@ -76,8 +82,8 @@ OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
 `ochakai list stale_after` を試すとよい。concept は普通の markdown リンク
 で互いを指しているので、グラフは何も宣言しなくても既にそこにある。
 
-**わざと均質にしていない。** 4 つの concept は draft なので(エージェントが
-書いた診断もその一つ)レビューキューは空にならず、1 つの Attested Computation は deprecated(FY2025 のレポート
+**わざと均質にしていない。** 5 つの concept は draft なので(エージェントが
+書いた診断の二つもそれに含まれる)レビューキューは空にならず、1 つの Attested Computation は deprecated(FY2025 のレポート
 が乗っていた受注ベースの合計)で、1 つの draft は `stale_after` を既に過ぎ
 ているので stale フィードにも住人がいる。一ヶ月使った本物のナレッジベース
 は、だいたいこう見える。
@@ -99,7 +105,7 @@ OCHAKAI_URL=http://localhost:8080 ochakai import examples/demo
 おり(SPEC §11)、免除されるのは `index.md` と `log.md` だけである。バンドル
 の中に README があるとその規則を破り、`ochakai import` が毎回ファイルを一つ
 スキップすることになる。`demo/` 以下のすべての `.md` は concept 文書なので、
-import は 36 concept を報告し、何もスキップしない。
+import は 37 concept を報告し、何もスキップしない。
 
 ### データは実在し、チームは架空である
 

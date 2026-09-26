@@ -5,7 +5,7 @@ description: 受注した明細のうち、売上になった(Complete の)明�
 tags: [sales, fulfillment, returns]
 generated: { by: analysis_agent/claude-fable-5, at: 2026-09-18T02:20:00Z }
 verified:
-  - { by: human:tanaka@example.co.jp, at: 2026-09-20T01:05:00Z }
+  - { by: human:tanaka@example.co.jp, at: 2026-09-26T03:00:00Z }
 status: stable
 grain: item
 synonyms: [completion rate, 完了割合]
@@ -29,8 +29,10 @@ unit: ratio
 半分は `Processing` か `Shipped` のままである。状態は生成時に振られて
 いて、受注から配達へ進んでいく記録ではない
 ([完了した注文](/glossary/completed-order.md))。そのため完了率は月に
-よらず 4 分の 1 前後で、その周りで数ポイント上下する。この上下が、売上が
-落ちる月の半分ほどを説明する([売上が落ちるときの因果](/insights/why-revenue-falls.md))。
+よらず 4 分の 1 前後で、その周りで数ポイント上下する。上下のほとんどは
+揺れの範囲で、揺れを超えた月もたいてい翌月に戻る。前月と比べて下がって
+見えたら、前月のほうが高すぎなかったかを先に見る
+([売上が落ちるときの要因](/insights/why-revenue-falls.md))。
 
 値の水準を現実の EC と比べてはいけない。「受注の 4 分の 3 が売上に
 ならない店」ではなく、そう振られた生成器である。

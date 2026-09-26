@@ -229,7 +229,13 @@ var evalCases = []evalCase{
 		accept: []string{"insights/why-revenue-falls"}, dim: dimQuestion},
 	{query: "このデータで答えられない問い", want: "insights/missing-data", dim: dimQuestion},
 	{query: "広告費のデータはあるか", want: "insights/missing-data", dim: dimQuestion},
-	{query: "2025 年 7 月の売上減", want: "insights/cases/2025-07-revenue-dip",
+	{query: "2024 年 5 月の売上減", want: "insights/cases/2024-05-revenue-dip",
+		accept: []string{"insights/why-revenue-falls"}, dim: dimQuestion},
+	// The step the rebuild put first: whether a move is beyond the usual
+	// swing at all, and the case where it was the month before that moved.
+	{query: "売上の落ち込みは揺れの範囲か", want: "computations/revenue-drivers",
+		accept: []string{"insights/why-revenue-falls", "skills/diagnose-a-metric"}, dim: dimQuestion},
+	{query: "受注が伸びたのに売上が伸びない", want: "insights/cases/2026-03-flat-revenue",
 		accept: []string{"insights/why-revenue-falls"}, dim: dimQuestion},
 	{query: "inventory_item_id で在庫を結合してよいか", want: "insights/inventory-item-id",
 		accept: []string{"tables/inventory-items", "tables/order-items"}, dim: dimMixed},
@@ -638,7 +644,13 @@ const (
 	// neighbours every question about that store is honestly about, so
 	// the count nearly doubled while the share moved four points; the
 	// share is the comparable number, the count is not.
-	evalReachCeiling = 18.92
+	//
+	// Then 19.91 of 48 (41%), when the diagnosis learned to ask whether a
+	// move is beyond the usual swing before naming a cause: one more case
+	// concept, and a vocabulary of variation (揺れ, 日数, 前月が外れて
+	// いないか) that the store's other questions share. recall stayed
+	// 1.00 and MRR 0.84 / 0.81 over 109 cases.
+	evalReachCeiling = 19.92
 
 	// Leak: of those, how many came from the other bundle. The two
 	// domains share nothing but the language, so a leaked hit is the
@@ -678,7 +690,11 @@ const (
 	// Japanese a kb question can match on, and the widest leaker is now
 	// 「Docker が無い環境でインスタンスを立てる」, whose 環境 and 立てる
 	// are ordinary words in a diagnosis runbook.
-	evalLeakCeiling = 2.77
+	// The variation pass took it to 2.89, the same reason again: the
+	// widest leaker is now 「テストの id はどこから取るか」, and a
+	// diagnosis that says where a number came from and which month to
+	// take is written in its words.
+	evalLeakCeiling = 2.90
 
 	// What the dimensions read over this corpus, for the next change to
 	// aim at: question 23.76, mixed 21.23, keyword 17.77, english 16.88,
