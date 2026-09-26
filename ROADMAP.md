@@ -87,10 +87,11 @@ section says what the stages are for; it does not approve them in advance.
    what is used a lot, it reads the query history as that person and
    drafts the recurring aggregates. Nothing is harvested in bulk. This is
    where No FDE (C4) is won or lost.
-4. **Where people already ask.** Chat surfaces and assistant connectors, on
-   the conditions already written down
-   ([0116](docs/design/0116-the-connector-price-changed-not-its-condition.md)).
-   A chat surface that needs a secret stays out.
+4. **Where people already ask.** Assistant connectors: Claude, signed in
+   with the person's Google Workspace account
+   ([0151](docs/design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md)).
+   A chat surface that needs a secret, or that cannot run a query as the
+   person, stays out.
 
 **How it is measured.** Four numbers, and each has to be something
 `stats` or a replay can report:
@@ -105,9 +106,10 @@ section says what the stages are for; it does not approve them in advance.
 - **Stage 4 of the data agent** (above): where people already ask —
   Google Chat, Claude and Slack at the companies running ochakai. The
   Claude connector is the path: Claude answers, reads the knowledge over
-  MCP and runs BigQuery as the person with its own connector. This
-  reopens [0116](docs/design/0116-the-connector-price-changed-not-its-condition.md)'s
-  condition and pays for public reachability. Slack is reached through
+  MCP and runs BigQuery as the person with its own connector
+  ([0151](docs/design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md),
+  confirmed on claude.ai with Google Workspace as the issuer). It pays
+  for public reachability. Slack is reached through
   Claude. A Google Chat bridge was built, run on a real deployment and
   withdrawn (below). Stages 1 and 2 shipped in 0.29.0:
   automatic runs, answers that show their result, 👍 keeping a question,
