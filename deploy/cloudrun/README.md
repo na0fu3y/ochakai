@@ -527,6 +527,77 @@ provenance が崩れる。
 [REST API を自分のサービスに組み込む](../../docs/guides/rest-integration.md)
 にある。
 
+<a id="5e-optional-google-chat"></a>
+
+## 5e. 任意: Google Chat から訊く(意図して別サービス)
+
+Google Chat で ochakai のエージェントに訊けるようにする(設計ドキュメント
+[0150](../../docs/design/0150-google-chat-asks-through-a-bridge.md))。
+`ochakai serve-chat` は、Chat の問いを受けて、書いた本人の代わりに
+`serve` のエージェントに訊き、答えを Chat に返す橋である。**secret は
+一つも増えない**: Chat の呼び出しは Google が署名したトークンで届き、橋は
+自分のサービスアカウントで `serve` に届き、答えは HTTP の応答として返す。
+前提は §4c のエージェント(`OCHAKAI_AGENT`)が `serve` に入っていること。
+
+**この順序で設定すること。** 橋が本人の名前を転送し始めた瞬間、`serve` は
+この呼び出し元をすでに受け入れていない限り 403 を返す。
+
+```sh
+# 1. 橋のサービスアカウント
+gcloud iam service-accounts create ochakai-chat --project=$PROJECT_ID
+CHAT_SA=ochakai-chat@$PROJECT_ID.iam.gserviceaccount.com
+
+# 2. 橋が serve に届けて、本人の名前を転送できるようにする。
+#    OCHAKAI_DELEGATING_CALLERS は置き換わるので、serve-ui のサービス
+#    アカウントを既に入れているならカンマでつないで両方書く。
+gcloud run services add-iam-policy-binding ochakai --region=$REGION \
+  --member="serviceAccount:$CHAT_SA" --role=roles/run.invoker
+gcloud run services update ochakai --region=$REGION \
+  --update-env-vars="OCHAKAI_DELEGATING_CALLERS=$CHAT_SA"
+
+# 3. 橋をデプロイする(serve と同じイメージ)。公開しない。
+gcloud run deploy ochakai-chat \
+  --image=$IMAGE --args=serve-chat \
+  --region=$REGION \
+  --service-account=$CHAT_SA \
+  --no-allow-unauthenticated \
+  --min-instances=0 --max-instances=1 --cpu=1 --memory=256Mi \
+  --set-env-vars="OCHAKAI_URL=$(gcloud run services describe ochakai --region=$REGION --format='value(status.url)')"
+CHAT_URL=$(gcloud run services describe ochakai-chat --region=$REGION --format='value(status.url)')
+
+# 4. Chat だけが橋を呼べるようにする
+gcloud run services add-iam-policy-binding ochakai-chat --region=$REGION \
+  --member="serviceAccount:chat@system.gserviceaccount.com" --role=roles/run.invoker
+```
+
+5. Google Chat API を有効にし(`gcloud services enable chat.googleapis.com`)、
+   コンソールの **Google Chat API → 構成**で:
+   - **接続設定**を「HTTP エンドポイント URL」にし、`$CHAT_URL/` を入れる。
+   - **認証オーディエンス**は「**HTTP エンドポイント URL**」を選ぶ(「プロジェクト
+     番号」は使わない — 橋が確かめるのは、Google が署名した ID トークンの
+     audience がこの URL であることである)。
+   - 公開範囲を、使う人かグループに絞る。
+
+**Google Workspace アドオンとして作る**場合は、Chat が呼ぶのは
+`service-<プロジェクト番号>@gcp-sa-gsuiteaddons.iam.gserviceaccount.com`
+になる。手順 4 の `chat@system.gserviceaccount.com` をそれに置き換える
+(構成画面の「サービス アカウントのメール」に出ている)。
+
+**Chat でできることと、できないこと。**
+- 答えはナレッジから書かれ、読んだ concept と、それが人に確かめられた
+  ものかを添える。記録は書いた本人(`human:<メール> via process:$CHAT_SA`)
+  である。
+- **SQL は Chat では走らない。** Chat には本人のトークンが無いので、数字を
+  確かめる SQL が要るときは、その SQL を見せて Web UI のエージェントへ
+  誘う(Web UI なら本人の権限で走る — §4c)。
+- 一つのメッセージが一つの問いで、スレッドの前の発言は読まない。
+- 25 秒で答えられない問いは、Web UI で訊き直すよう答える(Chat は同期の
+  返答を 30 秒しか待たない)。
+
+**Slack から訊く橋は作らない。** Slack の呼び出しを確かめるには署名用の
+secret が、返事を書くにはボットのトークンが要り、どちらも ochakai が持たないと
+決めているもの(secret-zero)である。
+
 <a id="5d-optional-a-public-read-only-demo"></a>
 
 ## 5d. 任意: 公開の read-only なデモ

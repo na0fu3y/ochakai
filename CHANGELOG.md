@@ -21,6 +21,33 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **Ask the deployment's agent from Google Chat** with `ochakai serve-chat`
+  ([0150](docs/design/0150-google-chat-asks-through-a-bridge.md), ROADMAP
+  stage 4). It runs the same image as `serve`, deployed as its own private
+  Cloud Run service that only Chat may invoke.
+  - It verifies Chat's Google-signed ID token itself.
+  - It asks `POST /api/v1/agent` on behalf of the person who wrote
+    (`Ochakai-On-Behalf-Of`; add the bridge's service account to
+    `OCHAKAI_DELEGATING_CALLERS`).
+  - It replies synchronously, citing the concepts read.
+  - It holds no secret and calls no Chat API.
+  - SQL does not run in Chat; a proposal is shown with a pointer to the web
+    UI, where it runs as the person.
+  - It reads interaction events and Workspace add-on events.
+  - No REST operation, variable or flag is added. The deployment guide has
+    the steps (§5e).
+
+### Fixed
+
+- **A lapsed Google login at startup is named as one even when its
+  refresh hangs.** 0.29.1 recognized `invalid_grant` in the agent's probe,
+  but a login waiting to be reauthenticated can also run the probe out
+  of time. That again read as "grant roles/aiplatform.user". The start
+  now gets one token on its own first, within 10 seconds, and names the
+  credential when that fails.
+
 ## [0.29.1] - 2026-09-26
 
 ### Added

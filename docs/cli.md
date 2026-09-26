@@ -66,6 +66,8 @@ Server commands (run as deployed services, configured by environment):
   serve                   start the MCP + REST server (runs next to the database)
   serve-ui                serve the team web UI, proxying to $OCHAKAI_URL as the
                           service identity (same image as serve: --args=serve-ui)
+  serve-chat              answer Google Chat with the deployment's agent, asking
+                          $OCHAKAI_URL on behalf of whoever wrote (--args=serve-chat)
 
   version                 print the version
   completion <shell>      print a completion script (zsh, bash, fish)

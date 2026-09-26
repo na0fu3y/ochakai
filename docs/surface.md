@@ -1319,8 +1319,11 @@ Computation` が canary としてそれを継続実行する — が、**三つ�
   動く([0130](design/0130-the-web-ui-and-the-fields-of-a-document.md) §2)ので、増えるとすれば REST
   の節に出る。ページ自身の予算は「ビルドステップなし・フレームワーク
   なし・CDN なし」の一枚という形の制約で、数ではない。
-- **`serve` / `serve-ui` / `version` / `help`。** バイナリの動かし方で
-  あって、ochakai が知っていることではない。
+- **`serve` / `serve-ui` / `serve-chat` / `version` / `help`。** バイナリの
+  動かし方であって、ochakai が知っていることではない。`serve-chat`
+  ([0150](design/0150-google-chat-asks-through-a-bridge.md))は REST の
+  既存の一本を呼ぶ橋で、変数も面も足さない — 運用者が払うのはデプロイ
+  ガイドの一節と、任意のもう一つのサービスである。
 - **改名前の名前。** あるリリースが改名した MCP ツール名・CLI コマンド名は
   一リリースだけ答え続ける
   ([0088](design/0088-a-retired-name-answers-for-one-release.md))が、MCP は

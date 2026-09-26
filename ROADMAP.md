@@ -102,9 +102,15 @@ section says what the stages are for; it does not approve them in advance.
 
 ## Now
 
-- **Stage 4 of the data agent** (above): where people already ask. It
-  is not designed yet, and the condition it starts from is that a chat
-  surface needing a secret stays out. Stages 1 and 2 shipped in 0.29.0:
+- **Stage 4 of the data agent** (above): where people already ask —
+  Google Chat, Claude and Slack, at the companies running ochakai. Google
+  Chat comes first, through `ochakai serve-chat`
+  ([0150](docs/design/0150-google-chat-asks-through-a-bridge.md)): a bridge
+  with no secret that asks the agent on the writer's behalf. The Claude
+  connector is next; it reopens [0116](docs/design/0116-the-connector-price-changed-not-its-condition.md)'s
+  condition and pays for public reachability. A Slack bridge stays out
+  (it needs a signing secret and a bot token), and Slack is looked for
+  through Claude. Stages 1 and 2 shipped in 0.29.0:
   automatic runs, answers that show their result, 👍 keeping a question,
   👎 diagnosing, and `ochakai eval`. Stage 3 shipped in 0.29.1: an empty
   base fills from the page (0148), and the agent proposes the meaning a

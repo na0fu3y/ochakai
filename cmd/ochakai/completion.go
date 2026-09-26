@@ -102,6 +102,7 @@ _ochakai() {
     'completion:print a shell completion script'
     'serve:start the MCP + REST server'
     'serve-ui:serve the team web UI as a deployed service'
+    'serve-chat:answer Google Chat with the deployment agent'
     'version:print the version'
     'help:show help'
   )
@@ -247,7 +248,7 @@ _ochakai() {
   cmd=${COMP_WORDS[1]}
 
   if [ "$COMP_CWORD" -eq 1 ]; then
-    COMPREPLY=($(compgen -W "search list browse get put verify delete purge reembed move usage stats eval access report revisions export import seed use whoami ui mcp-stdio completion serve serve-ui version help" -- "$cur"))
+    COMPREPLY=($(compgen -W "search list browse get put verify delete purge reembed move usage stats eval access report revisions export import seed use whoami ui mcp-stdio completion serve serve-ui serve-chat version help" -- "$cur"))
     return
   fi
 
@@ -342,6 +343,7 @@ complete -c ochakai -n __fish_use_subcommand -a mcp-stdio -d 'speak MCP on stdin
 complete -c ochakai -n __fish_use_subcommand -a completion -d 'print a shell completion script'
 complete -c ochakai -n __fish_use_subcommand -a serve -d 'start the MCP + REST server'
 complete -c ochakai -n __fish_use_subcommand -a serve-ui -d 'serve the team web UI as a deployed service'
+complete -c ochakai -n __fish_use_subcommand -a serve-chat -d 'answer Google Chat with the deployment agent'
 complete -c ochakai -n __fish_use_subcommand -a version -d 'print the version'
 complete -c ochakai -n __fish_use_subcommand -a help -d 'print the command list'
 

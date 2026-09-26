@@ -951,7 +951,7 @@ func userDocs(t *testing.T) []string {
 // rather than something it knows (TestSurfaceDocCountsCLICommands excludes
 // them from CLI for the same reason).
 var extraTopLevelCommands = map[string]bool{
-	"serve": true, "serve-ui": true, "version": true, "help": true,
+	"serve": true, "serve-ui": true, "serve-chat": true, "version": true, "help": true,
 }
 
 // commandGuardExempt are DOC pages TestManualNamesNoCommandThatDoesNotExist

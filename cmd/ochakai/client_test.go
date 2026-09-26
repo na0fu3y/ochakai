@@ -162,10 +162,10 @@ func TestUsageNamesEveryCommand(t *testing.T) {
 		}
 	}
 
-	// These three are how the binary is run rather than something
+	// These four are how the binary is run rather than something
 	// ochakai knows, so they are not client commands and docs/surface.md
 	// does not count them either.
-	for _, name := range []string{"serve", "serve-ui", "version"} {
+	for _, name := range []string{"serve", "serve-ui", "serve-chat", "version"} {
 		if !documented[name] {
 			t.Errorf("usage() no longer documents %q", name)
 		}
