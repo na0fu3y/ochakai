@@ -21,6 +21,30 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **Claude reaches the knowledge through the person's Google sign-in**
+  ([0151](docs/design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md),
+  which supersedes 0116, and ROADMAP stage 4).
+  - A deployment that verifies its own tokens (`OCHAKAI_OIDC_ISSUER`) now
+    tells a client with no token where to sign in: `/mcp`'s 401 names RFC
+    9728 metadata at `/.well-known/oauth-protected-resource/mcp`, and the
+    metadata names the issuer.
+  - With `https://accounts.google.com` as the issuer and an OAuth client
+    ID as the audience, the deployment accepts Google's opaque access
+    tokens. It asks Google's tokeninfo, with the token in a POST body.
+    The token must have been issued to that client, be unexpired and
+    carry a verified email. The answer is believed for at most 5 minutes.
+  - The client secret lives in Claude's organization settings, never in
+    ochakai. Claude answers, reads over MCP, and runs BigQuery as the
+    person with its own connector.
+  - Confirmed on claude.ai on 2026-09-26. Deploy guide §5e has the steps.
+  - A self-verifying deployment refuses to start with
+    `OCHAKAI_DELEGATING_CALLERS=*`.
+  - A refused caller's reason is now logged (`refused a caller`), without
+    the token.
+  - No REST operation, variable or flag is added.
+
 ## [0.29.1] - 2026-09-26
 
 ### Added

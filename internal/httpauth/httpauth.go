@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -55,6 +56,11 @@ func Middleware(cfg *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		actor, status, err := ActorFromHeader(cfg, r.Header)
 		if err != nil {
+			// The reason goes to the operator's log as well as to the
+			// caller: a client that shows its user a spinner rather than
+			// the body leaves the operator nothing else to read. The
+			// token itself never appears here.
+			slog.Default().Warn("refused a caller", "path", r.URL.Path, "status", status, "reason", err.Error())
 			writeError(w, status, "auth: "+err.Error())
 			return
 		}

@@ -263,10 +263,12 @@ it.
   `linked_from`, so an agent reaching a metric sees the insight explaining it
   without a lookup of its own
   ([0106](docs/design/0106-a-read-carries-what-points-at-it.md)).
-- **A publicly reachable MCP OAuth connector service.** It existed briefly and
-  was retired in 0.9.0 ([0070 §2](docs/design/0070-what-was-retired-and-why.md));
-  [0070 §5](docs/design/0070-what-was-retired-and-why.md) names revert as the starting point
-  if it ever comes back.
+- **ochakai as an OAuth authorization server.** The connector service it once
+  ran was retired in 0.9.0 ([0070 §2](docs/design/0070-what-was-retired-and-why.md)).
+  The connector came back without it
+  ([0151](docs/design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md)):
+  the deployment tells a client which issuer to sign in with, and verifies
+  what comes back. It holds no client secret, including Google's.
 - **A tenant column, or a hosted edition.** There is no hosted ochakai,
   and a process that holds several organizations behind a tenant column is
   refused: the boundary between organizations is an address that already

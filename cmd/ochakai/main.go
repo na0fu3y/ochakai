@@ -530,6 +530,16 @@ For the web UI, run the bundled proxy on your machine:
 then open http://127.0.0.1:8098. See also: ochakai --help
 `, version)
 	})
+	// A deployment that verifies tokens itself (design doc 0086) and
+	// answers to an https audience can also say so where a client with
+	// no configuration will look: the 401 on /mcp names a metadata
+	// document, and the document names the issuer (RFC 9728). Every
+	// other deployment gets a nil here and is unchanged — including the
+	// well-known address, which stays a 404 like any address this server
+	// does not have.
+	discovery := httpauth.NewDiscovery(cfg)
+	discovery.Mount(mux)
+
 	// /mcp gets the same line as /api/v1 (internal/restapi/requestlog.go).
 	// Its whole surface is one address, so the route is that address; a
 	// deployment whose agents talk MCP would otherwise have a request log
@@ -546,8 +556,10 @@ then open http://127.0.0.1:8098. See also: ochakai --help
 	// The cost of the order is the same one /api/v1 already pays: a
 	// request refused by the middleware never reaches the log. A 401
 	// answered by the transport is not a request this server served.
-	mux.Handle("/mcp", httpauth.Middleware(cfg,
-		restapi.RequestLog(log, "/mcp", mcpserver.Handler(svc, version))))
+	// The challenge goes outside the authentication: a client with no
+	// token is exactly who has to be told where to get one (RFC 9728).
+	mux.Handle("/mcp", discovery.Challenge(httpauth.Middleware(cfg,
+		restapi.RequestLog(log, "/mcp", mcpserver.Handler(svc, version)))))
 	mux.Handle("/api/v1/", restapi.AnnounceReadOnly(svc, httpauth.Middleware(cfg, restapi.Handler(svc))))
 
 	return mux
@@ -570,8 +582,12 @@ func serve(log *slog.Logger) error {
 
 	mux := routes(log, cfg, svc, version)
 
+	endpoints := []string{"/mcp", "/api/v1", "/health"}
+	if p := httpauth.NewDiscovery(cfg).Path(); p != "" {
+		endpoints = append(endpoints, p)
+	}
 	log.Info("ochakai listening", "addr", cfg.Addr, "version", version,
-		"insecure_dev", cfg.InsecureDev, "endpoints", []string{"/mcp", "/api/v1", "/health"})
+		"insecure_dev", cfg.InsecureDev, "endpoints", endpoints)
 	return runServer(ctx, cfg.Addr, mux)
 }
 

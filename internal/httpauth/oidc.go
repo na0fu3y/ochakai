@@ -67,6 +67,10 @@ type OIDC struct {
 
 	// noEmail carries the one warning of design doc 0116.
 	noEmail sync.Once
+
+	// google verifies Google's opaque access tokens, and is set only
+	// when the issuer is Google's (design doc 0151).
+	google *googleAccess
 }
 
 // NewOIDC builds a verifier for an issuer and the audience this
@@ -88,11 +92,15 @@ func NewOIDC(issuer, audience string) (*OIDC, error) {
 		// which is the whole of what this verifies with.
 		return nil, fmt.Errorf("OIDC issuer must be https://, got %q", issuer)
 	}
-	return &OIDC{
+	o := &OIDC{
 		issuer:   strings.TrimSuffix(issuer, "/"),
 		audience: audience,
 		client:   &http.Client{Timeout: 10 * time.Second},
-	}, nil
+	}
+	if o.issuer == GoogleIssuer {
+		o.google = newGoogleAccess(audience, o.client)
+	}
+	return o, nil
 }
 
 // signatureAlgorithms is the allowlist. Asymmetric only: a symmetric
@@ -110,6 +118,20 @@ var signatureAlgorithms = []jose.SignatureAlgorithm{
 func (o *OIDC) Verify(ctx context.Context, token string) (Identity, error) {
 	if token == "" {
 		return Identity{}, fmt.Errorf("no bearer token (this deployment authenticates with OIDC issuer %s)", o.issuer)
+	}
+	// Google signs people in with opaque access tokens, which carry no
+	// signature to check here; Google says what they mean (0151). Every
+	// other issuer's token is a JWT, and a non-JWT from one is refused
+	// below as it always was.
+	if o.google != nil && opaque(token) {
+		id, byEmail, err := o.google.verify(ctx, token)
+		if err != nil {
+			return Identity{}, err
+		}
+		if !byEmail {
+			o.sayTheDowngrade(id.Name)
+		}
+		return id, nil
 	}
 	parsed, err := jwt.ParseSigned(token, signatureAlgorithms)
 	if err != nil {

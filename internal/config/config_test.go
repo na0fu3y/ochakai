@@ -562,3 +562,20 @@ func TestBigQueryProjectStandsWithoutTheAgent(t *testing.T) {
 		}
 	}
 }
+
+// A self-verifying deployment can be reached by anybody its issuer signs
+// in, so "*" delegation there would let any of them write as anyone
+// (design doc 0151).
+func TestASelfVerifyingDeploymentRefusesDelegationFromEveryone(t *testing.T) {
+	t.Setenv("OCHAKAI_DATABASE_URL", "postgres://x")
+	t.Setenv("OCHAKAI_OIDC_ISSUER", "https://accounts.google.com")
+	t.Setenv("OCHAKAI_OIDC_AUDIENCE", "123-abc.apps.googleusercontent.com")
+	t.Setenv("OCHAKAI_DELEGATING_CALLERS", "*")
+	if _, err := FromEnv(); err == nil || !strings.Contains(err.Error(), "OCHAKAI_DELEGATING_CALLERS=*") {
+		t.Errorf("err = %v, want the refusal naming the pair", err)
+	}
+	t.Setenv("OCHAKAI_DELEGATING_CALLERS", "app@p.iam.gserviceaccount.com")
+	if _, err := FromEnv(); err != nil {
+		t.Errorf("a named delegating caller was refused: %v", err)
+	}
+}

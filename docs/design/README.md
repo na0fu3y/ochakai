@@ -50,7 +50,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md)。**番号は領域の決定に与え、その内側の規則には与えないことと、この表の一行が挙げてよい記録の数の天井は [0128](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)**(0048 §2.1 / §2.2 を改訂) |
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**却下が frontmatter を離れ、イベントとして `log.md` で運ばれることは [0135](0135-a-rejection-is-a-deletion.md)**(OKF の信号は単調で、否定の段はどのキーにも無い) |
 | 空のベースを埋める | [0148](0148-the-empty-base-fills-from-the-page-too.md) が現行 — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし(ウェアハウスに接続しない)、**Web UI の「BigQuery から取り込む」は同じ投影を本人の身元で読んだスキーマから作り、既存の `PUT` で上書きせずに書く**。サーバーは何も新しく提供せず、`OCHAKAI_OAUTH_CLIENT_ID` はエージェント無しで立つ(0085 を置き換えた) |
-| やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**MCP OAuth コネクタの再実装の出発点は [0116](0116-the-connector-price-changed-not-its-condition.md) が差し替えた** — 戻す条件は 0070 §5 のままで、その日に開くのが 0010 の認可サーバ(863 行)ではなく、測定済みの二つの答え(180 行)になった |
+| やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**コネクタは [0151](0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md) が戻した** — ochakai は認可サーバにならず、`/mcp` の 401 がクライアントに発行者(Google Workspace を含む)を教える。Google Chat と Slack の橋は ROADMAP の「やらないこと」 |
 | REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md)。**本文の鍵の照合が完全一致で、同じ鍵の重複が 400 になることは [0125](0125-a-body-names-each-field-once.md)**(0064 §2 が決めた規則を、書かれたとおりに効かせたもの) |
 | MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
 
@@ -1268,25 +1268,28 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
 - [0018 import-ossie の廃止](0018-semantic-model-as-knowledge.md) — **Superseded by 0070**。
 - [0028 compile_sql とセマンティックモデル面の撤去](0028-retire-compile-sql.md) — **Superseded by 0070**。
 
-## MCP OAuth コネクタ(撤去済み)
+## MCP OAuth コネクタ
 
+- [0151 Claude は、本人の Google のサインインでナレッジに届く](0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md)
+  — **Accepted**。0116 を置き換え、0070 §2・§5 を改訂する。再開の
+  条件(組織ナレッジを claude.ai のコネクタから引きたい利用者)が満たされた。
+  自分で検証するデプロイは `/mcp` の 401 に RFC 9728 のメタデータを名指し、
+  メタデータが発行者を名指す — ochakai は認可サーバにならない。**Google
+  Workspace を発行者にできる**: Google のアクセストークンは opaque なので、
+  発行者が Google のデプロイは tokeninfo に問い(トークンは POST の本文で)、
+  `aud`/`azp` がこの OAuth クライアント・期限内・確かめられた email を確かめ、
+  最長 5 分だけ覚える。`resource` は届いたホストの `/mcp`、scope は
+  `openid email`。OAuth クライアントの secret は Claude の組織設定に入り、
+  ochakai は持たない。同意画面を「内部」にして組織の人に限る。答えるのは
+  Claude で、BigQuery も Claude が本人として走らせ、デプロイのエージェントは
+  MCP に載らない。代金は公開到達(どの呼び出しも確かめたトークンを要る)、
+  `OCHAKAI_DELEGATING_CALLERS=*` との併用は起動を止める、断った理由を
+  ログに残す。2026-09-26 に claude.ai で実機確認(失敗した接続は、コネクタを
+  足し直すと通った)。どの数も動かない。却下した案: Google の前の認可
+  サーバ、`static_headers`、aud を確かめない受け入れ、1 時間の記憶、Chat と
+  Slack の橋。
 - [0116 コネクタの値段は変わり、その条件は変わらない](0116-the-connector-price-changed-not-its-condition.md)
-  — **Accepted**。[0070](0070-what-was-retired-and-why.md) §5 の「戻すときは
-  revert が出発点になる」を改訂する。0012 が撤去した三週間後に
-  [0086](0086-a-second-way-to-say-who-is-calling.md) が着地しており、
-  **ochakai が認可サーバである必要はなくなっていた** — 認可サーバは運用者が
-  既に動かしている発行者で、デプロイが公開するのは RFC 9728 のメタデータと
-  401 のチャレンジ二つだけ、しかもそこに書く二つの事実は
-  `OCHAKAI_OIDC_AUDIENCE` と `OCHAKAI_OIDC_ISSUER` がそのまま入る。実測で
-  成立した(vendor がホストするクライアントが別ホストの認可サーバを自分で
-  見つけ、自分を登録し、audience に束縛されたトークンで戻り、人として記録
-  された)。**863 行が 180 行になり、環境変数も姿勢も増えない。**
-  それでも**採用しない**: 0070 §1 の四つの観測のうち三つは発生しないが、
-  残る一つ「利用がない」は動いておらず、それが 0012 の撤去理由そのもので
-  ある。**安くなったのは実装であって需要ではない。** 値段は消えたのでは
-  なく運用者の IdP に移っており(登録の許可、`scope: openid`、access token の
-  email)、採用する日の記録が読者に負っているのはその三つである。戻す条件は
-  0070 §5 のまま。
+  — **Superseded by 0151**。
 - [0010 MCP OAuth コネクタサービス](0010-mcp-oauth-connector.md) —
   **Superseded by 0012**。claude.ai / ChatGPT リモートコネクタ向けの
   公開第二サービス。**再実装時の出発点はここではなくなった**(0116)。
