@@ -102,9 +102,14 @@ section says what the stages are for; it does not approve them in advance.
 
 ## Now
 
-- **Stage 4 of the data agent** (above): where people already ask. It
-  is not designed yet, and the condition it starts from is that a chat
-  surface needing a secret stays out. Stages 1 and 2 shipped in 0.29.0:
+- **Stage 4 of the data agent** (above): where people already ask —
+  Google Chat, Claude and Slack at the companies running ochakai. The
+  Claude connector is the path: Claude answers, reads the knowledge over
+  MCP and runs BigQuery as the person with its own connector. This
+  reopens [0116](docs/design/0116-the-connector-price-changed-not-its-condition.md)'s
+  condition and pays for public reachability. Slack is reached through
+  Claude. A Google Chat bridge was built, run on a real deployment and
+  withdrawn (below). Stages 1 and 2 shipped in 0.29.0:
   automatic runs, answers that show their result, 👍 keeping a question,
   👎 diagnosing, and `ochakai eval`. Stage 3 shipped in 0.29.1: an empty
   base fills from the page (0148), and the agent proposes the meaning a
@@ -283,6 +288,21 @@ it.
   0109 §3 foresaw; a change that breaks one of the four is the change that
   closes it, and fleet tooling belongs with the operator, not in this
   repository.
+- **A Google Chat app (and chat-tool bridges in general).** A bridge that
+  asked the deployment's agent on the writer's behalf, with no secret, was
+  built and run on a real deployment (PR
+  [#911](https://github.com/na0fu3y/ochakai/pull/911), 2026-09-26) and
+  withdrawn. What it could not do was the part that makes a data agent
+  worth asking: run a query as the person. A Chat app configured on the
+  Chat API page receives no user OAuth token. Its events carry only the
+  add-on's own `systemIdToken`, and a request for `bigquery.readonly` is
+  refused as an invalid response. That left knowledge answers plus a
+  hand-off to the web UI, which did not repay the upkeep of a second
+  service and two event formats. A Slack bridge needs a signing secret
+  and a bot token. Chat tools are reached through an assistant that
+  already holds the person's identity: the Claude connector. Revisited if
+  Chat starts delivering a user token with a non-Workspace scope to a
+  Chat-configured app.
 - **A per-caller rate limit.** Who may reach a deployment is Cloud Run
   IAM's decision and lives nowhere in this binary
   ([0003](docs/design/0003-gcp-only.md),
