@@ -941,6 +941,49 @@ func TestIdentifierOutranksItsScatteredParts(t *testing.T) {
 	}
 }
 
+// TestPlacementBreaksATie pins the tie-break between concepts the score
+// cannot tell apart: every concept here holds sale_price once, none is
+// named it, so all of them score the same — and the two holding it
+// where a body says what it is about, a table's first cell and a
+// heading, come first although their ids sort last. A cell further
+// along the row is a mention, not a subject.
+func TestPlacementBreaksATie(t *testing.T) {
+	ctx := context.Background()
+	s := newSearchStore(t, ctx)
+	run := testdb.Unique(t, "placement")
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+
+	for id, body := range map[string]string{
+		"a/metric":    "Revenue is the sum of sale_price over completed lines.",
+		"b/query":     "```sql\nSELECT SUM(sale_price) FROM order_items\n```",
+		"c/elsewhere": "| Metric | Column |\n|---|---|\n| revenue | `sale_price` |",
+		"y/table":     "One row per line.\n\n| Column | Type |\n|---|---|\n| `sale_price` | FLOAT64 |",
+		"z/heading":   "Notes.\n\n## sale_price is net of discounts\n\nAlways.",
+	} {
+		k := &domain.Knowledge{
+			Type: domain.TypeTables, ID: run + "/" + id,
+			Body: body, Status: domain.StatusStable, CreatedBy: actor,
+		}
+		if err := s.Create(ctx, k, false); err != nil {
+			t.Fatalf("create %s: %v", k.ID, err)
+		}
+	}
+
+	hits, err := s.SearchLexical(ctx, "sale_price", Filter{Prefixes: []string{run}}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, h := range hits {
+		ids = append(ids, strings.TrimPrefix(h.ID, run+"/"))
+	}
+	want := []string{"y/table", "z/heading", "a/metric", "b/query", "c/elsewhere"}
+	if !slices.Equal(ids, want) {
+		t.Errorf("ranking %v, want %v: the concepts holding the term in a first "+
+			"cell or a heading did not win the tie", ids, want)
+	}
+}
+
 // TestWholeQueryBonusIgnoresCaseAndWidth pins what migration 0052 made
 // of the whole-query bonus: the haystack is stored NFKC and lower case,
 // and the pattern is folded the same way, so a question typed in capitals

@@ -653,6 +653,25 @@ const (
 	foldedFilename = `normalize(` + filenameText + `, NFKC)`
 )
 
+// placementPattern matches a fragment where a Markdown body puts what it
+// is about rather than what it mentions: a heading line, or the first
+// cell of a table row. It is a POSIX regular expression for ~*, so case
+// is folded by the operator; an identifier matches with - and _ read as
+// one character, the way identifierLexeme stores it.
+//
+// The first cell is the shape `ochakai seed` writes a table's columns in
+// (cmd/ochakai/seed.go), and the one a person writes a schema table in:
+// the concept whose row starts `sale_price` is the table that has the
+// column, where every metric and query that sums it says the name in a
+// sentence.
+func placementPattern(frag string) string {
+	q := regexp.QuoteMeta(frag)
+	if isIdentifier(frag) {
+		q = strings.NewReplacer("_", "[-_]", "-", "[-_]").Replace(q)
+	}
+	return `(^|\n)(#{1,6}[ \t][^\n]*` + q + `|\|[^|\n]*` + q + `[^|\n]*\|)`
+}
+
 // wholeBonus is what a row earns when the whole query appears in its
 // haystack verbatim — a keyword search outranking an entry that merely
 // shares its terms with a question.
@@ -746,7 +765,7 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 			foldedTitle+" ILIKE $%[1]d OR "+foldedFilename+" ILIKE $%[1]d", len(args)))
 	}
 	frags := queryFragments(query)
-	var hit, weight, weighted, named, weights, tests []string
+	var hit, weight, weighted, named, weights, tests, placed []string
 	for i, frag := range frags {
 		// Two spellings of the same fragment: the term itself, which the
 		// tsquery reads, and the escaped pattern the name test reads. The
@@ -790,6 +809,11 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 		// in the body, so a rare term stays rare wherever it lands.
 		named = append(named, fmt.Sprintf("CASE WHEN n%d THEN w%d ELSE 0 END", i, i))
 		weights = append(weights, fmt.Sprintf("w%d", i))
+		// Where in the body the fragment sits, weighted as it is
+		// everywhere else. Read only for a fragment the row holds.
+		args = append(args, placementPattern(frag))
+		placed = append(placed, fmt.Sprintf(
+			"CASE WHEN s.h%[1]d AND d.body ~* $%[2]d THEN s.w%[1]d ELSE 0 END", i, len(args)))
 	}
 	// Scoring carries ids and booleans, never rows. The window functions
 	// force every candidate to be materialized before LIMIT can apply, and
@@ -809,48 +833,76 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	// regexp_replace() nine times a candidate — measured at 97 ms against
 	// 28 over 7,500 rows (issue #883). OFFSET 0 is the idiom that keeps
 	// a subquery from being flattened.
-	// Ties are broken by standing-verification recency, then id. The
-	// score is a fraction over a handful of addends, so a short query
-	// leaves several concepts holding exactly the same number — and
-	// "whatever order the scan produced" decided what an agent reading
-	// top-N under a byte budget saw. When the text cannot tell two
-	// concepts apart, the loop's own signal can: the one somebody most
-	// recently confirmed as it stands goes first, and the id closes the
-	// order so equal-in-every-way concepts still arrive the same way
-	// twice. This breaks ties only — no weight, no addend — so it cannot
-	// outrank anything the text distinguishes (compare the named sort key
-	// in the service's fuse, which follows the same rule). Both the boost
-	// and the tie-break read the one standing expression: a confirmation
-	// an edit has replaced neither lifts a score nor wins a tie (design
-	// doc 0138).
+	// Ties are broken by where the terms sit, then by
+	// standing-verification recency, then id. The score is a fraction
+	// over a handful of addends, so a short query leaves several
+	// concepts holding exactly the same number — and "whatever order the
+	// scan produced" decided what an agent reading top-N under a byte
+	// budget saw. It still did, one level down: 「sale_price はどの表に
+	// あるか」 held six concepts at the same score in the demo, every
+	// metric and query that sums the column among them, and the table
+	// that has it sorted sixth because tables/ comes after metrics/,
+	// ontology/ and queries/.
+	//
+	// So the text is asked once more before the loop is: a concept
+	// holding the tied terms in a heading or a table's first cell
+	// (placementPattern) is about them, where one saying them in a
+	// sentence mentions them. How often a term appears was measured
+	// beside it and rejected — the metric that sums sale_price says it
+	// more often than the table that has it. When placement cannot tell
+	// two concepts apart either, the loop's own signal can: the one
+	// somebody most recently confirmed as it stands goes first, and the
+	// id closes the order so equal-in-every-way concepts still arrive
+	// the same way twice. Both keys break ties only — no weight, no
+	// addend — so they cannot outrank anything the score distinguishes
+	// (compare the named sort key in the service's fuse, which follows
+	// the same rule). Both the boost and the verification tie-break read
+	// the one standing expression: a confirmation an edit has replaced
+	// neither lifts a score nor wins a tie (design doc 0138).
+	//
+	// Placement reads the body, which the scoring layers above carry
+	// none of, so it is read only for the rows that can still reach the
+	// page: those scoring at least the limit-th score. A row under it
+	// has lost on the score, and no tie-break brings it back.
 	q := fmt.Sprintf(`
 		WITH scored AS (
-			SELECT w.id, w.last_verified,
-				((%[1]s) + 0.5 * (%[2]s)) / NULLIF(%[3]s, 0)
-					+ w.whole + w.named
-					+ CASE WHEN w.last_verified IS NOT NULL THEN 0.05 ELSE 0 END AS score
+			SELECT s.id, s.last_verified, s.score,
+				CASE WHEN s.score >= coalesce(s.cutoff, 0)
+					THEN (SELECT %[12]s FROM object d WHERE d.id = s.id)
+					ELSE 0 END AS placed
 			FROM (
-				SELECT c.*, %[4]s FROM (
-					SELECT k.id, %[5]s, count(*) OVER () AS total,
-						CASE WHEN k.search_text LIKE lower($%[6]d) THEN %[11]g ELSE 0 END AS whole,
-						CASE WHEN %[7]s
-							THEN 1 ELSE 0 END AS named,
-						(SELECT max(v.at) FROM knowledge_verification v
-							WHERE v.id = k.id AND v.at >= k.content_changed_at) AS last_verified
-					FROM object k, LATERAL (SELECT `+foldedName+` AS name OFFSET 0) nm
-					WHERE k.search_tsv @@ (%[8]s) AND %[9]s
-				) c
-			) w
-			ORDER BY score DESC, last_verified DESC NULLS LAST, id LIMIT %[10]d
+				SELECT t.*, nth_value(t.score, %[10]d) OVER (ORDER BY t.score DESC
+					ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS cutoff
+				FROM (
+					SELECT w.*,
+						((%[1]s) + 0.5 * (%[2]s)) / NULLIF(%[3]s, 0)
+							+ w.whole + w.named
+							+ CASE WHEN w.last_verified IS NOT NULL THEN 0.05 ELSE 0 END AS score
+					FROM (
+						SELECT c.*, %[4]s FROM (
+							SELECT k.id, %[5]s, count(*) OVER () AS total,
+								CASE WHEN k.search_text LIKE lower($%[6]d) THEN %[11]g ELSE 0 END AS whole,
+								CASE WHEN %[7]s
+									THEN 1 ELSE 0 END AS named,
+								(SELECT max(v.at) FROM knowledge_verification v
+									WHERE v.id = k.id AND v.at >= k.content_changed_at) AS last_verified
+							FROM object k, LATERAL (SELECT `+foldedName+` AS name OFFSET 0) nm
+							WHERE k.search_tsv @@ (%[8]s) AND %[9]s
+						) c
+					) w
+				) t
+			) s
+			ORDER BY score DESC, placed DESC, last_verified DESC NULLS LAST, id LIMIT %[10]d
 		)
 		SELECT `+knowledgeSelectK+`, scored.score
 		FROM object k JOIN scored ON scored.id = k.id
-		ORDER BY scored.score DESC, scored.last_verified DESC NULLS LAST, k.id`,
+		ORDER BY scored.score DESC, scored.placed DESC, scored.last_verified DESC NULLS LAST, k.id`,
 		strings.Join(weighted, " + "), strings.Join(named, " + "),
 		strings.Join(weights, " + "),
 		strings.Join(weight, ", "), strings.Join(hit, ", "), wholeParam,
 		strings.Join(nameTests, " OR "),
-		strings.Join(tests, " || "), where, limit, wholeBonus)
+		strings.Join(tests, " || "), where, limit, wholeBonus,
+		strings.Join(placed, " + "))
 	rows, err := s.pool.Query(ctx, q, args...)
 	if err != nil {
 		return nil, err

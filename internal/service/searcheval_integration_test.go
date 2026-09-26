@@ -515,9 +515,16 @@ const evalVerified = "policies/revenue-recognition"
 //     README's next line is `ochakai get insights/reading-revenue`.
 //   - An English keyword lands in prose that is Japanese around it, so
 //     "sale_price column" ties the concepts that all carry the column
-//     name and is settled by verification recency and id. A middling
-//     rank is what a Japanese base gives an English keyword, and
-//     measuring it is why the English cases stayed.
+//     name. Verification recency and id settled it, and put the table
+//     that has the column fifth; where the term sits now settles it
+//     first — the table lists sale_price in its schema's first cell,
+//     the metrics and the computations say it in a sentence
+//     (store/search.go). On the 88-case set before the demo rebuild
+//     that took lexical 0.91 → 0.93 and fused 0.89 → 0.90, four cases
+//     up and none down; over the rebuilt demo it took 0.84 → 0.85 and
+//     0.81 → 0.82, seven cases up and three down by one rank each, the
+//     sale_price questions from tenth to second and third. Reach and
+//     leak did not move either time.
 //
 // The fused floors are separate. A stand-in that shares the lexical
 // side's vocabulary can only reorder a list the words already reached,
@@ -531,11 +538,12 @@ const evalVerified = "policies/revenue-recognition"
 const (
 	evalK = 10
 	// Lexical, measured at 1.00 / 0.87 over the thelook corpus, then
-	// 1.00 / 0.84 over the causal rebuild. The MRR floor is two cases'
+	// 1.00 / 0.84 over the causal rebuild, then 1.00 / 0.85 once lexical
+	// ties were broken by where a term sits. The MRR floor is two cases'
 	// worth under it: one case slipping from rank 1 to rank 2 is 0.005 at
 	// 107 cases, so a floor closer than that fails on noise.
 	evalRecallFloor = 0.99
-	evalMRRFloor    = 0.83
+	evalMRRFloor    = 0.84
 	// Fused: the same questions with the stand-in encoder on, measured
 	// at 1.00 / 0.87. This floor is the one that catches the verified
 	// addend going back to 0.002 — that constant is the kind that gets
@@ -563,8 +571,12 @@ const (
 	// vocabulary. The stand-in encoder shares that vocabulary too, so it
 	// cannot tell a driver metric from the revenue it divides any better
 	// than the words can.
+	//
+	// Breaking lexical ties by where a term sits then took it 0.81 →
+	// 0.82: the lexical list is half of what the merge reads, so a tie it
+	// settles differently reaches the fused order too.
 	evalFusedRecallFloor = 0.99
-	evalFusedMRRFloor    = 0.80
+	evalFusedMRRFloor    = 0.81
 )
 
 // Reach: how many concepts a question touched at all.

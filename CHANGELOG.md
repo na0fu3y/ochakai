@@ -23,6 +23,23 @@ last entry.
 
 ### Changed
 
+- **A tied search result goes to the concept a term is the subject of.**
+  「sale_price はどの表にあるか」 and "sale_price column" held the demo's
+  table, metrics and queries at exactly the same lexical score, and the
+  table that has the column came fifth because `tables/` sorts after
+  `metrics/` and `queries/`. A tie is now broken first by whether the
+  concept holds the tied terms in a Markdown heading or a table row's
+  first cell — the shape `ochakai seed` writes a table's columns in —
+  and only then by verification recency and id. It breaks ties only, so
+  nothing the score distinguishes changes order, and what a query
+  reaches is unchanged. The search eval went 0.91 → 0.93 lexical and
+  0.89 → 0.90 fused, four cases up and none down, on the
+  corpus before the demo rebuild below; over the rebuilt demo it took
+  0.84 → 0.85 lexical and 0.81 → 0.82 fused, seven cases up and three
+  down by one rank each. How often a term
+  appears was measured beside it and rejected: it moved four cases down
+  for five up.
+
 - **`examples/demo` answers "revenue fell — why, and what now"**, and
   grows from 18 concepts to 36. It is laid out as OKF's own sample
   bundles are: `datasets/`, `tables/` with `# Schema`, `# Joins` and
