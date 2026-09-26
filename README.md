@@ -243,16 +243,22 @@ that reads identity — and see the same six tools. A deployment that reads
 no identity takes the URL wherever it lives, so trying the public demo
 from Claude Code is one command and no install:
 `claude mcp add --transport http ochakai https://demo.ochak.ai/mcp`.
-An assistant hosted by a vendor opens the
-connection from that vendor's infrastructure rather than from your
-machine, so an IAM-restricted deployment is out of its reach by design:
-[connecting an MCP client](docs/guides/mcp-clients.md) (Japanese).
+**Claude has two ways in, and they answer different deployments:**
 
-**Claude Desktop has a third form: `ochakai_<version>.mcpb` on the
-[releases page](https://github.com/na0fu3y/ochakai/releases).** It is the
-bridge above with the JSON already written — open the file, and the app
-asks for one thing, the server URL, with the public demo filled in. macOS
-and Windows, which are the platforms that install a bundle.
+| | `ochakai_<version>.mcpb` | Claude connector |
+|---|---|---|
+| Runs | on the person's machine (the bridge above, JSON already written) | from Anthropic's infrastructure |
+| Claude surfaces | Claude Desktop | claude.ai, mobile, Cowork, Desktop |
+| The person proves who they are with | their local `gcloud auth login` | a Google Workspace sign-in in the browser |
+| The deployment | stays private behind Cloud Run IAM | is publicly reachable; every call still needs a Google token it verifies |
+| Choose it when | nothing may be publicly reachable | people ask from the web or their phone; it covers Desktop too |
+
+The bundle is on the [releases page](https://github.com/na0fu3y/ochakai/releases)
+(macOS and Windows). The connector holds no secret: the OAuth client's
+secret stays in Claude's organization settings
+([deploy guide §5e](deploy/cloudrun/README.md#5e-optional-the-claude-connector), Japanese;
+[design doc 0151](docs/design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md), Japanese).
+Every other client: [connecting an MCP client](docs/guides/mcp-clients.md) (Japanese).
 
 Then copy [examples/claude-code/CLAUDE.md](examples/claude-code/CLAUDE.md)
 (Japanese) into your project's CLAUDE.md, or install the

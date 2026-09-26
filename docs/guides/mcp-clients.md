@@ -29,7 +29,8 @@ URL。それ以外はブリッジ** — ブリッジには独自の前提条件�
 | [Claude Code](#claude-code)* | URL | ブリッジ | `.mcp.json`、または `claude mcp add` |
 | [Claude Desktop](#claude-desktop) | ブリッジ(または [`.mcpb`](#claude-desktop)) | ブリッジ | `claude_desktop_config.json` |
 | [その他のクライアント](#その他のクライアント) | URL | ブリッジ | クライアントごと(下の表) |
-| [ホスト型アシスタント](#clients-that-cannot-reach-your-deployment) | 公開デプロイなら届く | 設計上、届かない | 製品ごと |
+| [Claude のコネクタ](#clients-that-cannot-reach-your-deployment)(claude.ai・Cowork・モバイル・Desktop) | 公開デプロイなら届く | **トークンを自分で検証するデプロイなら届く**(Google Workspace でサインイン) | Claude の組織設定 |
+| [その他のホスト型アシスタント](#clients-that-cannot-reach-your-deployment) | 公開デプロイなら届く | 届かない | 製品ごと |
 
 **何もインストールせずに一番速く繋ぐ**なら、公開デモが URL をそのまま
 取る — Claude Code なら一コマンドで、Go も gcloud も要らない:
@@ -262,9 +263,10 @@ Cloud Run に対しては、この設定だけではマシンに gcloud とロ�
 }
 ```
 
-アプリの**カスタムコネクタ** UI はコマンドではなく URL を取るが、
+アプリの**カスタムコネクタ** UI はコマンドではなく URL を取り、
 その接続はあなたのマシンではなく Anthropic のインフラから開かれる —
-[下](#clients-that-cannot-reach-your-deployment)を見よ。
+組織が [Claude のコネクタ](#clients-that-cannot-reach-your-deployment)を
+入れているなら、Desktop にもそれが出るので、バンドルは要らない。
 
 ## その他のクライアント
 
@@ -318,26 +320,47 @@ ochakai ui        # http://127.0.0.1:8098/mcp
 
 ## デプロイに届かないクライアント
 
-ChatGPT のコネクタ、OpenAI の Responses API、Claude Desktop のカスタム
-コネクタ UI は、いずれも接続を**あなたのマシンからではなくベンダーの
-インフラから**開く。`localhost` も IAM で制限された Cloud Run サービス
-も、そこからは届かず、どんな設定の書き方もそれを変えない。
+ChatGPT のコネクタ、OpenAI の Responses API、Claude のカスタムコネクタは、
+いずれも接続を**あなたのマシンからではなくベンダーのインフラから**開く。
+`localhost` も IAM で制限された Cloud Run サービスも、そこからは届かず、
+どんな設定の書き方もそれを変えない — 到達できることがそのまま認可である
+(設計ドキュメント [0065](../design/0065-identity-and-provenance.md) §1)。
 
-これはギャップではなく、アクセスモデルが働いている証拠である:
-到達できることそのものが認可である(設計ドキュメント
-[0065](../design/0065-identity-and-provenance.md) §1)ので、デプロイを第三者のサーバー
-から届くようにすることは、そのまま公開到達可能にすることを意味する。
-チームの知識を持つデプロイをそこへ置くのは、デプロイの一形態ではなく
-設定ミスである。ローカルコードも動かせるホスト型アシスタント
-(ブリッジ越しの Claude Desktop、Claude Code、Cursor)が、サポートされる
-経路である。
+**Claude には、そのための経路がある**(設計ドキュメント
+[0151](../design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md))。
+トークンを自分で検証するデプロイ(`OCHAKAI_OIDC_ISSUER`)は、トークンを
+持たないクライアントに「どこでサインインするか」を教え、Claude の人は
+**Google Workspace でサインイン**して届く。デプロイは公開到達になるが、
+どの呼び出しも Google が発行し ochakai が確かめたトークンを要り、記録は
+その人の名前である。ochakai は secret を持たない(OAuth クライアントの
+secret は Claude の組織設定に入る)。手順は
+[デプロイガイド §5e](../../deploy/cloudrun/README.md#5e-optional-the-claude-connector)。
 
-**例外は、公開することが決定であるデプロイだけである** — `public` と
+<a id="mcpb-or-claude-connector"></a>
+
+### `.mcpb` か、Claude のコネクタか
+
+同じ Claude でも、二つは**違うデプロイに答える**。
+
+| | `.mcpb`(バンドル) | Claude のコネクタ |
+|---|---|---|
+| 動く場所 | その人のマシン(上のブリッジ) | Anthropic の基盤 |
+| 使える Claude | Claude Desktop | claude.ai・モバイル・Cowork・Desktop |
+| 本人であることの証明 | 手元の `gcloud auth login` | ブラウザでの Google Workspace のサインイン |
+| 各人が入れるもの | バンドルと gcloud | 何も無い(「接続」を押す) |
+| デプロイ | 非公開のまま(Cloud Run IAM) | 公開到達(どの呼び出しも確かめたトークンを要る) |
+| 選ぶとき | 何も公開到達にできない組織 | Web やモバイルから問う人がいる組織 — Desktop もこれで足りる |
+
+**迷ったら、公開到達を受け入れられるかで決める。** 受け入れられるなら
+コネクタ一つで全員に届き、バンドルは要らない。受け入れられないなら、
+バンドル(と Claude Code)が届く経路のすべてである。
+
+**それ以外のホスト型アシスタント**(ChatGPT のコネクタなど)は、同じ
+握手を話し、Google のアクセストークンを持ってくるなら届くかもしれないが、
+ここでは誰も確かめていない。公開することが決定のデプロイ — `public` と
 サンドボックス([0066](../design/0066-four-postures-one-word.md) §3・
-[0087](../design/0087-a-sandbox-says-it-is-one.md))は、誰から届くかを
-選んでいないのだから、ベンダーのインフラから届いても失うものが無い。
-公開デモがその形で、ここでは誰も動かしていないので、各アシスタントの
-コネクタ UI がそれを受け入れるかどうかは、それぞれの製品の話である。
+[0087](../design/0087-a-sandbox-says-it-is-one.md))— には、どこから届いても
+失うものが無い。
 
 ## 繋がらないとき
 
