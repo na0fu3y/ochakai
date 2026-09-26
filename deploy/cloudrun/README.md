@@ -565,23 +565,37 @@ gcloud run deploy ochakai-chat \
   --set-env-vars="OCHAKAI_URL=$(gcloud run services describe ochakai --region=$REGION --format='value(status.url)')"
 CHAT_URL=$(gcloud run services describe ochakai-chat --region=$REGION --format='value(status.url)')
 
-# 4. Chat だけが橋を呼べるようにする
+# 4. Chat だけが橋を呼べるようにする。コンソールの既定(Workspace アドオン)
+#    では、Chat はプロジェクトの Workspace アドオン サービスエージェントとして
+#    呼ぶ
 gcloud run services add-iam-policy-binding ochakai-chat --region=$REGION \
-  --member="serviceAccount:chat@system.gserviceaccount.com" --role=roles/run.invoker
+  --member="serviceAccount:service-$(gcloud projects describe $PROJECT_ID --format='value(projectNumber)')@gcp-sa-gsuiteaddons.iam.gserviceaccount.com" \
+  --role=roles/run.invoker
 ```
 
 5. Google Chat API を有効にし(`gcloud services enable chat.googleapis.com`)、
    コンソールの **Google Chat API → 構成**で:
-   - **接続設定**を「HTTP エンドポイント URL」にし、`$CHAT_URL/` を入れる。
-   - **認証オーディエンス**は「**HTTP エンドポイント URL**」を選ぶ(「プロジェクト
-     番号」は使わない — 橋が確かめるのは、Google が署名した ID トークンの
-     audience がこの URL であることである)。
-   - 公開範囲を、使う人かグループに絞る。
+   - **「この Chat アプリを Workspace アドオンとしてビルドします」はオンのまま
+     にする**(既定)。**オフにすると元に戻せない**。橋はアドオンのイベントを
+     読み、アドオンの形で返す。
+   - アプリ名・アバター・説明を入れ、**インタラクティブ機能**で「スペースと
+     グループの会話に参加する」をオンにする。
+   - **接続設定**を「HTTP エンドポイント URL」にし、**トリガー**を「すべての
+     トリガーに共通の HTTP エンドポイント URL を使用する」にして
+     `$CHAT_URL/` を入れる。アドオンでは認証オーディエンスの欄は出ない —
+     Google が署名した ID トークンの audience は、このエンドポイント URL になる。
+   - **公開設定**で、使う人かグループに絞る。**ログ**の「エラーを Logging に
+     記録する」をオンにしておくと、届かないときに理由が読める。
+   - Save。アプリのステータスが「ライブ」になる。
 
-**Google Workspace アドオンとして作る**場合は、Chat が呼ぶのは
-`service-<プロジェクト番号>@gcp-sa-gsuiteaddons.iam.gserviceaccount.com`
-になる。手順 4 の `chat@system.gserviceaccount.com` をそれに置き換える
-(構成画面の「サービス アカウントのメール」に出ている)。
+**アドオンにしない場合**(オフにしたプロジェクト)は、Chat が呼ぶのは
+`chat@system.gserviceaccount.com` になり、手順 4 の member をそれに置き換える。
+認証オーディエンスは「**HTTP エンドポイント URL**」を選ぶ(「プロジェクト番号」の
+自己署名 JWT を橋は受けない)。
+
+**スペースでは `@ochakai` を付けて問い、ダイレクト メッセージなら付けずに
+問える。** スペースにアプリを足すと、橋が挨拶を返す — それが、Chat から橋まで
+届いたことの最初の確かめになる。
 
 **Chat でできることと、できないこと。**
 - 答えはナレッジから書かれ、読んだ concept と、それが人に確かめられた
