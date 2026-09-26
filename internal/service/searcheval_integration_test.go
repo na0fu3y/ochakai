@@ -458,9 +458,12 @@ const evalVerified = "policies/revenue-recognition"
 //     README's next line is `ochakai get insights/reading-revenue`.
 //   - An English keyword lands in prose that is Japanese around it, so
 //     "sale_price column" ties the concepts that all carry the column
-//     name and is settled by verification recency and id. A middling
-//     rank is what a Japanese base gives an English keyword, and
-//     measuring it is why the English cases stayed.
+//     name. Verification recency and id settled it, and put the table
+//     that has the column fifth; where the term sits now settles it
+//     first — the table lists sale_price in its schema's first cell,
+//     the metric and the queries say it in a sentence (store/search.go).
+//     That took lexical 0.91 → 0.93 and fused 0.89 → 0.90 on this set
+//     alone, four cases up and none down, reach and leak unmoved.
 //
 // The fused floors are separate. A stand-in that shares the lexical
 // side's vocabulary can only reorder a list the words already reached,
@@ -473,12 +476,12 @@ const evalVerified = "policies/revenue-recognition"
 // vocabulary at all, and no number on this page says how much that is.
 const (
 	evalK = 10
-	// Lexical, measured at 1.00 / 0.87 over the thelook corpus. The MRR
+	// Lexical, measured at 1.00 / 0.93 over the thelook corpus. The MRR
 	// floor is two cases' worth under it: one case slipping from rank 1
-	// to rank 2 is 0.007 here, so a floor closer than that fails on
+	// to rank 2 is 0.006 here, so a floor closer than that fails on
 	// noise.
 	evalRecallFloor = 0.98
-	evalMRRFloor    = 0.89
+	evalMRRFloor    = 0.92
 	// Fused: the same questions with the stand-in encoder on, measured
 	// at 1.00 / 0.87. This floor is the one that catches the verified
 	// addend going back to 0.002 — that constant is the kind that gets
@@ -500,8 +503,12 @@ const (
 	// the same terms is a smaller haystack for the stand-in to reorder,
 	// which is the mixed dimension going 0.74 to 0.81 lexically. It is
 	// the corpus changing under the merge again, not the merge.
+	//
+	// Breaking lexical ties by where a term sits took it 0.89 → 0.90:
+	// the lexical list is half of what the merge reads, so a tie it
+	// settles differently reaches the fused order too.
 	evalFusedRecallFloor = 0.98
-	evalFusedMRRFloor    = 0.87
+	evalFusedMRRFloor    = 0.88
 )
 
 // Reach: how many concepts a question touched at all.

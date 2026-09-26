@@ -21,6 +21,22 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **A tied search result goes to the concept a term is the subject of.**
+  「sale_price はどの表にあるか」 and "sale_price column" held the demo's
+  table, metrics and queries at exactly the same lexical score, and the
+  table that has the column came fifth because `tables/` sorts after
+  `metrics/` and `queries/`. A tie is now broken first by whether the
+  concept holds the tied terms in a Markdown heading or a table row's
+  first cell — the shape `ochakai seed` writes a table's columns in —
+  and only then by verification recency and id. It breaks ties only, so
+  nothing the score distinguishes changes order, and what a query
+  reaches is unchanged. The search eval went 0.91 → 0.93 lexical and
+  0.89 → 0.90 fused, four cases up and none down. How often a term
+  appears was measured beside it and rejected: it moved four cases down
+  for five up.
+
 ## [0.29.2] - 2026-09-26
 
 ### Added
