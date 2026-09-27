@@ -6,6 +6,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path"
@@ -184,14 +185,20 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 	// queue instead of deadlocking.
 	rows, err := tx.Query(ctx,
 		`SELECT `+knowledgeSelectDoc+` FROM object
-		 WHERE deleted_at IS NULL AND (links @> $1 OR attrs->>'model' = $2 OR id = $3)
+		 WHERE deleted_at IS NULL AND (links @> $1 OR attrs->>'model' = $2 OR id = $3
+		       OR (frontmatter ?| $4 AND strpos(doc, $5) > 0))
 		 ORDER BY id FOR UPDATE`,
 		// The same containment the reverse lookup asks with, marshalled
 		// rather than formatted: %q spells a Go literal, and the two
 		// disagree for a rune Go writes as \U0001d173 — which no id is
 		// likely to carry, and which JSON has no such escape for.
 		linkContainment(oldID),
-		oldID, newID)
+		oldID, newID,
+		// A path in the frontmatter (OKF SPEC §6.2) is not in the links
+		// index, so the candidates are the documents that carry such a
+		// key and spell the moved name somewhere; which of them really
+		// point at the move is decided below, per value.
+		domain.PathFieldKeys, path.Base(oldID))
 	if err != nil {
 		return err
 	}
@@ -202,6 +209,33 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 	if err != nil {
 		return err
 	}
+	now := NowStored()
+	movedDirs := path.Dir(oldID) != path.Dir(newID)
+	moves := domain.ConceptMoves(oldID, newID)
+	// Each referrer's repair is worked out before any is written, because
+	// only a referrer that really changes decides the blast radius: a
+	// candidate that merely spelled the name matches the query and needs
+	// nothing.
+	var repaired []*domain.Knowledge
+	for i := range referrers {
+		r := &referrers[i]
+		self := r.ID == newID
+		// The moved entry resolves its own relative links against its old
+		// directory, so it is rewritten as if it still lived at oldID.
+		from := r.ID
+		if self {
+			from = oldID
+		}
+		ok, err := repairReferences(r, from, self && movedDirs, moves,
+			func(body string) string { return domain.RewriteBodyLinks(from, body, oldID, newID) },
+			map[string]string{oldID: newID})
+		if err != nil {
+			return err
+		}
+		if ok {
+			repaired = append(repaired, r)
+		}
+	}
 	// The blast radius, decided before a single row is written: every
 	// referrer this loop would rewrite has to be one the caller may
 	// write. Refused whole rather than narrowed — a rewrite that skipped
@@ -209,57 +243,27 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 	// that is gone, which is the one thing a move exists to prevent
 	// (design doc 0129 §2).
 	if within != nil {
-		for i := range referrers {
+		for _, r := range repaired {
 			// The moved entry rewrites its own relative links as part of
 			// the move; the caller's right to write it is the right to
 			// write the destination, checked before the transaction.
-			if referrers[i].ID == newID {
+			if r.ID == newID {
 				continue
 			}
-			if !underAny(referrers[i].ID, within) {
+			if !underAny(r.ID, within) {
 				return ErrOutsideScope
 			}
 		}
 	}
-	now := NowStored()
-	movedDirs := path.Dir(oldID) != path.Dir(newID)
-	for i := range referrers {
-		r := &referrers[i]
+	for _, r := range repaired {
 		self := r.ID == newID
-		// The moved entry resolves its own relative links against its old
-		// directory, so it is rewritten as if it still lived at oldID.
-		from := r.ID
-		body := r.Body
-		if self {
-			from = oldID
-			// Its own outbound relative links point at the old directory,
-			// and links are derived from the body against the entry's
-			// current id: left alone, "./gross.md" silently starts meaning
-			// a different entry (or none) the next time this row is
-			// written. Absolute is the form a move cannot reinterpret.
-			if movedDirs {
-				body = domain.AbsolutizeBodyLinks(oldID, body)
-			}
-		}
-		body = domain.RewriteBodyLinks(from, body, oldID, newID)
-		modelMoved := false
-		if m, ok := r.Attrs["model"].(string); ok && m == oldID {
-			r.Attrs["model"] = newID
-			modelMoved = true
-		}
-		if body == r.Body && !modelMoved {
-			continue // matched the links index but nothing to repair
-		}
-		r.Body = body
-		r.Doc = string(okf.ReplaceBody([]byte(r.Doc), body))
-		r.Links = domain.LinksFromBody(r.ID, r.Body)
 		// The rewrite is a content change by the mover, and it is recorded
 		// as one ("update" revision below), so the entry's generated.by
 		// follows it (design doc 0036 §3.3).
 		r.UpdatedBy = actor
-		// Only the columns a link rewrite touches are written: a move
-		// repairs references, and an entry's citations and computation
-		// contract are not references it makes.
+		// The columns a repair can touch are written: the body and what
+		// is derived from it, and the path-valued fields (OKF SPEC §6.2)
+		// that name what the move carried.
 		j, err := marshalJSONFields(r)
 		if err != nil {
 			return err
@@ -302,11 +306,12 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		err = tx.QueryRow(ctx,
 			`UPDATE object SET links=$2, attrs=$3, body=$4, updated_at=$5,
 			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8, updated_by_producer=$9,
-			 doc=$10, content_hash=$11, content_changed_at=`+changedAfterVerified("$12")+`, frontmatter=$13
+			 doc=$10, content_hash=$11, content_changed_at=`+changedAfterVerified("$12")+`, frontmatter=$13,
+			 resource=$14, sources=$15, computation=$16, executor=$17, attester=$18
 			 WHERE id=$1 AND deleted_at IS NULL
 			 RETURNING content_changed_at`,
 			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, actor.Producer, doc, hash,
-			r.ContentChangedAt, fm).Scan(&r.ContentChangedAt)
+			r.ContentChangedAt, fm, r.Resource, j.sources, r.Computation, j.executor, j.attester).Scan(&r.ContentChangedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return fmt.Errorf("rewriting references to %s: %s changed under the move", oldID, r.ID)
 		}
@@ -319,6 +324,8 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 			moved.Body = r.Body
 			moved.Links = r.Links
 			moved.Attrs = r.Attrs
+			moved.Resource, moved.Sources, moved.Computation = r.Resource, r.Sources, r.Computation
+			moved.Executor, moved.Attester = r.Executor, r.Attester
 			// And the document the body was rewritten inside, with the
 			// version that goes with it: the "move" revision the caller
 			// records is written from this entry (design doc 0046 §2.2).
@@ -331,6 +338,69 @@ func (s *Store) rewriteReferences(ctx context.Context, tx pgx.Tx, oldID string, 
 		}
 	}
 	return nil
+}
+
+// repairReferences applies a move to one entry that points at what moved,
+// and reports whether anything changed: the body's links (rewriteBody),
+// the paths its frontmatter names (OKF SPEC §6.2: resource,
+// sources[].resource, computation, executor.resource, attester.resource),
+// and a `model` key naming a moved id (models, old id to new).
+//
+// from is the id relative values are resolved against — the old id, for
+// the entry that moved itself — and absolutize says that entry changed
+// directory, so its own relative links and paths come back absolute
+// rather than starting to mean something else where it now sits.
+//
+// The document is edited in place, never re-rendered: the body is
+// swapped inside the stored bytes, and each frontmatter key that changed
+// is rewritten as its own block with every other line left as written.
+func repairReferences(r *domain.Knowledge, from string, absolutize bool, moves []domain.PathMove,
+	rewriteBody func(string) string, models map[string]string,
+) (bool, error) {
+	changed := false
+	doc := []byte(r.Doc)
+	body := r.Body
+	if absolutize {
+		body = domain.AbsolutizeBodyLinks(from, body)
+	}
+	if body = rewriteBody(body); body != r.Body {
+		r.Body = body
+		r.Links = domain.LinksFromBody(r.ID, body)
+		doc = okf.ReplaceBody(doc, body)
+		changed = true
+	}
+	out, pathsMoved, err := okf.RewritePathFields(doc, func(v string) (string, bool) {
+		return domain.MovePathValue(from, v, moves, absolutize)
+	})
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", r.ID, err)
+	}
+	if pathsMoved {
+		d, _, err := okf.Parse(out)
+		if err != nil {
+			return false, fmt.Errorf("%s: %w", r.ID, err)
+		}
+		doc = out
+		r.Resource, r.Sources, r.Computation = d.Resource, d.Sources, d.Computation
+		r.Executor, r.Attester = d.Executor, d.Attester
+		changed = true
+	}
+	if m, ok := r.Attrs["model"].(string); ok {
+		if to, moved := models[m]; moved {
+			r.Attrs["model"] = to
+			// In place when the block allows it; otherwise the stored
+			// document no longer says what the row does, and storedDoc
+			// renders the canonical form, as it always has for this key.
+			if v, err := json.Marshal(to); err == nil {
+				if out, err := okf.SetFrontmatterKeys(doc, map[string]json.RawMessage{"model": v}, nil); err == nil {
+					doc = out
+				}
+			}
+			changed = true
+		}
+	}
+	r.Doc = string(doc)
+	return changed, nil
 }
 
 // underAny reports whether id sits at or beneath any of prefixes, on

@@ -1823,9 +1823,12 @@ paths:
         The id is the address (design doc 0075 §2), so a move carries
         everything keyed by it along in one transaction — revisions,
         usage, files, embeddings — and rewrites inbound references (link
-        targets in both of SPEC §6's forms, and the producer key `model`
-        where a document carries one) so nothing breaks (design doc 0075
-        §5). The destination must be a fresh id: a live or soft-deleted
+        targets in both of SPEC §6's forms, the paths SPEC §6.2 names in
+        `resource`, `sources[].resource`, `computation`,
+        `executor.resource` and `attester.resource`, and the producer key
+        `model` where a document carries one) so nothing breaks (design
+        doc 0075 §5). A path is swapped as a token in the stored
+        document, leaving its other bytes as written. The destination must be a fresh id: a live or soft-deleted
         concept there already owns that address and its history — free
         an id held by a deleted concept with DELETE ...?purge=true.
         Lives at its own top-level path for the same reason /usage and

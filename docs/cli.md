@@ -546,9 +546,9 @@ Usage: ochakai move [flags] <id> <new-id>
        ochakai move --directory [flags] <old> <new>
 
 Move (rename) a knowledge concept to a new id. Revisions, usage, and
-files follow, and inbound references (link targets, and
-a `model` key where a document carries one) are rewritten so nothing
-breaks.
+files follow, and inbound references (link targets, the paths OKF puts
+in resource, sources, computation, executor and attester, and a `model`
+key where a document carries one) are rewritten so nothing breaks.
 
 With --directory the two arguments are directories, and everything
 addressed under the old one moves: the concepts, the concepts that were
