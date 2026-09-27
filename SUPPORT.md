@@ -36,8 +36,8 @@ Most answers are already written down, and the docs are short enough to check:
   Cloud Run + Cloud SQL walkthrough, including the hardening checklist.
 - [docs/spec/README.md](docs/spec/README.md) (Japanese) — how each area works
   today and why, which is usually the fastest answer to "why does it work like
-  that". An area not written up yet points at the
-  [design index](docs/design/README.md) row that still describes it.
+  that". The numbered records before it are in the frozen
+  [design index](docs/design/README.md).
 - [ROADMAP.md](ROADMAP.md) — what is being worked on, and what has been ruled
   out on purpose.
 - [docs/compatibility.md](docs/compatibility.md) — what may break between

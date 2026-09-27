@@ -474,12 +474,9 @@ One number bounds an entry:
 decisions, or current-state prose that belongs in the spec.
 
 **[docs/design](docs/design/README.md) is history.** Records 0001–0152
-are frozen: nobody rewrites them, amends them or tombstones them any
-more. Until an area has its spec document, the index's opening table is
-still where that area's current state is reached, so a PR that changes
-such an area updates the table's row by hand and, if it is worth it,
-adds a decision entry. When every area has a spec document the index
-stops being edited.
+and their index are frozen: nobody rewrites them, amends them or
+tombstones them any more. Every area has its spec document, and the
+index's opening table now only points at them.
 
 The two used to be one thing. A numbered record was both the immutable
 history and the spec somebody read today, so every change had to choose

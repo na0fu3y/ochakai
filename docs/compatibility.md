@@ -115,7 +115,12 @@ moves:
   JSON whatever the `Accept` says, because SPEC §9 defines one markdown
   history (`log.md`) and this address rendered a second one — again with
   no fingerprint line moving, since the media type it drops is shared with
-  the concept export.
+  the concept export. The third is
+  [decision 0153](decisions/0153-serve-the-bundle-as-okf.md): a plain GET
+  of a concept's address answers the document rather than the JSON View,
+  and a directory's address answers its `index.md` — a `.md` address that
+  answers something other than the document is not serving OKF, and the
+  JSON is still there for a client that names `Accept: application/json`.
 - **The rest of `/api/v1` is unstable** — the ruling
   (`POST /api/v1/review/{id}`), the usage totals and outcome reports
   (`/api/v1/usage/{id}`), `stats`, `move` and `reembed`
@@ -130,12 +135,13 @@ moves:
   `error` is a sentence for a person and may be reworded in any release,
   and `code` is a closed vocabulary a client may branch on. Branch on the
   code, never on the prose — the prose was the only thing separating
-  three conditions that share 409 (`already_exists`, `not_deleted`,
-  `no_rejection`) and two that share 412 (a stale `If-Match`, and an
-  occupied path under `If-None-Match: *`), which is what made a
-  string match the only way to tell them apart and this policy's
-  permission to reword them a trap. **The vocabulary is closed at
-  twelve words, and the freeze holds it there** — the enum is written
+  the conditions that share 409 (`already_exists`, `not_deleted`) and
+  the two that share 412 (a stale `If-Match`, and an occupied path under
+  `If-None-Match: *`), which is what made a string match the only way to
+  tell them apart and this policy's permission to reword them a trap.
+  **The vocabulary is closed at eleven words, and the freeze holds it
+  there** (it was twelve until `no_rejection` left with the capability
+  behind it, the fourth reason above) — the enum is written
   into `components/responses/Error`, which the core operations reach, so
   it is a line of the fingerprint, and a thirteenth code *moves* that
   line rather than adding one, which is not what
@@ -143,8 +149,8 @@ moves:
   [0101](design/0101-a-level-can-be-walked.md) left outside the freeze.
   Nor is there a way in through a side door: `surface_test.go` requires
   that enum and the server's own list to be the same list, and every
-  error response anywhere in the contract to draw from it. A thirteenth
-  code needs one of the three reasons above, the way any other change to
+  error response anywhere in the contract to draw from it. A twelfth
+  code needs one of the reasons above, the way any other change to
   the core does. Treat an unrecognized code as the status alone would be
   treated anyway — that costs nothing until the day one of those three
   lands.
@@ -192,13 +198,12 @@ the spec, and the pin is what tells that sync where to diff from.
 
 Not a promise that nothing breaks. A promise that you are told what did:
 
-- **A rename reaches you at the call, not only in the changelog**, which
-  is the one place a script or an agent configuration was never going to
-  read. And the window closes on time because closing it is checked:
-  each retired name carries the release that retired it, and CI fails as
-  soon as a later release is cut with the entry still in place. A
-  deprecation window's failure mode is not being broken, it is never
-  ending.
+- **A rename fails loudly rather than quietly.** A tool or command a
+  release renames is gone in that release: the call gets the protocol's
+  unknown-tool error or the CLI's unknown-command answer, and the list of
+  what exists (`tools/list`, `ochakai help`) names what to call instead
+  ([0152](design/0152-a-rename-at-0x-is-announced-not-bridged.md) — the
+  one-release window 0088 kept was never used and is gone).
 - **Every breaking change to MCP, the CLI or the stored shape is marked
   `BREAKING` in [the changelog](../CHANGELOG.md)**, with what an operator has
   to do about it — which migration runs, whether `updated_at` moves, whether

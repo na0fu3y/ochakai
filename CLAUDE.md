@@ -24,10 +24,9 @@ short entries (`DECISION-LINES`, checked), never rewritten, numbered from
 0153, written only when somebody is likely to reopen the choice. A rule
 added inside an area is the spec and the CHANGELOG, not an entry.
 
-[docs/design](docs/design/README.md) — records 0001–0152 — is frozen
-history. Until an area has its spec document, the index's opening table
-is still the way to its current state, and a change to that area updates
-the row by hand. The `design-doc` skill has the procedure;
+[docs/design](docs/design/README.md) — records 0001–0152 and their
+index — is frozen history: every area has its spec document, and nothing
+there is edited any more. The `design-doc` skill has the procedure;
 CONTRIBUTING.md's "Design: spec and decisions" has the reasons.
 
 ## Surface, and the default answer

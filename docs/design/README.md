@@ -7,10 +7,9 @@
 が持つ。規則は [CONTRIBUTING.md](../../CONTRIBUTING.md) の「Design: spec and
 decisions」にある。
 
-**現行仕様がまだ書かれていない領域は、下の早見表が現行の読み先である。**
-その領域を変える PR は、該当する行を手で直す(記録は直さない)。現行仕様が
-書かれた領域の行は、そちらを指す一行になる。全部の領域が揃ったら、この
-index も書き換えなくなる。
+**全部の領域に現行仕様が書かれたので、この index も凍結した。** 下の
+早見表は各領域の現行仕様を指し、その下の各節は 2026-09 までの決定の
+履歴である。どちらも、もう書き換えない。
 
 ## 現行ドキュメント早見表
 
@@ -35,13 +34,13 @@ index も書き換えなくなる。
 | Web UI | **[現行仕様 webui.md](../spec/webui.md)** — 二つの配信経路、ページの作り、画面、編集、出さないもの。経緯は 0130・0094・0131 |
 | 検証ループと利用測定 | **[現行仕様 loop.md](../spec/loop.md)** — 裁定と trust、四つのキュー、利用測定、ミス、`stats`、turn と比較の問い。経緯は 0141・0135・0144・0146 |
 | 同時実行と削除 | **[現行仕様 concurrency.md](../spec/concurrency.md)** — 前提条件、二段階の削除、バイト列の回収。経緯は 0030・0031・0099 |
-| 実装の品質ゲート | [0035](0035-verifiability.md) |
+| 実装の品質ゲート | **[現行仕様 quality.md](../spec/quality.md)**。経緯は 0035 |
 | 決定の書き方 | [CONTRIBUTING.md](../../CONTRIBUTING.md) の「Design: spec and decisions」が現行 — 現行仕様は領域ごとに書き換え、決定ログは短く書き換えない。0048 と 0128 の規則(番号の基準、置き換えによる改訂、表の一行の天井)はこの移行で役目を終えた |
 | バンドル往復と provenance の所有権 | **[現行仕様 okf.md](../spec/okf.md)**(「取り込みと往復」節)。経緯は 0009・0075 §3.1・0135 |
 | 空のベースを埋める | **[現行仕様 seeding.md](../spec/seeding.md)** — `ochakai seed` と Web UI の取り込み、空の description、クエリ履歴。経緯は 0148 |
-| やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**コネクタは [0151](0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md) が戻した** — ochakai は認可サーバにならず、`/mcp` の 401 がクライアントに発行者(Google Workspace を含む)を教える。Google Chat と Slack の橋は ROADMAP の「やらないこと」 |
-| REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md)。**本文の鍵の照合が完全一致で、同じ鍵の重複が 400 になることは [0125](0125-a-body-names-each-field-once.md)**(0064 §2 が決めた規則を、書かれたとおりに効かせたもの) |
-| MCP・CLI の安定性契約 | [0152](0152-a-rename-at-0x-is-announced-not-bridged.md)(0.x の改名は古い綴りを答えさせず、CHANGELOG が BREAKING と印す — 1.0 で決め直す) |
+| やらないと決めたこと | **[現行仕様 declined.md](../spec/declined.md)** — 断り方、撤去の基準、戻す条件。いま断っていることの一覧は [ROADMAP](../../ROADMAP.md)。経緯は 0070・0151 |
+| REST の安定性契約 | **[現行仕様 rest-stability.md](../spec/rest-stability.md)** と [compatibility.md](../compatibility.md) — 凍るのはコアだけ、凍結の外の二つの追加、破ってよい理由。経緯は 0064・0107・0082 |
+| MCP・CLI の安定性契約 | **[現行仕様 mcp-cli-stability.md](../spec/mcp-cli-stability.md)** — 0.x の改名は告げるだけで猶予を置かない。経緯は 0152 |
 
 だから**下の各節は、そのドキュメントが決めたことだけを書く**。何が後から
 改訂・Superseded されたかは本体の `Status:` ヘッダが必ず持っており、ここに

@@ -12,10 +12,8 @@ ochakai が**いまどう動くか、なぜそうなのか**を、領域ごと�
 
 ## 領域
 
-**まだ書かれていない領域は、[設計記録の index](../design/README.md) の
-早見表の行が現行の読み先である。** 一本書き終えるたびに、下の行と
-早見表の行がここを指すようになる。全部が揃った時点で
-`docs/design` は履歴の目録になり、以後は追記しない。
+全 17 領域が書かれている。[設計記録の index](../design/README.md) は
+履歴の目録になり、以後は書き換えない。
 
 | 文書 | 領域 | 状態 |
 |---|---|---|
@@ -32,10 +30,10 @@ ochakai が**いまどう動くか、なぜそうなのか**を、領域ごと�
 | [loop.md](loop.md) | 検証ループと利用測定 | 現行 |
 | [concurrency.md](concurrency.md) | 同時実行と削除 | 現行 |
 | [seeding.md](seeding.md) | 空のベースを埋める | 現行 |
-| `rest-stability.md` | REST の安定性契約 | 未着手 |
-| `mcp-cli-stability.md` | MCP・CLI の安定性契約 | 未着手 |
-| `declined.md` | やらないと決めたこと(ROADMAP の「やらないこと」と一本化) | 未着手 |
-| `quality.md` | 実装の品質ゲート | 未着手 |
+| [rest-stability.md](rest-stability.md) | REST の安定性契約 | 現行 |
+| [mcp-cli-stability.md](mcp-cli-stability.md) | MCP・CLI の安定性契約 | 現行 |
+| [declined.md](declined.md) | やらないと決めたこと(断り方と撤去の基準。一覧の正は ROADMAP) | 現行 |
+| [quality.md](quality.md) | 実装の品質ゲート | 現行 |
 
 決定の書き方そのものは、この一覧ではなく CONTRIBUTING.md が持つ。
 [docs/architecture.md](../architecture.md) は利用者向けの要約として残り、
