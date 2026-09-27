@@ -9,54 +9,26 @@ default and rules on nothing), and zero secrets — Cloud Run IAM + Cloud SQL IA
 in-process OIDC verification off it (0086), never tokens or passwords
 (0065, 0003).
 
-## Design docs
+## Design: spec and decisions
 
-Architecture decisions live in [docs/design](docs/design) as numbered,
-immutable decision records (mostly Japanese).
-[docs/design/README.md](docs/design/README.md) is the index — its
-opening table says which doc describes each area today; the prose below
-it carries the history, and a superseded or amended doc says so in its
-`Status:` header.
+What ochakai does lives in [docs/spec](docs/spec/README.md), one
+document per area, **rewritten in place**: a PR that changes what a user
+can observe (the wire, the stored form and its round trip, what identity
+and provenance mean, a Google Cloud dependency, something ochakai refuses
+to do) edits that area's document in the same PR, in the present tense.
+Internal changes that leave the outside unchanged belong in the PR
+description.
 
-A numbered doc is for a decision **a user can observe**
-([0048](docs/design/0048-decision-records-for-wire-contracts.md)): the
-shape of the wire, the stored form and its round trip, what identity and
-provenance mean, a new Google Cloud dependency, or something ochakai
-refuses to do. Internal changes that leave the outside unchanged belong
-in the PR description instead. **And a number is for an area's decision,
-not a rule inside it**
-([0128](docs/design/0128-a-number-is-for-an-area-not-a-rule-inside-it.md)):
-if the parent record plus the CHANGELOG answer the question somebody
-reopens in three months, the rule goes in the PR and the CHANGELOG, not
-a record. **A doc that has not reached a release is revised by replacing
-it, not by taking a new number** — immutability is a promise about
-decisions somebody could be depending on — and a released one is amended
-by a record that restates the whole area and supersedes it, never by a
-diff stacked on it. The index's opening table has a ceiling on how many
-records one row may cite (`INDEX-ROW-RECORDS`, down only, checked).
+Why it is not otherwise lives in [docs/decisions](docs/decisions/README.md):
+short entries (`DECISION-LINES`, checked), never rewritten, numbered from
+0153, written only when somebody is likely to reopen the choice. A rule
+added inside an area is the spec and the CHANGELOG, not an entry.
 
-When one is needed, it lands in the same PR as the change and the index
-stays truthful — the `design-doc` skill has the full procedure (new
-number, older docs' `Status:` headers, the index entry, and why amendment
-chains get a replacement instead). The bookkeeping half of it is checked:
-`cmd/ochakai/designdocs_test.go` fails on a record missing from an index,
-an index that disagrees with a record's `Status:` header about whether it
-is current, or a supersession recorded at only one end.
-
-**A record has a ceiling; the corpus no longer does.** CONTRIBUTING.md
-declares `RECORD-LINES` for one record's length, and a Superseded record
-shrinks to a tombstone (`TOMBSTONE-LINES`); the same test file reads both
-back. Over a line usually means two decisions, or a record restating one
-that already exists — not a record that needs denser prose. **What is no
-longer counted is the total**: `RECORD-CORPUS-LINES` is retired, with
-`DOC-LINES` and `REST-LINES`, because the paragraphs those ceilings asked
-for became the largest thing they produced (docs/surface.md's 上限
-section). 0048 narrowed what earns a number and 0128 narrowed what a
-number is for; a corpus growing under those two rules is growing
-correctly, and one growing against them is a review problem rather than
-an arithmetic one. Records have grown 4.1x since v0.10.0 against non-test
-Go's 2.5x, and it is the tombstone rule that keeps their line total under
-the code's.
+[docs/design](docs/design/README.md) — records 0001–0152 — is frozen
+history. Until an area has its spec document, the index's opening table
+is still the way to its current state, and a change to that area updates
+the row by hand. The `design-doc` skill has the procedure;
+CONTRIBUTING.md's "Design: spec and decisions" has the reasons.
 
 ## Surface, and the default answer
 

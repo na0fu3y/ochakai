@@ -14,6 +14,15 @@ context, including the store integration test and the fuzz targets).
       `internal/` or `cmd/` moves; if this change is not behavior, label the
       PR `no-changelog` and say why above
 
+## Scope
+
+Answer each in a line (CONTRIBUTING.md, "Proposing a feature").
+
+- **Condition** — which of `docs/surface.md`'s C1–C8 this serves, or "none:
+  internal / fix":
+- **Ruling made cheaper** — for anything an LLM or other automation does,
+  which person's ruling it makes cheaper (never one it makes), or "n/a":
+
 ## Surfaces and contract
 
 - [ ] `api/openapi.yaml`, `internal/restapi`, `internal/mcpserver`, and
@@ -33,12 +42,13 @@ context, including the store integration test and the fuzz targets).
       surface does not already cover it, and what is folded away in exchange.
       The default answer is no
 
-## Design docs
+## Spec and decisions
 
-- [ ] Alters an accepted decision? A new numbered doc under `docs/design` is in
-      this PR — or: it does not, and this box is not applicable. The index
-      entries, the `Status:` headers at both ends and the two indexes agreeing
-      about them are checked by `cmd/ochakai/designdocs_test.go`; what is left
-      for a human is whether the index's opening table still points at the doc
-      to read now, and whether the English summary says what was decided
+- [ ] Changes what a user can observe? The area's `docs/spec` document says so
+      in the present tense — or, for an area not written up yet, the design
+      index's opening-table row does. Or: it does not, and this box is not
+      applicable
+- [ ] A choice somebody will reopen? A short entry in `docs/decisions`
+      (0153 onward, under `DECISION-LINES`) — or it is not one
+- [ ] No document here says ochakai will not do something a ROADMAP stage plans
 - [ ] Commit messages and code comments are in English

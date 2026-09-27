@@ -68,7 +68,16 @@ func TestManualLinksResolve(t *testing.T) {
 	for _, name := range named {
 		pages = append(pages, root+name)
 	}
-	pages = append(pages, designIndex, designEnglishIndex)
+	// The design index is still edited until every area has its spec
+	// document, and docs/spec is rewritten in place, so both are living
+	// pages. Decision entries are not: like the records, each says what
+	// was true when it was written.
+	pages = append(pages, designDir+"/README.md", root+"docs/decisions/README.md")
+	specs, err := filepath.Glob(root + "docs/spec/*.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pages = append(pages, specs...)
 	// CLAUDE.md and CONTRIBUTING.md are changer-facing and so excluded
 	// from userDocs, but they are living pages whose links are meant to
 	// keep resolving — and a broken one survives review the same way a

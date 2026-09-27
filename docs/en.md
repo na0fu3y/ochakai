@@ -122,8 +122,10 @@ the key each client spells the URL with.
 
 ## Contributing in English
 
-Design records are Japanese, and every one carries an English abstract in
-[docs/design/README.en.md](design/README.en.md) — a reading aid, not the
-authority. Propose in whichever language you think in and say so in the
+How each area works and why is in [docs/spec](spec/README.md), one page
+per area, in Japanese: the table there names the areas, so you can pick
+the page to machine-translate. The numbered records in
+[docs/design](design/README.md) are the history before that, frozen.
+Propose in whichever language you think in and say so in the
 pull request; [CONTRIBUTING.md](../CONTRIBUTING.md) is in English and
 describes the checks.

@@ -116,10 +116,9 @@ otherwise have to hunt for. Not a translation; a way in.
   答えは no である。九つの一覧すべてをビルドから読み戻すテストがある
   ので数はずれず、機能は diff に出ないままでは現れない — それを説明
   する散文も同じで、これが九つ目の一覧であり、最も速く増えている。
-- [docs/design](design) — 番号付きの、書き換えない決定記録、そしてどれ
-  が今の状態を説明しているかを言う [index](design/README.md)。ほとんど
-  は日本語で、英語の記述と食い違えば記録本体が正しい。
-  [README.en.md](design/README.en.md) はその全部を英語で要約する — 何が
-  決まったか、それが ochakai を使う人にとって何を意味するか。
+- [docs/spec](spec/README.md) — 領域ごとの現行仕様。いまどう動くか、
+  なぜそうかを書き、振る舞いが変わるたびに書き換える。問い直されそうな
+  選択の理由は [決定ログ](decisions/README.md) に、2026-09 までの経緯は
+  凍結した [設計記録](design/README.md) にある。
 - [SECURITY.md](../SECURITY.md) — 脆弱性の報告方法、そして何が脆弱性に
   数えられるか。

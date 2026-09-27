@@ -34,10 +34,10 @@ Most answers are already written down, and the docs are short enough to check:
   requirements and every environment variable.
 - [deploy/cloudrun/README.md](deploy/cloudrun/README.md) (Japanese) — the full
   Cloud Run + Cloud SQL walkthrough, including the hardening checklist.
-- [docs/design/README.md](docs/design/README.md) — the index of numbered design
-  docs (mostly Japanese), with [English summaries](docs/design/README.en.md)
-  beside it. It says which document describes the current state of an area,
-  which is usually the fastest answer to "why does it work like that".
+- [docs/spec/README.md](docs/spec/README.md) (Japanese) — how each area works
+  today and why, which is usually the fastest answer to "why does it work like
+  that". An area not written up yet points at the
+  [design index](docs/design/README.md) row that still describes it.
 - [ROADMAP.md](ROADMAP.md) — what is being worked on, and what has been ruled
   out on purpose.
 - [docs/compatibility.md](docs/compatibility.md) — what may break between

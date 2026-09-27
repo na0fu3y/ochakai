@@ -873,9 +873,10 @@ func TestSurfaceDocCountsUserDocs(t *testing.T) {
 // Five things are markdown and are not the manual, and each is left out
 // for a reason docs/surface.md states:
 //
-//   - docs/design — decision records, read by somebody changing ochakai.
-//     What earns a number is already narrowed by design doc 0048; the same
-//     thing is not tightened twice.
+//   - docs/design, docs/spec and docs/decisions — the frozen records, the
+//     current-state spec and the decision log, read by somebody changing
+//     ochakai rather than using it (CONTRIBUTING.md, "Design: spec and
+//     decisions").
 //   - OKF documents — a file with frontmatter under examples/ or kb/ is
 //     knowledge, the thing ochakai stores, not prose about it. That is
 //     examples/demo, the bundle under examples/bigquery-catalog, and the
@@ -895,6 +896,7 @@ func userDocs(t *testing.T) []string {
 	const root = "../.."
 	skipDirs := map[string]bool{
 		".git": true, "node_modules": true, "docs/design": true, "internal": true,
+		"docs/spec": true, "docs/decisions": true,
 	}
 	forChangers := map[string]bool{
 		"CHANGELOG.md": true, "CONTRIBUTING.md": true,

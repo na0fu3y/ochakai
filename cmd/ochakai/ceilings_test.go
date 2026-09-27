@@ -36,10 +36,9 @@ import (
 //   - exact: the declared number is the measured number. A list of names
 //     (REST, CLI, ENV …) carries no tolerance, because adding a name is
 //     already a visible diff; a fold that lowers the count lowers the
-//     number in the same PR, so headroom never banks. The same rule is a
-//     ratchet when the number may only move down (INDEX-ROW-RECORDS).
+//     number in the same PR, so headroom never banks.
 //   - under: each of several things stays at or below the number. Per
-//     record, per tombstone: a ceiling on the one, not on the sum.
+//     decision entry: a ceiling on the one, not on the sum.
 //
 // The check holds the arithmetic, not the judgment. Whether the addition
 // earned its place is the reviewer's, and docs/surface.md's three
@@ -105,59 +104,18 @@ func one(what string, n int) []measurement { return []measurement{{what, n}} }
 // so that a new counted surface needs no row here.
 var ceilings = []ceiling{
 	{
-		name: "RECORD-LINES", in: contributing, rule: under,
+		name: "DECISION-LINES", in: contributing, rule: under,
 		measure: func(t *testing.T) []measurement {
-			from := fmt.Sprintf("%04d", declaredNumber(t, contributing, "RECORD-CAP-FROM"))
 			var ms []measurement
-			for _, r := range designRecords(t) {
-				if r.number < from {
-					continue // immutable before the rule; a ceiling cannot reach back
-				}
-				ms = append(ms, measurement{"docs/design/" + r.file, strings.Count(r.body, "\n")})
-			}
-			if len(ms) == 0 {
-				t.Fatalf("no record numbered %s or later: this check now guards nothing", from)
+			for _, d := range decisionEntries(t) {
+				ms = append(ms, measurement{"docs/decisions/" + d.file, strings.Count(d.body, "\n")})
 			}
 			return ms
 		},
-		advice: `A record is prose somebody reads, and going over usually means the decision
-is two decisions — split it and take two numbers. If it is restating what an
-earlier record already settled, cite that record instead. If it really is
-that large, raise the ceiling in this PR and say why: the number is there so
-the raise cannot happen quietly, not to be worked around by writing denser
-Japanese.`,
-	},
-	{
-		name: "TOMBSTONE-LINES", in: contributing, rule: under,
-		measure: func(t *testing.T) []measurement {
-			var ms []measurement
-			for _, r := range designRecords(t) {
-				if supersededByRe.MatchString(r.status) {
-					ms = append(ms, measurement{"docs/design/" + r.file, strings.Count(r.body, "\n")})
-				}
-			}
-			if len(ms) == 0 {
-				t.Fatal("no Superseded record found: this check now guards nothing")
-			}
-			return ms
-		},
-		advice: `A record whose Status: says Superseded shrinks to a tombstone: the title,
-the header, one sentence of what it decided, and a link to the commit that
-held it in full (CONTRIBUTING.md, "What a superseded record keeps"). Nobody
-can be depending on a decision that has already been replaced, and the full
-text stays one git show away — it does not need to stay in this file too.`,
-	},
-	{
-		name: "INDEX-ROW-RECORDS", in: contributing, rule: exact,
-		measure: func(t *testing.T) []measurement {
-			row, n := widestIndexRow(t)
-			return one(fmt.Sprintf("the widest row of the design index's opening table (%q)", row), n)
-		},
-		advice: `A row of the index's opening table is the one line a reader reaches an
-area's current state from (0048 §2.4); a row citing nine records has moved
-the amendment chain into the table. The number only moves down (0128 §2.3):
-do not add a record to the widest row — write the one that restates the
-area and supersedes the rest (0128 §2.2), and lower the number in that PR.`,
+		advice: `A decision entry is the reason a choice went one way, kept short so it gets
+read: context, decision, alternatives turned down, what would reopen it. Over
+the line usually means two decisions, or current-state prose that belongs in
+the area's docs/spec document, which is rewritten rather than appended to.`,
 	},
 }
 

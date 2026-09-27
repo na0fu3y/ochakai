@@ -1,60 +1,35 @@
 ---
 name: design-doc
-description: Add a numbered design doc to docs/design and keep the index and older docs' Status headers truthful. Use when a change alters an accepted decision — a new interface, a new Google Cloud dependency, a change to the auth model or a surface.
+description: Update the current-state spec in docs/spec and, when a choice is likely to be reopened, add a short entry to docs/decisions. Use when a change alters what a user can observe — the wire, the stored form, identity and provenance, a Google Cloud dependency, a surface, or something ochakai refuses to do.
 ---
 
-# Adding a design doc
+# Recording a design change
 
-`docs/design` holds decision records. They are **immutable** — once
-accepted, a doc is not rewritten. The incremental history lives in the
-docs and in PRs. What the repo must keep readable is the *current* state
-per area, and that is entirely the job of the `Status:` headers and
-[the index](../../../docs/design/README.md).
+Two places, two promises (CONTRIBUTING.md, *Design: spec and decisions*):
 
-So the deliverable is never just a new file. It is a new file **plus**
-every older doc it touches **plus** the index, in one PR.
+- **`docs/spec/<area>.md`** — how the area works today and why. Rewritten
+  in place, in the present tense. No `Status:` notes, no "amends": git
+  holds the history.
+- **`docs/decisions/NNNN-<slug>.md`** — a choice somebody will reopen:
+  context, decision, alternatives turned down, what would bring it back.
+  Short (`DECISION-LINES`), never rewritten, numbered from 0153.
+- **`docs/design/`** — records 0001–0152. Frozen history. Do not edit a
+  record, its `Status:` header or its index entry.
 
-## When one is needed
+## When
 
-A numbered doc is for a decision **a user can observe** (0048 §2.1):
+A change **a user can observe** — the shape of the wire (REST, MCP, CLI,
+web UI), the stored form and its round trip, what identity and
+provenance mean, a new Google Cloud dependency, or something ochakai
+refuses to do — updates the spec. Internal work that leaves the outside
+unchanged belongs in the PR description.
 
-- **the shape of the wire** — a REST endpoint, parameter or response
-  shape; an MCP tool added or removed; a CLI command added or removed;
-  what the web UI carries
-- **the stored form and its round trip** — the OKF document,
-  canonicalization, what gets hashed, the bundle address space
-- **what identity and provenance mean** — who a write is recorded as,
-  what is refused, read-only and its edges
-- **a new dependency on a Google Cloud service**, or anything touching
-  secret-zero (0065, 0003)
-- **something ochakai refuses to do** — the kind of judgment that lands
-  in the ROADMAP's refusals
+A decision entry is extra, and rarer: write one only when somebody three
+months from now will ask "why not the other way". A rule added inside an
+area, a number moved, a word renamed — the spec and the CHANGELOG carry
+those.
 
-Everything else belongs in the PR description: internal restructuring
-that leaves the outside unchanged, query and index work, performance,
-dependencies, additions *within* an existing decision (a new type
-spelling, an error message), and docs- or tests-only changes. When
-unsure, ask whether somebody will reopen this in three months. If not,
-the PR is enough.
-
-**That list picks areas, not grain** (0128 §2.1). A rule *inside* an
-area that already has a current record — who may write the first policy
-row, what a scoped caller's counts include, whether a prefix can hold
-its own administrator — is observable and still takes no number. Ask:
-will the parent record plus the CHANGELOG answer the question in three
-months? If yes, write the PR description and the CHANGELOG entry and
-stop. Only when the parent's own text now contradicts the rule is it an
-amendment, and step 7 below says what an amendment looks like.
-
-**A doc that has not reached a release is revised by replacing it, not by
-taking a new number** (0048 §2.3). Immutability is a promise about
-decisions somebody could be depending on; nobody depends on an unreleased
-one. Check the `Unreleased` section of [the changelog](../../../CHANGELOG.md):
-if the implementation is still sitting there, edit that doc (or delete
-and fold it into its successor, as 0034 did) instead of taking the next
-number. The alternatives you dropped stay in the PR history.
-
-Two decisions to check any proposal against first:
+Check any proposal against these first:
 
 - **Only a ruling changes what is served, no LLM rules, and the server
   runs no SQL** (0142). A ruling is a person's, or a confirmation job's
@@ -67,96 +42,40 @@ Two decisions to check any proposal against first:
 
 ## Steps
 
-**1. Read the area first.** Open the index and read every doc for the
-area, following the `Status:` notes. You need to know exactly which
-decisions you are overturning before you can write the header.
+**1. Find the area.** [docs/spec/README.md](../../../docs/spec/README.md)
+lists the areas. If the area's spec document exists, that is what you
+edit. If it does not yet, the design index's opening table
+([docs/design/README.md](../../../docs/design/README.md)) is still the
+area's current state: update that row by hand so it stays true, and do
+not touch the records it cites.
 
-**2. Take the next free number.**
+**2. Edit the spec** in the same PR as the change. Say what is true now;
+delete what stopped being true rather than annotating it. Cite a
+decision entry for the why when there is one.
+
+**3. Add a decision entry only if it earns one.**
 
 ```bash
-ls docs/design | tail -5
+ls docs/decisions | tail -3
 ```
 
-Gaps are fine — proposals that never landed stay in their PRs. Filename
-is `NNNN-kebab-case-slug.md`.
+Take the next number (0153 onward). The shape is in
+[docs/decisions/README.md](../../../docs/decisions/README.md): title,
+`Date:`, `領域:` linking the spec document, then 背景 / 決定 / 退けた案 /
+戻す条件. Keep it under `DECISION-LINES`; going over means two decisions,
+or spec prose in the wrong place. If a later change reverses it, add a
+new entry and edit the spec — the old entry is not annotated.
 
-**3. Write it.** Japanese is the maintainer's habit, not a rule — write
-in English if that is what you think in, and say so in the PR. The
-review cares that the decision **and its rejected alternatives** are
-legible. The `Status:` header names what this doc supersedes or amends:
+**4. Say it in the CHANGELOG**, as for any change a user can observe.
 
-```
-# ochakai 設計ドキュメント NNNN: <題>
+**5. Name the gate in the PR**: which condition (C1–C8) the change
+serves; for LLM or automation, which person's ruling it makes cheaper;
+for a wider surface, the three questions. Do not write that ochakai will
+not do something a ROADMAP stage plans.
 
-Status: Accepted(YYYY-MM-DD)。[00XX](00XX-….md) を Superseded にし、
-[00YY](00YY-….md) §N の「…」を改訂する。
-Date: YYYY-MM-DD
-```
-
-Use 0067 or 0071 as models for the header style.
-
-**Keep it under the ceiling.** CONTRIBUTING.md declares a `RECORD-LINES:`
-number and `TestCeilings` (`cmd/ochakai/ceilings_test.go`, one table of
-every ceiling the repository keeps) reads it back; the
-median record is about 140 lines. Going over almost always means the
-decision is two decisions — split it and take two numbers — or that the
-record is restating something an earlier one already settled, which is
-what citing it is for. If it genuinely is that large, raise the number in
-the same PR and say why. Do not answer the ceiling by compressing the
-prose: a record nobody finishes costs more than a long one.
-
-**The corpus as a whole has no ceiling any more.** `RECORD-CORPUS-LINES`
-is retired (CONTRIBUTING.md, *How many records, and how much*, and the
-上限 section of docs/surface.md say why), so a new record moves no total
-and there is no number to raise. What still holds is the pair of rules
-the ceiling stood in for: a number is for a decision a user can observe
-(0048) and for an area rather than a rule inside it (0128). A record
-that restates one already on file is the case to catch by citing that
-record instead; two subjects sharing one number read better split.
-
-**4. Update the older docs' `Status:` headers.** Every doc the new one
-supersedes or amends gets a line pointing at the new number. See 0011 or
-0018 for the style. This is the step that is easiest to forget and the
-one the whole scheme rests on.
-
-**5. Update the index.** Add the doc to its area with a one-line summary
-in the surrounding style (bold status, then what it decides), and adjust
-the status notes of the docs it amends. If this doc becomes the one to
-read for an area, update that area's row in the index's opening table —
-that table is what a reader is meant to reach the current state from
-(0048 §2.4).
-
-**6. Summarize it in English.** `docs/design/README.en.md` is a table, one
-row per record (record link, status, decision in a sentence or two); a
-missing row fails `TestEnglishDesignIndexCoversEveryRecord`. A doc this
-one supersedes **drops to a bare pointer row** — record and status only,
-no decision cell — since full rows are only kept for what is current
-(0048 §2.5), and `TestEnglishIndexSummarizesOnlyWhatIsCurrent` fails if
-the old row is left standing. Cutting it is part of superseding, not
-tidying to do later: the row of a replaced record describes the old world
-in the present tense and nobody rereads it.
-
-**7. Amend a released record by replacing it** (0128 §2.2). Do not
-stack a diff on it: write the record that states the area's whole
-current picture, and mark the parent and every amendment on it
-**Superseded**. An unreleased parent is simply edited (0048 §2.3). The
-index's opening table enforces the shape from its side —
-`TestCeilings` fails a row that cites more records than
-CONTRIBUTING's `INDEX-ROW-RECORDS`, and that number only goes down; if
-your record would be the one over, the fold is the PR to write.
-
-## What the checks hold, and what they cannot
-
-`cmd/ochakai/designdocs_test.go` fails when steps 3-6 are half done: a
-record over the ceiling, a record with no entry in either index, an index
-that still lists a superseded record as current (or retires one that is
-still standing), a supersession written at only one end. Run
-`go test ./cmd/ochakai/` before opening the PR and those come back as
-sentences, not review comments.
-
-No test reads step 5's judgment — whether the opening table's row points
-at the doc somebody should actually read now — or whether the summary in
-step 6 says what the record decided. Spend the attention there.
+What the checks hold: a decision entry's length, title and `Date:`, and a
+number not already used (`cmd/ochakai/decisions_test.go`). Nothing reads
+whether the spec says what the code does — that is the review.
 
 ## Surface consistency
 

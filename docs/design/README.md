@@ -1,27 +1,16 @@
 # ochakai 設計ドキュメント index
 
-番号付きの設計ドキュメント(decision record)の一覧。各ドキュメントは
-**決定の記録**であり、採択後は書き換えない。後続の設計が決定を覆した・
-改訂したときは、旧ドキュメントの `Status:` ヘッダに改訂元へのリンクが
-追記される(例: [0011](0011-gcs-attachment-storage.md)、
-[0018](0018-semantic-model-as-knowledge.md))。
+番号付きの設計ドキュメント(decision record)0001–0152 の一覧。**これらは
+履歴として凍結されている** — 記録本体も `Status:` ヘッダも、もう書き換え
+ない。いま ochakai がどう動くかは [現行仕様](../spec/README.md) が領域ごとに
+書き、なぜ他の案にしなかったかは [決定ログ](../decisions/README.md)(0153 以降)
+が持つ。規則は [CONTRIBUTING.md](../../CONTRIBUTING.md) の「Design: spec and
+decisions」にある。
 
-**ある領域の現在の姿を知るには、その領域の全ドキュメントを Status の
-注記に従って読めば足りる**状態を保つ。これがこの index の目的であり、
-維持ルールは [CONTRIBUTING.md](../../CONTRIBUTING.md) の「Design docs」
-節にある。番号には欠番があり得る — 採択・ランドに至らなかった提案は
-PR の中に残る。
-
-番号付きドキュメントを要するのは、**利用者が観測できるものを変える決定**
-だけである(ワイヤの形、保存形と往復、identity と provenance の意味、
-Google Cloud への依存、意図してやらないこと)。外形の変わらない内部変更は
-PR の説明で足り、まだリリースに乗っていない決定の改訂は新しい番号ではなく
-元のドキュメントの差し替えになる — 基準は
-[0048](0048-decision-records-for-wire-contracts.md)。番号は**領域の決定**に
-与え、その内側の規則(誰が最初の行を書けるか、数が何を含むか)は PR と
-CHANGELOG に置く。リリース済みの記録を改訂するときは差分ではなく領域の
-現在の姿を一本に書き、下の早見表の一行が挙げる記録の数には天井がある
-— [0128](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)。
+**現行仕様がまだ書かれていない領域は、下の早見表が現行の読み先である。**
+その領域を変える PR は、該当する行を手で直す(記録は直さない)。現行仕様が
+書かれた領域の行は、そちらを指す一行になる。全部の領域が揃ったら、この
+index も書き換えなくなる。
 
 ## 現行ドキュメント早見表
 
@@ -47,25 +36,12 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 検証ループと利用測定 | [0141](0141-a-miss-is-read-off-the-words.md) が現行 — 四つのキュー、立っている検証からの tier、直近 90 日の並び、`stats` と、**どの concept の言葉にも一致しなかった検索をミスとして数えること**(0069・0090・0095・0137・0138 を畳んだ)。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない)。**ループの入力になる turn を、ochakai のエージェント以外も残せて REST から読めることは [0144](0144-a-turn-is-kept-whoever-answered.md)**(0142 §6 の書き手を広げる — 形・保持・export に載せないことは動かない)。**比較に使う問いを再生し、答えがまだ立っているかを言うことは [0146](0146-a-kept-question-is-replayed-where-the-person-runs-it.md)**(`ochakai eval`、エージェントは `dry_run` で何も書かず何も数えず、SQL は打った人の手元で走る) |
 | 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂)。**却下が削除の一種であり、理由がリビジョンに載ることは [0135](0135-a-rejection-is-a-deletion.md)** — 墓標は塞がず、`knowledge_rejection` は畳まれた |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
-| 決定の書き方 | [0048](0048-decision-records-for-wire-contracts.md)。**番号は領域の決定に与え、その内側の規則には与えないことと、この表の一行が挙げてよい記録の数の天井は [0128](0128-a-number-is-for-an-area-not-a-rule-inside-it.md)**(0048 §2.1 / §2.2 を改訂) |
+| 決定の書き方 | [CONTRIBUTING.md](../../CONTRIBUTING.md) の「Design: spec and decisions」が現行 — 現行仕様は領域ごとに書き換え、決定ログは短く書き換えない。0048 と 0128 の規則(番号の基準、置き換えによる改訂、表の一行の天井)はこの移行で役目を終えた |
 | バンドル往復と provenance の所有権 | [0075](0075-the-bundle-is-the-address-space.md) §3.1 が現行(主張と観測の分離)。往復で何が動かないか・Git をレビュー経路にする決定・二つの拒否は [0009](0009-provenance-portability.md)。**却下が frontmatter を離れ、イベントとして `log.md` で運ばれることは [0135](0135-a-rejection-is-a-deletion.md)**(OKF の信号は単調で、否定の段はどのキーにも無い) |
 | 空のベースを埋める | [0148](0148-the-empty-base-fills-from-the-page-too.md) が現行 — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし(ウェアハウスに接続しない)、**Web UI の「BigQuery から取り込む」は同じ投影を本人の身元で読んだスキーマから作り、既存の `PUT` で上書きせずに書く**。サーバーは何も新しく提供せず、`OCHAKAI_OAUTH_CLIENT_ID` はエージェント無しで立つ(0085 を置き換えた) |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**コネクタは [0151](0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md) が戻した** — ochakai は認可サーバにならず、`/mcp` の 401 がクライアントに発行者(Google Workspace を含む)を教える。Google Chat と Slack の橋は ROADMAP の「やらないこと」 |
 | REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md)。**本文の鍵の照合が完全一致で、同じ鍵の重複が 400 になることは [0125](0125-a-body-names-each-field-once.md)**(0064 §2 が決めた規則を、書かれたとおりに効かせたもの) |
 | MCP・CLI の安定性契約 | [0152](0152-a-rename-at-0x-is-announced-not-bridged.md)(0.x の改名は古い綴りを答えさせず、CHANGELOG が BREAKING と印す — 1.0 で決め直す) |
-
-英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
-[README.en.md](README.en.md) を置いている。**正典は各ドキュメント本体**で、
-要約が食い違えば本体が正しい。新しいドキュメントを足したら要約も足す —
-足し忘れは `TestEnglishDesignIndexCoversEveryRecord` が落ちる。
-
-この index と各ドキュメントの `Status:` ヘッダの食い違いは
-`cmd/ochakai/designdocs_test.go` が落とす(0035)。1 つの決定が触る
-4 箇所(0048 §1)のうち、**この index にエントリがあること**、**両方の
-index の現行 / Superseded の表示が本体のヘッダと一致すること**、
-**Superseded にした側とされた側・改訂した側とされた側の両方にその記録が
-あること**が対象で、覚えていることが要るのは残りの 1 つ — 早見表の行が
-指す先が本当に「いま読むべきドキュメント」か — だけになる。
 
 だから**下の各節は、そのドキュメントが決めたことだけを書く**。何が後から
 改訂・Superseded されたかは本体の `Status:` ヘッダが必ず持っており、ここに
