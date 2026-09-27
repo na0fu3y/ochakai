@@ -98,6 +98,21 @@ last entry.
   a bucket keeps writing to GCS, and one that names a bucket later keeps
   reading the bytes it stored in PostgreSQL. The startup line says
   `file bytes in PostgreSQL (no OCHAKAI_GCS_BUCKET)`.
+- **BREAKING: a concept's address answers its document to a plain GET,
+  and a directory's address answers its `index.md`** (decision 0153).
+  `GET /api/v1/bundle/<id>.md` returned the JSON View unless
+  `Accept: text/markdown` was named; it now returns the document — the
+  export form, with its ETag — unless `Accept: application/json` is
+  named. `GET /api/v1/bundle/` and any path ending in `/` answer that
+  directory's `index.md` instead of a 501 or 404, so `/api/v1/bundle/`
+  is the root a body's `/tables/orders.md` link resolves against. This
+  is what OKF means by serving a bundle: a reader that fetches `.md`
+  files and follows `index.md` — or `subdir/`, as SPEC §8 writes it —
+  now reads ochakai the way it reads a static file server. **If you read
+  concepts over REST without an `Accept` header and parse JSON, add
+  `Accept: application/json`.** The CLI and the web UI already send it;
+  the BigQuery catalog job in `examples/` now does. Writes still answer
+  with the View.
 
 ### Fixed
 

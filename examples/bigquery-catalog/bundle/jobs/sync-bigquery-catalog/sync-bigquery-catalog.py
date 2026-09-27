@@ -366,7 +366,10 @@ class Ochakai:
         in If-Match exactly as it arrived (design doc 0030). It is not a
         timestamp, and nothing here parses it.
         """
-        r = requests.get(self._at(entry_id), headers=self.headers, timeout=TIMEOUT)
+        # The View is asked for by name: a concept's address answers its
+        # document to a plain GET (design doc 0153).
+        r = requests.get(self._at(entry_id), headers={**self.headers, "Accept": "application/json"},
+                         timeout=TIMEOUT)
         if r.status_code == 404:
             return None, ""
         r.raise_for_status()

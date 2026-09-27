@@ -467,6 +467,14 @@ func Handler(svc *service.Service) http.Handler {
 			writeObjectHistory(w, r, svc, path)
 			return
 		}
+		// A directory's own address — the bundle root, or any path ending
+		// in "/" — is its index, as a static file server answers it and
+		// as SPEC §8's own example links a subdirectory (`subdir/`).
+		// Before this it read as a file and answered 501 or 404
+		// (design doc 0153).
+		if path == "" || strings.HasSuffix(path, "/") {
+			path += "index.md"
+		}
 		dir, base := splitReserved(path)
 		switch base {
 		case "index.md":
@@ -557,10 +565,15 @@ func Handler(svc *service.Service) http.Handler {
 						w.WriteHeader(http.StatusNotModified)
 						return
 					}
-					if wantsDocument(r) {
-						writeDocument(w, http.StatusOK, k)
-					} else {
+					// The document is what lives at a concept's address,
+					// so it is what a plain GET gets — the answer a static
+					// file server gives, and what OKF says anyone serving a
+					// bundle serves (design doc 0153). The JSON View is
+					// the structured form, asked for by name.
+					if wantsJSON(r) {
 						writeView(w, k)
+					} else {
+						writeDocument(w, http.StatusOK, k)
 					}
 					return
 				}
@@ -1684,14 +1697,12 @@ func splitReserved(path string) (dir, base string) {
 //     recognizes):
 //     index.md / log.md   — application/json: structured; default: the
 //     generated markdown document.
-//     a concept (<id>.md) — text/markdown: the export-form document;
-//     default: the JSON View. 0046 §3.5's table said the unmarked
-//     default should be the export form; the code has answered the
-//     View by default since the address landed — what "every existing
-//     client reads" (see wantsDocument below) — and 0064 corrects the
-//     table to match the code rather than the other way around, since
-//     changing the default now would break every existing REST client
-//     silently, at the moment the wire is meant to stop moving.
+//     a concept (<id>.md) — application/json: the JSON View; default:
+//     the document, as it would sit in an exported bundle. 0064 kept the
+//     View as the default so as not to break clients at the freeze;
+//     design doc 0153 turned it around, because a `.md` address that
+//     answers a plain GET with something other than the document is not
+//     serving OKF, and every client ochakai ships already names JSON.
 //     a file               — application/json: its metadata, with no
 //     bytes (design doc 0064 — the one way to read a sha256 without
 //     downloading it, closing the gap 0046 §3.5's table had already
@@ -1741,9 +1752,11 @@ func writeMarkdown(w http.ResponseWriter, doc []byte) {
 	_, _ = w.Write(doc)
 }
 
-// wantsDocument reports whether the caller asked for the concept as a
-// document rather than as JSON. Only an explicit markdown Accept counts:
-// a browser sends */* and wants the JSON every existing client reads.
+// wantsDocument reports whether a write's caller asked to be answered
+// with the stored document rather than the JSON View. A write's answer
+// is about the write — the plan and the notes ride in the View's body
+// (design docs 0097, 0113) — so the View stays its default; a read's
+// default is the document (design doc 0153).
 func wantsDocument(r *http.Request) bool {
 	return acceptsType(r, "text/markdown")
 }

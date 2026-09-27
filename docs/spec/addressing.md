@@ -36,6 +36,13 @@ UTF-8・128 バイト以下・制御文字なし・先頭 `.` 禁止、id 全体
   `<dir>/log.md` で読む。裸の id を取るのは
   `/api/v1/review/{id}` と `/api/v1/usage/{id}` で、これは識別子であって
   住所ではない。二つの対象を持つ `move` だけが本文で名指す。
+- **素の GET には、静的ファイルサーバーと同じものを返す。** concept の
+  住所は文書そのもの(export と同じ形)を、ディレクトリの住所(`/` で終わる
+  パスと根の `/api/v1/bundle/`)はその `index.md` を返す。だから
+  `/api/v1/bundle/` がバンドルの根で、本文の絶対リンク `/tables/orders.md` は
+  そこから解決される。構造化した JSON(concept の View、ディレクトリの一覧)は
+  `Accept: application/json` で名指す。書き込みの応答は、何をしたかを本文で
+  運ぶので JSON が既定である(決定 [0153](../decisions/0153-serve-the-bundle-as-okf.md))。
 - **表現は `Accept` が決める。** 一つの住所の複数の表現であって、第二の面
   ではない。`Accept: application/gzip` はパスを部分木として読み、**その
   tar.gz** を返す。ルートなら全体 — これが export である(`files=false` で

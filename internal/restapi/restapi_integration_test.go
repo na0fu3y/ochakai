@@ -2869,7 +2869,12 @@ func TestRESTIntegrationAnObjectIsNotAnArchivableDirectory(t *testing.T) {
 // what a dry run did not write.
 func storedDocument(t *testing.T, base, id string) string {
 	t.Helper()
-	resp, err := http.Get(base + "/api/v1/bundle/" + id + ".md")
+	req, err := http.NewRequest(http.MethodGet, base+"/api/v1/bundle/"+id+".md", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Accept", "application/json")
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
