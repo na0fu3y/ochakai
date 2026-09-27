@@ -45,9 +45,7 @@ Answer each in a line (CONTRIBUTING.md, "Proposing a feature").
 ## Spec and decisions
 
 - [ ] Changes what a user can observe? The area's `docs/spec` document says so
-      in the present tense — or, for an area not written up yet, the design
-      index's opening-table row does. Or: it does not, and this box is not
-      applicable
+      in the present tense. Or: it does not, and this box is not applicable
 - [ ] A choice somebody will reopen? A short entry in `docs/decisions`
       (0153 onward, under `DECISION-LINES`) — or it is not one
 - [ ] No document here says ochakai will not do something a ROADMAP stage plans

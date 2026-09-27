@@ -43,11 +43,8 @@ Check any proposal against these first:
 ## Steps
 
 **1. Find the area.** [docs/spec/README.md](../../../docs/spec/README.md)
-lists the areas. If the area's spec document exists, that is what you
-edit. If it does not yet, the design index's opening table
-([docs/design/README.md](../../../docs/design/README.md)) is still the
-area's current state: update that row by hand so it stays true, and do
-not touch the records it cites.
+lists the areas, one document each; that document is what you edit. The
+design records and their index are frozen history — do not touch them.
 
 **2. Edit the spec** in the same PR as the change. Say what is true now;
 delete what stopped being true rather than annotating it. Cite a
@@ -107,7 +104,6 @@ Keep `api/openapi.yaml`, `internal/restapi`, `internal/mcpserver`, and
 
 ## Before opening the PR
 
-Reread the index and ask the question it exists to answer: can someone
-learn an area's current state from the opening table alone, and then from
-that area's docs by following the Status notes? If not, the index change
-is not done.
+Reread the area's spec document and ask the question it exists to
+answer: can someone learn how the area works today, and why, from it
+alone? If not, the spec change is not done.
