@@ -945,11 +945,10 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 // than it (design doc 0025 §6).
 //
 // Verifying does not touch the entry's row. The document did not change,
-// so its lifecycle status, its updated_at and therefore its ETag all stay
-// where they were (design doc 0043 §3.2) — an editor holding a
-// precondition does not lose it because somebody else confirmed the
-// entry. Promoting a draft to stable is a separate act by a writer, on
-// the document.
+// so its updated_at and therefore its ETag stay where they were — an
+// editor holding a precondition does not lose it because somebody else
+// confirmed the entry. Publishing a draft is Service.Verify's, as an
+// edit made before this runs (decision 0157).
 //
 // The timestamp comes from the database, not from NowStored: the feed
 // compares it against the last failure report, which RecordOutcome stamps

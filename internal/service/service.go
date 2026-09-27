@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -618,10 +619,14 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor, ifM
 // that was reported wrong and then fixed stayed in the re-verification
 // feed for good. A queue nobody can empty stops being read.
 //
-// It does not touch the document, so the concept's status and its ETag stay
-// put (design doc 0043 §3.2). Promoting a draft to stable is a separate
-// edit by a writer; confirming and publishing are different acts, and a
-// draft somebody checked is a state OKF can express (SPEC §§5.3-5.4).
+// A draft is published first: its document is rewritten with
+// `status: stable`, as the verifier, and the verification is then
+// recorded against that content, so it stands (decision 0157). Every
+// face that ruled on a draft meant to accept it, and the review queue
+// used to compose the two acts in the other order — verify, then edit
+// the status — which is a content change after the verification, so the
+// draft it had just accepted came out stable and unverified. A stable or
+// deprecated concept is not edited: its status and its ETag stay put.
 //
 // There is no promotion restriction: anyone who may write the concept
 // may verify it, and the ledger records who did — trust is judged from
@@ -641,12 +646,48 @@ func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*d
 	if err := s.mayWrite(ctx, id); err != nil {
 		return nil, err
 	}
+	if err := s.publishDraft(ctx, id, actor); err != nil {
+		return nil, err
+	}
 	k, err := s.Store.Verify(ctx, id, actor)
 	if err != nil {
 		return nil, err
 	}
 	s.Log.Info("knowledge verified", "id", id, "actor", actor.String())
 	return k, nil
+}
+
+// publishDraft rewrites a draft's document with `status: stable` and
+// stores it as an edit by actor; any other concept is left alone. The
+// one line is spliced into the document as stored, so the writer's
+// layout, comments and every other key survive (okf.SetFrontmatterKeys),
+// and the write is conditional on the content hash it read: an edit
+// landing in between fails the ruling rather than being overwritten.
+func (s *Service) publishDraft(ctx context.Context, id string, actor domain.Actor) error {
+	cur, err := s.Store.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if cur.Lifecycle() != domain.StatusDraft {
+		return nil
+	}
+	doc, _, err := store.StoredDocument(cur)
+	if err != nil {
+		return err
+	}
+	out, err := okf.SetFrontmatterKeys([]byte(doc), map[string]json.RawMessage{"status": json.RawMessage(`"stable"`)}, nil)
+	if err != nil {
+		return err
+	}
+	d, _, err := okf.Parse(out)
+	if err != nil {
+		return err
+	}
+	k := d.Knowledge
+	k.ID = id
+	hash := cur.ContentHash
+	_, _, err = s.Update(ctx, &k, actor, &hash)
+	return err
 }
 
 // Purge hard-deletes an already soft-deleted concept, freeing its id for a

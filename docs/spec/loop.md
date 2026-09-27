@@ -16,7 +16,13 @@
 - **裁定は二つ**: 検証(`POST /api/v1/review/{id}` に `{"ruling":
   "verified"}`、CLI `ochakai verify`)と却下(`DELETE` に `note`、CLI
   `ochakai delete --note`)。どちらも人の面(REST・CLI・Web UI)にあり、
-  MCP には無い。裁定は文書にも ETag にも触れない。
+  MCP には無い。
+- **draft への検証は、それを公開してから記録する**
+  ([0157](../decisions/0157-verify-publishes-a-draft.md))。文書の
+  `status` の一行だけを `stable` に書き換えて検証者の編集として保存し、
+  そのうえで検証を記録するので、検証はいまの内容に対して立つ。stable と
+  deprecated への検証は文書にも ETag にも触れない — 再確認が、編集中の
+  人の If-Match を無効にしない。
 - **裁定するのは人か、人が置いた確認ジョブ**である。`process:` の身元で
   記録された検証(CI の canary など)は `machine-confirmed` と読まれる。
   LLM は裁定しない([architecture.md](architecture.md))。
@@ -36,13 +42,14 @@
   出ない。
 - **status は裁定ではない**(draft / stable / deprecated は内容の段階で、
   書き手が書く)。MCP から書いた文書で status が無いものは draft として
-  書かれる。
+  書かれる。draft を stable にするのは、書き手の編集か、draft への検証
+  である。
 
 ## 四つのキューと、キューではない一つのフィード
 
 | キュー | 一覧 | 空になる条件 |
 |---|---|---|
-| `drafts` | `ochakai list usage --status draft` | 公開する編集 / 削除(却下を含む) |
+| `drafts` | `ochakai list usage --status draft` | verify / 公開する編集 / 削除(却下を含む) |
 | `failed` | `ochakai list failed` | 最後の失敗報告より後の verify |
 | `stale_after` | `ochakai list stale_after` | 書き手が期限を宣言し直す編集 |
 | `edited` | `ochakai list verified_at --trust unverified` | verify / 削除 |

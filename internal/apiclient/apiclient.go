@@ -559,9 +559,9 @@ func (c *Client) Delete(ctx context.Context, path, ifMatch, note string) error {
 }
 
 // review records one human ruling on the entry (POST
-// /api/v1/review/{id}). It does not edit the entry: the document, its
-// lifecycle status and its ETag all stay put, because ruling on
-// knowledge and publishing it are different acts (design doc 0043 §3.2).
+// /api/v1/review/{id}). A draft is published as stable first, as the
+// caller, so the verification stands for what is served (decision
+// 0157); any other entry's document and ETag stay put.
 // The other ruling a curator makes is a Delete carrying a note (design
 // doc 0135).
 func (c *Client) review(ctx context.Context, id, ruling, note string) (*domain.View, error) {

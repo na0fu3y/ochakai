@@ -115,7 +115,7 @@ func TestIntegrationDelegatedActorFollowsEachCall(t *testing.T) {
 	sw.set("human:carol@example.co.jp")
 	res, err = cs.CallTool(ctx, &mcp.CallToolParams{
 		Name:      "report_outcome",
-		Arguments: map[string]any{"target": id, "outcome": "failed", "note": "did not run"},
+		Arguments: map[string]any{"id": id, "outcome": "failed", "note": "did not run"},
 	})
 	if err != nil {
 		t.Fatalf("report_outcome: %v", err)

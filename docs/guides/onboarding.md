@@ -66,9 +66,8 @@
 先に知っておくと設計し直さずに済むことが二つある。**status と trust は別の物
 差しである。** status(draft / stable / deprecated)は書き手が置くライフサイク
 ルの主張で、trust(unverified / machine-confirmed / human-reviewed)は台帳から
-導かれる。draft のまま検証済みにもなり、stable のまま未検証にもなる。Web UI の
-レビュー画面の ✓ 検証は検証の記録と stable への昇格を一度に行うが、ワイヤでは
-別の二手で、`ochakai verify` は台帳にしか触れない。そして**「二人が確認した」
+導かれる。stable のまま未検証にもなる。draft への検証は、Web UI の ✓ でも
+`ochakai verify` でも、stable にしてから検証を記録する(決定 0157)。そして**「二人が確認した」
 という段は無い。** trust は三段で単調である。二人目の検証は台帳の二行目として
 残り、Web UI の provenance 行と `ochakai get` が読めるが、一覧や検索の要約に回
 数は出ない。二人以上を運用の条件にするなら、読むのはそこである。

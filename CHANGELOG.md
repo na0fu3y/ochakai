@@ -23,6 +23,20 @@ last entry.
 
 ### Changed
 
+- **BREAKING: verifying a draft publishes it as stable**
+  ([decision 0157](docs/decisions/0157-verify-publishes-a-draft.md)).
+  `POST /api/v1/review/{id}` with `verified`, `ochakai verify` and the
+  web UI's ✓ first rewrite a draft's `status` line to `stable`, as an
+  edit by the verifier (the rest of the document kept byte for byte),
+  then record the verification — so it stands, and the response carries
+  the new ETag. A stable or deprecated concept is still not edited. The
+  review queue's ✓ used to verify and then edit the status, which
+  unseated the verification it had just made: an accepted draft came out
+  stable, unverified, and in the 編集後未検証 queue.
+- **BREAKING: MCP `report_outcome` takes `id`, not `target`,** as
+  `get_concept` and `put_concept` do. A client sending `target` gets a
+  validation error naming it.
+
 - **A search snippet reads as the text it was cut from.** A line the
   writer's editor wrapped inside a paragraph is joined with nothing
   between two Japanese characters, as markdown renders it, instead of a

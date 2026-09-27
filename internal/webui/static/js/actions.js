@@ -162,11 +162,10 @@ export async function applyStatus(id, status) {
   return true;
 }
 
-// The two rulings a curator makes. Verifying does not edit the document —
-// confirming an entry is a judgment about it, so it has its own endpoint
-// and leaves the lifecycle status alone (design doc 0043 §3.2) — and it
-// is an append, so the first confirmation and the tenth re-check are the
-// same call.
+// The two rulings a curator makes. Verifying has its own endpoint and is
+// an append, so the first confirmation and the tenth re-check are the
+// same call; on a draft the server publishes it as stable first
+// (decision 0157), and a stable or deprecated entry is not edited.
 export async function verifyEntry(id) {
   await api('/api/v1/review/' + idPath(id), { method: 'POST', body: { ruling: 'verified' } });
   refreshQueues();

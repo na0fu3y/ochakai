@@ -34,12 +34,13 @@
 **裁定する。** `ochakai ui` を開き、レビューキューでそれを見つけて
 「検証」を押す — あるいは理由を付けて「却下」する。却下はその concept を
 消し、理由を裁定として残す(設計ドキュメント 0135)。レビュー画面の
-✓ 検証は、検証を台帳に記録し、あわせて draft を stable に昇格させる —
-ワイヤでは別の二手で、`ochakai verify` は台帳にしか触れず status を
-動かさない。**status と trust は別の物差しである**: status(draft /
-stable / deprecated)は書き手が置くライフサイクルの主張、trust
-(unverified / machine-confirmed / human-reviewed)は台帳から導かれる。
-draft のまま検証済みにもなり、stable のまま未検証にもなる。理由は履歴と
+✓ 検証も `ochakai verify` も同じ一手で、draft ならまず stable にして
+から、検証を台帳に記録する(決定 0157)。stable の concept を検証し直す
+ときは、文書には触れない。**status と trust は別の物差しである**:
+status(draft / stable / deprecated)は書き手が置くライフサイクルの
+主張、trust(unverified / machine-confirmed / human-reviewed)は台帳から
+導かれる。stable のまま未検証にもなる — 書き手が stable と書いて入れた
+concept や、検証のあとで編集された concept がそうである。理由は履歴と
 `log.md` に残り、同じ id はまた書ける — 読めるところに置くのであって、
 読ませて止めるのではない(0135 §3)。**この一手を、繋いだエージェント
 がついでに済ませることはない** — MCP に裁定のツールが無いからである
