@@ -860,7 +860,7 @@ func cmdRevisions(ctx context.Context, args []string) error {
 func cmdLog(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"log",
-		"Usage: ochakai log [flags] [path]\n\nPrint the update history under a path as OKF's log.md (SPEC §9):\ndate-grouped, newest first. With no path, the whole bundle.\n\nIt is generated from the revision ledger, so it says the same thing\n`ochakai revisions` does — in the format a bundle carries, which is\nwhat makes the history portable.",
+		"Usage: ochakai log [flags] [path]\n\nPrint the update history under a path as OKF's log.md (SPEC §9):\ndate-grouped, newest first. With no path, the whole bundle.\n\nIt is generated from the revision ledger, for every concept under the\npath at once, in the format a bundle carries — which is what makes the\nhistory portable, and where a rejection's reason is read. For one\nconcept's revisions with the whole document as it stood, use\n`ochakai revisions`.",
 		"  ochakai log\n  ochakai log metrics\n  ochakai log metrics/revenue --limit 20\n")
 	limit := fs.Int("limit", 0, "max concepts (default 1000)")
 	pos, err := parseArgs(fs, args)

@@ -49,6 +49,10 @@ last entry.
   "this surface has no If-Match" — on a path that has a precondition. It
   now says the concept was ruled on and to write a new draft that links
   it. Still 400.
+- **`ochakai log`'s help no longer says it is `ochakai revisions`.** The
+  two differ: `log` covers every concept under a path in OKF's log.md
+  form, where a rejection's reason is read; `revisions` is one concept,
+  with each revision's whole document under `--json`.
 
 ### Fixed
 
