@@ -791,7 +791,7 @@ func view(k *domain.Knowledge, notes []string, plan string) (knowledgeOut, error
 
 type writeIn struct {
 	ID       string `json:"id" jsonschema:"where the concept lives: its full path, / separated (e.g. metrics/revenue, 用語/売上). The last segment must not be \"index\" or \"log\""`
-	Document string `json:"document" jsonschema:"the concept as an OKF document: YAML frontmatter, then markdown.\nFrontmatter: type (required, one line; the description lists the recommended ones), title (the id's last segment names it without one), description, tags, resource (the underlying asset's URI), status (draft | stable | deprecated; omitted reads as stable), status_note, stale_after (RFC 3339, or a YYYY-MM-DD date), sources (list of {resource, id, title, ...} — the material this derives from), usage_window ({from, to}). An Attested Computation also takes runtime (required), parameters, computation, executor, attester.\nProducer-defined keys sit beside these and are kept as written. Provenance keys (generated, verified, created_by) are never read as truth — send a document back as it came and they are kept as its claim, not as a ruling"`
+	Document string `json:"document" jsonschema:"the concept as an OKF document: YAML frontmatter, then markdown.\nFrontmatter: type (required, one line; the description lists the recommended ones), title (the id's last segment names it without one), description, tags, resource (the underlying asset's URI), status (draft | stable | deprecated; omitted is written as draft), status_note, stale_after (RFC 3339, or a YYYY-MM-DD date), sources (list of {resource, id, title, ...} — the material this derives from), usage_window ({from, to}). An Attested Computation also takes runtime (required), parameters, computation, executor, attester.\nProducer-defined keys sit beside these and are kept as written. Provenance keys (generated, verified, created_by) are never read as truth — send a document back as it came and they are kept as its claim, not as a ruling"`
 }
 
 // toKnowledge parses the document. Notes — values read differently than
@@ -809,5 +809,15 @@ func (in writeIn) toKnowledge() (k *domain.Knowledge, notes, claimed []string, e
 	}
 	out := d.Knowledge
 	out.ID = in.ID
+	// A status left out is written as draft here, not read as OKF's
+	// stable. An agent that forgot the key would otherwise publish an
+	// unverified stable concept that no review queue holds — the drafts
+	// queue counts status = draft — so its learning would be served
+	// without ever reaching a person. The deployment's own agent writes
+	// the same way (internal/agent writeDraft); a stable written out is
+	// still the agent's to say.
+	if out.Status == "" {
+		out.Status = domain.StatusDraft
+	}
 	return &out, notes, d.Claimed, nil
 }
