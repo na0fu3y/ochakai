@@ -218,6 +218,26 @@ func writeFilteredHelp(t *testing.T, b *strings.Builder, help, otherCommand stri
 }
 
 // helpFor runs one command with -h and returns what it printed.
+// A backquoted word in a flag's usage is the flag package's name for
+// its argument, so "else the `ochakai use` selection" printed as
+// "-url ochakai use" on every command. A flag line whose argument name
+// has a space in it is that mistake.
+func TestFlagArgumentNamesAreOneWord(t *testing.T) {
+	t.Setenv("OCHAKAI_URL", "")
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	for _, name := range slices.Sorted(maps.Keys(clientCommands)) {
+		for line := range strings.SplitSeq(helpFor(t, name), "\n") {
+			rest, ok := strings.CutPrefix(line, "  -")
+			if !ok || strings.HasPrefix(rest, "-") {
+				continue
+			}
+			if _, arg, ok := strings.Cut(rest, " "); ok && strings.Contains(arg, " ") {
+				t.Errorf("`ochakai %s -h`: flag line %q names its argument with more than one word", name, line)
+			}
+		}
+	}
+}
+
 func helpFor(t *testing.T, name string) string {
 	t.Helper()
 	var b bytes.Buffer

@@ -9,6 +9,7 @@ import { esc } from '../escape.js';
 import { actorStr, daysSince, displayTitle, entryHash, fmtAge } from '../format.js';
 import { descHTML, md } from '../markdown.js';
 import { queueStrip, refreshQueues } from '../queues.js';
+import { askRejectNote } from '../reject.js';
 import { knownDirs, refreshTree } from '../tree.js';
 import { icon } from '../vocab.js';
 import { debounce, explore } from './explore.js';
@@ -333,8 +334,8 @@ export function wireReviewActions(container) {
           toast('検証しました(stable への変更には失敗: ' + e.message + ')');
         }
       } else {
-        const note = prompt('却下の理由をご記入ください。このナレッジは削除され、理由が裁定として残ります(履歴は残ります)。', '');
-        if (note === null || note.trim() === '') return;
+        const note = await askRejectNote(id);
+        if (note === null) return;
         await rejectEntry(id, note);
         toast('却下しました。');
       }

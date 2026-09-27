@@ -128,6 +128,32 @@ export async function viewEditor(id, prefix = '') {
     drawOther(out.keys);
   }
 
+  // drawKeeping is draw for the redraws a type change sets off, which
+  // land a round trip after the change: whatever was typed into another
+  // field in the meantime is put back, with the cursor, rather than
+  // wiped. Its own change is already queued behind this redraw, so the
+  // document catches up on its own; only the form would have lost it.
+  function drawKeeping(out) {
+    const typed = new Map();
+    for (const el of fields.querySelectorAll('input[id], textarea[id]')) {
+      if (el.type !== 'checkbox' && el.value) typed.set(el.id, el.value);
+    }
+    const focused = document.activeElement;
+    const at = focused && fields.contains(focused) && focused.id
+      ? { id: focused.id, start: focused.selectionStart, end: focused.selectionEnd }
+      : null;
+    draw(out);
+    for (const [id, value] of typed) {
+      const el = document.getElementById(id);
+      if (el && fields.contains(el) && !el.value) el.value = value;
+    }
+    const el = at && document.getElementById(at.id);
+    if (el && fields.contains(el)) {
+      el.focus();
+      try { el.setSelectionRange(at.start, at.end); } catch { /* not a text control */ }
+    }
+  }
+
   // The keys the form has no editor for. Named rather than hidden: what
   // makes "the form is the document" true is that a producer's own key
   // survives it (SPEC §4.1), and a writer has no way to know that unless
@@ -224,7 +250,7 @@ export async function viewEditor(id, prefix = '') {
       await inOrder(async () => {
         seeded = templateDocument(el.value, '');
         const out = await frontmatter({ document: seeded });
-        if (out) draw(out);
+        if (out) drawKeeping(out);
         dirty = true;
       });
       return;
@@ -253,7 +279,7 @@ export async function viewEditor(id, prefix = '') {
     if (field.key === 'type') {
       await inOrder(async () => {
         const out = await frontmatter({ document: docEl.value });
-        if (out) draw(out);
+        if (out) drawKeeping(out);
       });
     }
   });

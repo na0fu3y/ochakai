@@ -51,7 +51,7 @@ export function viewDir(rawPrefix) {
 export function viewHome() {
   view.innerHTML = `
     <div class="section-title" style="font-size:1.5rem">🍵 ochakai</div>
-    <p style="color:var(--muted);max-width:42rem">ナレッジはフォルダのツリーです。ナレッジの id がそのままパスになる(例: <code>queries/sales/monthly-revenue</code>)ので、サイドバーのツリーが入口になります。まとめて読むものは同じ場所に置き、文書をたどるように読み進めてください。どこを見ればよいか分からないときに検索を使います。</p>
+    <p style="color:var(--muted);max-width:42rem">ナレッジはフォルダのツリーです。ナレッジの id がそのままパスになる(例: <code>metrics/revenue</code>)ので、サイドバーのツリーが入口になります。まとめて読むものは同じ場所に置き、文書をたどるように読み進めてください。どこを見ればよいか分からないときに検索を使います。</p>
     <div class="searchbox" style="max-width:36rem">
       <input type="text" id="home-q" placeholder="メトリクス・検証済みクエリ・知見・用語・テーブルを検索…" autocomplete="off">
       <a class="btn" id="home-go" href="#/search">検索</a>

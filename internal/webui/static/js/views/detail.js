@@ -13,6 +13,8 @@ import { frontmatterRefs } from '../frontmatter.js';
 import { checkTargets } from '../links.js';
 import { descHTML, md } from '../markdown.js';
 import { headingAnchors, permalinks, tocHTML } from '../outline.js';
+import { askRejectNote } from '../reject.js';
+import { failedNoteHTML, failedSince } from '../reports.js';
 import { knownDirs, refreshTree, revealInTree } from '../tree.js';
 import { STATUSES, icon } from '../vocab.js';
 import { explore, viewExplore } from './explore.js';
@@ -241,6 +243,7 @@ export async function viewDetail(id, heading = '') {
     </div>
     ${entry.status_note ? `<div class="status-note">${esc(entry.status_note)}</div>` : ''}
     ${staleNote}
+    <div id="failed-note"></div>
     ${entry.resource ? `<div class="provenance">resource: ${resourceHTML(entry.resource)}</div>` : ''}
     <div class="tabs" id="tabs">
       <button data-tab="overview" class="active">${TAB_LABELS.overview}</button>
@@ -571,6 +574,20 @@ export async function viewDetail(id, heading = '') {
   // tab: what the two directions cost is not the same, and a failure to
   // reach the server about the backlinks must not take the outgoing links
   // — which are already in hand, and are right — off the page with it.
+  // Failures reported since the last verification, under the header —
+  // the ✓ beside the title says who confirmed it, and this says whether
+  // somebody has since found it wrong. The usage it reads is the one the
+  // 利用状況 tab draws, fetched once for both.
+  let usageOnce;
+  const usage = () => (usageOnce ??= api('/api/v1/usage/' + idPath(entry.id)));
+  usage().then(u => {
+    const since = lastVerification(observed)?.at;
+    const html = failedNoteHTML(failedSince(u.reports, since),
+      since ? '最後の検証のあとに失敗の報告があります: ' : '失敗の報告があります: ');
+    const box = $('#failed-note');
+    if (box && box.isConnected) box.innerHTML = html;
+  }).catch(() => { usageOnce = undefined; });
+
   let linkedHTML = '';
   let asking = false;
   const body = $('#tab-body');
@@ -578,7 +595,7 @@ export async function viewDetail(id, heading = '') {
   // cached template. A failed fetch shows in place and retries next open.
   const lazy = {
     usage: async () => {
-      const u = await api('/api/v1/usage/' + idPath(entry.id));
+      const u = await usage();
       return () => `
         <div class="stat-tiles">
           <div class="tile"><div class="num">${u.search_hits ?? 0}</div><div class="lbl">検索ヒット</div></div>
@@ -803,8 +820,8 @@ export async function viewDetail(id, heading = '') {
   });
   $('#act-reject')?.addEventListener('click', async () => {
     closeMenu();
-    const note = prompt('却下の理由をご記入ください。このナレッジは削除され、理由が裁定として残ります(履歴は残ります)。', '');
-    if (note === null || note.trim() === '') return;
+    const note = await askRejectNote(entry.id);
+    if (note === null) return;
     try {
       await rejectEntry(entry.id, note);
       toast('却下しました。');

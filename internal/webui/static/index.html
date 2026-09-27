@@ -130,6 +130,22 @@
   <div id="palette-list" role="listbox" aria-label="候補"></div>
   <div class="palette-hint">↑↓ で選択 · Enter で開く · Esc で閉じる</div>
 </dialog>
+<!-- The reason a reject asks for (reject.js): a <dialog> for the reason
+     the palette is one, and because window.prompt() is refused by
+     embedded browsers and gave the reason one line. -->
+<dialog id="reject-dialog" aria-labelledby="reject-title">
+  <form id="reject-form">
+    <h2 id="reject-title">却下の理由</h2>
+    <p class="hint"><code id="reject-what"></code> は削除され、この理由が裁定として残ります(履歴は残ります)。</p>
+    <textarea id="reject-note" rows="4" aria-labelledby="reject-title" placeholder="何が正しくないか、どこを読めば分かるか"></textarea>
+    <div class="dialog-actions">
+      <button type="button" class="btn" id="reject-cancel">キャンセル</button>
+      <!-- No type attribute: a button in a form submits by default, and
+           the explicit one is how webui_test.go finds the editor's save. -->
+      <button class="btn primary">却下する</button>
+    </div>
+  </form>
+</dialog>
 <!-- Every save, refusal and failure is announced here, so it is a live
      region: a screen reader gets told what a sighted reader sees flash
      past. polite, not assertive — it reports, it does not interrupt. -->

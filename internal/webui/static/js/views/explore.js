@@ -4,7 +4,9 @@ import { api } from '../api.js';
 import { hitCard } from '../cards.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
+import { entryHash, idPath } from '../format.js';
 import { highlightIn, terms } from '../highlight.js';
+import { failedNoteHTML, failedSince } from '../reports.js';
 import { KNOWN_TYPES, STATUSES, icon } from '../vocab.js';
 
 // Filter state survives navigation within the session.
@@ -256,6 +258,21 @@ export async function runSearch(append = false) {
     }
     wireScope();
     $('#feed-more')?.addEventListener('click', e => { e.preventDefault(); runSearch(true); });
+    // The re-verify feed says what was wrong on each card, not only that
+    // something was: the note is what a reviewer opens the concept for.
+    if (explore.failedFeed) {
+      for (const h of hits) {
+        const card = out.querySelector(`.card[data-href="${CSS.escape(entryHash(h))}"]`);
+        if (!card || card.querySelector('.failed-note')) continue;
+        api('/api/v1/usage/' + idPath(h.id)).then(u => {
+          if (my !== runSearch._seq || !card.isConnected) return;
+          const failed = failedSince(u.reports, h.verified_at);
+          card.insertAdjacentHTML('beforeend', failed.length
+            ? failedNoteHTML(failed, '')
+            : `<div class="status-note failed-note">検証のあとの失敗の報告に、理由は書かれていません</div>`);
+        }).catch(() => {});
+      }
+    }
   } catch (e) {
     if (my !== runSearch._seq || out !== $('#results')) return;
     out.innerHTML = `<div class="error-banner" role="alert">検索に失敗しました: ${esc(e.message)}</div>`;
