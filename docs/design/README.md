@@ -52,7 +52,7 @@ CHANGELOG に置く。リリース済みの記録を改訂するときは差分�
 | 空のベースを埋める | [0148](0148-the-empty-base-fills-from-the-page-too.md) が現行 — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし(ウェアハウスに接続しない)、**Web UI の「BigQuery から取り込む」は同じ投影を本人の身元で読んだスキーマから作り、既存の `PUT` で上書きせずに書く**。サーバーは何も新しく提供せず、`OCHAKAI_OAUTH_CLIENT_ID` はエージェント無しで立つ(0085 を置き換えた) |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**コネクタは [0151](0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md) が戻した** — ochakai は認可サーバにならず、`/mcp` の 401 がクライアントに発行者(Google Workspace を含む)を教える。Google Chat と Slack の橋は ROADMAP の「やらないこと」 |
 | REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md)。**本文の鍵の照合が完全一致で、同じ鍵の重複が 400 になることは [0125](0125-a-body-names-each-field-once.md)**(0064 §2 が決めた規則を、書かれたとおりに効かせたもの) |
-| MCP・CLI の安定性契約 | [0088](0088-a-retired-name-answers-for-one-release.md)(改名された名前は一リリースだけ答える — 呼べるが、載らない) |
+| MCP・CLI の安定性契約 | [0152](0152-a-rename-at-0x-is-announced-not-bridged.md)(0.x の改名は古い綴りを答えさせず、CHANGELOG が BREAKING と印す — 1.0 で決め直す) |
 
 英語話者向けに、各ドキュメントの決定と利用者への影響を要約した
 [README.en.md](README.en.md) を置いている。**正典は各ドキュメント本体**で、
@@ -1044,21 +1044,16 @@ Web UI の書き込みが誰として記録されるかは、この節ではな�
   こと・運ぶ情報が同じことの三つ。0082 が凍結の外と定めた応答専用スキーマ
   への追加であり、VOCAB は 34 → 46 に上がる。
 - [0088 名前が変わっても、一リリースは答える](0088-a-retired-name-answers-for-one-release.md)
-  — **Accepted**。**MCP と CLI の安定性契約の現行ドキュメント**。あるリリースが
-  MCP のツール名か CLI のコマンド名を改名したら、古い綴りはそのリリースの
-  あいだ答え続け、次のリリースで消える。それまでの規則は「猶予期間は無い」で、
-  正直ではあったが、**壊れる側に告知が届かない** —— エージェントの設定は
-  ツール名を名指しで持っていて、CHANGELOG を読むのは人だけである(C5・C4)。
-  要点は §3: **呼べるが、載らない**。`tools/list` も usage も `docs/cli.md` も
-  補完も古い名前を出さないので、まだ知らない側は永久に知らず、ツール説明文の
-  コンテキスト代([0067](0067-four-faces-and-what-they-decline.md) §1)を
-  二重に払わずに済む。実装がミドルウェアなのはそのため —— 登録した時点で
-  `tools/list` に出てしまう。各エントリは改名したリリース番号を持ち、
-  CHANGELOG の最新リリースより古くなるとテストが落ちるので、**窓を閉じるのは
-  release 準備 PR の仕事**になる(§4。猶予期間の失敗は破られることではなく
-  閉じられないことである)。遡らない(§5)。対象は名前だけで、フラグも
-  出力の形も保存形も含まない。[0082](0082-what-the-freeze-holds-still.md) が
-  REST 側で緩めたぶんとの釣り合いであり、面の数は動かない。
+  — **Superseded by 0152**。
+- [0152 0.x の改名は、橋を架けずに告げる](0152-a-rename-at-0x-is-announced-not-bridged.md)
+  — **Accepted**。**MCP と CLI の安定性契約の現行ドキュメント**(0088 を
+  置き換えた)。0.x の改名と削除は古い綴りを答えさせず、CHANGELOG が
+  **BREAKING** と印す。0088 の転送ミドルウェアと窓を閉じるテストは、
+  七週間一度も使われないまま毎リリース払われていたので畳んだ。0088 §1 の
+  懸念(エージェントは CHANGELOG を読まない)は消えていないが、0.x は
+  最新リリースだけを支えると既に言っており、壊れ方は unknown tool として
+  黙らずに返る。**1.0 を切るときに契約を決め直す**のが戻す条件である。
+  面の数は動かない。
 - [0125 本文は、鍵を一度だけ名指す](0125-a-body-names-each-field-once.md)
   — **Accepted**。0064 §2 の「宣言していないボディキーは 400 で名指す」を、
   **書かれたとおりに効かせる**。規則の追加ではなく、規則を実施するはずの

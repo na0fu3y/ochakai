@@ -58,7 +58,7 @@ func connectWith(t *testing.T, cfg *config.Config) *mcp.ClientSession {
 	t.Helper()
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	if _, err := newServer(&service.Service{Config: cfg}, "test", RetiredToolNames).Connect(ctx, st, nil); err != nil {
+	if _, err := newServer(&service.Service{Config: cfg}, "test").Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil).Connect(ctx, ct, nil)
@@ -722,7 +722,7 @@ func serverSession(t *testing.T, client *mcp.Implementation) *mcp.ServerSession 
 	t.Helper()
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	srv := newServer(&service.Service{}, "test", RetiredToolNames)
+	srv := newServer(&service.Service{}, "test")
 	if _, err := srv.Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}

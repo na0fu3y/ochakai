@@ -22,10 +22,9 @@ import (
 // stateless transport (design doc 0118) gives a client no session to hang
 // a list on, so the ones that re-list per connection re-list constantly;
 // five minutes covers a working session's worth of those while keeping a
-// deploy visible inside a rollout. It also sits well inside the one
-// release a renamed name keeps answering for (design doc 0088), so a
-// client holding a stale list through an upgrade is holding names that
-// still work.
+// deploy visible inside a rollout. A client holding a stale list through
+// an upgrade that renamed a tool finds out on its next call; renames at
+// 0.x are breaking changes announced in the CHANGELOG (design doc 0152).
 const listTTL = 5 * time.Minute
 
 // answerHowLongAListingHolds sets the TTL hint on the three listings
