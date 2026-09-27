@@ -5,12 +5,10 @@
 **ochakai が何であり、なぜ選ぶか**は [README](../README.md) にあり、
 このページはそれを読んで作業を始めた人を前提にする。
 
-ここで説明する決定は [docs/design](design) 配下の番号付き decision
-record に記録されている — 大半は日本語で、このページと食い違えば
-そちらが正である。まず [index](design/README.md) から: すべての
-record を分野別にまとめ、どれが今の状態を説明しているかを示している。
-横にある [README.en.md](design/README.en.md) は各 record を英語で
-要約する。以下の節は、それぞれが依拠する record を
+ここで説明する決定の現行の姿は [docs/spec](spec/README.md) が領域ごとに
+持ち、このページと食い違えばそちらが正である。まだ書かれていない領域は
+[設計記録の index](design/README.md) の早見表が読み先になる。以下の節は、
+それぞれが依拠する record を
 `(設計ドキュメント NNNN)` として引用する — [README](../README.md) と
 同じやり方である。
 

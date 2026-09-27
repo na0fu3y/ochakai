@@ -433,9 +433,9 @@ in the version you are running.
   a translation of it
 - **Deciding** — [The surface](docs/surface.md), the eight conditions
   ochakai exists to satisfy and everything counted against them, and
-  [docs/design](docs/design/README.md), the numbered decision records
-  behind it (mostly Japanese, [summarized in
-  English](docs/design/README.en.md)).
+  [docs/spec](docs/spec/README.md), how each area works today and why
+  (Japanese; [docs/en.md](docs/en.md) is the way in), with the decision
+  log and the frozen design records behind it.
 
 ## Contributing
 

@@ -431,271 +431,68 @@ covers it (if it does, don't add), and what can be folded away in
 exchange. The test holds the arithmetic; those answers are the part
 review spends time on.
 
-## Design docs
+The pull request template asks for these in fields rather than in
+prose, because a ceiling that anyone can raise by one line stopped none
+of the scope that grew around the data agent — every raise came with its
+reasons. The fields are the gate:
 
-Architecture decisions live in [docs/design](docs/design) as numbered
-documents (mostly Japanese). Start from the
-[index](docs/design/README.md): its opening table says which document
-describes each area today, and the prose below it carries the history. A
-new record needs a row in
-[README.en.md](docs/design/README.en.md) beside it, which a test checks.
-[docs/architecture.md](docs/architecture.md) (Japanese) summarizes the
-accepted ones if you would rather read the shape of the system first.
+- **the condition** the change serves, C1–C8;
+- for anything an LLM or other automation does, **which person's ruling
+  it makes cheaper** — never one it makes;
+- for a change that widens a surface, the three questions.
 
-The Japanese is the maintainer's habit, not a rule — write your design
-doc in English if that is what you think in, and say so in the PR. What
-the review cares about is that the decision and its rejected
-alternatives are legible, not which language they are legible in.
+And a document does not say ochakai will not do something that a stage
+of the [ROADMAP](ROADMAP.md) plans: what is declined lives in one place
+(the spec's `declined.md`, today ROADMAP's list), and a refusal written
+elsewhere is how 0142 §7's "no charts" lasted two days.
 
-A numbered doc is for a decision **somebody using ochakai can observe**
-([0048](docs/design/0048-decision-records-for-wire-contracts.md)): the
-shape of the wire (REST, MCP, CLI, web UI), the stored form and its
-round trip, what identity and provenance mean, a new dependency on a
-Google Cloud service, or something the project refuses to do. Internal
-work that leaves the outside unchanged — restructuring, queries and
-indexes, performance, dependencies, a new spelling within an existing
-decision — belongs in the PR description instead. If you are unsure, ask
-whether anybody will reopen the question in three months.
+## Design: spec and decisions
 
-That picks the *areas*. It does not pick the *grain*, and for four weeks
-after 0048 the corpus grew at the same rate as before it, one rule at a
-time: who may write the first policy row, what a scoped caller's counts
-include, whether a prefix can hold its own administrator — each
-observable, each inside a decision already on file. So
-[0128](docs/design/0128-a-number-is-for-an-area-not-a-rule-inside-it.md)
-adds the grain: **a number is for an area's decision; a rule inside it
-takes none.** If the parent record and the CHANGELOG answer the question
-somebody reopens in three months, the PR and the CHANGELOG are where the
-rule goes. Only when the parent's own text now contradicts the rule is
-it an amendment — and then see the replacement rule below, not a diff.
+What ochakai does, and why, lives in two places with two different
+promises.
 
-Docs are immutable decision records; the incremental history lives in
-them and in PRs. What the repo must keep readable is the *current*
-state per area, so when a design doc lands:
+- **[docs/spec](docs/spec/README.md)** is the current state, one document
+  per area. It is **rewritten**: a PR that changes what a user can observe
+  — the wire, the stored form and its round trip, what identity and
+  provenance mean, a Google Cloud dependency, something ochakai refuses to
+  do — edits that area's document in the same PR, in the present tense.
+  There is no "amends", no "Superseded", no `Status:` note; git holds the
+  history.
+- **[docs/decisions](docs/decisions/README.md)** is the log of choices
+  somebody is likely to reopen. An entry is **short and never rewritten**:
+  context, the decision, the alternatives turned down, and what would
+  bring the question back. Write one only when somebody three months from
+  now will ask "why not the other way". Adding a rule, moving a number or
+  renaming a word is the spec and the CHANGELOG, not an entry. Numbers
+  continue from 0153.
 
-- Take the next free number. Gaps are fine — proposals that never land
-  stay in their PRs.
-- **Unless the doc you are revising has not reached a release**, in which
-  case replace it rather than numbering a successor: immutability is a
-  promise about decisions somebody could be depending on, and nobody
-  depends on an unreleased one. If the implementation is still in the
-  changelog's `Unreleased` section, edit that doc — or delete it and fold
-  it into the one replacing it, as 0034 did.
-- Update the `Status:` header of every older doc the new one supersedes
-  or amends, linking to the new number (see 0011 or 0018 for the style).
-  A doc the new one supersedes outright also shrinks to a tombstone —
-  see "What a superseded record keeps" below.
-- Update [docs/design/README.md](docs/design/README.md): add the new
-  doc to its area with a one-line summary, adjust the status notes of
-  the docs it amends, and — if it becomes the doc to read for that area —
-  update the area's row in the opening table.
-- Add its row to `README.en.md`'s table, in the same area. A doc the new
-  one supersedes drops to a bare pointer row (record and status only, no
-  decision cell); full rows are kept only for what is current, and a test
-  holds it — cutting the old row is part of superseding, not tidying for
-  later.
-- Amend a *released* record by replacing it, not by stacking a diff on
-  it (0128 §2.2): the new record states the area's whole current picture
-  and marks the parent and every amendment on it Superseded. This used
-  to be a step in the `design-doc` skill that nothing checked, and 0109
-  took five amendments in a week; what checks it now is the table
-  ceiling below.
-- Keep it under the ceiling below. A record is prose somebody reads.
+One number bounds an entry:
 
-### How long a record gets
+    DECISION-LINES: 60
 
-    RECORD-LINES: 300
-    RECORD-CAP-FROM: 0065
-    INDEX-ROW-RECORDS: 10
+`TestCeilings` holds every entry to that number. Going over means two
+decisions, or current-state prose that belongs in the spec.
 
-`INDEX-ROW-RECORDS` is the third number, and the only one that moves in
-one direction. It bounds how many records one row of the index's opening
-table may cite, and `TestCeilings` holds it equal to the
-widest row — so folding a row is what lowers it and nothing lowers it
-quietly. The table is the one line a reader reaches an area's current
-state from (0048 §2.4); on 2026-08-23 four rows cited eight to ten
-records each, which is the amendment chain moved into the table. The
-number starts at that day's maximum and comes down one fold per PR,
-widest row first, until it reaches 3 — a record, its amendment, and one
-more — and stays there. A PR that would cite a fourth writes the fold
-instead (0128 §2.3, §2.4).
+**[docs/design](docs/design/README.md) is history.** Records 0001–0152
+are frozen: nobody rewrites them, amends them or tombstones them any
+more. Until an area has its spec document, the index's opening table is
+still where that area's current state is reached, so a PR that changes
+such an area updates the table's row by hand and, if it is worth it,
+adds a decision entry. When every area has a spec document the index
+stops being edited.
 
-0048 narrowed *what* earns a number. It said nothing about *how much*,
-and the corpus grew accordingly — record count and total lines both
-outrunning the manual's own count over the same stretch (see "How many
-records, and how much" below for where things stand today). A decision
-that renames two words has cost 150 lines of record, an entry in each
-index and a paragraph in
-[docs/surface.md](docs/surface.md) — the explanation outgrowing the
-thing explained is the shape the numbers have been showing for several
-releases.
+The two used to be one thing. A numbered record was both the immutable
+history and the spec somebody read today, so every change had to choose
+between a diff stacked on a record (an amendment chain that the index
+table then carried) and a restatement of the whole area (a replacement
+nobody wanted to write). The ceilings, the tombstone rule, the English
+index and the checks that read them against each other were holding that
+tension together; with the roles split, they are retired.
 
-So a record from 0065 on stays under that line, and
-`TestCeilings` (`cmd/ochakai/ceilings_test.go`) reads both numbers back out of
-this file.
-The ceiling is the same bargain [docs/surface.md](docs/surface.md)
-strikes for the surface: it is one number in one file and anybody can
-raise it, in the same PR, having said why. What it buys is only that the
-raise cannot happen quietly.
-
-Going over usually means one of three things, in order of likelihood:
-
-1. **It is two decisions.** Split it and take two numbers. Two records a
-   reader can finish beat one they abandon.
-2. **It is restating what another record already decided.** Cite it
-   instead. The index exists so a record does not have to carry its
-   ancestors.
-3. **It really is that large.** Then raise the line above and say so.
-   0046 rebuilt the address space in 601 lines and earned every one; it
-   is a tombstone now, so 0064 is both the precedent and the customer.
-
-What the ceiling must not buy is denser prose. Records earlier than 0065
-are not measured: they are immutable, and immutability is a promise about
-decisions somebody could be depending on, not a licence to keep writing
-at whatever length the last one happened to be.
-
-**891 → 300, and 0063 → 0065, is that batch closing.** This ceiling spent
-its whole life so far being set by one record. 0064 is not one decision
-the way most records are: it is the *last* batch that can break REST, so
-every breaking change anyone still wanted had to be in it or never
-happen, and each round of pre-release review found more — 364 → 554 →
-789 → 891, every step the third case above and every step honest. The
-review's recurring find is the part worth keeping: not a missing feature
-but **a place where the contract and the code disagreed in silence**, and
-once the fingerprint's own blind spot turned out to be one of them, **the
-check that guards the freeze had a gap the freeze's own record had
-already described** — which is the argument for reading an invariant from
-outside rather than trusting that a record and a test agree
-([0035](docs/design/0035-verifiability.md)).
-
-A batch record grows until the batch closes, and this one closed: the
-freeze shipped in v0.18.0, `/api/v1` cannot move again, so neither can
-0064. The ceiling it was holding open is now holding nothing — a record
-six times the median could land under it without a word — so the floor
-moves past it and the line comes down to 300, which is where the records
-actually written since the freeze put it (0069 at 282 is the tallest).
-0064 stays exactly as tall as it is. It is released and immutable, and
-the floor is how this file has always excused a record it cannot ask to
-be shorter.
-
-### What a superseded record keeps
-
-    TOMBSTONE-LINES: 12
-
-A record's own `Status:` header already says when it has been replaced.
-Until now the body kept every word regardless of whether anyone still
-read it: ten Superseded records carried 2,107 lines between them, and
-1,071 of those were a two-hop chain — 0036 → 0043 → 0046 — that nobody
-following a `Status:` header should start from in the first place.
-
-So a record whose `Status:` says Superseded shrinks to a tombstone: the
-title, the header, one sentence of what it decided, and a link to the
-commit that held it in full. Immutability does not object — it is a
-promise about decisions somebody could be depending on, and nobody can be
-depending on a decision that has already been replaced. The full text is
-not gone, only a `git show` away, and the tombstone's commit link points
-at exactly that.
-
-This is the rule
-[0048](docs/design/0048-decision-records-for-wire-contracts.md) §2.5
-already applies to *summaries* of a superseded record in
-[README.en.md](docs/design/README.en.md) — a pointer, and no more
-maintenance than that — extended to the record it summarizes.
-`TestCeilings` holds a Superseded record to
-`TOMBSTONE-LINES` and requires the commit link; going over it means the
-record is still carrying prose nobody rereads.
-
-### When a record's premise turns out to be wrong
-
-A record states two kinds of thing: what was decided, and what was true
-about the world when it was decided. There are doors for the first —
-supersede it, or amend it by replacing it (0128 §2.2) — and until now
-none for the second, which meant a record whose decision still stands had
-no way to say that one of its reasons does not.
-
-[0133](docs/design/0133-an-okf-moment-is-an-instant.md) is the case that
-found this. Its §1 read ochakai's old date-only code as having misquoted
-OKF; the code had in fact matched the spec as published, which changed a
-normative rule seven days before 0133 was written without moving its
-version. **The decision 0133 reached was right, and is still right** —
-which is exactly why there was nothing to do about the premise. The error
-then propagated: it was copied into the English index summary, into the
-CHANGELOG, and into `docs/positioning.md`, and the correction reached one
-of the three before the other two were noticed a week later.
-
-So: **a factual premise is corrected in the `Status:` block, and the body
-is not edited.** One line, naming what the body says, what is true, and
-where that was established. Had 0133's decision not also moved — it did,
-so 0139 superseded it and its body is a tombstone now — the line it would
-carry is the shape to copy:
-
-    Corrected(2026-09-05): §1 reads the old date-only rule as a misquote
-    of SPEC §5; it matched the spec as published on 2026-07-24, which
-    changed on 2026-08-21 without moving its version (0139 §1.1).
-
-Then apply the same correction to that record's row in
-[README.en.md](docs/design/README.en.md), which restates the record in the
-present tense and would otherwise keep repeating the error.
-
-**Immutability does not object**, for the reason the tombstone rule gives:
-it is a promise about *decisions* somebody could be depending on, and a
-claim about the outside world is not one. The `Status:` block is already
-the mutable part — 0064's carries a growing list of what later records
-revised in it — and this is that same block being asked one more question.
-
-**Do not reach for supersession here.** It requires restating the whole
-area, and it would then shrink a record that is still the current answer
-to a tombstone. If the decision moves too, that is an ordinary
-supersession and this rule is not needed.
-
-This is not a numbered record, by 0128's own rule: it is a rule inside an
-area, not an area's decision, and nothing a user of ochakai can observe.
-
-### How many records, and how much
-
-`RECORD-LINES` bounds one record's thickness, and the tombstone rule
-bounds what a replaced one keeps. Nothing bounds the total any more, and
-what that gives up is worth stating plainly.
-
-**The count is the number that moved**: 19 records at v0.10.0 against 137
-today, while non-test Go grew 2.5x and REST retreated from 19 operations
-to 11. Lines did not outrun the code — the corpus is under the code's own
-total — but that is the tombstone rule doing the work, not the count
-slowing down: a record still arrives about as often, it just stops costing
-lines once something replaces it. **Count is what to watch**, and nothing
-watches it. Folding a surface leaves a record behind, and
-[docs/surface.md](docs/surface.md)'s DOC section names the rest of that
-residue — an index entry in each language, an English summary, a paragraph
-in that file or this one.
-
-**`RECORD-CORPUS-LINES` was that ceiling and it is retired**, with
-`DOC-LINES` and `REST-LINES`; [docs/surface.md](docs/surface.md)'s 上限
-section holds the reasoning for all three. The short of it: the ceiling
-asked for a paragraph every time the corpus crossed a 500-line boundary,
-and those paragraphs — a crossing log, a grid rule, a slack number, and
-the two widenings that made the grid — became the largest thing the
-ceiling produced. What it was built to catch (fold a surface, then write
-a long explanation of the fold) it caught once or twice in ten crossings.
-
-What holds instead is what 0048 and 0128 already decide: a number is for
-a decision a user can observe, and for an area rather than a rule inside
-it. A corpus that grows because those two rules are being followed is a
-corpus growing correctly, and one that grows because they are not is a
-review problem rather than an arithmetic one. If that turns out to be
-wishful, the ceiling comes back and this paragraph is what it argues
-with.
-
-Most of that list is checked rather than remembered
-(`cmd/ochakai/designdocs_test.go`): a record needs an entry in both
-indexes, the two indexes have to agree with the record's own `Status:`
-header about whether it is current or superseded, a supersession **or an
-amendment** has to be recorded at both ends — the new record naming what
-it retires or revises, and the older one saying so — a new record has to
-fit under its own
-ceiling, and a Superseded one has to be a tombstone
-(`TOMBSTONE-LINES`).
-What no test can read is the judgment: whether the opening table's row still
-points at the doc somebody should actually read. That is where the attention goes.
+Write the spec and the decisions in Japanese, the maintainer's habit and
+C8's reason — or in English if that is what you think in; say so in the
+PR. [docs/architecture.md](docs/architecture.md) (Japanese) summarizes
+the shape of the system for a first read.
 
 Two decisions worth knowing before proposing features:
 
@@ -734,8 +531,7 @@ file and `CLAUDE.md`.
 **No mirror.** One page, one language. A translated pair is two texts
 saying the same thing, and which one went stale is exactly what nobody
 can tell (`docs/faq.md`'s own rule, and the mechanism behind every stale
-command this repository has shipped). The single deliberate exception is
-`docs/design/README.en.md`, which a test keeps honest in both directions.
+command this repository has shipped).
 
 What does **not** change, because it is the product's vocabulary rather
 than prose: command names, flags, environment variables, JSON keys, the
@@ -819,7 +615,7 @@ writes. `concept` is the wire's word: it stays in ids, in tool names
 **What stays English** is the vocabulary a reader also types or sees
 stored, where translating would put the screen and the frontmatter into
 disagreement. Declared here so the list a writer consults and the list
-the check enforces are one list, for the reason `RECORD-LINES` is:
+the check enforces are one list, for the reason `DECISION-LINES` is:
 
     COPY-ENGLISH-TERMS: OKF SPEC YAML MiB REST MCP CLI API
       frontmatter markdown export import ochakai ui serve-ui access

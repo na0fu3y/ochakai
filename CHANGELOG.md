@@ -71,6 +71,14 @@ last entry.
   team to the operator's scheduled job in `examples/bigquery-catalog`.
   Design doc 0149 §4 named the project view; its Status header now says
   so.
+- **How a design change is written down has changed.** The current state
+  of each area moves to `docs/spec` (Japanese, rewritten in place) and the
+  reasons for choices likely to be reopened to `docs/decisions` (short,
+  never rewritten, numbered from 0153). The numbered records 0001–0152 in
+  `docs/design` are frozen history; until an area has its spec document,
+  the design index's opening table is still where it is described.
+  `docs/design/README.en.md` is retired — English readers go through
+  `docs/en.md` to the spec pages. Nothing ochakai does changes.
 
 ### Fixed
 

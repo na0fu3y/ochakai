@@ -1263,18 +1263,14 @@ Computation` が canary としてそれを継続実行する — が、**三つ�
 
 数えないものを決めるのは、数えるものを決めるのと同じだけ決定である。
 
-- **[docs/design](design) の記録。** 利用者ではなく、変えようとする人が
-  読む。何が番号を**取る資格**を持つかは
-  [0048](design/0048-decision-records-for-wire-contracts.md) が既に
-  狭めているが、取った後に**何冊積み上がるか**は別の問いで、これは
-  数えていなかった — v0.10.0 の 19 記録から、この文書の
-  どの次元よりも速く増えている。総行数の天井
-  (`RECORD-CORPUS-LINES`)を [CONTRIBUTING.md](../CONTRIBUTING.md) に
-  置いていたが、`DOC-LINES` と一緒に退役した(冊数を数える
-  `RECORD-COUNT` はその前に、同じ理由で退役している)。一冊の天井
-  `RECORD-LINES` と、Superseded を墓標に縮める規則は残る — **積み上がる
-  総量ではなく、一冊の厚さと、読まれない一冊が場所を取らないこと**が、
-  そこで守られているものである。
+- **[docs/spec](spec/README.md)・[docs/decisions](decisions/README.md)・
+  [docs/design](design/README.md)。** 利用者ではなく、変えようとする人が
+  読む。現行仕様は領域ごとに一本で書き換えるので、冊数は領域の数で止まる。
+  決定ログは一本の長さに `DECISION-LINES` の天井があり、0001–0152 の記録は
+  凍結した履歴である。記録にかけていた一冊の天井・墓標・英語要約・
+  表の一行の天井は、履歴と現行を一冊に兼ねさせていたための仕組みで、
+  二つを分けたときに退役した(CONTRIBUTING.md「Design: spec and
+  decisions」)。
 - **OKF ドキュメント。** `examples/demo` の 37 件も
   `examples/bigquery-catalog/bundle` も、プロジェクト自身のナレッジで
   ある `kb/bundle` も、ochakai が**保存するもの**であって ochakai に
