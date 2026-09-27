@@ -21,6 +21,15 @@ last entry.
 
 ## [Unreleased]
 
+### Added
+
+- **`deploy/sandbox-reset`** holds the image demo.ochak.ai's reset job
+  runs: `reset.sh`, its Dockerfile, and `build.sh`, which builds it from
+  a release's linux/amd64 archive (checked against `checksums.txt`) with
+  that tag's `examples/demo` as the seed. The job's image had lived only
+  in the registry, so the demo kept restoring 0.28.4's 18 concepts after
+  0.29.3 shipped 37. The operating guide's sandbox section points here.
+
 ## [0.29.3] - 2026-09-27
 
 ### Changed

@@ -178,6 +178,28 @@ digest=$(curl -sI -H "Authorization: Bearer $token" \
 gh api "repos/na0fu3y/ochakai/attestations/$digest" --jq '.attestations | length'   # expect 1
 ```
 
+## 5. Update demo.ochak.ai
+
+The demo is two things, and a release moves neither by itself: the
+Cloud Run service `ochakai` and the `demo-reset` job that re-imports its
+seed every six hours. The seed is baked into the job's image, so a
+release that changed `examples/demo` keeps serving the old demo until
+the image is rebuilt.
+
+```bash
+gcloud run services update ochakai --project ochakai-demo --region asia-northeast1 \
+  --image asia-northeast1-docker.pkg.dev/ochakai-demo/ghcr/na0fu3y/ochakai:X.Y.Z
+deploy/sandbox-reset/build.sh X.Y.Z asia-northeast1-docker.pkg.dev/ochakai-demo/demo-ops/demo-reset
+gcloud run jobs update demo-reset --project ochakai-demo --region asia-northeast1 \
+  --image asia-northeast1-docker.pkg.dev/ochakai-demo/demo-ops/demo-reset:X.Y.Z
+gcloud run jobs execute demo-reset --project ochakai-demo --region asia-northeast1 --wait
+curl -s https://demo.ochak.ai/api/v1/stats | jq '{version, concepts: .concepts.total}'
+```
+
+`build.sh` pushes, so docker needs to be signed in to Artifact Registry
+first (`gcloud auth configure-docker asia-northeast1-docker.pkg.dev`).
+Expect the new version and the bundle's concept count.
+
 ## Why the ceremony
 
 A tag is effectively permanent: the module proxy caches it forever and a
