@@ -14,6 +14,7 @@
 // where git and automation take it from.
 
 import { api, toast } from '../api.js';
+import { askConfirm } from '../dialog.js';
 import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { fmtDate } from '../format.js';
@@ -244,10 +245,10 @@ async function saveAccess(rules, version) {
   // The two crossings that change what the deployment *is*, rather than
   // which side of an existing boundary somebody stands on. Both are one
   // click away, and neither is undoable by reading the page again.
-  if (!rules.length && next.length && !confirm(
-    'これが最初の一行です。保存すると、いま全部を読み書きできている全員に、同時に境界が入ります。続けますか？')) return;
-  if (rules.length && !next.length && !confirm(
-    '付与を全部消します。境界そのものが無くなり、ここに届く人はまた全部を読み書きできます。続けますか？')) return;
+  if (!rules.length && next.length && !await askConfirm('境界を入れますか？',
+    'これが最初の一行です。保存すると、いま全部を読み書きできている全員に、同時に境界が入ります。', '保存する')) return;
+  if (rules.length && !next.length && !await askConfirm('付与を全部消しますか？',
+    '境界そのものが無くなり、ここに届く人はまた全部を読み書きできます。', '全部消す')) return;
   try {
     const saved = await api('/api/v1/access',
       { method: 'PUT', body: { rules: next }, ifMatch: version ? `"${version}"` : undefined });

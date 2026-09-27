@@ -13,7 +13,7 @@ import { frontmatterRefs } from '../frontmatter.js';
 import { checkTargets } from '../links.js';
 import { descHTML, md } from '../markdown.js';
 import { headingAnchors, permalinks, tocHTML } from '../outline.js';
-import { askRejectNote } from '../reject.js';
+import { askConfirm, askRejectNote } from '../dialog.js';
 import { failedNoteHTML, failedSince } from '../reports.js';
 import { knownDirs, refreshTree, revealInTree } from '../tree.js';
 import { STATUSES, icon } from '../vocab.js';
@@ -534,7 +534,7 @@ export async function viewDetail(id, heading = '') {
     });
     body.querySelectorAll('[data-remove-file]').forEach(b => b.addEventListener('click', async () => {
       const path = b.dataset.removeFile;
-      if (!confirm(`${b.dataset.name} を外しますか？変更はリビジョンとして残ります。`)) return;
+      if (!await askConfirm('ファイルを外しますか？', `${b.dataset.name} を外します。変更はリビジョンとして残ります。`, '外す')) return;
       try {
         await api(attPath(path), { method: 'DELETE' });
         toast('ファイルを外しました。');
@@ -843,7 +843,7 @@ export async function viewDetail(id, heading = '') {
   });
   $('#act-delete').addEventListener('click', async () => {
     closeMenu();
-    if (!confirm(`${entry.id} を削除しますか？リビジョンの履歴は残ります。`)) return;
+    if (!await askConfirm('削除しますか？', `${entry.id} を削除します。リビジョンの履歴は残ります。`, '削除する')) return;
     try {
       await api(conceptURL(entry.id), { method: 'DELETE' });
       toast('削除しました。');

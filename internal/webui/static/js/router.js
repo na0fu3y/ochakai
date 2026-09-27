@@ -3,6 +3,7 @@
 // after a save, and does it from inside a handler long after both
 // modules have finished evaluating.
 
+import { askConfirm } from './dialog.js';
 import { $, view } from './dom.js';
 import { parseKPath } from './format.js';
 import { markTreeSelection } from './tree.js';
@@ -17,7 +18,11 @@ import { viewSeed } from './views/seed.js';
 
 // Set by the editor while it holds unsaved changes: route() asks before
 // discarding them on hash navigation, beforeunload warns on real navigation.
-export let unsaved = null; // () => boolean
+// It is set through setUnsaved because another module cannot assign an
+// imported binding. Until this setter nothing ever set it, so leaving the
+// editor by a link in the page discarded the edit without a word.
+let unsaved = null; // () => boolean
+export function setUnsaved(fn) { unsaved = fn; }
 window.addEventListener('beforeunload', e => { if (unsaved && unsaved()) e.preventDefault(); });
 
 export function route() {
@@ -39,9 +44,21 @@ export function route() {
     }
     return;
   }
-  if (unsaved && unsaved() && !confirm('保存していない変更を破棄しますか？')) {
-    // Put the URL back; replaceState does not re-fire hashchange.
+  if (unsaved && unsaved()) {
+    // The hash has already moved, and the answer comes back later: put
+    // the URL back now (replaceState does not re-fire hashchange), and go
+    // where the reader was going only if they say to discard. The answer
+    // used to be confirm(), which an embedded browser answers "no"
+    // without showing anything — leaving the editor then did nothing, and
+    // there was no way out short of saving.
+    const target = hash || '#/';
     history.replaceState(null, '', route._current || '#/');
+    askConfirm('変更を破棄しますか？', '保存していない変更があります。このページを離れると失われます。', '破棄して移動')
+      .then(discard => {
+        if (!discard) return;
+        unsaved = null;
+        location.hash = target; // hashchange routes it, with nothing left to ask
+      });
     return;
   }
   unsaved = null;

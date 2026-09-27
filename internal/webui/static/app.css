@@ -163,14 +163,14 @@ pre:hover .copy-btn, .copy-btn:focus-visible { opacity: 1; }
   margin: 10vh auto auto;
 }
 #palette::backdrop { background: rgba(0, 0, 0, .35); }
-#reject-dialog {
+#ask-dialog {
   width: min(32rem, 92vw); border: 1px solid var(--border); border-radius: 12px;
   padding: 1rem 1.1rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow-hover);
 }
-#reject-dialog::backdrop { background: rgba(0, 0, 0, .35); }
-#reject-dialog h2 { font-size: 1.05rem; margin: 0 0 .4rem; }
-#reject-dialog .hint { color: var(--muted); font-size: .86rem; margin: 0 0 .6rem; }
-#reject-note { width: 100%; box-sizing: border-box; }
+#ask-dialog::backdrop { background: rgba(0, 0, 0, .35); }
+#ask-dialog h2 { font-size: 1.05rem; margin: 0 0 .4rem; }
+#ask-dialog .hint { color: var(--muted); font-size: .86rem; margin: 0 0 .6rem; white-space: pre-line; }
+#ask-note { width: 100%; box-sizing: border-box; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .7rem; }
 #palette-q {
   border: none; border-bottom: 1px solid var(--border); border-radius: 12px 12px 0 0;

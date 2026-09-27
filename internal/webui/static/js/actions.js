@@ -3,6 +3,7 @@
 // queue — and a ruling implemented twice is one that gets fixed once.
 
 import { READ_ONLY, api, toast } from './api.js';
+import { askConfirm } from './dialog.js';
 import { withStatus } from './documents.js';
 import { $ } from './dom.js';
 import { conceptURL, idPath } from './format.js';
@@ -116,7 +117,7 @@ export async function movePrefixEntry(from, to) {
     else tree.classList.add('drop-hover');
   });
   tree.addEventListener('dragleave', e => { if (e.target === tree) clearDrop(); });
-  tree.addEventListener('drop', e => {
+  tree.addEventListener('drop', async e => {
     if (!dragId && !dragPrefix) return;
     e.preventDefault();
     const sum = e.target.closest('details.node > summary');
@@ -132,13 +133,13 @@ export async function movePrefixEntry(from, to) {
       // concepts end up (design doc 0135 §6). The server refuses it too;
       // refusing here keeps the gesture from looking like it worked.
       if ((to + '/').startsWith(from + '/')) return;
-      if (confirm(`${from}/ → ${to}/ へ移動しますか？\n配下のすべて（却下されたもの・削除済みのもの・ファイルを含む）が` +
-        `まとめて動きます。途中で止まることはありません。`)) {
+      if (await askConfirm('ディレクトリを移動しますか？', `${from}/ → ${to}/\n配下のすべて（却下されたもの・削除済みのもの・ファイルを含む）が` +
+        `まとめて動きます。途中で止まることはありません。`, '移動する')) {
         movePrefixEntry(from, to);
       }
       return;
     }
-    if (confirm(`${from} → ${to} へ移動しますか？\nこのナレッジを指している参照は自動で書き換わり、履歴も付いていきます。`)) {
+    if (await askConfirm('移動しますか？', `${from} → ${to}\nこのナレッジを指している参照は自動で書き換わり、履歴も付いていきます。`, '移動する')) {
       moveEntry(from, to);
     }
   });

@@ -21,6 +21,19 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Leaving the editor by a link in the page asks before discarding
+  unsaved changes.** The guard was written but never switched on —
+  nothing set it — so an edit was dropped without a word; only closing
+  the tab warned.
+- **The web UI's yes/no questions are asked on the page.** Delete, move
+  (including a drag in the tree), removing a file, the access policy's
+  first and last grant, and discarding an edit used `window.confirm()`,
+  which an embedded browser answers "no" without showing anything: the
+  button did nothing and said nothing. They use the same dialog the
+  reject reason moved to in 0.31.0.
+
 ## [0.31.0] - 2026-09-28
 
 ### Changed
