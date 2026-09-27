@@ -501,7 +501,12 @@ try {
   await check('a field edit lands in the document',
     await waitFor(`document.querySelector('#e-doc').value.includes('title: スモーク')`), shown);
 
+  // The edit is unsaved, so leaving asks first and the URL stays on the
+  // editor until it is answered. The answer here is to discard.
   await go('#/dir/metrics');
+  await check('leaving an unsaved edit asks first',
+    await waitFor(`document.querySelector('#ask-dialog').open && location.hash === '#/new'`), shown);
+  await evalJS(`document.querySelector('#ask-form').requestSubmit()`);
   await check('a directory page renders', await waitFor(`${textOf('#view')}.includes('metrics')`), shown);
 
   // A navigation replaces the main region in place, so focus has to
