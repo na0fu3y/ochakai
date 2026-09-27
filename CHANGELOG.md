@@ -53,6 +53,15 @@ last entry.
   two differ: `log` covers every concept under a path in OKF's log.md
   form, where a rejection's reason is read; `revisions` is one concept,
   with each revision's whole document under `--json`.
+- **A rename at 0.x is announced, not bridged** (design doc 0152,
+  superseding 0088). A release that renames or removes an MCP tool or a
+  CLI command no longer keeps the old spelling answering for one release;
+  the entry is marked **BREAKING** here and the old name gets the
+  protocol's unknown-tool error. The forwarding middleware, the CLI's
+  rename table and the test that closed the window are gone — both tables
+  were empty for the seven weeks they existed, so nothing that answers
+  today stops answering. docs/compatibility.md says so, and the release
+  checklist loses its step. It is decided again when 1.0 is cut.
 
 ### Fixed
 

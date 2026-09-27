@@ -288,7 +288,7 @@ func TestASandboxSaysSoInItsInstructions(t *testing.T) {
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
 	svc := &service.Service{Config: &config.Config{Sandbox: true}}
-	if _, err := newServer(svc, "test", RetiredToolNames).Connect(ctx, st, nil); err != nil {
+	if _, err := newServer(svc, "test").Connect(ctx, st, nil); err != nil {
 		t.Fatalf("server connect: %v", err)
 	}
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "0"}, nil).Connect(ctx, ct, nil)

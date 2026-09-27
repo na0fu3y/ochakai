@@ -43,7 +43,7 @@ const (
 // no server-initiated request, and its own state is the knowledge base —
 // so the mode it loses is one it never used.
 func Handler(svc *service.Service, version string) http.Handler {
-	server := newServer(svc, version, RetiredToolNames)
+	server := newServer(svc, version)
 	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server },
 		&mcp.StreamableHTTPOptions{Stateless: true})
 }
@@ -242,7 +242,7 @@ func instructionsFor(cfg *config.Config) string {
 	return instructions
 }
 
-func newServer(svc *service.Service, version string, retired []RetiredToolName) *mcp.Server {
+func newServer(svc *service.Service, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: version}, &mcp.ServerOptions{
 		Instructions: instructionsFor(svc.Config),
 		// What this server can do, said in the protocol's own vocabulary
@@ -260,11 +260,6 @@ func newServer(svc *service.Service, version string, retired []RetiredToolName) 
 			Resources: &mcp.ResourceCapabilities{},
 		},
 	})
-
-	// A name this release renamed still answers, for this release only
-	// (design doc 0088). It goes on before any tool is registered because
-	// it decides which registration a call reaches.
-	s.AddReceivingMiddleware(answerForRetiredNames(retired))
 
 	// How long a listing holds (design doc 0118 §7). After the handler, so
 	// it reads the result the registrations below produce.

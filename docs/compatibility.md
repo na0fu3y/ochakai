@@ -6,10 +6,10 @@ The short version, so nobody has to infer it:
 > — `GET`/`PUT`/`DELETE /api/v1/bundle/{path}` — and `GET
 > /api/v1/search`. Everything else is still unstable while the major
 > version is 0: the rest of `/api/v1`, MCP, the CLI and the stored shape
-> may all change in a minor release. **A name gets one release** — an MCP
-> tool or a CLI command a release renames keeps answering under its old
-> spelling until the next release, and nothing else gets a window
-> ([0088](design/0088-a-retired-name-answers-for-one-release.md)). Only
+> may all change in a minor release. **Nothing gets a window** — an MCP
+> tool or a CLI command a release renames stops answering under its old
+> spelling in that release, and the CHANGELOG marks it **BREAKING**
+> ([0152](design/0152-a-rename-at-0x-is-announced-not-bridged.md)). Only
 > the latest release is supported. Four things can still break the core
 > — a security defect, output that does not conform to OKF
 > ([0100](design/0100-md-is-how-a-concept-is-spelled.md)), folding
@@ -150,20 +150,14 @@ moves:
   lands.
 - **MCP** — tool names, arguments, and which tools exist at all.
   `compile_sql` existed until `0.13.0` and does not now, and the five
-  tools that said `knowledge` say `concept`. **A tool a release renames
-  goes on answering under its old name for that release**
-  ([0088](design/0088-a-retired-name-answers-for-one-release.md)): the
-  call is forwarded, and the answer opens with a line naming the tool to
-  call instead. The old name is never in `tools/list`, so an agent that
-  has not already learned it never does — a tool description is paid for
-  out of an agent's context window, and one that is about to stop
-  existing is not worth the room. Arguments have no window; only names
-  do.
-- **The CLI** — commands, flags, and the shape of what they print. A
-  renamed *command* gets the same one release, and says so on stderr. It
-  is not in `ochakai help`, `docs/cli.md` or the completion scripts,
-  for the reason the MCP one is not listed either. Flags and printed
-  shapes have no window.
+  tools that said `knowledge` say `concept`. A tool a release renames
+  answers only under its new name, and the CHANGELOG entry is marked
+  **BREAKING** ([0152](design/0152-a-rename-at-0x-is-announced-not-bridged.md)).
+  An agent configured with the old name gets the protocol's unknown-tool
+  error; `tools/list` names what to call instead.
+- **The CLI** — commands, flags, and the shape of what they print. None
+  of them has a window: a renamed command is **BREAKING** in the
+  CHANGELOG the way a tool is.
 - **The stored data** — migrations run automatically at server start, and
   they are one-way. There is no downgrade path.
 
