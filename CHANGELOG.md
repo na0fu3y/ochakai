@@ -62,6 +62,15 @@ last entry.
   were empty for the seven weeks they existed, so nothing that answers
   today stops answering. docs/compatibility.md says so, and the release
   checklist loses its step. It is decided again when 1.0 is cut.
+- **The agent reads only the asking person's own query history.** Asked
+  what is used a lot, it counted `INFORMATION_SCHEMA.JOBS_BY_PROJECT` —
+  every user's SQL, for anyone holding `bigquery.jobs.listAll` — and
+  copied recurring queries into drafts that everyone who reads the base
+  can see, regardless of directory grants. It now counts `JOBS_BY_USER`,
+  which needs no extra permission, and points a question about the whole
+  team to the operator's scheduled job in `examples/bigquery-catalog`.
+  Design doc 0149 §4 named the project view; its Status header now says
+  so.
 
 ### Fixed
 

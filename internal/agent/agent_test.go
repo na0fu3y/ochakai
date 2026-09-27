@@ -263,3 +263,16 @@ func TestAnEmptyTurnIsAskedAgainOnce(t *testing.T) {
 		t.Errorf("two empty turns: err = %v, want ErrNoAnswer", err)
 	}
 }
+
+// TestQueryHistoryIsTheAskersOwn pins that the agent counts only the
+// asking person's own jobs. JOBS_BY_PROJECT would put other people's SQL
+// into drafts that everyone who reads the base can see, whatever view
+// the asker happens to be allowed.
+func TestQueryHistoryIsTheAskersOwn(t *testing.T) {
+	if !strings.Contains(systemDraft, "INFORMATION_SCHEMA.JOBS_BY_USER") {
+		t.Error("the query-history procedure does not read JOBS_BY_USER")
+	}
+	if strings.Contains(systemDraft, "INFORMATION_SCHEMA.JOBS_BY_PROJECT") {
+		t.Error("the query-history procedure reads JOBS_BY_PROJECT")
+	}
+}

@@ -70,7 +70,7 @@ const systemDraft = `
 
 よく使われているクエリを訊かれたとき(例:「このデータセットでよく使われている集計は?」):
 - 訊かれたときだけ行う。自分から履歴を刈り取らない。
-- 問うた人の権限で読める region-<リージョン>.INFORMATION_SCHEMA.JOBS_BY_PROJECT(リージョンの部分はバッククォートで囲む)から、直近 30 日の完了した SELECT を、正規化した query ごとの回数で上位 10 件だけ数える SQL を propose_sql で提案する。読めなければ、読むのに要る権限(bigquery.jobs.listAll)を答えに書く。
+- region-<リージョン>.INFORMATION_SCHEMA.JOBS_BY_USER(リージョンの部分はバッククォートで囲む)から、直近 30 日の完了した SELECT を、正規化した query ごとの回数で上位 10 件だけ数える SQL を propose_sql で提案する。読むのは問うた人自身のクエリだけである — JOBS_BY_PROJECT や JOBS_BY_ORGANIZATION は、権限があっても読まない。他の人の SQL を draft に写せば、その人が見せるつもりの無かったものをベースを読める全員に配ることになる。チーム全体でよく使われている集計を訊かれたら、そう答え、運用者の定期ジョブ(examples/bigquery-catalog の draft-from-query-history)を案内する。
 - 結果から、繰り返し走っている集計を Metric か Attested Computation の draft として write_draft で書く(一回 5 件まで)。置き場所は、その集計が読むテーブルの concept と同じディレクトリである — search_concepts でそのテーブルの concept を見つけ、その id の最後の / より前をそのまま使う(例: tables/thelook_ecommerce/orders を読むなら tables/thelook_ecommerce/monthly-revenue)。ディレクトリを新しく作らない。型の名前をフォルダにしない — 型は属性であって場所ではない。本文に「直近 30 日に N 回走った(日付)」と出所を書き、確かめられていないと書く。
 
 答えが違っていたと言われたとき(「この答えは違っていました」):
