@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-09-27
+
 ### Added
 
 - **`deploy/sandbox-reset`** holds the image demo.ochak.ai's reset job
@@ -7871,7 +7873,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.29.3...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/na0fu3y/ochakai/compare/v0.29.3...v0.30.0
 [0.29.3]: https://github.com/na0fu3y/ochakai/compare/v0.29.2...v0.29.3
 [0.29.2]: https://github.com/na0fu3y/ochakai/compare/v0.29.1...v0.29.2
 [0.29.1]: https://github.com/na0fu3y/ochakai/compare/v0.29.0...v0.29.1
