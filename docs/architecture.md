@@ -251,8 +251,8 @@ address に畳み込んでいる操作の一つで、その畳み込みはまだ
 取得される。1 オブジェクトあたり 5 MiB まで、住所を保持するのは
 データベースの側である(設計
 ドキュメント [0075](design/0075-the-bundle-is-the-address-space.md) §1)。`OCHAKAI_GCS_BUCKET` が
-未設定なら、そのインスタンスは markdown の concept だけを保存し、
-markdown 以外の書き込みは拒否される。Files は検索対象でもある:
+未設定なら、バイト列は PostgreSQL に置かれる(決定
+[0156](decisions/0156-files-live-in-postgres-without-a-bucket.md))。Files は検索対象でもある:
 ファイル名はすべての検索でマッチし、内容は embeddings が有効な
 ところではハイブリッド検索に加わる — テキストはどの embedding
 model でも、画像と PDF は `gemini-embedding-2` で。ヒットは常に

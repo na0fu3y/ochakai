@@ -24,7 +24,7 @@ Run デプロイガイドの
 | provenance — 誰が書き、誰が検証し、いつか | yes | **no** — 文書には書かれるが、取り込みが読み戻さない |
 | リビジョン履歴 | yes | **no** |
 | 利用回数と結果報告 | yes | **no** |
-| 添付ファイルのバイト列 | no — GCS にある | yes、ファイルとして |
+| 添付ファイルのバイト列 | バケットが無ければ yes(PostgreSQL にある)、あれば no(GCS にある) | yes、ファイルとして |
 | ochakai なしで読めるか | no | yes: markdown と YAML |
 | リストア先 | 同じデータベース | 任意のインスタンス、任意のバージョン、任意の OKF consumer |
 
@@ -40,13 +40,13 @@ example インスタンスは `--no-backup` を付けて出荷されており、
 一歩である — コマンドは下の[ハードニング](#hardening)を見よ。
 
 リストアは Cloud SQL 自身の手順であり、データベースだけを復旧する。
-**ファイルのバイト列はそこに含まれない**: それらは content-addressed な
-オブジェクトとして GCS に住んでいるので、データベースのバックアップから
-リストアしたインスタンスは、バイト列が今日のバケットの中身のままである
-ファイルのメタデータを見つけることになる。それが重要なら object
-versioning か retention policy を有効にせよ — そして `purge` は意図的に
-GCS の blob を回収しない(設計ドキュメント 0031)ので、バケットは増える
-一方であることに注意せよ。
+`OCHAKAI_GCS_BUCKET` を名指していないデプロイでは、ファイルのバイト列も
+データベースの中にあるので一緒に戻る。**名指しているデプロイでは、
+バイト列はそこに含まれない**: content-addressed なオブジェクトとして GCS
+に住んでいるので、データベースのバックアップからリストアしたインスタンスは、
+バイト列が今日のバケットの中身のままであるファイルのメタデータを見つける
+ことになる。それが重要なら object versioning か retention policy を
+有効にせよ。
 
 ### エクスポートする
 
@@ -214,7 +214,7 @@ warning だが、レベルで絞り込むとこの表を素通りする行が三
 ```
 "ochakai listening" addr=:8080 version=… insecure_dev=false endpoints=[/mcp /api/v1 /health]
 "semantic search enabled" model=gemini-embedding-2 dim=768 project=… location=global discovered=true
-"files disabled (no OCHAKAI_GCS_BUCKET); markdown concepts only"
+"file bytes in PostgreSQL (no OCHAKAI_GCS_BUCKET)"
 ```
 
 `discovered=true` は、model・location・project のどれもデプロイが書いた

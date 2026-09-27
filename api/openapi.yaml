@@ -734,7 +734,7 @@ paths:
           in: query
           description: >
             `Accept: application/gzip` only — `false` archives the
-            markdown without any file bytes. They live in GCS, so a
+            markdown without any file bytes. Where they live in GCS, a
             periodic backup can copy them from there directly instead of
             pulling them through here. A value that is neither `true` nor
             `false` is a 400, and so is sending it without
@@ -885,8 +885,10 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "501":
           description: >
-            A file was asked for on an instance that holds no files
-            (no OCHAKAI_GCS_BUCKET, design doc 0075 §1). Only for a path
+            A file was asked for on a server built without a file store
+            (design doc 0075 §1). Since decision 0156 a deployment with no
+            OCHAKAI_GCS_BUCKET keeps files in PostgreSQL and does not
+            answer this. Only for a path
             that is not a concept's: at `<id>.md` the answer is the
             concept's own 404, because what was asked about is the
             concept and not the deployment.
@@ -989,9 +991,10 @@ paths:
         index.md and log.md are 409: they are generated from the bundle,
         so a write there is a conflict with what the address is.
 
-        Writing a file needs the server to have GCS configured
-        (OCHAKAI_GCS_BUCKET); without it an instance stores concepts and
-        nothing else, and a write that is not a concept is a 501 (design
+        A file's bytes go to GCS when the deployment names a bucket
+        (OCHAKAI_GCS_BUCKET) and to PostgreSQL when it does not (decision
+        0156), so every deployment `ochakai serve` runs holds files. The
+        501 remains for a server built without any file store (design
         doc 0075 §1). A concept is unaffected.
 
         `dry_run=true` asks what the write would do and stores nothing
@@ -3709,8 +3712,11 @@ components:
             enabled:
               type: boolean
               description: >
-                Whether file bytes have somewhere to live
-                (`OCHAKAI_GCS_BUCKET`, design doc 0075 §1).
+                Whether file bytes have somewhere to live. Every
+                deployment `ochakai serve` runs answers true — GCS when
+                `OCHAKAI_GCS_BUCKET` is set, PostgreSQL otherwise
+                (decision 0156); false is a server built without a file
+                store (design doc 0075 §1).
             variable:
               type: string
               description: >

@@ -341,13 +341,13 @@ gcloud run services update ochakai --region=$REGION \
 model を変えることが既存のデータベースに何をするかは、運用ガイドの
 [Upgrades](../../docs/guides/operating.md#upgrades) にある。
 
-## 4b. ファイルには GCS が要る
+## 4b. ファイルを GCS に置く(任意)
 
-ファイルの実体は GCS バケットにのみ置かれる — メタデータとリビジョン
-は Postgres に残り、認証はサービス identity 経由の ADC でキーは無い。
-`OCHAKAI_GCS_BUCKET` が無いとサービスは markdown 専用で動く: ファイル
-の書き込みは 501 を返し、import はファイルを失敗として報告する。ファイ
-ルを一切置かないのでなければ、この節は飛ばさない:
+`OCHAKAI_GCS_BUCKET` が無いとき、ファイルの実体は Postgres に置かれる
+(1 オブジェクト 5 MiB まで)。画像や PDF が多いなら、ここでバケットを
+用意する — メタデータとリビジョンは Postgres に残り、認証はサービス
+identity 経由の ADC でキーは無い。後からバケットを名指しても、それまで
+Postgres に置いたファイルはそこから読まれ続ける:
 
 ```sh
 gcloud storage buckets create gs://$PROJECT_ID-ochakai-blobs \
@@ -474,9 +474,8 @@ curl -fsSL "https://raw.githubusercontent.com/na0fu3y/ochakai/v$VERSION/examples
 自分のテーブルを入れるなら
 [examples/bigquery-catalog](../../examples/bigquery-catalog) に day-one の
 手順と、それを走らせる job と、走りが正しかったかを判定する attester が
-ある。**§4b の GCS バケットが要る** — バンドルが計算本体と attester を
-ファイルとして運ぶので、バケットの無いインスタンスは concept だけ入れて
-最初の `.py` で落ちる。
+ある。バンドルは計算本体と attester をファイルとして運び、バケットの無い
+インスタンスではそれらが Postgres に置かれる。
 
 Claude Code — あるいはシェルを持つ任意のエージェント — を同じ URL に
 向ける。上で走らせた CLI が、proxy 無しでトークンを解決できることをす

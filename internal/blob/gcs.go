@@ -56,6 +56,9 @@ func (g *GCS) Put(ctx context.Context, sha256, mediaType string, data []byte) er
 
 func (g *GCS) Get(ctx context.Context, sha256 string) ([]byte, error) {
 	r, err := g.bucket.Object(objectName(sha256)).NewReader(ctx)
+	if errors.Is(err, storage.ErrObjectNotExist) {
+		return nil, fmt.Errorf("gcs get %s: %w", sha256, ErrNotFound)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("gcs get %s: %w", sha256, err)
 	}
