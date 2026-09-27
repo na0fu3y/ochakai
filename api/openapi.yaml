@@ -988,8 +988,18 @@ paths:
         arrived. A markdown file is one of them — it just cannot be
         called `.md`.
 
-        index.md and log.md are 409: they are generated from the bundle,
-        so a write there is a conflict with what the address is.
+        log.md is 409: it is generated from the bundle, so a write there
+        is a conflict with what the address is. **A PUT of a directory's
+        index.md keeps what it says about each subdirectory it lists** —
+        the line `* [sales](sales/) - Revenue by channel` — and nothing
+        else: the listing is generated from what the directory holds, and
+        SPEC §8 gives a directory's description no other place (decision
+        0154). A subdirectory listed with no description, or with the
+        `N concepts` count ochakai writes for one nobody described, has
+        its description cleared. The caller must be able to write the
+        directory. The answer is 200 with the index as it now reads and
+        `Ochakai-Plan` (`updated` or `unchanged`); with `dry_run=true`
+        nothing is kept.
 
         A file's bytes go to GCS when the deployment names a bucket
         (OCHAKAI_GCS_BUCKET) and to PostgreSQL when it does not (decision
@@ -4082,6 +4092,13 @@ components:
                   documents and a mixed count would misdescribe every
                   directory that has both.
                 type: integer
+              description:
+                type: string
+                description: >
+                  What somebody wrote the directory is for, kept from its
+                  parent's index.md (decision 0154). Absent when nobody
+                  has; the markdown index then says how many concepts it
+                  holds.
             required: [name, count]
         concepts:
           type: array

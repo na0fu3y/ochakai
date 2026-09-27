@@ -484,6 +484,24 @@ func (c *Client) PlanBundleFile(ctx context.Context, path string, data []byte) (
 	return planOf(resp)
 }
 
+// DescribeDirectories sends a directory's index.md — as a producer wrote
+// it — so the server keeps what it says each subdirectory is for
+// (decision 0154). path is the index.md's bundle path. The answer is the
+// plan; with dry nothing is kept.
+func (c *Client) DescribeDirectories(ctx context.Context, path string, data []byte, dry bool) (string, error) {
+	var q url.Values
+	if dry {
+		q = url.Values{"dry_run": []string{"true"}}
+	}
+	resp, err := c.doRaw(ctx, http.MethodPut, bundlePath(path), q, documentMediaType, nil, bytes.NewReader(data))
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return planOf(resp)
+}
+
 // planOf reads the Ochakai-Plan header, and refuses an answer that has
 // none: a server old enough not to know dry_run ignored the parameter and
 // wrote, so silence here means the opposite of what it looks like.

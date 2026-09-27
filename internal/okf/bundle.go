@@ -56,6 +56,12 @@ func FromBundle(files map[string][]byte) (entries []Doc, atts []AttributedFile, 
 		if hiddenPath(clean) {
 			continue
 		}
+		if domain.IndexBundleName(path.Base(clean)) {
+			// Not a concept and not a file: what it says about each
+			// subdirectory is read by BundleIndexes and sent on its own
+			// (decision 0154), and the rest of it ochakai generates.
+			continue
+		}
 		if base := path.Base(clean); domain.ReservedBundleName(base) {
 			// SPEC §8 makes index.md regenerable and §11 forbids requiring
 			// one, so ochakai regenerates both reserved files from the
@@ -217,4 +223,21 @@ func fromBundleFile(clean string, content []byte) (*Doc, []string, error) {
 		return nil, nil, fmt.Errorf("path yields invalid id %q", d.ID)
 	}
 	return d, notes, nil
+}
+
+// BundleIndexes returns the index.md files a bundle carries, keyed by
+// the bundle path they sit at. ochakai generates every listing, but a
+// producer's index.md is also the one place OKF lets it say what a
+// subdirectory is for, and an import keeps that by sending each one to
+// the server (decision 0154).
+func BundleIndexes(files map[string][]byte) map[string][]byte {
+	out := map[string][]byte{}
+	for p, data := range files {
+		clean := cleanPath(p)
+		if hiddenPath(clean) || !domain.IndexBundleName(path.Base(clean)) || len(data) == 0 {
+			continue
+		}
+		out[clean] = data
+	}
+	return out
 }

@@ -71,6 +71,19 @@ func (s *Service) Browse(ctx context.Context, prefix, cursor string) (*BrowseRes
 	if err != nil {
 		return nil, err
 	}
+	if len(lvl.Dirs) > 0 {
+		paths := make([]string, len(lvl.Dirs))
+		for i, d := range lvl.Dirs {
+			paths[i] = prefix + d.Name
+		}
+		described, err := s.Store.DirectoryDescriptions(ctx, paths)
+		if err != nil {
+			return nil, err
+		}
+		for i := range lvl.Dirs {
+			lvl.Dirs[i].Description = described[paths[i]]
+		}
+	}
 	return &BrowseResult{
 		Dirs: lvl.Dirs, Concepts: lvl.Concepts, Files: lvl.Files,
 		Truncated: lvl.Truncated, Cursor: nextBrowseCursor(prefix, lvl),
@@ -178,8 +191,14 @@ func (s *Service) IndexDocument(ctx context.Context, prefix string) ([]byte, err
 		if d.Count == 1 {
 			noun = "concept"
 		}
-		dirs = append(dirs, okf.IndexLine{Text: d.Name + "/", Target: d.Name + "/index.md",
-			Description: fmt.Sprintf("%d %s", d.Count, noun)})
+		// What somebody wrote the directory is for, when anybody has
+		// (decision 0154); otherwise how much is in it, which is the
+		// honest line nobody had to write.
+		desc := d.Description
+		if desc == "" {
+			desc = fmt.Sprintf("%d %s", d.Count, noun)
+		}
+		dirs = append(dirs, okf.IndexLine{Text: d.Name + "/", Target: d.Name + "/index.md", Description: desc})
 	}
 	for _, e := range res.Concepts {
 		name := e.ID

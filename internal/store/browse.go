@@ -31,6 +31,9 @@ import (
 type DirCount struct {
 	Name  string `json:"name"`
 	Count int    `json:"count"`
+	// Description is what somebody wrote the directory is for (decision
+	// 0154). Absent when nobody has.
+	Description string `json:"description,omitempty"`
 }
 
 // BrowseFile is one file sitting directly in a directory: the third

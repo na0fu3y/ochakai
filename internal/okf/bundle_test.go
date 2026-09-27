@@ -361,10 +361,11 @@ func TestFromBundleFixture(t *testing.T) {
 		`title is not a string; read as "2026"`,
 		`description is not a string; read as "3.14"`,
 		`tags[0] is not a string; read as "1"`,
-		// The reserved files are regenerated rather than stored (SPEC
-		// §3.1), and this is the note that stops a hand-written one
-		// disappearing without a word.
-		"index.md is a filename OKF reserves",
+		// log.md is regenerated rather than stored (SPEC §3.1), and this
+		// is the note that stops a hand-written one disappearing without
+		// a word. index.md is not dropped any more: BundleIndexes hands it
+		// to the import, which keeps its subdirectory descriptions
+		// (decision 0154).
 		"log.md is a filename OKF reserves",
 	} {
 		if !slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, want) }) {

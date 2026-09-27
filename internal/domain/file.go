@@ -195,3 +195,8 @@ func ValidBundlePath(p string) bool {
 func ReservedBundleName(name string) bool {
 	return name == "index.md" || name == "log.md"
 }
+
+// IndexBundleName reports whether name is a directory's listing, the one
+// reserved name a producer's copy of is read (decision 0154: what it says
+// each subdirectory is for).
+func IndexBundleName(name string) bool { return name == "index.md" }
