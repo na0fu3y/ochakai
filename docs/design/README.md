@@ -23,8 +23,8 @@ index も書き換えなくなる。
 | 全体アーキテクチャ | **[現行仕様 architecture.md](../spec/architecture.md)** — Context Provider と、裁定しないデータエージェント(既定 off)。経緯は 0142・0149 |
 | Google Cloud 前提・secret-zero | **[現行仕様 identity.md](../spec/identity.md)**(「Google Cloud の外」節)。経緯は 0003・0086・0115・0119 |
 | 認証と identity | **[現行仕様 identity.md](../spec/identity.md)** — 経路・記録される名前・委譲・producer・ディレクトリ単位の認可。経緯は 0065・0109 とその改訂 |
-| デプロイの姿勢(read-only / public / dev / sandbox) | [0066](0066-four-postures-one-word.md)。**五つ目の `sandbox` は [0087](0087-a-sandbox-says-it-is-one.md)**(匿名で、書けて、消える — そしてそう言う) |
-| 環境変数の名前そのもの | **[0112](0112-a-start-refuses-a-variable-it-does-not-read.md)** — `OCHAKAI_` で始まり ochakai が読まない変数が一つでもあれば `serve` / `serve-ui` は名指しで起動を止める(0064 §2 の「宣言していないキーは 400」を、運用者が手で綴るもう一つの面に当てたもの)。値の側の拒否は 0066 §4・[0080](0080-search-and-how-a-deployment-embeds.md) §2 のまま。素通りするのは harness の `OCHAKAI_TEST_*` と、ochakai が配るフック・job が読む名前の一覧だけ(§4) |
+| デプロイの姿勢(read-only / public / dev / sandbox) | **[現行仕様 deployment.md](../spec/deployment.md)** — 五つの姿勢と、それぞれが面でどう現れるか。経緯は 0066・0087 |
+| 環境変数の名前そのもの | **[現行仕様 deployment.md](../spec/deployment.md)**(「環境変数」節)。経緯は 0112 |
 | OKF 互換・バンドル・保存形 | **[現行仕様 okf.md](../spec/okf.md)** — バンドルとオブジェクト、文書の形、受け取ったバイト列を保存すること、主張と観測、瞬間の綴り、予約ファイル、取り込み、問いの語彙。経緯は 0075・0079・0136・0139 |
 | 住所とパス | **[現行仕様 addressing.md](../spec/addressing.md)** — パスが住所、一つのアドレス空間と表現、ディレクトリの一覧、move(一件とディレクトリ)、`prefix`。経緯は 0075・0100・0132 |
 | 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
@@ -33,8 +33,8 @@ index も書き換えなくなる。
 | 検索と埋め込み | **[現行仕様 search.md](../spec/search.md)** — 融合・並べ方・`OCHAKAI_EMBEDDINGS`・ベースの生まれで決まる既定。経緯は 0147 |
 | サーフェスの配分 | **[現行仕様 faces.md](../spec/faces.md)** — 四つの面の役割、足す規則と降ろす規則、一覧と検索、裁定の面、MCP・CLI・Web UI の規則と載せないもの。経緯は 0145・0068 |
 | Web UI | [0130](0130-the-web-ui-and-the-fields-of-a-document.md) が現行(配信・ページの形・編集を一冊で。0072 / 0092 / 0126 を畳んだ)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**このデプロイができないことをページが出さなくなり、直せる呼び出し元にだけ案内を出すことは [0131](0131-a-deployment-says-what-it-cannot-do.md)** |
-| 検証ループと利用測定 | [0141](0141-a-miss-is-read-off-the-words.md) が現行 — 四つのキュー、立っている検証からの tier、直近 90 日の並び、`stats` と、**どの concept の言葉にも一致しなかった検索をミスとして数えること**(0069・0090・0095・0137・0138 を畳んだ)。裁定の面と一覧のページングは [0068](0068-how-a-face-is-added-and-removed.md)。**却下が削除になり、理由を OKF §9 の `log.md` が運ぶことは [0135](0135-a-rejection-is-a-deletion.md)**(0068 §4 を改訂 — `ochakai reject` は `delete --note` に畳まれ、`withdrawn` と `rejected` フィルタが落ち、古い却下は検索に残らない)。**ループの入力になる turn を、ochakai のエージェント以外も残せて REST から読めることは [0144](0144-a-turn-is-kept-whoever-answered.md)**(0142 §6 の書き手を広げる — 形・保持・export に載せないことは動かない)。**比較に使う問いを再生し、答えがまだ立っているかを言うことは [0146](0146-a-kept-question-is-replayed-where-the-person-runs-it.md)**(`ochakai eval`、エージェントは `dry_run` で何も書かず何も数えず、SQL は打った人の手元で走る) |
-| 同時実行と削除 | [0030](0030-optimistic-locking.md)、[0031](0031-purge.md)。**purge とファイル削除が参照されなくなったバイト列を回収することは [0099](0099-a-purge-reaches-the-bytes.md)**(0031 §3.2 を改訂)。**却下が削除の一種であり、理由がリビジョンに載ることは [0135](0135-a-rejection-is-a-deletion.md)** — 墓標は塞がず、`knowledge_rejection` は畳まれた |
+| 検証ループと利用測定 | **[現行仕様 loop.md](../spec/loop.md)** — 裁定と trust、四つのキュー、利用測定、ミス、`stats`、turn と比較の問い。経緯は 0141・0135・0144・0146 |
+| 同時実行と削除 | **[現行仕様 concurrency.md](../spec/concurrency.md)** — 前提条件、二段階の削除、バイト列の回収。経緯は 0030・0031・0099 |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [CONTRIBUTING.md](../../CONTRIBUTING.md) の「Design: spec and decisions」が現行 — 現行仕様は領域ごとに書き換え、決定ログは短く書き換えない。0048 と 0128 の規則(番号の基準、置き換えによる改訂、表の一行の天井)はこの移行で役目を終えた |
 | バンドル往復と provenance の所有権 | **[現行仕様 okf.md](../spec/okf.md)**(「取り込みと往復」節)。経緯は 0009・0075 §3.1・0135 |
