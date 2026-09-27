@@ -59,18 +59,22 @@ last entry.
     history daily, so past months move because the rows move, not
     because of returns. Status does not progress with time: half of
     items from 2019 are still `Processing` or `Shipped`.
-  - Checked against the data. Over 43 months, revenue fell below the
-    month before in 13, and in none of them by more than twice the
-    usual swing. Booked items per day grow about 4% a month, and the month total moves by
+  - Checked against the data on two snapshots a day apart, which
+    disagreed on every month's number. Over 43 months revenue fell
+    below the month before in 13 and 15 of them. It fell by more than
+    twice the usual swing in 0 and 3, and all three were Februaries. Booked items per day grow about 4% a month, and the month total moves by
     a tenth with the length of the month.
   - `examples/demo-eval` asks nine questions of Claude Code twice, with
     BigQuery alone and with this bundle served over MCP, and grades the
     answers against a rubric. The truth for a numeric question is
-    computed at run time.
+    computed at run time, and the two questions that name a month pick
+    it from that day's snapshot. On 2026-09-27, Sonnet 5 answered 9 of
+    18 with BigQuery alone and 18 of 18 with the bundle, at twice the
+    turns and twice the cost.
   - The search eval golden set grows from 88 cases to 109. Recall stays
     1.00. MRR moves from 0.91 to 0.84 (lexical) and from 0.89 to 0.81
     (fused), mostly from old cases that fall to rank 2 behind a new
-    concept sharing their words. Reach is 19.91 of 48, which is 41% of
+    concept sharing their words. Reach is 19.99 of 48, which is 42% of
     the base (36% before).
 
 ## [0.29.2] - 2026-09-26

@@ -10,6 +10,11 @@ at run time, because thelook_ecommerce regenerates its history daily.
     OCHAKAI_URL=http://localhost:8080 EVAL_PROJECT=my-project \
         python3 examples/demo-eval/run.py [--model claude-sonnet-5] [--repeat 1]
 
+Two questions name a month, and the month is picked from today's
+snapshot by the bundle's own attested computation (revenue-drivers): which
+month fell inside the usual swing, and which rose right after an outlier
+fell, change when the dataset regenerates.
+
 The instance at OCHAKAI_URL should hold examples/demo and nothing else.
 The agent is given read tools only, so a run leaves the base unchanged.
 """
@@ -46,6 +51,53 @@ def warehouse_reachable(project):
         ["bq", "query", f"--project_id={project}", "--use_legacy_sql=false",
          "--format=json", "SELECT 1"], capture_output=True, text=True)
     return done.returncode == 0
+
+
+def drivers(project):
+    doc = (HERE.parent / "demo" / "computations" / "revenue-drivers.md").read_text()
+    sql = doc.split("```sql\n", 1)[1].split("```", 1)[0]
+    this_month = datetime.date.today().replace(day=1).isoformat()
+    out = subprocess.run(
+        ["bq", "query", f"--project_id={project}", "--use_legacy_sql=false",
+         "--format=json", "--max_rows=1000",
+         "--parameter=from_month:DATE:2023-02-01",
+         f"--parameter=to_month:DATE:{this_month}", sql],
+        check=True, capture_output=True, text=True).stdout
+    return [{k: v if k == "month" else float(v) for k, v in r.items()}
+            for r in json.loads(out)]
+
+
+def ja_month(iso):
+    y, m, _ = iso.split("-")
+    return f"{int(y)} 年 {int(m)} 月"
+
+
+def pick(kind, rows):
+    """Return the placeholders for a question, or None when today's
+    snapshot has no month of that kind."""
+    if kind == "fall_within_swing":
+        # The largest fall that is plainly inside the swing, well clear of
+        # the threshold the bundle teaches, so the rubric is not borderline.
+        falls = [r for r in rows if r["d_revenue"] < 0 and abs(r["z_revenue"]) < 1.5
+                 and all(abs(r[k]) < 2 for k in
+                         ("z_completion_rate", "z_avg_item_price"))]
+        if not falls:
+            return None
+        r = min(falls, key=lambda r: r["d_revenue"])
+        return {"month": ja_month(r["month"]),
+                "change": f"{r['d_revenue']:+.3f}(対数), z {r['z_revenue']:+.1f}"}
+    if kind == "rebound_after_outlier":
+        # A month that rose beyond the swing right after one that fell
+        # beyond it, and landed back near the month before the fall.
+        found = []
+        for prev, cur in zip(rows, rows[1:]):
+            if cur["z_revenue"] >= 2 and prev["z_revenue"] <= -2:
+                found.append((cur["z_revenue"], prev, cur))
+        if not found:
+            return None
+        _, prev, cur = max(found, key=lambda f: f[0])
+        return {"month": ja_month(cur["month"]), "prev": ja_month(prev["month"])}
+    raise ValueError(kind)
 
 
 def truth(sql, project):
@@ -131,7 +183,8 @@ def main():
     if args.resume:
         out = pathlib.Path(args.resume)
         rows = [json.loads(line) for line in out.read_text().splitlines() if line]
-        rows = [r for r in rows if not r.get("error")]
+        ids = {q["id"] for q in questions}
+        rows = [r for r in rows if not r.get("error") and r["id"] in ids]
         out.write_text("".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows))
     else:
         stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -139,6 +192,7 @@ def main():
         out.parent.mkdir(exist_ok=True)
         rows = []
     done_runs = {(r["id"], r["condition"], r["run"]) for r in rows}
+    snapshot = None
 
     with tempfile.TemporaryDirectory() as workdir:
         mcp_config = pathlib.Path(workdir) / "mcp.json"
@@ -154,6 +208,14 @@ def main():
                 raise SystemExit("BigQuery is not reachable (is the gcloud login "
                                  f"current?); continue with --resume {out}")
             t = truth(q["truth_sql"], args.project) if "truth_sql" in q else None
+            if "pick" in q:
+                snapshot = snapshot or drivers(args.project)
+                fill = pick(q["pick"], snapshot)
+                if fill is None:
+                    print(f"{q['id']:26} skipped: today's snapshot has no such month")
+                    continue
+                q = dict(q, question=q["question"].format(**fill),
+                         rubric=q["rubric"].format(**fill))
             for n, condition in todo:
                 res = ask(q, condition, args, workdir, str(mcp_config))
                 answer = res.get("result", "")
@@ -161,6 +223,7 @@ def main():
                      else grade(q, answer, t, args, workdir))
                 row = {
                     "id": q["id"], "condition": condition, "run": n,
+                "question": q["question"],
                     "pass": bool(g.get("pass")), "error": g.get("error"),
                     "reason": g.get("reason") or g.get("error"),
                     "truth": t, "model": args.model,

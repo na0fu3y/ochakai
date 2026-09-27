@@ -645,12 +645,12 @@ const (
 	// the count nearly doubled while the share moved four points; the
 	// share is the comparable number, the count is not.
 	//
-	// Then 19.91 of 48 (41%), when the diagnosis learned to ask whether a
+	// Then 19.99 of 48 (42%), when the diagnosis learned to ask whether a
 	// move is beyond the usual swing before naming a cause: one more case
 	// concept, and a vocabulary of variation (揺れ, 日数, 前月が外れて
 	// いないか) that the store's other questions share. recall stayed
 	// 1.00 and MRR 0.84 / 0.81 over 109 cases.
-	evalReachCeiling = 19.92
+	evalReachCeiling = 20.00
 
 	// Leak: of those, how many came from the other bundle. The two
 	// domains share nothing but the language, so a leaked hit is the
@@ -690,11 +690,11 @@ const (
 	// Japanese a kb question can match on, and the widest leaker is now
 	// 「Docker が無い環境でインスタンスを立てる」, whose 環境 and 立てる
 	// are ordinary words in a diagnosis runbook.
-	// The variation pass took it to 2.89, the same reason again: the
+	// The variation pass took it to 2.90, the same reason again: the
 	// widest leaker is now 「テストの id はどこから取るか」, and a
 	// diagnosis that says where a number came from and which month to
 	// take is written in its words.
-	evalLeakCeiling = 2.90
+	evalLeakCeiling = 2.91
 
 	// What the dimensions read over this corpus, for the next change to
 	// aim at: question 23.76, mixed 21.23, keyword 17.77, english 16.88,

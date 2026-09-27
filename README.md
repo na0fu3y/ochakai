@@ -138,7 +138,10 @@ concepts](examples/demo) about Google's public `thelook_ecommerce`
 dataset, linked to each other, some of them drafts. It is built around
 one question an agent is asked: revenue fell — whether that is more than
 the usual swing, which driver moved, what to do about it, and where the
-data runs out. Everything goes
+data runs out. Asked nine questions twice, Claude Code with BigQuery
+alone answered 9 of 18 right and with this bundle 18 of 18
+([examples/demo-eval](examples/demo-eval), with its limits in
+[examples/README.md](examples/README.md)). Everything goes
 through the API, so plain curl reaches it too:
 
 ```sh
