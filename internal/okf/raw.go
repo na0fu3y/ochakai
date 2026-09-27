@@ -650,8 +650,18 @@ func serverKeysFor(k *domain.Knowledge) *serverKeysOnly {
 	// the row's (design doc 0046 §3.4).
 	g := actorEvent(&k.UpdatedBy, &k.ContentChangedAt)
 	own := &serverKeysOnly{Generated: &g, CreatedBy: actorText(k.CreatedBy)}
+	// Only the verifications that stand — at or after the content's last
+	// meaningful change (design doc 0138). SPEC §5.3 derives the tier
+	// from whatever `verified` holds, with no notion of a confirmation an
+	// edit has since outlived, so writing a lapsed row here made every
+	// OKF reader rank the concept higher than ochakai does (decision
+	// 0155). The lapsed rows stay in the ledger and in log.md, which is
+	// where the history of who confirmed what belongs.
 	for i := range k.Verifications {
 		v := &k.Verifications[i]
+		if v.At.Before(k.ContentChangedAt) {
+			continue
+		}
 		own.Verified = append(own.Verified, actorEvent(&v.By, &v.At))
 	}
 	return own
