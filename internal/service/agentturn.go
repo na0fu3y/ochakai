@@ -343,12 +343,18 @@ func (s *Service) RevisableDraft(ctx context.Context, id, document string) (*dom
 	if err := s.readOnly(); err != nil {
 		return nil, err
 	}
-	if _, err := s.RefuseIfCurated(ctx, id, "revise"); err != nil {
+	// Not RefuseIfCurated: its refusal is written for an MCP agent
+	// (report_outcome, put_concept, no If-Match), and this path answers
+	// the person applying over REST as well as the deployment's agent.
+	if err := s.mayWrite(ctx, id); err != nil {
 		return nil, err
 	}
 	cur, err := s.Store.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if cur.Curated() {
+		return nil, Invalidf("%s was ruled on (%s): only a draft nobody has ruled on is revised this way; write a new draft that links it instead", id, cur.Ruling())
 	}
 	if cur.Status != domain.StatusDraft {
 		return nil, Invalidf("%s is %s, not a draft: only a draft nobody has ruled on is revised this way; write a new draft that links it instead", id, cur.Status)

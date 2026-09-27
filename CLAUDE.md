@@ -1,8 +1,10 @@
 # CLAUDE.md
 
 ochakai is a knowledge store for data-analysis agents. Two decisions
-frame everything: nothing but a person's ruling changes what is served,
-and the server executes no SQL (0142 — its own data agent is off by
+frame everything: nothing but a ruling changes what is served — a
+person's, or a confirmation job's recorded under its own `process:`
+identity and read as `machine-confirmed`, never as human-reviewed; no
+LLM rules — and the server executes no SQL (0142 — its own data agent is off by
 default and rules on nothing), and zero secrets — Cloud Run IAM + Cloud SQL IAM on Google Cloud,
 in-process OIDC verification off it (0086), never tokens or passwords
 (0065, 0003).
@@ -142,4 +144,5 @@ callers as the anonymous human, while the MCP connection carries your
 process identity, and that distinction is what keeps the trust tier
 honest about who reviewed what
 ([kb/bundle/policies/ai-human-identity.md](kb/bundle/policies/ai-human-identity.md)).
-Rulings — verify and reject — belong to the human.
+Rulings — verify and reject — belong to the human; a `process:`
+verification is a confirmation job's (a CI canary), never an agent's.

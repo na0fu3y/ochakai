@@ -56,7 +56,9 @@ number. The alternatives you dropped stay in the PR history.
 
 Two decisions to check any proposal against first:
 
-- **Only a person rules, and the server runs no SQL** (0142). The
+- **Only a ruling changes what is served, no LLM rules, and the server
+  runs no SQL** (0142). A ruling is a person's, or a confirmation job's
+  recorded as `process:` and read as `machine-confirmed`. The
   deployment's own agent is off by default, answers and proposes, and
   never rules; a query runs as the person asking.
 - **Secret-zero** (0065, 0003). Cloud Run IAM + Cloud SQL IAM on Google
