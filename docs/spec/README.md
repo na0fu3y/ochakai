@@ -21,7 +21,7 @@ ochakai が**いまどう動くか、なぜそうなのか**を、領域ごと�
 |---|---|---|
 | [architecture.md](architecture.md) | 全体アーキテクチャとデータエージェント | 現行 |
 | [identity.md](identity.md) | 認証・identity・認可(secret-zero と OIDC を含む) | 現行 |
-| `deployment.md` | デプロイの姿勢と環境変数 | 未着手 |
+| [deployment.md](deployment.md) | デプロイの姿勢と環境変数 | 現行 |
 | [okf.md](okf.md) | OKF 互換・バンドル・保存形・往復と provenance | 現行 |
 | [addressing.md](addressing.md) | 住所・パス・move | 現行 |
 | `vocabulary.md` | 型の語彙と呼び名 | 未着手 |
@@ -29,8 +29,8 @@ ochakai が**いまどう動くか、なぜそうなのか**を、領域ごと�
 | [search.md](search.md) | 検索と埋め込み | 現行 |
 | [faces.md](faces.md) | 面の配分(REST / MCP / CLI / Web UI) | 現行 |
 | `webui.md` | Web UI | 未着手 |
-| `loop.md` | 検証ループと利用測定 | 未着手 |
-| `concurrency.md` | 同時実行と削除 | 未着手 |
+| [loop.md](loop.md) | 検証ループと利用測定 | 現行 |
+| [concurrency.md](concurrency.md) | 同時実行と削除 | 現行 |
 | `seeding.md` | 空のベースを埋める | 未着手 |
 | `rest-stability.md` | REST の安定性契約 | 未着手 |
 | `mcp-cli-stability.md` | MCP・CLI の安定性契約 | 未着手 |
