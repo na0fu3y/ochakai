@@ -107,6 +107,17 @@ last entry.
   written as `draft`, the way the deployment's own agent already wrote
   its drafts. A status written out is kept as written, and REST, the
   CLI and the web UI are unchanged.
+- **A move repairs the paths a frontmatter names, not only body links.**
+  `resource`, `sources[].resource`, `computation`, `executor.resource` and
+  `attester.resource` (OKF SPEC §6.2) that pointed at a moved concept, or
+  at a file in its namespace or in a moved directory, kept the old path —
+  an Attested Computation whose attester moved with it was left pointing
+  at nothing. They now follow, as bundle-absolute paths, and the referrer
+  gets its `update` revision as for a body link. The stored document is
+  edited as a token swap, so indentation, comments and other keys stay as
+  written; a `model` key a move rewrites no longer re-renders the whole
+  document either. Under an access policy, only a referrer the move
+  really rewrites counts toward whether it fits.
 
 ## [0.29.3] - 2026-09-27
 

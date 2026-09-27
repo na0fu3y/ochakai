@@ -16,7 +16,6 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
-	"github.com/na0fu3y/ochakai/internal/okf"
 )
 
 // MovePrefix moves every object addressed under oldPrefix to newPrefix and
@@ -144,7 +143,7 @@ func (s *Store) MovePrefix(ctx context.Context, oldPrefix, newPrefix string, act
 			 WHERE starts_with(path, $1 || '/')`, oldPrefix, newPrefix); err != nil {
 			return err
 		}
-		final, err := s.rewritePrefixReferences(ctx, tx, pairs, movedNew, actor, now, within)
+		final, err := s.rewritePrefixReferences(ctx, tx, oldPrefix, newPrefix, pairs, movedNew, actor, now, within)
 		if err != nil {
 			return err
 		}
@@ -233,7 +232,7 @@ func rekeyConcept(ctx context.Context, tx pgx.Tx, oldID, newID string, actor dom
 // Without that split, moving a directory of mutually-linking concepts
 // would stack a revision per internal link and leave a history nobody can
 // read.
-func (s *Store) rewritePrefixReferences(ctx context.Context, tx pgx.Tx, pairs [][2]string,
+func (s *Store) rewritePrefixReferences(ctx context.Context, tx pgx.Tx, oldPrefix, newPrefix string, pairs [][2]string,
 	movedNew map[string]bool, actor domain.Actor, now time.Time, within []string,
 ) (map[string]*domain.Knowledge, error) {
 	// A directory of nothing but files has no reference to repair, and no
@@ -257,27 +256,19 @@ func (s *Store) rewritePrefixReferences(ctx context.Context, tx pgx.Tx, pairs []
 		 WHERE deleted_at IS NULL
 		   AND (EXISTS (SELECT 1 FROM jsonb_array_elements(links) l WHERE l->>'target' = ANY($1))
 		        OR attrs->>'model' = ANY($1)
-		        OR id = ANY($2))
-		 ORDER BY id FOR UPDATE`, olds, news)
+		        OR id = ANY($2)
+		        OR (frontmatter ?| $3 AND strpos(doc, $4) > 0))
+		 ORDER BY id FOR UPDATE`, olds, news,
+		// A path in the frontmatter into the directory (OKF SPEC §6.2)
+		// spells the directory's name; rewriteReferences says why this is
+		// a candidate set and not the answer.
+		domain.PathFieldKeys, path.Base(oldPrefix))
 	if err != nil {
 		return nil, err
 	}
 	referrers, err := pgx.CollectRows(rows, scanKnowledgeDoc)
 	if err != nil {
 		return nil, err
-	}
-	// The blast radius, decided before a row is written (design doc 0129
-	// §2): a referrer the caller may not write means the whole move is
-	// refused, never narrowed. The moved concepts are already checked.
-	if within != nil {
-		for i := range referrers {
-			if movedNew[referrers[i].ID] {
-				continue
-			}
-			if !underAny(referrers[i].ID, within) {
-				return nil, ErrOutsideScope
-			}
-		}
 	}
 	// Every live moved concept is in this read — the id clause selects it
 	// whether or not it points at anything — so the final text of each is
@@ -293,41 +284,52 @@ func (s *Store) rewritePrefixReferences(ctx context.Context, tx pgx.Tx, pairs []
 	for _, p := range pairs {
 		oldOf[p[1]] = p[0]
 	}
+	moves := domain.PrefixMoves(oldPrefix, newPrefix)
+	models := make(map[string]string, len(pairs))
+	for _, p := range pairs {
+		models[p[0]] = p[1]
+	}
+	var repaired []*domain.Knowledge
 	for i := range referrers {
 		r := &referrers[i]
 		self := movedNew[r.ID]
-		body := r.Body
-		// A moved concept resolves its own relative links against the
-		// directory it used to sit in, so it is rewritten as if it were
-		// still there, and relative links are absolutized first when the
-		// directory it sits in changed. Absolute is the form a move
-		// cannot reinterpret.
+		// A moved concept resolves its own relative links and paths
+		// against the directory it used to sit in, and they come back
+		// absolute when that directory changed. Absolute is the form a
+		// move cannot reinterpret.
 		from := r.ID
 		if self {
 			from = oldOf[r.ID]
-			if path.Dir(from) != path.Dir(r.ID) {
-				body = domain.AbsolutizeBodyLinks(from, body)
-			}
 		}
-		for _, p := range pairs {
-			body = domain.RewriteBodyLinks(from, body, p[0], p[1])
-		}
-		modelMoved := false
-		if m, ok := r.Attrs["model"].(string); ok {
-			for _, p := range pairs {
-				if m == p[0] {
-					r.Attrs["model"] = p[1]
-					modelMoved = true
-					break
+		ok, err := repairReferences(r, from, self && path.Dir(from) != path.Dir(r.ID), moves,
+			func(body string) string {
+				for _, p := range pairs {
+					body = domain.RewriteBodyLinks(from, body, p[0], p[1])
 				}
+				return body
+			}, models)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			repaired = append(repaired, r)
+		}
+	}
+	// The blast radius, decided before a row is written (design doc 0129
+	// §2): a referrer the caller may not write means the whole move is
+	// refused, never narrowed. The moved concepts are already checked.
+	if within != nil {
+		for _, r := range repaired {
+			if movedNew[r.ID] {
+				continue
+			}
+			if !underAny(r.ID, within) {
+				return nil, ErrOutsideScope
 			}
 		}
-		if body == r.Body && !modelMoved {
-			continue // matched the index but nothing to repair
-		}
-		r.Body = body
-		r.Doc = string(okf.ReplaceBody([]byte(r.Doc), body))
-		r.Links = domain.LinksFromBody(r.ID, r.Body)
+	}
+	for _, r := range repaired {
+		self := movedNew[r.ID]
 		r.UpdatedBy = actor
 		// A moved concept's row already carries the move's instant; only
 		// a referrer that stayed put is being changed now.
@@ -351,11 +353,12 @@ func (s *Store) rewritePrefixReferences(ctx context.Context, tx pgx.Tx, pairs []
 		err = tx.QueryRow(ctx,
 			`UPDATE object SET links=$2, attrs=$3, body=$4, updated_at=$5,
 			 updated_by_kind=$6, updated_by_name=$7, updated_by_via=$8, updated_by_producer=$9,
-			 doc=$10, content_hash=$11, content_changed_at=`+changedAfterVerified("$12")+`, frontmatter=$13
+			 doc=$10, content_hash=$11, content_changed_at=`+changedAfterVerified("$12")+`, frontmatter=$13,
+			 resource=$14, sources=$15, computation=$16, executor=$17, attester=$18
 			 WHERE id=$1 AND deleted_at IS NULL
 			 RETURNING content_changed_at`,
 			r.ID, j.links, j.attrs, r.Body, r.UpdatedAt, actor.Kind, actor.Name, actor.Via, actor.Producer,
-			doc, hash, r.ContentChangedAt, fm).Scan(&r.ContentChangedAt)
+			doc, hash, r.ContentChangedAt, fm, r.Resource, j.sources, r.Computation, j.executor, j.attester).Scan(&r.ContentChangedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("repairing references into %s: %s changed under the move", olds[0], r.ID)
 		}

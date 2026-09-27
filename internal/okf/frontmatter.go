@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"sort"
 	"strconv"
 	"strings"
@@ -160,6 +161,20 @@ func SetFrontmatterKeys(raw []byte, set map[string]json.RawMessage, unset []stri
 		remove[key] = true
 	}
 
+	out := spliceKeys(fm, rest, present, replace, remove)
+	if err := verifySpliced(out, set, unset); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// spliceKeys replaces the block of each key in replace with its rendered
+// lines, removes every key in remove, and appends the keys in replace the
+// block did not carry — touching no other line. present is the block's
+// keys in document order (topLevelKeys). It is the line arithmetic both
+// SetFrontmatterKeys and RewritePathFields rest on.
+func spliceKeys(fm, rest string, present []string, replace map[string]string, remove map[string]bool) []byte {
+	replace = maps.Clone(replace)
 	// A plain split is exact here because mappingKeys has already
 	// refused every block whose lines the parser would count differently
 	// — a bare carriage return, the Unicode breaks, a document marker.
@@ -217,11 +232,7 @@ func SetFrontmatterKeys(raw []byte, set map[string]json.RawMessage, unset []stri
 	// the same key twice produces the same bytes: what a caller stores
 	// has to be what a caller storing it again would store. One pass is
 	// one, since NormalizeText is idempotent.
-	out = NormalizeText(out)
-	if err := verifySpliced(out, set, unset); err != nil {
-		return nil, err
-	}
-	return out, nil
+	return NormalizeText(out)
 }
 
 // verifySpliced reads the produced document back and requires it to say
