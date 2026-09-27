@@ -88,6 +88,16 @@ last entry.
   the design index's opening table is still where it is described.
   `docs/design/README.en.md` is retired — English readers go through
   `docs/en.md` to the spec pages. Nothing ochakai does changes.
+- **A deployment with no `OCHAKAI_GCS_BUCKET` keeps files in PostgreSQL**
+  (decision 0156). It used to hold markdown concepts only, so a bundle
+  carrying an attester's `.py` or a diagram — every bundle the OKF
+  repository publishes carries one — could not round-trip through a
+  local, CI or off-Google-Cloud deployment. File bytes now go to a
+  `blob_bytes` table (migration 0055), up to the same 5 MiB per object,
+  and the sweep reclaims them as it does on GCS. A deployment that names
+  a bucket keeps writing to GCS, and one that names a bucket later keeps
+  reading the bytes it stored in PostgreSQL. The startup line says
+  `file bytes in PostgreSQL (no OCHAKAI_GCS_BUCKET)`.
 
 ### Fixed
 

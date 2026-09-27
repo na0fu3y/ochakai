@@ -23,8 +23,8 @@ README が前提にしているのに、一箇所では書いていないこと�
 
 出ない。ochakai はどこへも何も報告しない — テレメトリが無いので、
 オプトアウトするものも無い。接続する先はあなた自身のプロジェクトの
-Google Cloud API だけである: 常に Cloud SQL、`OCHAKAI_GCS_BUCKET` を
-設定していれば GCS、そして意味的検索が有効なら Vertex AI — Google Cloud
+Google Cloud API だけである: 常に Cloud SQL(ファイルのバイト列も、
+`OCHAKAI_GCS_BUCKET` を設定していなければここ)、設定していれば GCS、そして意味的検索が有効なら Vertex AI — Google Cloud
 の上で動く以上、これが既定である(設計ドキュメント
 [0147](design/0147-search-and-the-default-a-base-was-made-with.md))。
 `OCHAKAI_EMBEDDINGS=off` — このデプロイがどう埋め込むかを言う唯一の変数

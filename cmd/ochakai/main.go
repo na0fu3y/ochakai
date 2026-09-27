@@ -288,16 +288,19 @@ func setup(ctx context.Context, log *slog.Logger) (*service.Service, *config.Con
 		cfg.Verifier = v
 		log.Info("authenticating with OIDC", "issuer", cfg.OIDCIssuer, "audience", cfg.OIDCAudience)
 	}
-	// File bytes live only on GCS (design doc 0013).
+	// File bytes live on GCS when a bucket is named, and in PostgreSQL
+	// otherwise (decision 0156). A deployment that names a bucket after
+	// keeping files in PostgreSQL still reads those, from there.
 	if cfg.GCSBucket != "" {
 		bs, err := blob.NewGCS(ctx, cfg.GCSBucket)
 		if err != nil {
 			return nil, nil, err
 		}
-		st.UseBlobStore(bs)
+		st.UseBlobStore(blob.Fallback(bs, st.PostgresBlobs()))
 		log.Info("file bytes on GCS", "bucket", cfg.GCSBucket)
 	} else {
-		log.Info("files disabled (no OCHAKAI_GCS_BUCKET); markdown concepts only")
+		st.UseBlobStore(st.PostgresBlobs())
+		log.Info("file bytes in PostgreSQL (no OCHAKAI_GCS_BUCKET)")
 	}
 	if err := st.Migrate(ctx, 0); err != nil {
 		return nil, nil, err

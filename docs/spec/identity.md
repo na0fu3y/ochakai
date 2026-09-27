@@ -248,7 +248,7 @@ Web UI は `#/access`(ポリシーを読めた呼び出し元にだけタブが�
 ## Google Cloud の外
 
 認証だけは OIDC で外でも成り立つ。データベースの資格情報は外では運用者の
-仕事に戻り(`OCHAKAI_DATABASE_URL`)、ファイルは GCS が無ければ扱えず、
+仕事に戻り(`OCHAKAI_DATABASE_URL`)、ファイルは PostgreSQL に置かれ、
 埋め込みは Vertex AI が無ければ無い。**外を正式に支えるのは、埋め込みが
 設定無し・secret 無し・所在地を選べる形で外でも既定になったとき**で、
 それまで足場は Google Cloud 一つである(C8 が乗っているのが検索だから)。

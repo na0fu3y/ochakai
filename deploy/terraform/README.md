@@ -139,7 +139,7 @@ GRANT "<database_user output>" TO "you@your-org.example";
 | `agent_model` | §4c | `OCHAKAI_AGENT` — データエージェントを入れ、モデルを名指す。勧めるのは `global` の `gemini-3.8-flash`(resource name で名指す)。`roles/aiplatform.user` と API は `enable_vertex_embeddings` が false でも付く。 |
 | `agent_oauth_client_id` | §4c | `OCHAKAI_OAUTH_CLIENT_ID` — エージェントが提案した SQL を、チームの Web UI が本人の権限で走らせる(`ochakai ui` はこれが無くても走らせる)。クライアントはコンソールで作る(Terraform では作れない)。 |
 | `agent_bigquery_project` | §4c | `OCHAKAI_BIGQUERY_PROJECT` — 提案されたクエリの課金先。利用者は欄に何も書かずに済む。`enable_webui` なら `webui_iap_members` に `roles/bigquery.jobUser` を付与する。 |
-| `enable_gcs_files` | §4b | バケット + `roles/storage.objectUser` + `OCHAKAI_GCS_BUCKET`。無いとファイルの書き込みは 501 を返す。 |
+| `enable_gcs_files` | §4b | バケット + `roles/storage.objectUser` + `OCHAKAI_GCS_BUCKET`。無ければファイルの実体は Cloud SQL に置かれる。 |
 | `enable_webui` | §5b | `serve-ui` を、同じイメージ・専用の identity で、IAP の背後にある二つ目の Cloud Run サービスとして立てる。`webui_records_browser_user`(既定 on)は、UI のサービスアカウントではなくブラウザの本人を記録する。 |
 | `read_only` | §5d | `OCHAKAI_MODE=read-only` を設定する — 非公開のままである。on にする*前*にベースへ import しておくこと: read-only なデプロイには import できない。 |
 | `public_read_only` | §5d | `OCHAKAI_MODE=public` を設定し、`allUsers` を付与する(`sandbox` と並ぶ、このモジュールで `allUsers` が付く二つの変数の一つ)。`read_only` を含意する。その姿勢が何を手放すかは[デプロイガイド](../cloudrun/README.md#5d-optional-a-public-read-only-demo)にある。書き込み可能な状態で apply し、`ochakai import examples/demo` した後、これを on にして再度 apply する。 |
