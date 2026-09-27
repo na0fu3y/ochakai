@@ -30,6 +30,30 @@ last entry.
   in the registry, so the demo kept restoring 0.28.4's 18 concepts after
   0.29.3 shipped 37. The operating guide's sandbox section points here.
 
+### Changed
+
+- **The documents say where the text goes by default.** The C8 row of
+  docs/surface.md and the README said embeddings run in the deployment's
+  region by default; since 0147 §1.2 a base created after v0.29.0 embeds
+  in `global`, and the recommended agent model exists only there. Both
+  now say the default does not stay in the region and that one variable
+  pins it. Nothing on the wire or in the defaults changes.
+- **What counts as a ruling is written the way it has behaved.** A CI
+  canary's `process:` verification already earned the search nudge, the
+  agent's "confirmed", and the guard against an agent overwriting it; the
+  principle said only a person rules. It now says a ruling is a
+  person's, or a confirmation job's that readers see as
+  `machine-confirmed`, and that no LLM rules. Behaviour is unchanged.
+- **Applying an agent's revision to a ruled concept answers for REST.**
+  The refusal used to be the MCP one — `report_outcome`, `put_concept`,
+  "this surface has no If-Match" — on a path that has a precondition. It
+  now says the concept was ruled on and to write a new draft that links
+  it. Still 400.
+- **`ochakai log`'s help no longer says it is `ochakai revisions`.** The
+  two differ: `log` covers every concept under a path in OKF's log.md
+  form, where a rejection's reason is read; `revisions` is one concept,
+  with each revision's whole document under `--json`.
+
 ### Fixed
 
 - **A concept an agent writes over MCP without a status is a draft.**

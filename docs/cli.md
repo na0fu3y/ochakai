@@ -492,9 +492,11 @@ Usage: ochakai log [flags] [path]
 Print the update history under a path as OKF's log.md (SPEC §9):
 date-grouped, newest first. With no path, the whole bundle.
 
-It is generated from the revision ledger, so it says the same thing
-`ochakai revisions` does — in the format a bundle carries, which is
-what makes the history portable.
+It is generated from the revision ledger, for every concept under the
+path at once, in the format a bundle carries — which is what makes the
+history portable, and where a rejection's reason is read. For one
+concept's revisions with the whole document as it stood, use
+`ochakai revisions`.
 
 Flags:
   -limit int

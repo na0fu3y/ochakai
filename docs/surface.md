@@ -26,11 +26,11 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 | C1 | 資産は利用者のもの — 丸ごと出て、丸ごと戻り、求められれば消える([0009](design/0009-provenance-portability.md)・[0031](design/0031-purge.md)・[0075](design/0075-the-bundle-is-the-address-space.md)) |
 | C2 | secret を一つも置かないこと — その性質を Cloud Run IAM と Cloud SQL IAM が無設定で買う([0065](design/0065-identity-and-provenance.md)・[0003](design/0003-gcp-only.md))。**性質と買い方は同じではない**: OIDC 発行者を名指したデプロイは Google Cloud の外でも secret を増やさずに誰が呼んでいるかを答え([0086](design/0086-a-second-way-to-say-who-is-calling.md))、そこではデータベースの資格情報が運用者の仕事に戻る。**残りを撤回してよい条件は [0115](design/0115-the-second-footing-waits-for-search.md)** |
 | C3 | 形式は Open Knowledge Format — 保存もワイヤも往復も OKF で、その横に第二の形式を発明しない([0075](design/0075-the-bundle-is-the-address-space.md))。**「v0.2」は一つの文書を指さない**ので、留めるのは版ではなく**コミット**である(`open-knowledge-format@0b87c52`、[compatibility.md](compatibility.md) が正典): v0.2 は公開後に normative な規則を版番号を動かさずに変えており、綴りをどちらに合わせるかは [0139](design/0139-ochakai-does-not-choose-a-spelling.md) |
-| C4 | No FDE — デプロイは自分でできて、必要な操作には自分で打てるコマンドがある([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md)) |
+| C4 | No FDE — デプロイは自分でできて、必要な操作には自分で打てるコマンドがある([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md))。**デプロイ自身のデータエージェント(既定 off)はこの条件のためにある** — チームが自前のエージェントを作らずに済み、空のベースを人の手で埋め切れない分を LLM が下書きする。LLM は人の裁定を安くするためにだけ使い、裁定はしない([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)・[ROADMAP](../ROADMAP.md)) |
 | C5 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §3) |
 | C6 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)・[0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §1) |
 | C7 | 人間の改善ループが測れる — 検証・結果報告・キューの長さ・答えの無かった問いを、推測ではなく数で持つ([0141](design/0141-a-miss-is-read-off-the-words.md)) |
-| C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — 二文字の日本語語が索引で引け(移行 `0036`)、書き手が与えた別名も索引に入り([0105](design/0105-a-concept-answers-to-its-other-names.md))、埋め込みは既定でデプロイのリージョンで走る([0147](design/0147-search-and-the-default-a-base-was-made-with.md) §1.2) |
+| C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — 二文字の日本語語が索引で引け(移行 `0036`)、書き手が与えた別名も索引に入り([0105](design/0105-a-concept-answers-to-its-other-names.md))、埋め込みとエージェントのモデルをデプロイのリージョンに留めることが変数一つで書ける — **既定では留まらない**: 新しいベースの埋め込みは `global`、前からあるベースはリージョンで([0147](design/0147-search-and-the-default-a-base-was-made-with.md) §1.2)、エージェントの推奨モデルは `global` にしか無い([configuration.md](configuration.md)) |
 
 **どれにも当たらない提案は、三つの問いに進むまでもなく no である。**
 逆は成り立たない — 条件に当たることは必要条件であって十分条件では

@@ -452,7 +452,8 @@ endorse し、Endorsed Mode ではエージェントが「endorse された資�
   それを人が確かめたかどうかを言う。確かめたことは status ではなく、
   認証された呼び出し元を名指す台帳の行である
   ([0065](design/0065-identity-and-provenance.md))。エージェントは裁定
-  しない — 提案するだけで、配る中身を変えるのは人の裁定だけである
+  しない — 提案するだけで、配る中身を変えるのは裁定だけである(人の
+  裁定か、CI の確認ジョブが `process:` として残す `machine-confirmed`)
   ([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §3)。
   Genie の重みも Cortex Sense の順位も、どの読み方を採るかを機械が決める。
 - **却下が理由ごと残る。** 答えへの 👎 と一言は失敗の結果報告として

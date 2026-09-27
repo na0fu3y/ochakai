@@ -52,7 +52,8 @@ ochakai competes on what they gave up:
 **What does not move.** The goal changes what the agent does, not what the
 agent is allowed to do:
 
-- only a person's ruling changes what is served;
+- only a ruling changes what is served — a person's, or a confirmation
+  job's that reads as `machine-confirmed` — and no LLM rules;
 - the server executes no SQL, and a query runs as the person who asked;
 - no secrets;
 - the agent is off by default;
@@ -210,8 +211,9 @@ it.
 
 - **An LLM that rules.** ochakai returns human-verified golden queries
   verbatim, and the definitions and caveats around them, and only a
-  person's ruling changes what it serves — that is what the trust in human
-  verification rests on. Since [0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)
+  ruling changes what it serves — a person's, or a confirmation job's
+  such as a CI canary, which readers see as `machine-confirmed` rather
+  than human-reviewed. That is what the trust in verification rests on. Since [0142](docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)
   a deployment may turn on its own data agent (off by default), and it
   answers and proposes but never verifies, rejects or rewrites a ruled
   concept; search and reads carry no LLM either way. Automatic

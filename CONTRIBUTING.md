@@ -699,10 +699,13 @@ points at the doc somebody should actually read. That is where the attention goe
 
 Two decisions worth knowing before proposing features:
 
-- **Only a person rules, and the server runs no SQL.** ochakai stores
-  and serves knowledge; its own data agent (off by default) answers and
-  proposes but never verifies or rejects, and a query runs as the person
-  asking, never as the server (0142).
+- **Only a ruling changes what is served, no LLM rules, and the server
+  runs no SQL.** A ruling is a person's, or a confirmation job's (a CI
+  canary) recorded under its own `process:` identity, which readers see
+  as `machine-confirmed` rather than human-reviewed (0141 §2.4). ochakai
+  stores and serves knowledge; its own data agent (off by default)
+  answers and proposes but never verifies or rejects, and a query runs as
+  the person asking, never as the server (0142).
 - **Secret-zero.** Auth is Cloud Run IAM + Cloud SQL IAM on Google
   Cloud, or in-process verification against an OIDC issuer's published
   keys off it (0086); features must not introduce tokens or passwords
