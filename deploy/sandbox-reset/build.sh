@@ -1,7 +1,7 @@
 #!/bin/sh
 # Build and push the sandbox reset image for one release.
 #
-#   deploy/sandbox-reset/build.sh 0.30.0 \
+#   deploy/sandbox-reset/build.sh 0.31.0 \
 #     asia-northeast1-docker.pkg.dev/PROJECT/REPO/demo-reset
 #
 # The CLI is the release's own linux/amd64 archive, checked against the
