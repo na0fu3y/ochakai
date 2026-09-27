@@ -10,7 +10,7 @@ import {
   FIELDS, fieldsMarkup, listItemMarkup, otherKeys, rowMarkup, valueOf,
 } from '../frontmatter.js';
 import { refreshQueues } from '../queues.js';
-import { route } from '../router.js';
+import { route, setUnsaved } from '../router.js';
 import { refreshTree } from '../tree.js';
 
 // prefix (create only) seeds the ID field — the per-directory ＋
@@ -335,7 +335,9 @@ export async function viewEditor(id, prefix = '') {
   if (first) draw(first);
 
   $('#editor').addEventListener('input', () => { dirty = true; });
-  window.onbeforeunload = () => (dirty ? '' : undefined);
+  // The router asks before a link in the page leaves this, and warns
+  // before the tab does; it forgets the question on the next route.
+  setUnsaved(() => dirty);
 
   $('#editor').addEventListener('submit', async ev => {
     ev.preventDefault();

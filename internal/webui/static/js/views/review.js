@@ -9,7 +9,7 @@ import { esc } from '../escape.js';
 import { actorStr, daysSince, displayTitle, entryHash, fmtAge } from '../format.js';
 import { descHTML, md } from '../markdown.js';
 import { queueStrip, refreshQueues } from '../queues.js';
-import { askRejectNote } from '../reject.js';
+import { askRejectNote } from '../dialog.js';
 import { knownDirs, refreshTree } from '../tree.js';
 import { icon } from '../vocab.js';
 import { debounce, explore } from './explore.js';

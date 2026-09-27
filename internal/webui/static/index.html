@@ -130,19 +130,20 @@
   <div id="palette-list" role="listbox" aria-label="候補"></div>
   <div class="palette-hint">↑↓ で選択 · Enter で開く · Esc で閉じる</div>
 </dialog>
-<!-- The reason a reject asks for (reject.js): a <dialog> for the reason
-     the palette is one, and because window.prompt() is refused by
-     embedded browsers and gave the reason one line. -->
-<dialog id="reject-dialog" aria-labelledby="reject-title">
-  <form id="reject-form">
-    <h2 id="reject-title">却下の理由</h2>
-    <p class="hint"><code id="reject-what"></code> は削除され、この理由が裁定として残ります(履歴は残ります)。</p>
-    <textarea id="reject-note" rows="4" aria-labelledby="reject-title" placeholder="何が正しくないか、どこを読めば分かるか"></textarea>
+<!-- The questions the page asks before it acts (dialog.js): a yes/no,
+     or a yes/no with a reason. A <dialog> for the reason the palette is
+     one, and because window.confirm() and prompt() are refused, silently
+     or not, by embedded browsers. -->
+<dialog id="ask-dialog" aria-labelledby="ask-title" aria-describedby="ask-message">
+  <form id="ask-form">
+    <h2 id="ask-title"></h2>
+    <p class="hint" id="ask-message"></p>
+    <textarea id="ask-note" rows="4" aria-labelledby="ask-title" hidden></textarea>
     <div class="dialog-actions">
-      <button type="button" class="btn" id="reject-cancel">キャンセル</button>
+      <button type="button" class="btn" id="ask-cancel">キャンセル</button>
       <!-- No type attribute: a button in a form submits by default, and
            the explicit one is how webui_test.go finds the editor's save. -->
-      <button class="btn primary">却下する</button>
+      <button class="btn primary" id="ask-ok"></button>
     </div>
   </form>
 </dialog>
