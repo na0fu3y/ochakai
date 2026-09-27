@@ -458,7 +458,7 @@ func TestToolAnnotations(t *testing.T) {
 	}
 }
 
-// TestReportOutcomeValidation pins the tool's input checks: a target
+// TestReportOutcomeValidation pins the tool's input checks: an id
 // that is not a valid concept id and an unknown outcome are tool errors
 // (not transport failures), and both fire before any store access.
 func TestReportOutcomeValidation(t *testing.T) {
@@ -468,8 +468,8 @@ func TestReportOutcomeValidation(t *testing.T) {
 		args       map[string]any
 		wantSubstr string
 	}{
-		{"bad target", map[string]any{"target": "queries/", "outcome": "worked"}, "invalid target"},
-		{"bad outcome", map[string]any{"target": "queries/q", "outcome": "misleading"}, "invalid outcome"},
+		{"bad id", map[string]any{"id": "queries/", "outcome": "worked"}, "invalid id"},
+		{"bad outcome", map[string]any{"id": "queries/q", "outcome": "misleading"}, "invalid outcome"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

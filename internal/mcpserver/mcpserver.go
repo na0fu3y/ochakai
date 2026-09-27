@@ -526,9 +526,9 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"failed with what went wrong in note: failed reports against verified concepts flag " +
 			"them for re-verification. Returns the concept's updated usage totals.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in outcomeIn) (*mcp.CallToolResult, usageOut, error) {
-		id := strings.TrimPrefix(in.Target, uriScheme)
+		id := strings.TrimPrefix(in.ID, uriScheme)
 		if !domain.ValidID(id) {
-			return nil, usageOut{}, fmt.Errorf("invalid target %q (want the concept's id, e.g. queries/monthly-revenue)", in.Target)
+			return nil, usageOut{}, fmt.Errorf("invalid id %q (want the concept's id, e.g. metrics/revenue)", in.ID)
 		}
 		u, err := svc.ReportOutcome(ctx, id, in.Outcome, in.Note)
 		if err != nil {
@@ -751,7 +751,9 @@ func newUsageOut(u *domain.Usage) usageOut {
 }
 
 type outcomeIn struct {
-	Target  string `json:"target" jsonschema:"the concept's id (e.g. queries/monthly-revenue; an ochakai:// prefix is tolerated)"`
+	// id, as every other tool that names one concept spells it; it was
+	// `target` until 0.31, the one tool an agent had to spell differently.
+	ID      string `json:"id" jsonschema:"the concept's id (e.g. metrics/revenue; an ochakai:// prefix is tolerated)"`
 	Outcome string `json:"outcome" jsonschema:"worked = acting on it gave a correct result; failed = a wrong or unusable one"`
 	Note    string `json:"note,omitempty" jsonschema:"what was run, what went wrong (max 2000 bytes)"`
 }

@@ -1508,8 +1508,9 @@ func TestGetSaysWhenTheContentMovedAfterTheVerification(t *testing.T) {
 		want:      "verified by human:na0 on 2026-08-01; created by",
 		avoid:     "then edited",
 	}, {
-		// Verifying does not touch the document (design doc 0043 §3.2),
-		// so the two instants can be equal, and that is not an edit.
+		// A verification is stamped no earlier than the content it
+		// confirms, so the two instants can be equal, and that is not an
+		// edit.
 		name:      "verified against the document as it stands",
 		changedAt: verifiedAt,
 		want:      "verified by human:na0 on 2026-08-01; created by",

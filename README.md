@@ -229,7 +229,7 @@ does:
 ochakai use https://your-service.run.app   # or back to http://localhost:8080
 ochakai whoami                      # which server, as whom, reachable?
 ochakai search "なぜ売上が落ちているのか"  # the read an agent starts a data question with
-ochakai verify metrics/revenue      # a human confirmed it; status and ETag stay put
+ochakai verify metrics/revenue      # a human confirmed it; a draft becomes stable
 ochakai search "revenue" --type Metric --trust human-reviewed   # what that verify put there
 ochakai ui                          # web UI at http://127.0.0.1:8098, acting as you
 ```

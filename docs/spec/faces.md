@@ -76,6 +76,10 @@
 **ツールは 6 本**: `search_concepts`・`list_concepts`・`get_concept`・
 `get_file`・`put_concept`・`report_outcome`。
 
+- **一つの concept を名指す引数は、どのツールでも `id`** である
+  (`get_concept`・`put_concept`・`report_outcome`)。ファイルは `path`。
+  綴りがツールごとに違えば、エージェントは一度間違えてから読み直す。
+
 - **答えは text のコンテントブロック一つで返る。** `outputSchema` を宣言せず、
   同じ JSON を `structuredContent` に二重に載せない。常駐の予算
   (`MCP-BYTES`)は wire が運ぶスキーマを入力・出力の両側とも数える。

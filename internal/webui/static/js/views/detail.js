@@ -814,7 +814,7 @@ export async function viewDetail(id, heading = '') {
     closeMenu();
     try {
       await verifyEntry(entry.id);
-      toast(isVerified(entry) ? '再検証しました。' : '検証しました。');
+      toast(isVerified(entry) ? '再検証しました。' : entry.status === 'draft' ? '検証し、stable にしました。' : '検証しました。');
       viewDetail(entry.id);
     } catch (e) { toast('検証できませんでした: ' + e.message); }
   });

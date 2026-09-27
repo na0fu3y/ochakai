@@ -1,7 +1,7 @@
 // The review queue: what agents drafted, what was reported wrong, what
 // is past its expiry — and the loop's own numbers above them.
 
-import { applyStatus, rejectEntry, verifyEntry } from '../actions.js';
+import { rejectEntry, verifyEntry } from '../actions.js';
 import { api, toast } from '../api.js';
 import { cardThumbs } from '../cards.js';
 import { $, view } from '../dom.js';
@@ -322,17 +322,12 @@ export function wireReviewActions(container) {
     const id = card.dataset.id;
     try {
       if (btn.dataset.act === 'verify') {
+        // Verifying a draft publishes it as stable on the server, before
+        // the verification is recorded (decision 0157). The queue used
+        // to set the status itself afterwards, which unseated the
+        // verification it had just made.
         await verifyEntry(id);
-        // This queue lists drafts, so a verified card that stayed made ✓
-        // look like a no-op. The ruling and the promotion stay separate
-        // acts on the wire (design doc 0043 §3.2); the queue composes
-        // them because accepting a draft is what its ✓ means here.
-        try {
-          await applyStatus(id, 'stable');
-          toast('検証し、stable にしました。');
-        } catch (e) {
-          toast('検証しました(stable への変更には失敗: ' + e.message + ')');
-        }
+        toast('検証し、stable にしました。');
       } else {
         const note = await askRejectNote(id);
         if (note === null) return;

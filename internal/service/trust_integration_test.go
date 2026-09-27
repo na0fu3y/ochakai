@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/okf"
 	"github.com/na0fu3y/ochakai/internal/store"
 	"github.com/na0fu3y/ochakai/internal/testdb"
 )
@@ -214,5 +216,61 @@ func TestVerifyStandsOnSkewedClocksIntegration(t *testing.T) {
 	if k.Trust != domain.TrustHuman {
 		t.Errorf("verification under clock skew does not stand: trust = %s, want %s",
 			k.Trust, domain.TrustHuman)
+	}
+}
+
+// TestVerifyPublishesADraftIntegration pins decision 0157: verifying a
+// draft publishes it as stable — as an edit by the verifier, with the
+// writer's bytes kept — and the verification stands for what is served.
+// The review queue used to verify and then edit the status, which is a
+// content change after the verification, so an accepted draft came out
+// stable and unverified and landed in the edited queue.
+func TestVerifyPublishesADraftIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	agent := domain.Actor{Kind: domain.ActorProcess, Name: "analysis-agent"}
+	human := domain.Actor{Kind: domain.ActorHuman, Name: "reviewer@example.co.jp"}
+
+	prefix := uid(t, "publish")
+	id := prefix + "/metric"
+	doc := "---\ntype: Metric\n# the window is still open\nstatus: draft\ntitle: リピート購入率\n---\n\n以前にも買った客の割合。\n"
+	d, _, err := okf.Parse([]byte(doc))
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := d.Knowledge
+	k.ID = id
+	if _, err := svc.Create(ctx, &k, agent); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := svc.Verify(ctx, id, human)
+	if err != nil {
+		t.Fatalf("Verify: %v", err)
+	}
+	if got.Status != domain.StatusStable || got.Trust != domain.TrustHuman {
+		t.Fatalf("after verify: status %s, trust %s; want stable, %s", got.Status, got.Trust, domain.TrustHuman)
+	}
+	if !strings.Contains(got.Doc, "# the window is still open\nstatus: stable\n") {
+		t.Errorf("the document was rebuilt rather than edited in place:\n%s", got.Doc)
+	}
+	if got.CreatedBy != agent {
+		t.Errorf("created_by = %v, want the drafting agent kept", got.CreatedBy)
+	}
+	q, err := svc.Store.QueueCounts(ctx, store.Filter{Prefixes: []string{prefix}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if q.Edited != 0 || q.Drafts != 0 {
+		t.Errorf("queues after verify: drafts %d, edited %d; want both empty", q.Drafts, q.Edited)
+	}
+
+	// A re-check of a stable concept edits nothing: the ETag stays put.
+	again, err := svc.Verify(ctx, id, human)
+	if err != nil {
+		t.Fatalf("re-verify: %v", err)
+	}
+	if again.ContentHash != got.ContentHash {
+		t.Errorf("re-verifying a stable concept moved its content hash")
 	}
 }

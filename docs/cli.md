@@ -970,9 +970,9 @@ Append a verification against the concept as it stands: you and the time
 are added to its ledger. The first confirmation and the tenth re-check
 are the same command, and re-checking is what takes a concept out of
 both review feeds (`ochakai list verified_at`, `ochakai list failed`).
-It does not edit the concept: the lifecycle status and the ETag stay put,
-because confirming knowledge and publishing it are different acts. Use
-`put` to move a draft to stable.
+A draft is published first: its status becomes stable, as an edit by
+you, and the verification is recorded against that. A stable or
+deprecated concept is not edited, so its status and ETag stay put.
 
 Flags:
   -json

@@ -1370,7 +1370,7 @@ func (t *noteTally) report() {
 func cmdVerify(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"verify",
-		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the concept as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes a concept out of\nboth review feeds (`ochakai list verified_at`, `ochakai list failed`).\nIt does not edit the concept: the lifecycle status and the ETag stay put,\nbecause confirming knowledge and publishing it are different acts. Use\n`put` to move a draft to stable.",
+		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the concept as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes a concept out of\nboth review feeds (`ochakai list verified_at`, `ochakai list failed`).\nA draft is published first: its status becomes stable, as an edit by\nyou, and the verification is recorded against that. A stable or\ndeprecated concept is not edited, so its status and ETag stay put.",
 		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'\n")
 	asJSON := fs.Bool("json", false, "print the verified concept as JSON")
 	id, _, err := idArgs(fs, args, 1)

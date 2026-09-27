@@ -2029,14 +2029,17 @@ paths:
         it — taking a ruling back is a person putting the concept where it
         was.
 
-        **It does not edit the concept.** The document, its lifecycle
-        status, its `updated_at` and its ETag all stay put, because
-        ruling on knowledge and publishing it are different acts (design
-        doc 0075 §3.2). Promoting a draft to stable is a PUT. That
-        shared property is what says these are one operation: a face that
-        writes the document and a face that rules on it are different
-        things, and three faces that all leave the document alone are the
-        same thing said three times.
+        **A draft is published first** (decision 0157). Its document is
+        rewritten with `status: stable` — one line spliced in, the rest of
+        the bytes kept — and stored as an edit by the caller, and the
+        verification is then recorded against that content, so it stands
+        and the tier reads it. The response carries the new ETag. A stable
+        or deprecated concept is not edited: its document, `updated_at`
+        and ETag stay put, which is what lets a re-check leave an editor's
+        precondition alone. Accepting a draft had been two calls, verify
+        and then a PUT of the status, and the PUT was a content change
+        after the verification — so the draft came out stable and
+        unverified.
 
         Not an MCP tool: rulings stay off that surface (design doc 0076),
         and a person's ruling is the judgment the write-back loop turns

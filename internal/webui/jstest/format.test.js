@@ -142,8 +142,8 @@ test('an edit after the newest verification is read from the two ledgers', () =>
   // Confirmed after the last change — the ordinary state of a verified
   // concept, and nothing to say.
   assert.equal(editedSinceVerified({ verified, generated: { at: '2026-07-01T00:00:00Z' } }), '');
-  // Verifying does not touch the document (design doc 0043 §3.2), so the
-  // instants can be equal and that is not an edit.
+  // A verification is stamped no earlier than the content it confirms,
+  // so the instants can be equal and that is not an edit.
   assert.equal(editedSinceVerified({ verified, generated: { at: '2026-08-01T00:00:00Z' } }), '');
   // Nothing confirmed it, so there is no confirmation to be later than.
   assert.equal(editedSinceVerified({ generated: { at: '2026-08-20T00:00:00Z' } }), '');
