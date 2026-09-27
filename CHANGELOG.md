@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.31.1] - 2026-09-28
+
 ### Fixed
 
 - **Leaving the editor by a link in the page asks before discarding
@@ -7937,7 +7939,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.31.1...HEAD
+[0.31.1]: https://github.com/na0fu3y/ochakai/compare/v0.31.0...v0.31.1
 [0.31.0]: https://github.com/na0fu3y/ochakai/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/na0fu3y/ochakai/compare/v0.29.3...v0.30.0
 [0.29.3]: https://github.com/na0fu3y/ochakai/compare/v0.29.2...v0.29.3
