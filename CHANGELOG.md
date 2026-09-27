@@ -32,6 +32,8 @@ last entry.
 
 ### Changed
 
+- **The web UI's directory cards show what a directory is for**, when
+  its parent's `index.md` said so (decision 0154), under the count.
 - **A directory can say what it is for** (decision 0154). OKF's one place
   for that is the line a parent's `index.md` gives a subdirectory, and
   an import dropped every `index.md` with a note — so each bundle the OKF
