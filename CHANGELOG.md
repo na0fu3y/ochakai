@@ -32,6 +32,11 @@ last entry.
 
 ### Changed
 
+- **docs/surface.md counts, and no longer narrates.** Each counted
+  section keeps its rule — what is counted and why — and its list; the
+  paragraphs explaining each time a number moved are gone (1,386 → 464
+  lines). Why a number moved is the PR's and this changelog's to say, and
+  the history before this lives in the frozen design records.
 - **The web UI's directory cards show what a directory is for**, when
   its parent's `index.md` said so (decision 0154), under the count.
 - **A directory can say what it is for** (decision 0154). OKF's one place
