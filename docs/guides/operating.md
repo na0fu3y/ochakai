@@ -930,6 +930,13 @@ done
 ochakai import /seed
 ```
 
+demo.ochak.ai が 6 時間ごとに走らせているジョブのイメージは
+[deploy/sandbox-reset](../../deploy/sandbox-reset) にある。`build.sh` が
+リリースの linux/amd64 アーカイブと、そのタグの `examples/demo` を種にして
+イメージを作る。種はイメージに焼き込まれるので、**リリースでデモを変えた
+ら、イメージを作り直してジョブを向け直すまで、サンドボックスは古い種に
+戻り続ける**。
+
 **サンドボックスは自分でそう言う。** `GET /api/v1/stats` が
 `sandbox: true` を返し、同梱の Web UI は全ページにバナーを出す。
 これは親切ではなく設計上の要請である — **言わないサンドボックスは、
