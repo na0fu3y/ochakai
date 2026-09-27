@@ -1,8 +1,10 @@
 package store
 
 import (
+	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // A hit says which concept matched. It did not say *why*, and the
@@ -35,7 +37,26 @@ const (
 // snippetFor returns the passage of body where one of frags occurs, or ""
 // when none of them is in the body. Matching is case-insensitive, as the
 // scorer's own name test is.
+//
+// The passage is read from the body with its markdown links reduced to
+// their text: a list row showing `[完了率](/metrics/completion-rate.md)`
+// spends a third of its window on a path the reader cannot follow from
+// there. Only when a fragment is found nowhere but in a link's target is
+// the passage taken from the body as written, because then the target is
+// the reason the concept matched.
 func snippetFor(body string, frags []string) string {
+	if s := snippetIn(linkText.ReplaceAllString(body, "$1"), frags); s != "" {
+		return s
+	}
+	return snippetIn(body, frags)
+}
+
+// linkText is an inline markdown link or image, with the text to keep
+// in its first group. Reference-style links and footnotes are left as
+// they are: they are short, and they carry no path.
+var linkText = regexp.MustCompile(`!?\[([^\[\]]*)\]\([^()\s]*\)`)
+
+func snippetIn(body string, frags []string) string {
 	if body == "" || len(frags) == 0 {
 		return ""
 	}
@@ -106,8 +127,38 @@ func nudgeToBoundary(runes []rune, pos, limit, dir int) int {
 
 // collapseSpace puts the passage on one line: a snippet crosses markdown
 // line breaks, and a caller printing it in a list wants one row.
+//
+// A line break inside a paragraph is where the writer's editor wrapped,
+// not a word boundary, and markdown renders it as nothing between two
+// Japanese characters — so it is joined with nothing there ("どの\n枝も"
+// is どの枝も, not "どの 枝も"). Next to a Latin character, and across a
+// blank line, it is still a space. A continuation line's indent goes too.
 func collapseSpace(s string) string {
-	return strings.Join(strings.FieldsFunc(s, func(r rune) bool {
-		return r == '\n' || r == '\r' || r == '\t'
-	}), " ")
+	var b strings.Builder
+	para := false
+	for line := range strings.SplitSeq(s, "\n") {
+		line = strings.TrimSpace(strings.ReplaceAll(line, "\t", " "))
+		if line == "" {
+			para = true
+			continue
+		}
+		if b.Len() > 0 {
+			last, _ := utf8.DecodeLastRuneInString(b.String())
+			first, _ := utf8.DecodeRuneInString(line)
+			if para || !wide(last) || !wide(first) {
+				b.WriteByte(' ')
+			}
+		}
+		b.WriteString(line)
+		para = false
+	}
+	return b.String()
+}
+
+// wide is a character a wrapped line may be broken beside without a
+// space having been there: Han, kana, and the full-width punctuation
+// Japanese text is set in.
+func wide(r rune) bool {
+	return r > unicode.MaxLatin1 && !unicode.IsSpace(r) &&
+		!unicode.In(r, unicode.Latin, unicode.Greek, unicode.Cyrillic)
 }

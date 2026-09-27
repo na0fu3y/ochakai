@@ -163,6 +163,15 @@ pre:hover .copy-btn, .copy-btn:focus-visible { opacity: 1; }
   margin: 10vh auto auto;
 }
 #palette::backdrop { background: rgba(0, 0, 0, .35); }
+#reject-dialog {
+  width: min(32rem, 92vw); border: 1px solid var(--border); border-radius: 12px;
+  padding: 1rem 1.1rem; background: var(--surface); color: var(--text); box-shadow: var(--shadow-hover);
+}
+#reject-dialog::backdrop { background: rgba(0, 0, 0, .35); }
+#reject-dialog h2 { font-size: 1.05rem; margin: 0 0 .4rem; }
+#reject-dialog .hint { color: var(--muted); font-size: .86rem; margin: 0 0 .6rem; }
+#reject-note { width: 100%; box-sizing: border-box; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .7rem; }
 #palette-q {
   border: none; border-bottom: 1px solid var(--border); border-radius: 12px 12px 0 0;
   font-size: 1.02rem; padding: .8rem 1rem;
@@ -433,6 +442,9 @@ input[type=date]:not(:focus):invalid, input[type=date]:not(:focus):placeholder-s
   margin-top: .7rem; border-left: 3px solid var(--border); padding: .1rem .8rem;
   color: var(--muted); font-size: .9rem;
 }
+.status-note.failed-note { border-left-color: var(--rejected-bd); color: var(--text); }
+.status-note.failed-note .provenance { display: inline; margin-left: .3rem; }
+.card .failed-note { margin-top: .45rem; font-size: .86rem; }
 .tabs { display: flex; gap: .2rem; border-bottom: 1px solid var(--border); margin: 1.1rem 0 1rem; overflow-x: auto; }
 .tabs button {
   font: inherit; font-weight: 500; background: none; border: none; cursor: pointer;

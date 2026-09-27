@@ -120,7 +120,7 @@ func newBareFlagSet(name, synopsis, examples string) *flag.FlagSet {
 
 func newFlagSet(name, synopsis, examples string) (*flag.FlagSet, *string) {
 	fs := newBareFlagSet(name, synopsis, examples)
-	url := fs.String("url", defaultURL(), "ochakai server URL (default: $OCHAKAI_URL, else the `ochakai use` selection)")
+	url := fs.String("url", defaultURL(), "ochakai server URL (default: $OCHAKAI_URL, else the \"ochakai use\" selection)")
 	return fs, url
 }
 
@@ -1406,7 +1406,7 @@ func cmdDelete(ctx context.Context, args []string) error {
 		"Usage: ochakai delete [flags] <path>\n\nRemove one object of the bundle: a knowledge concept, named by its id\n(soft-delete — history is retained server-side), or a file, named by\nthe path it lives at (the removal is kept as a revision of the concept\nthat linked it; content-addressed bytes stay referenced by history).\nA concept's address is <id>.md and an id is that path with the .md\nfiled off, so an argument carrying no filename extension is read as an\nid — spell a dotted id with its .md to reach it.\nWith --if-match a concept is deleted only if it still has the version\nyou read, and the delete fails instead of removing someone else's edit.\nWith --note the removal is a ruling: it records that the concept was\nreviewed and not accepted, and why. The reason is information, not a\nwall — the id is writable again from every surface, this one and MCP\nincluded, and --note changes nothing else. `ochakai log` prints the\nrulings, and an exported bundle carries them as OKF SPEC §9 log\nentries, which is where the next writer can read one.",
 		"  ochakai delete terms/obsolete-kpi\n  ochakai delete metrics/bad-revenue --note \"double-counts refunds; see policies/revenue-recognition\"\n  ochakai delete insights/reading-revenue/weekly.png\n")
 	ifMatch := fs.String("if-match", "", "delete only if the concept still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of deleting")
-	note := fs.String("note", "", "why it was not accepted — recorded on the revision and printed by `ochakai log`; it blocks nothing, the id stays writable")
+	note := fs.String("note", "", "why it was not accepted — recorded on the revision and printed by \"ochakai log\"; it blocks nothing, the id stays writable")
 	pos, err := exactArgs(fs, args, 1)
 	if err != nil {
 		return err

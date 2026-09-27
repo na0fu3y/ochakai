@@ -154,6 +154,10 @@ var adminCommands = []string{"serve", "serve-ui", "version", "help"}
 func unknownCommand(w io.Writer, cmd string) {
 	fmt.Fprintf(w, "ochakai: unknown command %q\n", cmd)
 	switch {
+	case cmd == "-v" || cmd == "-V" || strings.TrimLeft(cmd, "-") == "version":
+		// The one flag people type before any command, and the one the
+		// advice below would send to a command that refuses it.
+		fmt.Fprintln(w, "\nThe version is a command of its own:\n  ochakai version")
 	case strings.HasPrefix(cmd, "-"):
 		fmt.Fprintf(w, "\nA flag belongs to a command, so it goes after it:\n"+
 			"  ochakai whoami %s …\n", cmd)

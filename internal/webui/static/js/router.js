@@ -97,7 +97,11 @@ export function route() {
     mark('access');
     viewAccess();
   } else if (head === 'search') {
-    mark('search');
+    // A feed is a review queue drawn by the search view: the レビュー
+    // badge counts it and the review page's strip links to it, so the
+    // tab that stays lit is レビュー, not 検索.
+    const feed = ['reported-wrong', 'verification-age', 'stale', 'edited'].includes(rest[0]);
+    mark(feed ? 'review' : 'search');
     // #/search/reported-wrong and #/search/verification-age open a feed
     // directly. Both are entrances to the review loop, and the filter bar
     // was the only way in — a queue nobody can find stops being read as

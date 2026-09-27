@@ -36,6 +36,26 @@ func TestSnippetFor(t *testing.T) {
 		body:  "見出し\n\n売上の話。\n",
 		frags: []string{"売上"},
 		want:  "見出し 売上の話。",
+	}, {
+		name:  "a wrapped Japanese line joins with nothing, as markdown renders it",
+		body:  "要因をたどると、どの\n  枝もどこかで売上のデータが切れて\n止まる。",
+		frags: []string{"売上"},
+		want:  "要因をたどると、どの枝もどこかで売上のデータが切れて止まる。",
+	}, {
+		name:  "a wrapped line beside a Latin word keeps its space",
+		body:  "明細の `created_at`\nで束ねた売上。 sale\nprice",
+		frags: []string{"売上"},
+		want:  "明細の `created_at` で束ねた売上。 sale price",
+	}, {
+		name:  "a link reads as its text",
+		body:  "売上が落ちた月に[完了率](/metrics/completion-rate.md)が下がった。",
+		frags: []string{"売上"},
+		want:  "売上が落ちた月に完了率が下がった。",
+	}, {
+		name:  "a match only in a link's target keeps the link",
+		body:  "詳しくは[完了率](/metrics/completion-rate.md)を読む。",
+		frags: []string{"completion-rate"},
+		want:  "詳しくは[完了率](/metrics/completion-rate.md)を読む。",
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := snippetFor(tc.body, tc.frags)

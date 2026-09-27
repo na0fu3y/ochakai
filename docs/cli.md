@@ -122,8 +122,8 @@ Flags:
     	replace the policy only if it still has this version (`ochakai access --json` prints it as .version; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of dropping the rules somebody else added
   -json
     	print the policy as JSON — the same document -f takes back
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai access
@@ -157,8 +157,8 @@ Flags:
     	resume a level where the last page ended: the cursor the previous page printed, for the same prefix
   -json
     	print the raw JSON response
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai browse
@@ -211,10 +211,10 @@ entries, which is where the next writer can read one.
 Flags:
   -if-match version
     	delete only if the concept still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of deleting
-  -note ochakai log
-    	why it was not accepted — recorded on the revision and printed by ochakai log; it blocks nothing, the id stays writable
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -note string
+    	why it was not accepted — recorded on the revision and printed by "ochakai log"; it blocks nothing, the id stays writable
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai delete terms/obsolete-kpi
@@ -256,8 +256,8 @@ Flags:
     	replay at most this many kept questions, newest first (default: all of them)
   -project project
     	the Google Cloud project the queries are billed to (default: the deployment's OCHAKAI_BIGQUERY_PROJECT)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai eval
@@ -287,8 +287,8 @@ Flags:
     	export the markdown only, skipping file bytes
   -prefix directory
     	export one directory of the bundle rather than the whole base: the archive carries that subtree, says so in its root index.md, and is not a backup of the base. Anyone who may read the directory may take it; the whole base stays with the administrators
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai export ./knowledge
@@ -327,8 +327,8 @@ Flags:
     	save the concept's files into this directory
   -json
     	print the whole read as JSON (document, summary, observed) instead of the document alone
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai get metrics/revenue
@@ -390,8 +390,8 @@ Flags:
     	report what the import would do, and write nothing: every object is sent with the server's dry-run parameter, so the counts, the notes and the refusals are the ones the import itself would meet
   -strict
     	refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. With --dry-run the same verdict is reached with nothing written, which is what makes it a CI gate
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai import ./knowledge
@@ -425,8 +425,8 @@ Flags:
     	filter by who confirmed the concept: unverified|machine-confirmed|human-reviewed (repeatable, OR-ed) — independent of --status, which is the lifecycle value
   -type value
     	filter by type: Metric|Attested Computation|Skill|Insight|Policy|Glossary Term|BigQuery Dataset|BigQuery Table|Reference, or any custom type (repeatable)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 ```
 
 ## ochakai list
@@ -504,8 +504,8 @@ concept's revisions with the whole document as it stood, use
 Flags:
   -limit int
     	max concepts (default 1000)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai log
@@ -529,8 +529,8 @@ stdout carries the protocol and nothing else; diagnostics go to
 stderr. Run it as the client's command, not by hand.
 
 Flags:
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai mcp-stdio
@@ -583,8 +583,8 @@ confirms the moved content (`ochakai verify`). The `edited` queue in
 Flags:
   -directory
     	move a whole directory: both arguments are paths, and every object under the first one moves to the second (a concept whose id is exactly that path is a different address and stays)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai move insights/revenue-seasonality insights/sales/revenue-seasonality
@@ -602,8 +602,8 @@ move. History is gone — `ochakai delete` first, then purge. A live
 concept is refused.
 
 Flags:
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai delete terms/obsolete-kpi
@@ -674,8 +674,8 @@ Flags:
     	print the written object as JSON
   -only-if-new
     	write only if the id is free; a taken id fails instead of being replaced
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai put runbook/restore -f concept.md
@@ -701,8 +701,8 @@ Flags:
     	max concepts to embed per pass (server default 200)
   -once
     	run a single pass instead of continuing until nothing is left
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai reembed
@@ -726,8 +726,8 @@ Flags:
     	print the updated usage totals as JSON
   -note string
     	context recorded with the report: what was run, what went wrong (max 2000 bytes)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai report queries/sales/monthly-revenue worked
@@ -750,8 +750,8 @@ Flags:
     	print the raw JSON response (includes each revision's document)
   -limit int
     	max revisions (server default 50, max 200)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai revisions metrics/revenue
@@ -874,8 +874,8 @@ Flags:
     	print JSON
   -prefix path
     	measure only concepts under this path, e.g. teams/growth — matched on segment boundaries (repeatable, OR-ed). The unanswered questions are not scoped: one no concept's words matched has no concept to belong to
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai stats
@@ -903,8 +903,8 @@ For a team-shared UI on Cloud Run, deploy `ochakai serve-ui`.
 Flags:
   -port int
     	port to listen on (always bound to 127.0.0.1: whoever reaches the proxy acts as you) (default 8098)
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai ui
@@ -931,8 +931,8 @@ A note is folded onto its one line; --json has it whole.
 Flags:
   -json
     	print JSON
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai usage queries/sales/monthly-revenue
@@ -977,8 +977,8 @@ because confirming knowledge and publishing it are different acts. Use
 Flags:
   -json
     	print the verified concept as JSON
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai verify metrics/revenue
@@ -1006,8 +1006,8 @@ deployment authenticates nobody.
 Flags:
   -json
     	print JSON
-  -url ochakai use
-    	ochakai server URL (default: $OCHAKAI_URL, else the ochakai use selection)
+  -url string
+    	ochakai server URL (default: $OCHAKAI_URL, else the "ochakai use" selection)
 
 Examples:
   ochakai whoami

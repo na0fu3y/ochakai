@@ -21,6 +21,41 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **A search snippet reads as the text it was cut from.** A line the
+  writer's editor wrapped inside a paragraph is joined with nothing
+  between two Japanese characters, as markdown renders it, instead of a
+  space ("どの 枝も" is now どの枝も); a continuation line's indent goes
+  too. An inline link shows its text rather than `[text](path)`, unless
+  the query matched only in the path.
+- **The web UI says when a concept was reported wrong.** A failure
+  report with a note, newer than the concept's last verification, is
+  shown under its header — the ✓ beside the title had kept saying
+  human-reviewed while the note sat on the 利用状況 tab — and each card on
+  the 再検証 feed carries the newest such note.
+
+### Fixed
+
+- **Every client command's `-h` printed `-url ochakai use`.** A
+  backquoted word in a flag's usage is the flag package's name for its
+  argument; `-url` (and `delete`'s `-note`, which printed `-note ochakai
+  log`) now read `string`, and a test fails on a multi-word argument name.
+- **`ochakai --version` and `-v` point at `ochakai version`.** They were
+  told to put the flag after a command, as `ochakai whoami --version`,
+  which refuses it.
+- **Rejecting in the web UI works where `window.prompt()` does not.** The
+  reason is asked in a dialog on the page, with room for more than one
+  line; an embedded browser had answered "prompt() is not supported" and
+  no ruling could be made.
+- **The new-concept form keeps what was typed while a type change is
+  answered.** Changing the type redraws the form a round trip later, and
+  that redraw emptied any field filled in the meantime (the value still
+  reached the document, so the form and the document disagreed).
+- **A review feed lights the レビュー tab, not 検索,** and the home page's
+  example id is `metrics/revenue` rather than a `queries/` path no
+  bundle uses.
+
 ## [0.30.0] - 2026-09-27
 
 ### Added

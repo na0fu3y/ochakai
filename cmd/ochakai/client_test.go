@@ -1466,6 +1466,8 @@ func TestUnknownCommandSaysWhatIsWrong(t *testing.T) {
 		{cmd: "serach", want: `Did you mean "search"?`},
 		{cmd: "improt", want: `Did you mean "import"?`},
 		{cmd: "--url", want: "A flag belongs to a command", avoid: "Did you mean"},
+		{cmd: "--version", want: "  ochakai version\n", avoid: "A flag belongs to a command"},
+		{cmd: "-v", want: "  ochakai version\n", avoid: "A flag belongs to a command"},
 		{cmd: "frobnicate", want: "unknown command", avoid: "Did you mean"},
 	} {
 		var b strings.Builder
