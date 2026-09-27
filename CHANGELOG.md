@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.29.3] - 2026-09-27
+
 ### Changed
 
 - **A tied search result goes to the concept a term is the subject of.**
@@ -7722,7 +7724,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.29.2...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.29.3...HEAD
+[0.29.3]: https://github.com/na0fu3y/ochakai/compare/v0.29.2...v0.29.3
 [0.29.2]: https://github.com/na0fu3y/ochakai/compare/v0.29.1...v0.29.2
 [0.29.1]: https://github.com/na0fu3y/ochakai/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/na0fu3y/ochakai/compare/v0.28.10...v0.29.0
