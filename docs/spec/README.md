@@ -22,12 +22,12 @@ ochakai が**いまどう動くか、なぜそうなのか**を、領域ごと�
 | [architecture.md](architecture.md) | 全体アーキテクチャとデータエージェント | 現行 |
 | [identity.md](identity.md) | 認証・identity・認可(secret-zero と OIDC を含む) | 現行 |
 | `deployment.md` | デプロイの姿勢と環境変数 | 未着手 |
-| `okf.md` | OKF 互換・バンドル・保存形・往復と provenance | 未着手 |
-| `addressing.md` | 住所・パス・move | 未着手 |
+| [okf.md](okf.md) | OKF 互換・バンドル・保存形・往復と provenance | 現行 |
+| [addressing.md](addressing.md) | 住所・パス・move | 現行 |
 | `vocabulary.md` | 型の語彙と呼び名 | 未着手 |
 | `files.md` | ファイル | 未着手 |
 | [search.md](search.md) | 検索と埋め込み | 現行 |
-| `faces.md` | 面の配分(REST / MCP / CLI / Web UI) | 未着手 |
+| [faces.md](faces.md) | 面の配分(REST / MCP / CLI / Web UI) | 現行 |
 | `webui.md` | Web UI | 未着手 |
 | `loop.md` | 検証ループと利用測定 | 未着手 |
 | `concurrency.md` | 同時実行と削除 | 未着手 |
