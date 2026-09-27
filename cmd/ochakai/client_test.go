@@ -1733,3 +1733,76 @@ func TestGetHintsHowToReadOneFile(t *testing.T) {
 		t.Errorf("stderr does not say %q:\n%s", want, errOut)
 	}
 }
+
+// TestImportSkipsFilesADeploymentCannotHold pins that a deployment with no
+// file store (no OCHAKAI_GCS_BUCKET, a 501 "unsupported" on every file)
+// still takes every concept in a bundle. Every bundle OKF publishes
+// carries a non-markdown file — a viz.html, an attester's .py — and the
+// import used to stop at the first one, in --dry-run as well.
+func TestImportSkipsFilesADeploymentCannotHold(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "metrics", "revenue"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	doc := "---\ntype: Metric\ntitle: Revenue\n---\n\nSee [the attester](/metrics/revenue/check.py).\n"
+	for name, body := range map[string]string{
+		filepath.Join("metrics", "revenue.md"):          doc,
+		filepath.Join("metrics", "revenue", "check.py"): "print('ok')\n",
+		"viz.html": "<html></html>\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var concepts []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		path := r.PathValue("path")
+		if !strings.HasSuffix(path, ".md") {
+			w.WriteHeader(http.StatusNotImplemented)
+			_ = json.NewEncoder(w).Encode(map[string]string{"code": "unsupported",
+				"error": "files are not supported without GCS: set OCHAKAI_GCS_BUCKET"})
+			return
+		}
+		if r.URL.Query().Get("dry_run") == "true" {
+			w.Header().Set("Ochakai-Plan", "created")
+			_ = json.NewEncoder(w).Encode(domain.View{ID: strings.TrimSuffix(path, ".md")})
+			return
+		}
+		concepts = append(concepts, path)
+		w.Header().Set("Ochakai-Plan", "created")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(domain.View{ID: strings.TrimSuffix(path, ".md")})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	out, errOut := captureOutput(t, func() error {
+		return cmdImport(context.Background(), []string{dir, "--dry-run", "--url", srv.URL})
+	})
+	if !strings.Contains(out, "2 skipped") || !strings.Contains(errOut, "OCHAKAI_GCS_BUCKET") {
+		t.Errorf("the dry run did not report the two files it cannot keep:\n%s\n%s", out, errOut)
+	}
+
+	out, errOut = captureOutput(t, func() error {
+		return cmdImport(context.Background(), []string{dir, "--url", srv.URL})
+	})
+	if !slices.Contains(concepts, "metrics/revenue.md") {
+		t.Errorf("the concept was not imported; stored = %v", concepts)
+	}
+	if !strings.Contains(out, "imported 1 concepts") || !strings.Contains(out, "2 skipped") {
+		t.Errorf("summary does not count the concept and the two skipped files:\n%s", out)
+	}
+	for _, want := range []string{"metrics/revenue/check.py", "viz.html"} {
+		if !strings.Contains(errOut, want) {
+			t.Errorf("the skip does not name %s:\n%s", want, errOut)
+		}
+	}
+
+	if _, _, err := captureRun(t, func() error {
+		return cmdImport(context.Background(), []string{dir, "--strict", "--url", srv.URL})
+	}); err == nil {
+		t.Error("--strict accepted a bundle whose files were not kept")
+	}
+}

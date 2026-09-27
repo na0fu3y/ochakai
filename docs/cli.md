@@ -365,8 +365,9 @@ leaves, so nothing is dropped for belonging to no concept. The packed shape is
 the structure: an archive wrapped in a single directory imports
 under that directory — the bundle keeps its own namespace. Works
 with any OKF bundle, not just ochakai's own.
-A file that cannot be stored at all — empty, oversized, or at a path
-ochakai cannot address — is skipped; a value read differently than
+A file that cannot be stored at all — empty, oversized, at a path
+ochakai cannot address, or sent to a deployment that holds no files —
+is skipped; a value read differently than
 it was written is a note and the concept still imports. A document
 that says who generated or confirmed it is one of those: the keys
 are kept as the document's own claim, under `received`, and never

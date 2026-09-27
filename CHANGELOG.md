@@ -82,6 +82,14 @@ last entry.
 
 ### Fixed
 
+- **`ochakai import` no longer stops at the first file a deployment
+  cannot hold.** Without `OCHAKAI_GCS_BUCKET` every file is a 501, and the
+  import ended there — in `--dry-run` too — so the concepts after it
+  never arrived. Every bundle the OKF repository publishes carries one (a
+  `viz.html`, an attester's `.py`). Such a file is now skipped and
+  reported like one the server refuses, every concept imports, and
+  `--strict` still fails on it. A refused file that a concept's body
+  links to is skipped the same way instead of ending the run.
 - **A concept an agent writes over MCP without a status is a draft.**
   `put_concept` read an omitted `status` as OKF's default, stable, and
   the drafts queue counts `status: draft` — so an agent that left the

@@ -1670,7 +1670,7 @@ func eachConcurrently(ctx context.Context, n int, fn func(ctx context.Context, i
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its concept (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file at\na renamed path, since `.md` is a concept's address and a note says\nwhere it landed),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical\nto what is stored are left untouched and reported as unchanged;\na document the server refuses as a concept — e.g. an Attested\nComputation with no runtime — is not stored, and is reported by path\nand reason; the bundle you imported from still has it, and the files\nit pointed at are written anyway).\nFiles referenced by a concept's body markdown links become\nattributed to it, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside a concept's\ndirectory (<id>/<name>) attribute to that concept the same way. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no concept. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, or at a path\nochakai cannot address — is skipped; a value read differently than\nit was written is a note and the concept still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per concept, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run is the same run with nothing written: each object is sent\nas a plan the server answers without storing it, so the notes, the\nrefusals and the created / updated / unchanged counts are the ones\nthe import would produce.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its concept (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file at\na renamed path, since `.md` is a concept's address and a note says\nwhere it landed),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical\nto what is stored are left untouched and reported as unchanged;\na document the server refuses as a concept — e.g. an Attested\nComputation with no runtime — is not stored, and is reported by path\nand reason; the bundle you imported from still has it, and the files\nit pointed at are written anyway).\nFiles referenced by a concept's body markdown links become\nattributed to it, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside a concept's\ndirectory (<id>/<name>) attribute to that concept the same way. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no concept. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, at a path\nochakai cannot address, or sent to a deployment that holds no files —\nis skipped; a value read differently than\nit was written is a note and the concept still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per concept, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run is the same run with nothing written: each object is sent\nas a plan the server answers without storing it, so the notes, the\nrefusals and the created / updated / unchanged counts are the ones\nthe import would produce.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on the import's own verdict\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "report what the import would do, and write nothing: every object is sent with the server's dry-run parameter, so the counts, the notes and the refusals are the ones the import itself would meet")
 	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. With --dry-run the same verdict is reached with nothing written, which is what makes it a CI gate")
@@ -1815,7 +1815,14 @@ func cmdImport(ctx context.Context, args []string) error {
 		// what preserving a foreign location means now (design doc 0046
 		// §3.3): the concept claims it because its body points there.
 		if _, err := c.PutBundleFile(ctx, a.Path, a.Data); err != nil {
-			return fmt.Errorf("write %s: %w", a.Path, err)
+			if !fileRefused(err) {
+				return fmt.Errorf("write %s: %w", a.Path, err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			skipped = append(skipped, a.Path+": rejected by the server: "+err.Error())
+			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
+			return nil
 		}
 		// A file is an object of the bundle at its own path, and
 		// attribution is derived from a concept's body rather than stored
@@ -1849,7 +1856,7 @@ func cmdImport(ctx context.Context, args []string) error {
 	err = eachConcurrently(ctx, len(loose), func(ctx context.Context, i int) error {
 		f := loose[i]
 		if _, err := c.PutBundleFile(ctx, f.Path, f.Data); err != nil {
-			if !isInvalid(err) {
+			if !fileRefused(err) {
 				return fmt.Errorf("write %s: %w", f.Path, err)
 			}
 			mu.Lock()
@@ -1960,7 +1967,7 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 	// would move, so ok=false means the server refused this one.
 	planFile := func(ctx context.Context, path string, data []byte) (ok bool, err error) {
 		if _, err := c.PlanBundleFile(ctx, path, data); err != nil {
-			if !isInvalid(err) {
+			if !fileRefused(err) {
 				return false, fmt.Errorf("write %s: %w", path, err)
 			}
 			mu.Lock()
@@ -2041,6 +2048,23 @@ func plural(n int, word string) string {
 func isInvalid(err error) bool {
 	var apiErr *apiclient.APIError
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusBadRequest
+}
+
+// fileRefused reports a verdict on one file rather than a broken
+// pipeline: a 400, or the 501 of a deployment that holds no files
+// (no OCHAKAI_GCS_BUCKET, design doc 0131). The second used to end the
+// import at the first file it met — every bundle OKF publishes carries
+// one (a viz.html, an attester's .py) — so a deployment that could hold
+// every concept in it imported none of what came after. A file the
+// deployment cannot keep is skipped and reported like any other, and
+// --strict still fails on it.
+func fileRefused(err error) bool {
+	var apiErr *apiclient.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	return apiErr.StatusCode == http.StatusBadRequest ||
+		apiErr.StatusCode == http.StatusNotImplemented && apiErr.Code == "unsupported"
 }
 
 // readBundle loads an OKF bundle into a path→content map from a directory,
