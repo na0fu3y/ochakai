@@ -1806,3 +1806,51 @@ func TestImportSkipsFilesADeploymentCannotHold(t *testing.T) {
 		t.Error("--strict accepted a bundle whose files were not kept")
 	}
 }
+
+// TestImportSendsTheIndexForItsDescriptions pins decision 0154 from the
+// import's side: a producer's index.md is not dropped with a note any
+// more, it is sent, so what it says of its subdirectories is kept.
+func TestImportSendsTheIndexForItsDescriptions(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "sales"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string]string{
+		filepath.Join("sales", "revenue.md"): "---\ntype: Metric\n---\n\nbody\n",
+		"index.md":                           "* [sales](sales/index.md) - Revenue by channel\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var indexes []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("PUT /api/v1/bundle/{path...}", func(w http.ResponseWriter, r *http.Request) {
+		path := r.PathValue("path")
+		if path == "index.md" {
+			body, _ := io.ReadAll(r.Body)
+			indexes = append(indexes, string(body))
+			w.Header().Set("Ochakai-Plan", "updated")
+			_, _ = w.Write([]byte("# ochakai knowledge bundle\n"))
+			return
+		}
+		w.Header().Set("Ochakai-Plan", "created")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(domain.View{ID: strings.TrimSuffix(path, ".md")})
+	})
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	out, errOut := captureOutput(t, func() error {
+		return cmdImport(context.Background(), []string{dir, "--strict", "--url", srv.URL})
+	})
+	if len(indexes) != 1 || !strings.Contains(indexes[0], "Revenue by channel") {
+		t.Errorf("the index was not sent: %q", indexes)
+	}
+	if !strings.Contains(out, "described the subdirectories index.md lists") {
+		t.Errorf("the import did not say it kept the descriptions:\n%s", out)
+	}
+	if strings.Contains(errOut, "index.md is a filename OKF reserves") {
+		t.Errorf("the index was still reported as dropped:\n%s", errOut)
+	}
+}

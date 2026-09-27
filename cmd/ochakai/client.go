@@ -14,9 +14,11 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1670,7 +1672,7 @@ func eachConcurrently(ctx context.Context, n int, fn func(ctx context.Context, i
 func cmdImport(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"import",
-		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its concept (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file at\na renamed path, since `.md` is a concept's address and a note says\nwhere it landed),\nreserved index.md / log.md files are skipped, keys the format does\nnot define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical\nto what is stored are left untouched and reported as unchanged;\na document the server refuses as a concept — e.g. an Attested\nComputation with no runtime — is not stored, and is reported by path\nand reason; the bundle you imported from still has it, and the files\nit pointed at are written anyway).\nFiles referenced by a concept's body markdown links become\nattributed to it, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside a concept's\ndirectory (<id>/<name>) attribute to that concept the same way. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no concept. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, at a path\nochakai cannot address, or sent to a deployment that holds no files —\nis skipped; a value read differently than\nit was written is a note and the concept still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per concept, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run is the same run with nothing written: each object is sent\nas a plan the server answers without storing it, so the notes, the\nrefusals and the created / updated / unchanged counts are the ones\nthe import would produce.",
+		"Usage: ochakai import [flags] <dir | file.tar.gz | ->\n\nImport an OKF bundle (a directory of markdown + YAML frontmatter, or\na tar.gz of one; \"-\" reads the tar.gz from stdin). The inverse of\n`ochakai export`: each path names its concept (the path minus .md is\nthe id), the frontmatter type key names the type (required — a\nmarkdown file without one is not a concept, and is kept as a file at\na renamed path, since `.md` is a concept's address and a note says\nwhere it landed),\nan index.md is sent so the server keeps what it says each\nsubdirectory is for (the listing itself is generated), log.md is\nskipped, keys the format does\nnot define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical\nto what is stored are left untouched and reported as unchanged;\na document the server refuses as a concept — e.g. an Attested\nComputation with no runtime — is not stored, and is reported by path\nand reason; the bundle you imported from still has it, and the files\nit pointed at are written anyway).\nFiles referenced by a concept's body markdown links become\nattributed to it, wherever they sit in the bundle (their location is\npreserved for re-export); unreferenced data files inside a concept's\ndirectory (<id>/<name>) attribute to that concept the same way. Everything else the\nbundle carried is written at the path it arrived at — what enters\nleaves, so nothing is dropped for belonging to no concept. The packed shape is\nthe structure: an archive wrapped in a single directory imports\nunder that directory — the bundle keeps its own namespace. Works\nwith any OKF bundle, not just ochakai's own.\nA file that cannot be stored at all — empty, oversized, at a path\nochakai cannot address, or sent to a deployment that holds no files —\nis skipped; a value read differently than\nit was written is a note and the concept still imports. A document\nthat says who generated or confirmed it is one of those: the keys\nare kept as the document's own claim, under `received`, and never\nbecome this instance's provenance — so a bundle from another\ninstance imports with a note per concept, while one exported from\nhere imports silently. Both are\nreported and neither fails the command, because a consumer takes the\ndocument rather than rejecting it. --strict is the opposite posture,\nfor a sync nobody watches: a bundle that is not read exactly as\nwritten fails, and the counts land in the summary line either way.\n--dry-run is the same run with nothing written: each object is sent\nas a plan the server answers without storing it, so the notes, the\nrefusals and the created / updated / unchanged counts are the ones\nthe import would produce.",
 		"  ochakai import ./knowledge\n  ochakai import ga4-bundle.tar.gz --dry-run\n  ochakai import ./knowledge --dry-run --strict   # gate a CI sync on the import's own verdict\n  ochakai export - | OCHAKAI_URL=https://other ochakai import -\n")
 	dryRun := fs.Bool("dry-run", false, "report what the import would do, and write nothing: every object is sent with the server's dry-run parameter, so the counts, the notes and the refusals are the ones the import itself would meet")
 	strict := fs.Bool("strict", false, "refuse a bundle that is not read exactly as written: any note or skip fails the command instead of being reported. With --dry-run the same verdict is reached with nothing written, which is what makes it a CI gate")
@@ -1683,6 +1685,7 @@ func cmdImport(ctx context.Context, args []string) error {
 		return err
 	}
 	entries, atts, loose, skipped, notes := okf.FromBundle(files)
+	indexes := okf.BundleIndexes(files)
 	for _, s := range skipped {
 		fmt.Fprintln(os.Stderr, "skip:", s)
 	}
@@ -1706,7 +1709,7 @@ func cmdImport(ctx context.Context, args []string) error {
 		return err
 	}
 	if *dryRun {
-		return dryRunImport(ctx, c, entries, atts, loose, skipped, noted, *strict)
+		return dryRunImport(ctx, c, entries, atts, loose, indexes, skipped, noted, *strict)
 	}
 	// A 400 is the server's judgment on one document (e.g. an Attested
 	// Computation with no runtime, which the write path refuses) — a
@@ -1877,6 +1880,11 @@ func cmdImport(ctx context.Context, args []string) error {
 	// A file whose concept was refused belongs to nobody, so it counts
 	// where the bundle's other unclaimed objects do.
 	written += orphaned
+	indexSkips, err := sendIndexes(ctx, c, indexes, false)
+	if err != nil {
+		return err
+	}
+	skipped = append(skipped, indexSkips...)
 	fmt.Printf("imported %d concepts (%d created, %d updated, %d unchanged, %d attributed, %d loose, %d skipped, %d notes)\n",
 		created+updated+unchanged, created, updated, unchanged, attached, written, len(skipped), noted)
 	// The parse-time gate above cannot see what the server read differently
@@ -1902,7 +1910,7 @@ func cmdImport(ctx context.Context, args []string) error {
 // bundle alone, so a CI gate on the dry run passed bundles the import
 // then failed on.
 func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
-	atts []okf.AttributedFile, loose []okf.BundleFile, skipped []string, noted int, strict bool,
+	atts []okf.AttributedFile, loose []okf.BundleFile, indexes map[string][]byte, skipped []string, noted int, strict bool,
 ) error {
 	// Concurrent for the same reason the real import is: the dry run is
 	// the same N round trips, and a CI gate pays for them on every push.
@@ -2017,6 +2025,11 @@ func dryRunImport(ctx context.Context, c *apiclient.Client, entries []okf.Doc,
 		return err
 	}
 	wrote += orphaned
+	indexSkips, err := sendIndexes(ctx, c, indexes, true)
+	if err != nil {
+		return err
+	}
+	skipped = append(skipped, indexSkips...)
 	fmt.Printf("dry run: %d concepts (%d created, %d updated, %d unchanged, %d attributed, %d loose, %d skipped, %d notes)\n",
 		created+updated+unchanged, created, updated, unchanged, attached, wrote, len(skipped), noted)
 	// The whole point of the dry run under --strict: the same verdict the
@@ -2048,6 +2061,36 @@ func plural(n int, word string) string {
 func isInvalid(err error) bool {
 	var apiErr *apiclient.APIError
 	return errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusBadRequest
+}
+
+// sendIndexes sends each index.md the bundle carried, so the server
+// keeps what it says about the subdirectories it lists (decision 0154);
+// the listings themselves ochakai generates. A 4xx is a verdict on that
+// one index — a server older than 0154 answers 409, a scoped caller 403 —
+// and is reported as a skip, which --strict counts.
+func sendIndexes(ctx context.Context, c *apiclient.Client, indexes map[string][]byte, dry bool) ([]string, error) {
+	paths := slices.Sorted(maps.Keys(indexes))
+	var skipped []string
+	for _, p := range paths {
+		plan, err := c.DescribeDirectories(ctx, p, indexes[p], dry)
+		if err != nil {
+			var apiErr *apiclient.APIError
+			if !errors.As(err, &apiErr) || apiErr.StatusCode < 400 || apiErr.StatusCode >= 500 {
+				return nil, fmt.Errorf("write %s: %w", p, err)
+			}
+			skipped = append(skipped, p+": the directory descriptions in it were not kept: "+err.Error())
+			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
+			continue
+		}
+		if plan == apiclient.PlanUpdated {
+			verb := "described"
+			if dry {
+				verb = "would describe"
+			}
+			fmt.Printf("%s the subdirectories %s lists\n", verb, p)
+		}
+	}
+	return skipped, nil
 }
 
 // fileRefused reports a verdict on one file rather than a broken

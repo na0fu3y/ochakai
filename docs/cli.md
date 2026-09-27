@@ -349,7 +349,9 @@ the id), the frontmatter type key names the type (required — a
 markdown file without one is not a concept, and is kept as a file at
 a renamed path, since `.md` is a concept's address and a note says
 where it landed),
-reserved index.md / log.md files are skipped, keys the format does
+an index.md is sent so the server keeps what it says each
+subdirectory is for (the listing itself is generated), log.md is
+skipped, keys the format does
 not define are kept as written, and existing concepts are replaced (kept as revisions; concepts identical
 to what is stored are left untouched and reported as unchanged;
 a document the server refuses as a concept — e.g. an Attested

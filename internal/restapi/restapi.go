@@ -682,6 +682,40 @@ func Handler(svc *service.Service) http.Handler {
 				writeError(w, err)
 				return
 			}
+			// A PUT of a directory's index.md keeps what the listing
+			// says each subdirectory is for, and nothing else: the listing
+			// is generated from what the directory holds, and SPEC §8 has
+			// no other place for a directory's description (decision
+			// 0154). The answer is the index as it now reads. log.md, and
+			// a DELETE of either, stay refused.
+			if dir, base := splitReserved(path); r.Method == http.MethodPut && domain.IndexBundleName(base) {
+				if err := rejectUnknownParams(r.URL.Query(), "dry_run"); err != nil {
+					writeError(w, err)
+					return
+				}
+				dry, err := queryBool(r.URL.Query(), "dry_run", false)
+				if err != nil {
+					writeError(w, err)
+					return
+				}
+				body, ok := readBody(w, r, maxDocument, fmt.Sprintf("index.md exceeds %d bytes", maxDocument))
+				if !ok {
+					return
+				}
+				plan, err := svc.DescribeDirectories(r.Context(), dir, body, httpauth.Actor(r.Context()), dry)
+				if err != nil {
+					writeError(w, err)
+					return
+				}
+				doc, err := svc.IndexDocument(r.Context(), dir)
+				if err != nil {
+					writeError(w, err)
+					return
+				}
+				w.Header().Set(planHeader, plan)
+				writeMarkdown(w, doc)
+				return
+			}
 			if refuseReserved(w, path, "and a generated file is not one anybody writes") {
 				return
 			}

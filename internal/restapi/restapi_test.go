@@ -351,7 +351,7 @@ func TestBundleAddressesRefuseByPath(t *testing.T) {
 		want               int
 		wantSubstr         string
 	}{
-		{"put index.md", http.MethodPut, "index.md", http.StatusConflict, "generated from the bundle"},
+		{"put log.md", http.MethodPut, "log.md", http.StatusConflict, "generated from the bundle"},
 		{"put nested log.md", http.MethodPut, "metrics/log.md", http.StatusConflict, "log.md is generated"},
 		{"delete index.md", http.MethodDelete, "index.md", http.StatusConflict, "index.md is generated"},
 	}

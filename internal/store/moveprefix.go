@@ -143,6 +143,9 @@ func (s *Store) MovePrefix(ctx context.Context, oldPrefix, newPrefix string, act
 			 WHERE starts_with(path, $1 || '/')`, oldPrefix, newPrefix); err != nil {
 			return err
 		}
+		if err := moveDirectoryDescriptions(ctx, tx, oldPrefix, newPrefix); err != nil {
+			return err
+		}
 		final, err := s.rewritePrefixReferences(ctx, tx, oldPrefix, newPrefix, pairs, movedNew, actor, now, within)
 		if err != nil {
 			return err

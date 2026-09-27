@@ -32,6 +32,17 @@ last entry.
 
 ### Changed
 
+- **A directory can say what it is for** (decision 0154). OKF's one place
+  for that is the line a parent's `index.md` gives a subdirectory, and
+  an import dropped every `index.md` with a note — so each bundle the OKF
+  repository publishes lost its directory descriptions and failed
+  `--strict`. A PUT of a directory's `index.md` now keeps the description
+  on each subdirectory's line (the listing itself stays generated, and
+  concept lines are not read); the generated `index.md` and the JSON
+  listing's `dirs[].description` carry it, a directory move takes it
+  along, and `ochakai import` sends `index.md` instead of noting it. The
+  caller must be able to write the directory. `log.md` is still skipped
+  with a note. Migration 0056.
 - **An export's `verified` lists only the verifications that stand**
   (decision 0155). ochakai ranks a concept from the confirmations of its
   content as it reads now; the export form wrote every ledger row, and

@@ -244,6 +244,7 @@ components/schemas/BundleListing.cursor required=false type=string
 components/schemas/BundleListing.dirs required=false type=array
 components/schemas/BundleListing.dirs[] type=object
 components/schemas/BundleListing.dirs[].count required=true type=integer
+components/schemas/BundleListing.dirs[].description required=false type=string
 components/schemas/BundleListing.dirs[].name required=true type=string
 components/schemas/BundleListing.files required=false type=array
 components/schemas/BundleListing.files[] type=object

@@ -252,10 +252,12 @@ func TestRESTIntegration(t *testing.T) {
 
 	// Neither is writable: they are generated, not stored, so a write to
 	// one conflicts with what the address is (design doc 0046 §3.5).
-	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+typ+"/index.md", strings.NewReader("x"))
+	req, err := http.NewRequest(http.MethodPut, srv.URL+"/api/v1/bundle/"+typ+"/log.md", strings.NewReader("x"))
 	// A `.md` PUT is a concept write and names the media type the spec
 	// declares for one; the refusal below is about the address, and comes
-	// before anything reads the body (design docs 0064 §15, 0100).
+	// before anything reads the body (design docs 0064 §15, 0100). A PUT
+	// of index.md is not refused: it keeps subdirectory descriptions
+	// (decision 0154).
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +268,7 @@ func TestRESTIntegration(t *testing.T) {
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusConflict {
-		t.Errorf("PUT index.md = %d, want 409", resp.StatusCode)
+		t.Errorf("PUT log.md = %d, want 409", resp.StatusCode)
 	}
 
 	// Export: the bundle carries the entry at its canonical path.
