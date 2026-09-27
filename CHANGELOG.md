@@ -127,6 +127,12 @@ last entry.
 
 ### Fixed
 
+- **A moved concept is embedded again under its new id.** The text a
+  concept's vector is made from opens with its id, but a move only
+  re-keyed the vector, so semantic search kept matching the old path's
+  words until `ochakai reembed`. A move, and a directory move for every
+  concept it carries, now makes the vector again once it commits; a
+  failure is logged and the move stands.
 - **`ochakai import` no longer stops at the first file a deployment
   cannot hold.** Without `OCHAKAI_GCS_BUCKET` every file is a 501, and the
   import ended there — in `--dry-run` too — so the concepts after it
