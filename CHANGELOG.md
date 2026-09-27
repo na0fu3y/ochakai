@@ -32,6 +32,15 @@ last entry.
 
 ### Changed
 
+- **An export's `verified` lists only the verifications that stand**
+  (decision 0155). ochakai ranks a concept from the confirmations of its
+  content as it reads now; the export form wrote every ledger row, and
+  OKF SPEC §5.3 ranks from whatever `verified` holds — so a concept
+  confirmed and then edited read as human-reviewed to every OKF reader
+  and as unverified here. The export, the document a GET returns and
+  `ochakai get` now write the standing rows only. Nothing is deleted: the
+  whole ledger is still in `log.md` and `?history`, and an export handed
+  back still imports as unchanged.
 - **The documents say where the text goes by default.** The C8 row of
   docs/surface.md and the README said embeddings run in the deployment's
   region by default; since 0147 §1.2 a base created after v0.29.0 embeds

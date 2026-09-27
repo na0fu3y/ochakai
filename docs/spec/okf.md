@@ -92,6 +92,10 @@ ochakai が持つのは**一つのバンドル — パスからオブジェク�
 - **取り除くことは捨てることではない。** 文書が書いた trust family は
   `received:` の下に**主張**として残し、取り込みの note に出す。主張は台帳にも
   trust tier にも `trust=` にも入らない。
+- export(と文書の表現)が書く `verified` は、**いまの内容に対して立って
+  いる検証だけ**である。OKF の読み手が SPEC §5.3 で出す段が、ochakai の段と
+  一致するように。台帳の全体は `log.md` と `?history` が持つ(決定
+  [0155](../decisions/0155-export-the-verifications-that-stand.md))。
 - **自分の export 形は主張ではない。** 添えられた trust family がこの
   インスタンスの観測と一致すれば戻ってきた自分の観測として取り除く。だから
   get → 編集 → PUT と export → レビュー → import は前と同じバイト列を保存
