@@ -28,7 +28,14 @@ base="https://github.com/na0fu3y/ochakai/releases/download/v${version}"
 archive="ochakai_${version}_linux_amd64.tar.gz"
 curl -fsSL -o "$ctx/$archive" "$base/$archive"
 curl -fsSL -o "$ctx/checksums.txt" "$base/checksums.txt"
-(cd "$ctx" && grep " ${archive}\$" checksums.txt | shasum -a 256 -c -)
+# Exactly one line must name the archive. An empty match would hand
+# shasum nothing to check, and some implementations pass on that.
+line=$(grep " ${archive}\$" "$ctx/checksums.txt" || true)
+if [ "$(printf '%s' "$line" | grep -c .)" -ne 1 ]; then
+	echo "build: checksums.txt has no single line for ${archive}" >&2
+	exit 1
+fi
+(cd "$ctx" && printf '%s\n' "$line" | shasum -a 256 -c -)
 tar -xzf "$ctx/$archive" -C "$ctx" ochakai
 rm "$ctx/$archive" "$ctx/checksums.txt"
 
