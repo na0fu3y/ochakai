@@ -531,8 +531,10 @@ paths:
 
           **The empty path is the bundle itself**: `/api/v1/bundle/`
           with `Accept: application/gzip` is the archive of everything,
-          and with `Accept: application/json` the root `index.md` is at
-          `/api/v1/bundle/index.md`. A path template parameter cannot
+          and otherwise it is the root's `index.md`, as any path ending
+          in `/` is its directory's (design doc 0153). `/api/v1/bundle/`
+          is therefore the bundle root a body's bundle-absolute link
+          (`/tables/orders.md`, SPEC §6.1) resolves against. A path template parameter cannot
           be written as empty in OpenAPI, so this is said here rather
           than in the path — as with the slashes above, the prose is as
           precise as the format allows.
@@ -563,9 +565,14 @@ paths:
         reserves per directory — which are generated from the bundle
         rather than stored in it (design doc 0075 §4.2).
 
-        A concept answers with a View, or with the document itself
-        under `Accept: text/markdown`, and carries the ETag to echo back
-        in `If-Match` on a later write.
+        **A concept answers with its document** — the OKF file, in the
+        form an exported bundle holds it — **unless the caller names
+        `Accept: application/json`**, which answers the View. A plain GET
+        gets what a static file server serving the bundle would give it,
+        which is what OKF means by serving a bundle (design doc 0153).
+        Either way the ETag to echo back in `If-Match` on a later write
+        comes with it. A directory's address (a path ending in `/`, or
+        the empty path) answers its `index.md`.
 
         A file answers with its bytes, its content hash as the ETag, a
         `304` when `If-None-Match` matches it, and the headers that
