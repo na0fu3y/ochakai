@@ -129,8 +129,9 @@ func (s *Store) Move(ctx context.Context, oldID, newID string, actor domain.Acto
 			}
 		}
 		// Embedding tables exist only once semantic search has been
-		// enabled; the embedding text does not include the id, so
-		// re-keying is enough — no re-embed.
+		// enabled. Re-keyed here so the row follows the concept; the
+		// text it was made from opens with the old id, so the service
+		// makes the vector again once the move commits.
 		for _, q := range []string{
 			`UPDATE knowledge_embedding SET id=$2 WHERE id=$1`,
 			// A file's vector is keyed by the file's path, so it follows

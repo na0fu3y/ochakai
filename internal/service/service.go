@@ -734,6 +734,12 @@ func (s *Service) Move(ctx context.Context, id, newID string, actor domain.Actor
 		within = append([]string{}, sc.Write...)
 	}
 	moved, err := s.Store.Move(ctx, id, newID, actor, within)
+	if err == nil {
+		// The id is the first line of the text a concept's vector was
+		// made from (embeddingText), so the one the move carried still
+		// read the old path. The store re-keys it; this makes it again.
+		s.updateEmbedding(ctx, moved)
+	}
 	if errors.Is(err, store.ErrOutsideScope) {
 		// What leaked is one bit, and it is about the caller's own
 		// concept: something, somewhere, links at it. No address, no
@@ -912,5 +918,35 @@ func (s *Service) MovePrefix(ctx context.Context, oldPrefix, newPrefix string, a
 			"may write, and a move rewrites every reference rather than skipping any: an administrator "+
 			"can move it", ErrForbidden, from)
 	}
+	if err == nil {
+		s.reembedUnder(ctx, to)
+	}
 	return moved, err
+}
+
+// reembedUnder makes the vector of every live concept under prefix again,
+// after a directory move carried them there: each one's id — the first
+// line of what it was embedded from — changed. The destination was empty
+// before the move, so everything under it moved. Failures are logged, as
+// every other write's are: the move stands either way, and `ochakai
+// reembed` finishes what a failure left.
+func (s *Service) reembedUnder(ctx context.Context, prefix string) {
+	if s.Embedder == nil {
+		return
+	}
+	var after *store.After
+	for {
+		page, err := s.Store.ListByAddress(ctx, store.Filter{Prefixes: []string{prefix}}, after, 200)
+		if err != nil {
+			s.Log.Warn("re-embedding a moved directory", "prefix", prefix, "error", err)
+			return
+		}
+		for i := range page {
+			s.updateEmbedding(ctx, &page[i])
+		}
+		if len(page) < 200 {
+			return
+		}
+		after = &store.After{ID: page[len(page)-1].ID}
+	}
 }
