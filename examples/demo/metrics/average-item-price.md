@@ -5,7 +5,7 @@ description: 売上になった明細1点あたりの平均実売価格(USD)。�
 tags: [sales, pricing, products]
 generated: { by: analysis_agent/claude-fable-5, at: 2026-09-18T02:40:00Z }
 verified:
-  - { by: human:tanaka@example.co.jp, at: 2026-09-20T01:10:00Z }
+  - { by: human:tanaka@example.co.jp, at: 2026-09-26T03:00:00Z }
 status: stable
 grain: item
 synonyms: [平均単価, average item price, 客単価]
@@ -23,9 +23,11 @@ unit: USD
 の点数の比率が下がっていないかを見る。同じカテゴリの中でも、高い商品と
 安い商品のどちらが売れたかで平均は大きく動く。
 
-月ごとに数%〜1 割動き、その動きが売上の動きのかなりの部分を占める。
-売上が落ちる月の半分ほどは、需要ではなくこの構成で落ちている
-([売上が落ちるときの因果](/insights/why-revenue-falls.md))。
+月ごとに数%〜1 割動くが、ほとんどは揺れの範囲である。明細の価格は
+数ドルから数百ドルまで散らばっていて、月に千件ほどの完了明細の平均は
+それだけで揺れる。揺れを超えて動く月は 43 か月で数回で、たいてい翌月に
+戻る([売上が落ちるときの要因](/insights/why-revenue-falls.md))。カテゴリ
+の中の平均はさらに荒く、母数が数十件のカテゴリでは倍半分に動く。
 
 「客単価」と呼ばれることがあるが、ここでは明細 1 点あたりである。注文
 あたりにしたいときは、注文あたりの点数(1.4 前後で安定)を掛ける。

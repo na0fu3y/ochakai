@@ -9,7 +9,7 @@ sources:
     title: "Palantir Foundry: Ontology core concepts"
 generated: { by: human:sato@example.co.jp, at: 2026-07-30T06:00:00Z }
 verified:
-  - { by: human:tanaka@example.co.jp, at: 2026-09-22T01:30:00Z }
+  - { by: human:tanaka@example.co.jp, at: 2026-09-26T03:00:00Z }
 status: stable
 ---
 
@@ -27,7 +27,16 @@ link)と動力層(action・function)に分けて説明している。[^foundry]
 | Function | [Attested Computation](/computations/revenue-drivers.md)。承認された計算で、実行は外で行う |
 | Action type | [actions/ の concept](/actions/review-high-return-products.md)。パラメータ・検証・副作用の契約 |
 | Object view | `ochakai get` の一枚。`linked_from` が、そのテーブルや指標を指すすべての concept を運んでくる |
-| Roles | trust tier。draft は書いたエージェントの名で残り、verified は人の裁定である |
+| Roles | 持たない。誰が何を見てよいかはウェアハウスの IAM のままである。ochakai が持つのは別の軸で、誰が書き、誰が確かめたか(draft と verified)を記録する |
+
+## 作り込まなくても効く
+
+オントロジーを完全に作ってから使う必要は無い。このバンドルは 37 枚で、
+エージェントの答えを変えたのはそのうち数枚の文章だった — 売上に入る
+明細、返品率の分母、当月の扱い、揺れの幅。同じ問いを BigQuery だけの
+エージェントと、このバンドルを引けるエージェントに訊くと、9 問 2 回で
+9/18 と 18/18 になった(`examples/demo-eval`)。整備の単位は型の体系では
+なく、エージェントが一度間違えた問いへの一枚である。
 
 ## 型を増やさなかった理由
 
@@ -39,7 +48,7 @@ OKF の SPEC にもサンプルのバンドルにも、object type にあたる�
 Foundry のオントロジーが持つ関係は「この二つはこう結べる」である。
 データ分析で本当に要るのは、その先の「結ぶとこうなる、だからこう読む」
 であり、それは Insight の形のほうがよく持てる。売上とその要因の関係は
-[売上が落ちるときの因果](/insights/why-revenue-falls.md)が、明細と訪問の
+[売上が落ちるときの要因](/insights/why-revenue-falls.md)が、明細と訪問の
 関係は[セッションと明細のつなぎ方](/insights/sessions-and-order-items.md)
 が、それぞれ文章で持っている。
 

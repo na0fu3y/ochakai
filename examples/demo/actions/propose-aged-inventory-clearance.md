@@ -5,7 +5,7 @@ description: 売れ残りが積み上がり、最近も売れていない商品�
 tags: [inventory, products, action, bigquery]
 generated: { by: human:sato@example.co.jp, at: 2026-08-24T05:00:00Z }
 verified:
-  - { by: human:tanaka@example.co.jp, at: 2026-08-27T01:15:00Z }
+  - { by: human:tanaka@example.co.jp, at: 2026-09-26T03:00:00Z }
 status: stable
 runtime: bigquery
 parameters:
@@ -30,9 +30,8 @@ question: 処分を検討すべき在庫はどれか?
 いる個体が `min_units` 点以上あり、かつその期間に 1 点も売れていない
 商品である。
 
-[明細単価](/metrics/average-item-price.md)が下がって売上が落ちた月に、
-在庫の側から取れる行動がこれである。売れ筋の単価は動かせないが、
-売れない在庫に寝ている原価は減らせる。
+売上を戻す行動ではない。売上の動きとは関係なく、売れない在庫に寝て
+いる原価を減らすための行動である。
 
 # Computation
 

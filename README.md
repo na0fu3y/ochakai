@@ -82,17 +82,17 @@ what the demo actually says:
 
 > **作り込まれた成長 (the built-in growth).** The demo's corpus is
 > Google's public `thelook_ecommerce` dataset, and its knowledge base
-> knows what the schema never says: 「系列には右肩上がりの成長が最初から
-> 入っている。前年比がプラスであることにも、前月比がプラスであることにも
-> 情報は無い」 — the growth is the generator's spec, not anyone's
-> achievement, so only a *fall* can mean anything here.
+> knows what the schema never says: 「前年比がプラスでも前月比がプラス
+> でも、そこに情報は無い」 — the growth is the generator's spec, not
+> anyone's achievement. A fall carries little more: revenue swings by a
+> tenth month to month with nothing happening, so the base's diagnosis
+> checks whether a move is beyond that swing before naming a cause.
 >
-> **動く過去 (the past that moves).** Returns pull revenue back out of
-> the months it was earned in, so 「先週見た数字と今日の数字は合わない。
-> 合わないこと自体は不具合ではなく、締めた数字が必要なら receipt を
-> 残しておくのが正しい」 — `status` overwrites history, last month's
-> revenue changes underneath you, and the sanctioned answer is a
-> receipt, not a re-run.
+> **動く過去 (the past that moves).** The dataset is regenerated, history
+> and all, every day, so 「先週見た 3 月の売上と今日の 3 月の売上は合わない
+> のが普通で、合わないこと自体は不具合ではない」 — last month's revenue
+> changes underneath you, and the sanctioned answer is a receipt, not a
+> re-run.
 
 An agent with warehouse access alone can run `SUM(sale_price)`. Nothing
 in the schema says the orders table holds no money at all, that
@@ -133,11 +133,15 @@ This runs with `OCHAKAI_MODE=dev`: authentication is off and every
 request acts as `human:anonymous` — never do this on a deployment
 ([every mode](docs/configuration.md#environment-variables) (Japanese)).
 
-Point the same CLI at it and load the demo knowledge base — [thirty-six
+Point the same CLI at it and load the demo knowledge base — [thirty-seven
 concepts](examples/demo) about Google's public `thelook_ecommerce`
 dataset, linked to each other, some of them drafts. It is built around
-one question an agent is asked: revenue fell — which driver moved, what
-to do about it, and where the data runs out. Everything goes
+one question an agent is asked: revenue fell — whether that is more than
+the usual swing, which driver moved, what to do about it, and where the
+data runs out. Asked nine questions twice, Claude Code with BigQuery
+alone answered 9 of 18 right and with this bundle 18 of 18
+([examples/demo-eval](examples/demo-eval), with its limits in
+[examples/README.md](examples/README.md)). Everything goes
 through the API, so plain curl reaches it too:
 
 ```sh
