@@ -271,6 +271,85 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 	}
 }
 
+// TestIntegrationPutWithoutStatusIsADraft pins that a concept an agent
+// writes without a status reaches the drafts queue. OKF reads an omitted
+// status as stable, and the queue counts status = draft, so before this
+// an agent that left the key out published an unverified stable concept
+// that no queue held and no person was asked about.
+func TestIntegrationPutWithoutStatusIsADraft(t *testing.T) {
+	dbURL := testdb.URL(t)
+	ctx := t.Context()
+	s, err := store.New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{InsecureDev: true}
+	svc := &service.Service{Store: s, Config: cfg, Log: slog.New(slog.NewTextHandler(os.Stderr, nil))}
+	srv := httptest.NewServer(httpauth.Middleware(cfg, Handler(svc, "test")))
+	defer srv.Close()
+	transport := &mcp.StreamableClientTransport{Endpoint: srv.URL}
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "host", Version: "0"}, nil).Connect(ctx, transport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	prefix := testdb.Unique(t, "mcpnostatus")
+	id := prefix + "/revenue"
+	defer func() {
+		_ = svc.Delete(context.Background(), id, domain.Actor{Kind: domain.ActorHuman, Name: "t"}, nil, "")
+	}()
+	before, err := s.QueueCounts(ctx, store.Filter{Prefixes: []string{prefix}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "put_concept",
+		Arguments: map[string]any{"id": id, "document": "---\ntype: Metric\ntitle: mcp no status " + id + "\n---\n\n受注合計。\n"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.IsError {
+		t.Fatalf("put_concept failed: %+v", res.Content)
+	}
+	k, err := svc.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if k.Status != domain.StatusDraft {
+		t.Errorf("status = %q, want draft", k.Status)
+	}
+	after, err := s.QueueCounts(ctx, store.Filter{Prefixes: []string{prefix}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Drafts != before.Drafts+1 {
+		t.Errorf("drafts queue = %d, want %d: the concept reached no queue", after.Drafts, before.Drafts+1)
+	}
+
+	// Saying stable is still the agent's to say, as the tool description
+	// has it — only the omission changed.
+	res, err = cs.CallTool(ctx, &mcp.CallToolParams{
+		Name:      "put_concept",
+		Arguments: map[string]any{"id": id, "document": "---\ntype: Metric\ntitle: mcp no status " + id + "\nstatus: stable\n---\n\n受注合計。\n"},
+	})
+	if err != nil || res.IsError {
+		t.Fatalf("put_concept stable: %v %+v", err, res)
+	}
+	if k, err = svc.Get(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+	if k.Status != domain.StatusStable {
+		t.Errorf("status = %q, want stable when written out", k.Status)
+	}
+}
+
 // The write-back loop's second half, walked from the six tools alone.
 //
 // The claim this pins is that an MCP-only agent — a hosted client with no

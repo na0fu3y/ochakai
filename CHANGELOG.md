@@ -30,6 +30,17 @@ last entry.
   in the registry, so the demo kept restoring 0.28.4's 18 concepts after
   0.29.3 shipped 37. The operating guide's sandbox section points here.
 
+### Fixed
+
+- **A concept an agent writes over MCP without a status is a draft.**
+  `put_concept` read an omitted `status` as OKF's default, stable, and
+  the drafts queue counts `status: draft` — so an agent that left the
+  key out published an unverified stable concept that no review queue
+  held, and no person was ever asked about it. An omitted status is now
+  written as `draft`, the way the deployment's own agent already wrote
+  its drafts. A status written out is kept as written, and REST, the
+  CLI and the web UI are unchanged.
+
 ## [0.29.3] - 2026-09-27
 
 ### Changed
