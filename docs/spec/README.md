@@ -24,14 +24,14 @@ ochakai が**いまどう動くか、なぜそうなのか**を、領域ごと�
 | [deployment.md](deployment.md) | デプロイの姿勢と環境変数 | 現行 |
 | [okf.md](okf.md) | OKF 互換・バンドル・保存形・往復と provenance | 現行 |
 | [addressing.md](addressing.md) | 住所・パス・move | 現行 |
-| `vocabulary.md` | 型の語彙と呼び名 | 未着手 |
-| `files.md` | ファイル | 未着手 |
+| [vocabulary.md](vocabulary.md) | 型の語彙と呼び名 | 現行 |
+| [files.md](files.md) | ファイル | 現行 |
 | [search.md](search.md) | 検索と埋め込み | 現行 |
 | [faces.md](faces.md) | 面の配分(REST / MCP / CLI / Web UI) | 現行 |
-| `webui.md` | Web UI | 未着手 |
+| [webui.md](webui.md) | Web UI | 現行 |
 | [loop.md](loop.md) | 検証ループと利用測定 | 現行 |
 | [concurrency.md](concurrency.md) | 同時実行と削除 | 現行 |
-| `seeding.md` | 空のベースを埋める | 未着手 |
+| [seeding.md](seeding.md) | 空のベースを埋める | 現行 |
 | `rest-stability.md` | REST の安定性契約 | 未着手 |
 | `mcp-cli-stability.md` | MCP・CLI の安定性契約 | 未着手 |
 | `declined.md` | やらないと決めたこと(ROADMAP の「やらないこと」と一本化) | 未着手 |

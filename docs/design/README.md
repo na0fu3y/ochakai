@@ -27,18 +27,18 @@ index も書き換えなくなる。
 | 環境変数の名前そのもの | **[現行仕様 deployment.md](../spec/deployment.md)**(「環境変数」節)。経緯は 0112 |
 | OKF 互換・バンドル・保存形 | **[現行仕様 okf.md](../spec/okf.md)** — バンドルとオブジェクト、文書の形、受け取ったバイト列を保存すること、主張と観測、瞬間の綴り、予約ファイル、取り込み、問いの語彙。経緯は 0075・0079・0136・0139 |
 | 住所とパス | **[現行仕様 addressing.md](../spec/addressing.md)** — パスが住所、一つのアドレス空間と表現、ディレクトリの一覧、move(一件とディレクトリ)、`prefix`。経緯は 0075・0100・0132 |
-| 型の語彙 | [0071](0071-the-recommended-type-vocabulary.md)。型に `/` を許すのは [0064](0064-rest-stops-at-api-v1.md) §18(0071 §1 の「`/` 不可」を撤回) |
-| 知識の単位の呼び名 | [0057](0057-concept-is-the-word-a-reader-meets.md)(ツール名・読む語)、[0064](0064-rest-stops-at-api-v1.md) §7 が現行(JSON フィールド名 `entries` → `concepts`) |
-| ファイル | [0075](0075-the-bundle-is-the-address-space.md)(バンドルのオブジェクトと帰属)、[0080](0080-search-and-how-a-deployment-embeds.md)(検索)。ベクトルの鍵がパスであることは [0091](0091-a-file-vector-is-keyed-by-its-path.md)。**バケットの無いデプロイがそう言い、どの面もファイルを差し出さなくなることは [0131](0131-a-deployment-says-what-it-cannot-do.md)** — `stats` が `files` を答え、直し方(変数の名前)はバンドル全体を持つ呼び出し元にだけ載る |
+| 型の語彙 | **[現行仕様 vocabulary.md](../spec/vocabulary.md)** — 自由な型と推奨の 9 型、ほかの語。経緯は 0071・0064 §18 |
+| 知識の単位の呼び名 | **[現行仕様 vocabulary.md](../spec/vocabulary.md)**(「知識の単位は concept と呼ぶ」節)。経緯は 0057・0064 §7 |
+| ファイル | **[現行仕様 files.md](../spec/files.md)** — オブジェクトとしてのファイル、配信、検索、面。経緯は 0075・0091・0131 |
 | 検索と埋め込み | **[現行仕様 search.md](../spec/search.md)** — 融合・並べ方・`OCHAKAI_EMBEDDINGS`・ベースの生まれで決まる既定。経緯は 0147 |
 | サーフェスの配分 | **[現行仕様 faces.md](../spec/faces.md)** — 四つの面の役割、足す規則と降ろす規則、一覧と検索、裁定の面、MCP・CLI・Web UI の規則と載せないもの。経緯は 0145・0068 |
-| Web UI | [0130](0130-the-web-ui-and-the-fields-of-a-document.md) が現行(配信・ページの形・編集を一冊で。0072 / 0092 / 0126 を畳んだ)。プロキシと identity は [0065](0065-identity-and-provenance.md) §5。**CSP の下で配信され、他人のフレームに入らないことは [0094](0094-the-page-runs-under-a-policy.md)**。**このデプロイができないことをページが出さなくなり、直せる呼び出し元にだけ案内を出すことは [0131](0131-a-deployment-says-what-it-cannot-do.md)** |
+| Web UI | **[現行仕様 webui.md](../spec/webui.md)** — 二つの配信経路、ページの作り、画面、編集、出さないもの。経緯は 0130・0094・0131 |
 | 検証ループと利用測定 | **[現行仕様 loop.md](../spec/loop.md)** — 裁定と trust、四つのキュー、利用測定、ミス、`stats`、turn と比較の問い。経緯は 0141・0135・0144・0146 |
 | 同時実行と削除 | **[現行仕様 concurrency.md](../spec/concurrency.md)** — 前提条件、二段階の削除、バイト列の回収。経緯は 0030・0031・0099 |
 | 実装の品質ゲート | [0035](0035-verifiability.md) |
 | 決定の書き方 | [CONTRIBUTING.md](../../CONTRIBUTING.md) の「Design: spec and decisions」が現行 — 現行仕様は領域ごとに書き換え、決定ログは短く書き換えない。0048 と 0128 の規則(番号の基準、置き換えによる改訂、表の一行の天井)はこの移行で役目を終えた |
 | バンドル往復と provenance の所有権 | **[現行仕様 okf.md](../spec/okf.md)**(「取り込みと往復」節)。経緯は 0009・0075 §3.1・0135 |
-| 空のベースを埋める | [0148](0148-the-empty-base-fills-from-the-page-too.md) が現行 — `ochakai seed` が運用者自身の撃った `INFORMATION_SCHEMA` の答えを `BigQuery Table` の draft バンドルにし(ウェアハウスに接続しない)、**Web UI の「BigQuery から取り込む」は同じ投影を本人の身元で読んだスキーマから作り、既存の `PUT` で上書きせずに書く**。サーバーは何も新しく提供せず、`OCHAKAI_OAUTH_CLIENT_ID` はエージェント無しで立つ(0085 を置き換えた) |
+| 空のベースを埋める | **[現行仕様 seeding.md](../spec/seeding.md)** — `ochakai seed` と Web UI の取り込み、空の description、クエリ履歴。経緯は 0148 |
 | やらないと決めたこと | [0070](0070-what-was-retired-and-why.md)。**コネクタは [0151](0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md) が戻した** — ochakai は認可サーバにならず、`/mcp` の 401 がクライアントに発行者(Google Workspace を含む)を教える。Google Chat と Slack の橋は ROADMAP の「やらないこと」 |
 | REST の安定性契約 | **凍結の範囲は [0107](0107-the-freeze-holds-the-okf-core.md) が現行** — 凍るのは OKF コア(bundle の往復と search)だけで、残りの `/api/v1` は 0.x の不安定な面。凍結の機構と最後の一括変更は [0064](0064-rest-stops-at-api-v1.md)、[docs/compatibility.md](../compatibility.md)。**凍結が止めているものの中身は [0082](0082-what-the-freeze-holds-still.md) が現行**(応答専用スキーマへの追加は対象外。**任意のクエリパラメータの追加も対象外で、それは [0101](0101-a-level-can-be-walked.md) §5**)。凍結を破ってよい理由は三つあり、二つ目(OKF 非適合な出力)は [0100](0100-md-is-how-a-concept-is-spelled.md) §4、三つ目(規格が定める綴りの重複を畳む)は [0102](0102-one-history-in-one-spelling.md) §3。エラー応答が運ぶ `code` は [0083](0083-an-error-carries-a-code.md)。**本文の鍵の照合が完全一致で、同じ鍵の重複が 400 になることは [0125](0125-a-body-names-each-field-once.md)**(0064 §2 が決めた規則を、書かれたとおりに効かせたもの) |
 | MCP・CLI の安定性契約 | [0152](0152-a-rename-at-0x-is-announced-not-bridged.md)(0.x の改名は古い綴りを答えさせず、CHANGELOG が BREAKING と印す — 1.0 で決め直す) |
