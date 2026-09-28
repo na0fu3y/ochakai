@@ -42,6 +42,12 @@ last entry.
   against 5,000 concepts and 6,000 file vectors, while the concept half
   took 2 ms. It is now two joins the planner can hash, and the same
   fixture answers in 60 ms with the same concepts and scores.
+- **A long lexical search computes each thing it tests a candidate
+  against once** (issue #954). Every name test normalized the title and
+  the filename again, every ILIKE lowered both sides again, and every
+  fragment decompressed the document's terms again. On a fifteen-fragment
+  question over 5,000 concepts the lexical query went from 165 ms to
+  75 ms. Rankings, scores and snippets are unchanged.
 
 ## [0.31.1] - 2026-09-28
 
