@@ -747,24 +747,33 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	// every entry and flattens the ranking ('_' matches any one character).
 	args = append(args, "%"+escapeLike(norm.NFKC.String(query))+"%")
 	wholeParam := len(args)
-	// The same escaped query with no wildcards around it: ILIKE without a
-	// pattern is case-insensitive equality, which is the exact-name test.
+	// The same escaped query with no wildcards around it: a LIKE without
+	// a wildcard, both sides lowered, is case-insensitive equality, which
+	// is the exact-name test.
 	// Beside the whole query, each of its terms: a compound question
 	// (「EC事業の継続率を計算して」) is the name of nothing, but it names
 	// EC事業 and 継続率, and the definitions it asks for must not lose to
 	// the reports that merely say all its words (QueryTerms).
 	args = append(args, escapeLike(norm.NFKC.String(query)))
 	nameTests := []string{fmt.Sprintf(
-		foldedTitle+" ILIKE $%[1]d OR "+foldedFilename+" ILIKE $%[1]d", len(args))}
+		"nm.title LIKE lower($%[1]d) OR nm.filename LIKE lower($%[1]d)", len(args))}
 	for _, term := range QueryTerms(query) {
 		if strings.EqualFold(term, query) {
 			continue // the whole-query test above already asks this
 		}
 		args = append(args, escapeLike(term))
 		nameTests = append(nameTests, fmt.Sprintf(
-			foldedTitle+" ILIKE $%[1]d OR "+foldedFilename+" ILIKE $%[1]d", len(args)))
+			"nm.title LIKE lower($%[1]d) OR nm.filename LIKE lower($%[1]d)", len(args)))
 	}
 	frags := queryFragments(query)
+	// Where the per-fragment tests read the document's terms from: the
+	// copy the name's LATERAL makes once, when there is more than one
+	// test to read it (see the note above the query).
+	tsv, tsvCopy := "k.search_tsv", ""
+	if len(frags) > 1 {
+		tsv, tsvCopy = "nm.tsv", `,
+								k.search_tsv || ''::tsvector AS tsv`
+	}
 	var hit, weight, weighted, named, weights, tests, placed []string
 	for i, frag := range frags {
 		// Two spellings of the same fragment: the term itself, which the
@@ -775,8 +784,8 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 		match := fragmentQuery(frag, len(args))
 		args = append(args, "%"+escapeLike(frag)+"%")
 		tests = append(tests, match)
-		hit = append(hit, fmt.Sprintf("k.search_tsv @@ %s AS h%d", match, i))
-		hit = append(hit, fmt.Sprintf("nm.name ILIKE $%d AS n%d", len(args), i))
+		hit = append(hit, fmt.Sprintf("%s @@ %s AS h%d", tsv, match, i))
+		hit = append(hit, fmt.Sprintf("nm.name LIKE lower($%d) AS n%d", len(args), i))
 		// Document frequency over the candidates, not the whole table: one
 		// window pass, no extra scans.
 		//
@@ -833,6 +842,21 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 	// regexp_replace() nine times a candidate — measured at 97 ms against
 	// 28 over 7,500 rows (issue #883). OFFSET 0 is the idiom that keeps
 	// a subquery from being flattened.
+	//
+	// Everything else a candidate is tested against more than once is
+	// computed there too (issue #954). The title and the filename, folded,
+	// each met every name test — the query's and each of its terms' —
+	// through normalize() of its own. Each is lowered once as well, so
+	// the tests are LIKE against a lowered pattern: that is what ILIKE
+	// does under a multibyte encoding, lowering both sides every time it
+	// runs. And the document's search_tsv is copied out once: stored
+	// compressed and out of line, each fragment's @@ against the column
+	// decompressed it again. A one-fragment query has one such test, and
+	// the copy would cost more than it saves, so it reads the column. The
+	// candidate predicate always reads the column, because that is the
+	// test the GIN index answers. On a fifteen-fragment question over
+	// 5,000 concepts these three took the query from 165 ms to 75.
+	//
 	// Ties are broken by where the terms sit, then by
 	// standing-verification recency, then id. The score is a fraction
 	// over a handful of addends, so a short query leaves several
@@ -886,7 +910,11 @@ func (s *Store) SearchLexical(ctx context.Context, query string, f Filter, limit
 									THEN 1 ELSE 0 END AS named,
 								(SELECT max(v.at) FROM knowledge_verification v
 									WHERE v.id = k.id AND v.at >= k.content_changed_at) AS last_verified
-							FROM object k, LATERAL (SELECT `+foldedName+` AS name OFFSET 0) nm
+							FROM object k, LATERAL (SELECT
+								lower(`+foldedName+`) AS name,
+								lower(`+foldedTitle+`) AS title,
+								lower(`+foldedFilename+`) AS filename`+tsvCopy+`
+								OFFSET 0) nm
 							WHERE k.search_tsv @@ (%[8]s) AND %[9]s
 						) c
 					) w
