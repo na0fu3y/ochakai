@@ -1013,24 +1013,30 @@ func efSearch(limit int) int {
 // and the deployments where the cost of ordering them shows up are far
 // past the size at which the planner reaches for this index at all.
 func (s *Store) annSearch(ctx context.Context, limit int, q string, args []any) ([]domain.SearchHit, error) {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
-	if _, err := tx.Exec(ctx, fmt.Sprintf("SET LOCAL hnsw.ef_search = %d", efSearch(limit))); err != nil {
-		return nil, err
-	}
+	// One batch, so one round trip rather than one per statement: a
+	// search runs this twice per question, and five sequential trips to
+	// the database each time were most of what it waited on besides the
+	// query itself (issue #954). A statement that fails leaves the
+	// transaction aborted with the ROLLBACK behind it unrun, and the
+	// pool destroys a connection returned in a transaction rather than
+	// handing it on, so no SET LOCAL outlives this call.
+	b := &pgx.Batch{}
+	b.Queue("BEGIN")
+	b.Queue(fmt.Sprintf("SET LOCAL hnsw.ef_search = %d", efSearch(limit)))
 	if s.iterativeScan {
-		if _, err := tx.Exec(ctx, "SET LOCAL hnsw.iterative_scan = 'strict_order'"); err != nil {
-			return nil, err
-		}
+		b.Queue("SET LOCAL hnsw.iterative_scan = 'strict_order'")
 	}
-	rows, err := tx.Query(ctx, q, args...)
-	if err != nil {
+	var hits []domain.SearchHit
+	b.Queue(q, args...).Query(func(rows pgx.Rows) error {
+		var err error
+		hits, err = pgx.CollectRows(rows, scanHit)
+		return err
+	})
+	b.Queue("ROLLBACK")
+	if err := s.pool.SendBatch(ctx, b).Close(); err != nil {
 		return nil, err
 	}
-	return pgx.CollectRows(rows, scanHit)
+	return hits, nil
 }
 
 // scanHit reads a knowledge row and projects it: a search result carries

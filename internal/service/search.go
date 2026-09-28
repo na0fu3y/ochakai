@@ -27,11 +27,28 @@ import (
 // deployment with no embedder, where lexical alone is the answer rather
 // than a fallback from one.
 func (s *Service) Search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, bool, error) {
+	query, f, err := searchInput(query, f)
+	if err != nil {
+		return nil, false, err
+	}
+	f, ok, err := s.narrow(ctx, f)
+	if err != nil {
+		return nil, false, err
+	}
+	if !ok {
+		return nil, false, nil
+	}
+	return s.searchNarrowed(ctx, query, f, limit)
+}
+
+// searchInput is the query and filter as a search reads them, or the
+// reason they cannot be searched with.
+func searchInput(query string, f store.Filter) (string, store.Filter, error) {
 	// Stored text is NFC (design doc 0022); an NFD query (pasted from a
 	// macOS path) must still match it byte-wise.
 	query = domain.Normalize(query)
 	// An empty query has nothing to rank by: SearchLexical splits the
-	// query into fragments and gets none. SearchOrList now answers a
+	// query into fragments and gets none. SearchOrList answers a
 	// query-less request with a listing rather than sending it here, so
 	// this guards a direct caller of the ranking half — a surface that
 	// reaches past the router — and tells it what the router would have
@@ -40,24 +57,19 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 		// The feeds come from domain.ListSorts rather than a sentence:
 		// this message named three of them for as long as there were
 		// three, and stale_after (design doc 0037) never reached it.
-		return nil, false, Invalidf("search needs a query; a request without one lists instead — "+
+		return "", f, Invalidf("search needs a query; a request without one lists instead — "+
 			"in address order, or by feed with sort=%s", strings.Join(domain.ListSorts, "|"))
 	}
 	f, err := checkedFilter(f)
-	if err != nil {
-		return nil, false, err
-	}
-	// Search is reachable without SearchOrList (MCP's search_concepts,
-	// and get_context before it retired), so the narrowing is here as
-	// well as there. Doing it twice is free — an intersection of a set
-	// with itself.
-	f, ok, err := s.narrow(ctx, f)
-	if err != nil {
-		return nil, false, err
-	}
-	if !ok {
-		return nil, false, nil
-	}
+	return query, f, err
+}
+
+// searchNarrowed is Search for a filter already narrowed to the caller's
+// scope. SearchOrList narrows before it knows whether it will search, and
+// narrowing reads the access policy from the database: a second read on
+// the way in would put one more round trip in front of every search, to
+// learn what the first one said.
+func (s *Service) searchNarrowed(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, bool, error) {
 	hits, worded, degraded, err := s.search(ctx, query, f, limit)
 	if err != nil {
 		return nil, false, err
@@ -81,6 +93,17 @@ func (s *Service) Search(ctx context.Context, query string, f store.Filter, limi
 	return hits, degraded, nil
 }
 
+// queryEmbedDeadline is how long a search waits for its query's
+// embedding before answering without it. The embedder's own limits are
+// set for writes — thirty seconds an attempt and three attempts — where
+// a slow answer is still worth having; a search answered lexically in
+// time is worth more than a fused one a minute late, and degraded is the
+// answer built for exactly that (design doc 0114). The retries still
+// run, inside this deadline.
+//
+// A variable so tests do not wait for real.
+var queryEmbedDeadline = 2 * time.Second
+
 // search returns the ranking, whether any concept matched the query's
 // words (the lexical list was non-empty — what a miss is read off), and
 // whether the ranking degraded.
@@ -101,16 +124,17 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 		return cutHits(lexical, limit), len(lexical) > 0, false, nil
 	}
 
-	// The lexical list and the query's embedding need nothing from each
-	// other, and the embedding is a round trip to another service, so
-	// they run side by side: the search costs the longer of the two
-	// rather than their sum (issue #954). The embedding's failure is not
-	// the group's — it degrades the answer rather than failing it — so
-	// it is kept apart from the error that cancels the other half.
+	// The lexical list needs nothing from the vector side, and the
+	// vector side is a chain — embed the query, then ask both vector
+	// lists for it — whose first link is a round trip to another
+	// service. The two run side by side, so the search costs the longer
+	// of lexical and the whole chain rather than their sum (issue #954).
+	// The embedding's failure is not the group's — it degrades the
+	// answer rather than failing it — so it is kept apart from the error
+	// that cancels the other half.
 	var (
-		lexical  []domain.SearchHit
-		vecs     [][]float32
-		embedErr error
+		lexical, vector, attachments []domain.SearchHit
+		embedErr                     error
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
@@ -119,8 +143,15 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 		return err
 	})
 	g.Go(func() error {
-		vecs, embedErr = s.Embedder.Embed(gctx, embed.TaskQuery, []string{query})
-		return nil
+		ectx, cancel := context.WithTimeout(gctx, queryEmbedDeadline)
+		defer cancel()
+		var vecs [][]float32
+		vecs, embedErr = s.Embedder.Embed(ectx, embed.TaskQuery, []string{query})
+		var err error
+		if embedErr == nil {
+			vector, attachments, err = s.vectorLists(gctx, vecs[0], f, limit*2)
+		}
+		return err
 	})
 	if err := g.Wait(); err != nil {
 		return nil, false, false, err
@@ -136,27 +167,31 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 		s.Log.Warn("query embedding failed; falling back to lexical-only", "error", err)
 		return cutHits(lexical, limit), worded, true, nil
 	}
-	// Concepts whose attachments match are the third list (design doc
-	// 0020): a concept matching in both body and attachment gains rank
-	// from both, so evidence-backed concepts surface first. Both vector
-	// lists read only the embedding, so they too run side by side.
-	var vector, attachments []domain.SearchHit
-	g, gctx = errgroup.WithContext(ctx)
+	fused := rrfFuse(query, limit, lexical, vector, attachments)
+	return fused, worded, false, nil
+}
+
+// vectorLists asks both vector lists for one embedding. Concepts whose
+// attachments match are the third list (design doc 0020): a concept
+// matching in both body and attachment gains rank from both, so
+// evidence-backed concepts surface first. Both read only the embedding,
+// so they run side by side.
+func (s *Service) vectorLists(ctx context.Context, vec []float32, f store.Filter, limit int) (vector, attachments []domain.SearchHit, err error) {
+	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		var err error
-		vector, err = s.Store.SearchVector(gctx, vecs[0], s.Embedder.Model(), f, limit*2)
+		vector, err = s.Store.SearchVector(gctx, vec, s.Embedder.Model(), f, limit)
 		return err
 	})
 	g.Go(func() error {
 		var err error
-		attachments, err = s.Store.SearchVectorAttachments(gctx, vecs[0], s.Embedder.Model(), f, limit*2)
+		attachments, err = s.Store.SearchVectorAttachments(gctx, vec, s.Embedder.Model(), f, limit)
 		return err
 	})
 	if err := g.Wait(); err != nil {
-		return nil, false, false, err
+		return nil, nil, err
 	}
-	fused := rrfFuse(query, limit, lexical, vector, attachments)
-	return fused, worded, false, nil
+	return vector, attachments, nil
 }
 
 // cutHits is the lexical list at the answer's length: it is fetched at

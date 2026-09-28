@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/embed"
@@ -21,6 +22,18 @@ func (failingEmbedder) Embed(context.Context, embed.Task, []string) ([][]float32
 }
 
 func (failingEmbedder) Model() string { return "failing" }
+
+// hangingEmbedder is a provider that takes the call and never answers:
+// the outage a failing one does not cover, because nothing fails until
+// somebody stops waiting.
+type hangingEmbedder struct{}
+
+func (hangingEmbedder) Embed(ctx context.Context, _ embed.Task, _ []string) ([][]float32, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (hangingEmbedder) Model() string { return "hanging" }
 
 // TestSearchSaysWhenItDegradedIntegration is design doc 0114: an embedder
 // that cannot answer degrades the ranking to lexical alone, and the
@@ -80,5 +93,43 @@ func TestSearchSaysWhenItDegradedIntegration(t *testing.T) {
 	}
 	if page.Degraded {
 		t.Error("a listing reported a degraded ranking; it ranks nothing")
+	}
+}
+
+// TestSearchDoesNotWaitOutAHangingEmbedderIntegration: a search stops
+// waiting for its query's embedding at queryEmbedDeadline and answers
+// lexically, degraded, rather than holding the caller for as long as the
+// embedder's own write-sized limits allow.
+func TestSearchDoesNotWaitOutAHangingEmbedderIntegration(t *testing.T) {
+	ctx := context.Background()
+	svc := newIntegrationService(t, ctx)
+	actor := domain.Actor{Kind: "human", Name: "test"}
+
+	typ := domain.Type(uid(t, "hang"))
+	if _, err := svc.Create(ctx, &domain.Knowledge{
+		Type: typ, ID: string(typ) + "/revenue", Title: "revenue", Body: "受注合計。",
+	}, actor); err != nil {
+		t.Fatal(err)
+	}
+	f := store.Filter{Types: []domain.Type{typ}}
+
+	defer func(d time.Duration) { queryEmbedDeadline = d }(queryEmbedDeadline)
+	queryEmbedDeadline = 50 * time.Millisecond
+
+	hanging := &Service{Store: svc.Store, Embedder: hangingEmbedder{}, Log: slog.New(slog.DiscardHandler)}
+	sctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	hits, degraded, err := hanging.Search(sctx, "revenue", f, 10)
+	if err != nil {
+		t.Fatalf("the search failed instead of degrading: %v", err)
+	}
+	if sctx.Err() != nil {
+		t.Fatal("the search waited for the embedder until the caller gave up")
+	}
+	if len(hits) == 0 {
+		t.Error("degrading dropped the lexical hits too")
+	}
+	if !degraded {
+		t.Error("the embedding never arrived and the answer did not say so")
 	}
 }

@@ -24,13 +24,18 @@ last entry.
 ### Changed
 
 - **A search on a deployment that embeds waits for the slower of its
-  halves, not their sum** (issue #954). The lexical search and the
-  query's embedding — a round trip to Vertex AI — ran one after the
-  other, and so did the two vector searches that follow; each pair now
-  runs side by side. Rankings, the `degraded` flag and what a miss is
-  read off are unchanged. A search now holds up to two database
-  connections at once, which is worth knowing if `pool_max_conns` is
-  set low.
+  halves, not their sum** (issue #954). The lexical search runs beside
+  the whole vector side — the query's embedding, a round trip to Vertex
+  AI, and then both vector searches, which also run side by side.
+  Rankings and what a miss is read off are unchanged. A search now holds
+  up to three database connections at once, which is worth knowing if
+  `pool_max_conns` is set low.
+- **A search waits at most 2 seconds for its query's embedding**, then
+  answers lexically with `degraded: true`. It used to wait out the
+  embedder's write-time limits — 30 seconds an attempt, three attempts —
+  so one question could take over a minute while Vertex AI was stuck.
+- **A search reads the access policy once, and each vector search is one
+  round trip to the database instead of five** (issue #954).
 
 ## [0.31.1] - 2026-09-28
 

@@ -82,7 +82,11 @@ func (s *Service) SearchOrList(ctx context.Context, query, sort, cursor string, 
 	if cursor != "" {
 		return nil, searchBoundError()
 	}
-	hits, degraded, err := s.Search(ctx, query, f, limit)
+	query, f, err = searchInput(query, f)
+	if err != nil {
+		return nil, err
+	}
+	hits, degraded, err := s.searchNarrowed(ctx, query, f, limit)
 	if err != nil {
 		return nil, err
 	}
