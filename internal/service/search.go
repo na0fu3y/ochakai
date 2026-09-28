@@ -126,14 +126,14 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 		return nil, false, false, err
 	}
 	worded := len(lexical) > 0
-	if embedErr != nil {
+	if err := embedErr; err != nil {
 		// Degrade to lexical-only rather than failing the search — and
 		// say so in the answer, not only here. The log is where an
 		// operator looks afterwards; the caller is the one holding a
 		// ranking that is worse than this deployment ordinarily gives,
 		// and until design doc 0114 nothing told them (0147 §1 fuses
 		// three lists, and this is two of them missing).
-		s.Log.Warn("query embedding failed; falling back to lexical-only", "error", embedErr)
+		s.Log.Warn("query embedding failed; falling back to lexical-only", "error", err)
 		return cutHits(lexical, limit), worded, true, nil
 	}
 	// Concepts whose attachments match are the third list (design doc
