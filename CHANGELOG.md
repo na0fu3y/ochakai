@@ -21,6 +21,17 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **A search on a deployment that embeds waits for the slower of its
+  halves, not their sum** (issue #954). The lexical search and the
+  query's embedding — a round trip to Vertex AI — ran one after the
+  other, and so did the two vector searches that follow; each pair now
+  runs side by side. Rankings, the `degraded` flag and what a miss is
+  read off are unchanged. A search now holds up to two database
+  connections at once, which is worth knowing if `pool_max_conns` is
+  set low.
+
 ## [0.31.1] - 2026-09-28
 
 ### Fixed
