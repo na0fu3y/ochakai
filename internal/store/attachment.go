@@ -43,6 +43,10 @@ import (
 // browsing gives (browse.go): an id may contain "_", which LIKE reads as
 // a wildcard. "sales_2024" would have claimed every file under
 // "salesX2024/" as its own.
+//
+// SearchVectorAttachments states the same rule as two joins, because the
+// OR here cannot be answered by an index when every file is in play. A
+// change to this rule is a change to both.
 const attributedTo = `f.id IS NULL AND f.deleted_at IS NULL
 	AND (starts_with(f.path, k.id || '/') AND strpos(substr(f.path, length(k.id) + 2), '/') = 0
 	     OR k.files ? f.path)`

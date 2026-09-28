@@ -943,20 +943,45 @@ func (s *Store) SearchVector(ctx context.Context, vec []float32, model string, f
 // from another directory ranks the concept that names it, and stops
 // ranking it the moment the body stops. A file two concepts both link
 // carries one vector and ranks both.
+//
+// The attribution is attributedTo's rule, written as two joins rather
+// than as that predicate. Joined on it, the OR left the planner no index
+// for either half, and it compared every concept with every file: 3.7 s
+// against 5,000 concepts and 6,000 file vectors, where the concept
+// vector search took 2 ms (issue #954). Split, each half is an equality
+// the planner can hash: a file directly under a concept's namespace is
+// owned by the concept whose id is the file's directory, and a file a
+// body names is one of the paths in that concept's files. The same
+// fixture answers in 60 ms with the same rows and scores. Every file
+// vector is still compared with the query — the answer is exact, as it
+// was — so this grows with the files a base holds, not with the product
+// of files and concepts.
 func (s *Store) SearchVectorAttachments(ctx context.Context, vec []float32, model string, f Filter, limit int) ([]domain.SearchHit, error) {
 	where, args := f.buildWhere("k.")
 	args = append(args, encodeVector(vec))
 	vecParam := len(args)
 	args = append(args, model) // this model's vectors only, as in SearchVector
 	q := fmt.Sprintf(`
+		WITH near AS (
+			SELECT e.path, e.embedding <=> $%[1]d::vector AS dist
+			FROM attachment_embedding e
+			JOIN object f ON f.path = e.path AND f.id IS NULL AND f.deleted_at IS NULL
+			WHERE e.model = $%[2]d
+		), owned AS (
+			SELECT substring(near.path from '^(.*)/[^/]*$') AS owner, near.dist FROM near
+			UNION ALL
+			SELECT named.id, near.dist FROM near JOIN (
+				SELECT k.id, p.path FROM object k, jsonb_array_elements_text(k.files) AS p(path)
+				WHERE k.id IS NOT NULL AND k.files <> '[]'::jsonb
+			) named ON named.path = near.path
+		)
 		SELECT `+withoutDoc(knowledgeCols)+", "+ledgerCols("best")+`, score FROM (
-			SELECT DISTINCT ON (k.id) k.*, 1 - (e.embedding <=> $%d::vector) AS score
-			FROM object k JOIN object f ON `+attributedTo+`
-			JOIN attachment_embedding e ON e.path = f.path AND e.model = $%d
-			WHERE %s
-			ORDER BY k.id, e.embedding <=> $%d::vector
+			SELECT DISTINCT ON (k.id) k.*, 1 - owned.dist AS score
+			FROM owned JOIN object k ON k.id = owned.owner
+			WHERE %[3]s
+			ORDER BY k.id, owned.dist
 		) best
-		ORDER BY score DESC LIMIT %d`, vecParam, len(args), where, vecParam, limit)
+		ORDER BY score DESC LIMIT %[4]d`, vecParam, len(args), where, limit)
 	return s.annSearch(ctx, limit, q, args)
 }
 

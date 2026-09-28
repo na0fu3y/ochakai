@@ -36,6 +36,12 @@ last entry.
   so one question could take over a minute while Vertex AI was stuck.
 - **A search reads the access policy once, and each vector search is one
   round trip to the database instead of five** (issue #954).
+- **The file half of a search no longer compares every concept with
+  every file** (issue #954). Which concept a file belongs to was joined
+  on one predicate with an OR in it, which no index could answer: 3.7 s
+  against 5,000 concepts and 6,000 file vectors, while the concept half
+  took 2 ms. It is now two joins the planner can hash, and the same
+  fixture answers in 60 ms with the same concepts and scores.
 
 ## [0.31.1] - 2026-09-28
 
