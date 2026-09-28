@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"golang.org/x/text/unicode/norm"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
@@ -88,27 +89,44 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	if err != nil {
 		return nil, false, false, err
 	}
-	lexical, err := s.Store.SearchLexical(ctx, query, f, limit*2)
-	if err != nil {
-		return nil, false, false, err
-	}
-	worded := len(lexical) > 0
-	cut := func() []domain.SearchHit {
-		if len(lexical) > limit {
-			return lexical[:limit]
-		}
-		return lexical
-	}
 	// No embedder configured is not a degradation: lexical alone is what
 	// this deployment answers with, every time, and a flag that stood on
 	// every response would say nothing about any of them (design doc
 	// 0114 §2).
 	if s.Embedder == nil {
-		return cut(), worded, false, nil
+		lexical, err := s.Store.SearchLexical(ctx, query, f, limit*2)
+		if err != nil {
+			return nil, false, false, err
+		}
+		return cutHits(lexical, limit), len(lexical) > 0, false, nil
 	}
 
-	vecs, err := s.Embedder.Embed(ctx, embed.TaskQuery, []string{query})
-	if err != nil {
+	// The lexical list and the query's embedding need nothing from each
+	// other, and the embedding is a round trip to another service, so
+	// they run side by side: the search costs the longer of the two
+	// rather than their sum (issue #954). The embedding's failure is not
+	// the group's — it degrades the answer rather than failing it — so
+	// it is kept apart from the error that cancels the other half.
+	var (
+		lexical  []domain.SearchHit
+		vecs     [][]float32
+		embedErr error
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	g.Go(func() error {
+		var err error
+		lexical, err = s.Store.SearchLexical(gctx, query, f, limit*2)
+		return err
+	})
+	g.Go(func() error {
+		vecs, embedErr = s.Embedder.Embed(gctx, embed.TaskQuery, []string{query})
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return nil, false, false, err
+	}
+	worded := len(lexical) > 0
+	if err := embedErr; err != nil {
 		// Degrade to lexical-only rather than failing the search — and
 		// say so in the answer, not only here. The log is where an
 		// operator looks afterwards; the caller is the one holding a
@@ -116,21 +134,39 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 		// and until design doc 0114 nothing told them (0147 §1 fuses
 		// three lists, and this is two of them missing).
 		s.Log.Warn("query embedding failed; falling back to lexical-only", "error", err)
-		return cut(), worded, true, nil
-	}
-	vector, err := s.Store.SearchVector(ctx, vecs[0], s.Embedder.Model(), f, limit*2)
-	if err != nil {
-		return nil, false, false, err
+		return cutHits(lexical, limit), worded, true, nil
 	}
 	// Concepts whose attachments match are the third list (design doc
 	// 0020): a concept matching in both body and attachment gains rank
-	// from both, so evidence-backed concepts surface first.
-	attachments, err := s.Store.SearchVectorAttachments(ctx, vecs[0], s.Embedder.Model(), f, limit*2)
-	if err != nil {
+	// from both, so evidence-backed concepts surface first. Both vector
+	// lists read only the embedding, so they too run side by side.
+	var vector, attachments []domain.SearchHit
+	g, gctx = errgroup.WithContext(ctx)
+	g.Go(func() error {
+		var err error
+		vector, err = s.Store.SearchVector(gctx, vecs[0], s.Embedder.Model(), f, limit*2)
+		return err
+	})
+	g.Go(func() error {
+		var err error
+		attachments, err = s.Store.SearchVectorAttachments(gctx, vecs[0], s.Embedder.Model(), f, limit*2)
+		return err
+	})
+	if err := g.Wait(); err != nil {
 		return nil, false, false, err
 	}
 	fused := rrfFuse(query, limit, lexical, vector, attachments)
 	return fused, worded, false, nil
+}
+
+// cutHits is the lexical list at the answer's length: it is fetched at
+// twice the limit so fusion has depth to draw on, and served alone it
+// has none to use.
+func cutHits(hits []domain.SearchHit, limit int) []domain.SearchHit {
+	if len(hits) > limit {
+		return hits[:limit]
+	}
+	return hits
 }
 
 // rrfK is reciprocal rank fusion's damping constant, and the unit the
