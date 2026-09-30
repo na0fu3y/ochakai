@@ -138,7 +138,7 @@ func answer(ctx context.Context, svc *service.Service, msgs []Message, dryRun bo
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	r := &run{svc: svc, read: []string{}, seen: map[string]bool{}}
+	r := &run{svc: svc, read: []string{}, seen: map[string]bool{}, partial: map[string]bool{}}
 	// Every agent may propose a query. Whether the page in front can run
 	// it is the page's business — `ochakai ui` runs it itself, the team
 	// web UI needs an OAuth client, and anything else shows the SQL for
@@ -300,6 +300,9 @@ type run struct {
 	seen      map[string]bool
 	drafts    []string
 	revisions []store.TurnRevision
+	// partial are the concepts whose document did not fit in what
+	// get_concept hands back, so the model has not seen all of it.
+	partial map[string]bool
 }
 
 // call runs one tool and returns what the model is handed back. A tool's
@@ -358,7 +361,15 @@ func (r *run) dispatch(ctx context.Context, c llm.FunctionCall) (any, error) {
 			r.seen[k.ID] = true
 			r.read = append(r.read, k.ID)
 		}
-		return okf.ViewOf(k)
+		v, err := okf.ViewOf(k)
+		if err != nil {
+			return nil, err
+		}
+		out, whole := fitView(v, maxResultBytes)
+		if !whole {
+			r.partial[k.ID] = true
+		}
+		return out, nil
 	case "get_stats":
 		return r.svc.Stats(ctx, a.int("days", 30), nil)
 	case "get_usage":
@@ -437,6 +448,9 @@ func (r *run) proposeRevision(ctx context.Context, id, document string) (any, er
 			return nil, fmt.Errorf("this turn already proposes a revision of %s; put everything into one document", id)
 		}
 	}
+	if r.partial[id] {
+		return nil, fmt.Errorf("%s is longer than get_concept could hand you, so a revision copied from what you read would drop the part you did not see; put what you would add in the answer instead, for the person to write", id)
+	}
 	k, err := r.svc.RevisableDraft(ctx, id, document)
 	if err != nil {
 		return nil, err
@@ -444,6 +458,10 @@ func (r *run) proposeRevision(ctx context.Context, id, document string) (any, er
 	cur, err := r.svc.Store.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if lost := droppedRows(cur.Body, k.Body); len(lost) > 0 {
+		shown := lost[:min(len(lost), 3)]
+		return nil, fmt.Errorf("the revision drops %d table rows the draft has (%s): copy every row of the column table unchanged, and write what a row gets wrong under # 注意 instead", len(lost), strings.Join(shown, " / "))
 	}
 	// Kept in the canonical form rather than as the model wrote it: that
 	// is the form a read renders, so the diff the person reads before
@@ -479,6 +497,80 @@ func (r *run) proposeRevision(ctx context.Context, id, document string) (any, er
 		out["warning"] = "description がまだ空である。frontmatter の description キーに一文を書くなら、もう一度 propose_revision する(同じ id は一度だけなので、この turn で出し直すことはできない — 答えにそう書く)。"
 	}
 	return out, nil
+}
+
+// fitView is what get_concept hands the model: the view whole when it
+// fits in budget, and otherwise the view with its document cut at a line.
+//
+// The cut used to be the generic one, over the marshalled JSON — which
+// took summary, trust and linked_from with the document's tail, and gave
+// the model no way to tell a wide table's last column from the cut. It
+// then wrote joins on columns it guessed, and a revision it copied from
+// the cut dropped the columns it never saw. Here everything but the
+// document survives, the document ends on a whole line, and the model is
+// told what it is missing.
+func fitView(v domain.View, budget int) (any, bool) {
+	if b, err := json.Marshal(v); err == nil && len(b) <= budget {
+		return v, true
+	}
+	total := len(v.Document)
+	doc := v.Document
+	v.Document = ""
+	out := map[string]any{
+		"concept": v, "truncated": true, "total_bytes": total, "shown_bytes": 0,
+		"note": "document が長すぎて途中までしか渡せていない(shown_bytes / total_bytes)。表の後ろの列は見えていないだけで、無いのではない。見えていない列の名前を推測で SQL に書かない — 要る列は INFORMATION_SCHEMA.COLUMNS を読む SELECT で確かめる。この concept の propose_revision はできない。",
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return nil, false
+	}
+	room := budget - len(b) - 16 // the digits shown_bytes grows by
+	shown := 0
+	for _, line := range strings.SplitAfter(doc, "\n") {
+		q, err := json.Marshal(line)
+		if err != nil || len(q)-2 > room {
+			break
+		}
+		room -= len(q) - 2
+		shown += len(line)
+	}
+	v.Document = doc[:shown]
+	out["concept"], out["shown_bytes"] = v, shown
+	return out, false
+}
+
+// droppedRows are the markdown table rows of cur that next no longer
+// has, compared cell by cell so re-padding a row does not count. A
+// revision fills in what a draft does not say; the rows are what it
+// already says, and a model copying a wide table abridges it.
+func droppedRows(cur, next string) []string {
+	have := map[string]bool{}
+	for l := range strings.SplitSeq(next, "\n") {
+		have[tableRow(l)] = true
+	}
+	var lost []string
+	for l := range strings.SplitSeq(cur, "\n") {
+		row := tableRow(l)
+		if row == "" || strings.Trim(row, "|-: ") == "" || have[row] {
+			continue
+		}
+		lost = append(lost, strings.TrimSpace(l))
+	}
+	return lost
+}
+
+// tableRow is a markdown table row with each cell trimmed, or "" for a
+// line that is not one.
+func tableRow(line string) string {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "|") {
+		return ""
+	}
+	cells := strings.Split(line, "|")
+	for i, c := range cells {
+		cells[i] = strings.TrimSpace(c)
+	}
+	return strings.Join(cells, "|")
 }
 
 type args map[string]any
