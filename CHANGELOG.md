@@ -21,6 +21,20 @@ last entry.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The deployment's agent no longer loses the tail of a wide table
+  without knowing it.** A `get_concept` result over 24 KiB — about 150 to
+  250 columns with descriptions — was cut as raw JSON, which dropped the
+  last columns together with the trust and `linked_from`, and said only
+  `truncated`. The agent then guessed column names it had not seen (a
+  failed join), and a `propose_revision` copied from the cut dropped
+  those columns from the draft when the person applied it. Now only the
+  document is cut, on a line, with the bytes shown and a note; a
+  concept cut this way cannot be revised by the agent, and no revision
+  may drop a row of the draft's tables. MCP and REST never cut, and
+  are unchanged.
+
 ## [0.31.2] - 2026-09-29
 
 ### Changed
