@@ -26,7 +26,7 @@ toolchain go1.27.0
 retract [v0.1.0, v0.8.0]
 
 require (
-	cloud.google.com/go/compute/metadata v0.9.1
+	cloud.google.com/go/compute/metadata v0.10.0
 	cloud.google.com/go/storage v1.68.0
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/jackc/pgx/v5 v5.11.0
