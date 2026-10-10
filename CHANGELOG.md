@@ -21,6 +21,24 @@ last entry.
 
 ## [Unreleased]
 
+### Security
+
+- **Built with Go 1.27.2 and `golang.org/x/net` v0.60.0.** The 1.27.0
+  standard library carries thirteen vulnerabilities this code reaches,
+  most of them in the HTTP server the deployment runs: an HPACK encoder
+  race, a double flow-control refund, repeated window changes, oversized
+  trailers and malformed framing headers in HTTP/2; connection
+  desynchronization around `CONNECT` and unbounded `Range` headers in
+  HTTP/1; a MIME header memory limit bypass in `net/textproto`; ECH outer
+  extension references in `crypto/tls`; two context-tracking gaps in
+  `html/template`; and `Root.Mkdir` following junctions on Windows. All
+  are fixed upstream in 1.27.2, and the HTTP/2 ones in `x/net` v0.60.0.
+  The `toolchain` line and the build image move together; the `go`
+  directive stays `1.27`, so no minimum rises for anyone installing with
+  `GOTOOLCHAIN=local`.
+  golangci-lint moves to v2.14.0 with them: v2.13 cannot read the export
+  data Go 1.27.2 writes and fails every package as a type error.
+
 ## [0.31.2] - 2026-09-29
 
 ### Changed
