@@ -22,7 +22,7 @@ import (
 // with an exclusive-lock scan.
 //
 // This is what makes a purge's promise reach the bytes (design doc 0031;
-// condition C1: the asset leaves whole, returns whole, and is deleted on
+// property P2: the asset leaves whole, returns whole, and is deleted on
 // request). Before this sweep existed, purge erased every row and left
 // the file bytes in the bucket forever.
 

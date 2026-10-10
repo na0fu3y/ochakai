@@ -1,7 +1,7 @@
 # The manual, for English speakers
 
 **The manual is in Japanese, and that is a decision** rather than a
-backlog item: condition C8 in [surface.md](surface.md) says ochakai
+backlog item: goal G5 in [surface.md](surface.md) says ochakai
 should be one of the best choices available to a Japanese-speaking
 reader, and a manual in their language is most of what that means.
 Seven pages stay in English — the front door and the contract — and

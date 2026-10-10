@@ -29,16 +29,22 @@ months from now will ask "why not the other way". A rule added inside an
 area, a number moved, a word renamed — the spec and the CHANGELOG carry
 those.
 
-Check any proposal against these first:
+Check any proposal against the properties first (docs/surface.md,
+P1–P5); they are not broken:
 
-- **Only a ruling changes what is served, no LLM rules, and the server
-  runs no SQL** (0142). A ruling is a person's, or a confirmation job's
-  recorded as `process:` and read as `machine-confirmed`. The
-  deployment's own agent is off by default, answers and proposes, and
-  never rules; a query runs as the person asking.
-- **Secret-zero** (0065, 0003). Cloud Run IAM + Cloud SQL IAM on Google
-  Cloud, in-process OIDC verification off it (0086); no tokens, no
-  passwords.
+- **Only a ruling changes what is served, and no LLM rules** (P1). A
+  ruling is a person's, or a confirmation job's recorded as `process:`
+  and read as `machine-confirmed`.
+- **A query never exceeds the permissions of the person who asked**
+  (P4), and ochakai keeps no standing warehouse credential.
+- **No long-lived secret an operator has to store or rotate** (P5).
+
+The means that meet them today — the server runs no SQL and the
+deployment's own agent is off by default (0142), Cloud Run IAM + Cloud
+SQL IAM on Google Cloud and in-process OIDC verification off it (0086,
+0065, 0003) — are not reasons on their own. A change that keeps a means
+against a goal (G1 first) names the property it serves and why no
+cheaper means would do.
 
 ## Steps
 
@@ -65,7 +71,7 @@ new entry and edit the spec — the old entry is not annotated.
 
 **4. Say it in the CHANGELOG**, as for any change a user can observe.
 
-**5. Name the gate in the PR**: which condition (C1–C8) the change
+**5. Name the gate in the PR**: which property or goal (P1–P5, G1–G5) the change
 serves; for LLM or automation, which person's ruling it makes cheaper;
 for a wider surface, the three questions. Do not write that ochakai will
 not do something a ROADMAP stage plans.
@@ -77,10 +83,11 @@ whether the spec says what the code does — that is the review.
 ## Surface consistency
 
 Start from no. [docs/surface.md](../../../docs/surface.md) opens with the
-eight conditions ochakai exists to satisfy — a change that serves none of
-them is a no before anything else — and counts every REST operation, MCP
+three layers — the properties ochakai keeps, the goals it exists for,
+and the means that serve them today; a change that serves no property or
+goal is a no before anything else — and counts every REST operation, MCP
 tool, CLI command and environment variable. A change that widens one
-names the condition it serves and answers the three questions in the PR:
+names the property or goal it serves and answers the three questions in the PR:
 who actually got stuck, whether an existing surface already covers it,
 and what can be folded away in exchange. `cmd/ochakai/surface_test.go` fails until the document matches
 what the build offers — the failure prints the section as it should read,

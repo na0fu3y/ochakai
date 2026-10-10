@@ -50,7 +50,7 @@ ochakai get insights/reading-revenue
 
 **The demo knowledge base is written in Japanese**, because that is what
 a knowledge base a Japanese team keeps looks like and this demo is one
-(the eight conditions in [docs/surface.md](docs/surface.md), C8). What
+(goal G5 in [docs/surface.md](docs/surface.md)). What
 stays English is what comes from the warehouse — `sale_price`,
 `status = 'Complete'`, the SQL in the `# Computation` fence — so
 `ochakai search traffic_source` still reaches the Japanese concepts
@@ -429,10 +429,10 @@ in the version you are running.
 - **Reading it in English** — [docs/en.md](docs/en.md): what each Japanese
   page holds, in what order to read them, and the names you would
   otherwise have to hunt for inside a page you cannot skim. The manual is
-  Japanese by decision (condition C8), and this is the way in rather than
+  Japanese by decision (goal G5), and this is the way in rather than
   a translation of it
-- **Deciding** — [The surface](docs/surface.md), the eight conditions
-  ochakai exists to satisfy and everything counted against them, and
+- **Deciding** — [The surface](docs/surface.md), the properties ochakai
+  keeps, the goals it exists for, and everything counted against them, and
   [docs/spec](docs/spec/README.md), how each area works today and why
   (Japanese; [docs/en.md](docs/en.md) is the way in), with the decision
   log and the frozen design records behind it.

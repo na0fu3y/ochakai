@@ -716,7 +716,7 @@ func (s *Service) Purge(ctx context.Context, id string, actor domain.Actor) erro
 	s.Log.Info("knowledge purged", "id", id, "actor", actor.String())
 	// The promise of a purge reaches the file bytes: what the rows above
 	// stopped referencing leaves the blob store too (design doc 0031,
-	// condition C1).
+	// property P2).
 	s.sweepBlobs(ctx)
 	return nil
 }
@@ -922,7 +922,7 @@ func (s *Service) MovePrefix(ctx context.Context, oldPrefix, newPrefix string, a
 		return 0, err
 	}
 	// The root is the whole bundle, and moving it is not a rename: it is
-	// an export and an import, which is the round trip C1 already has
+	// an export and an import, which is the round trip P2 already has
 	// (design doc 0009).
 	if from == "" || to == "" {
 		return 0, Invalidf("the root is not a directory that can be moved: name a directory under it")

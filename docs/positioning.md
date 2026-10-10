@@ -25,7 +25,7 @@ Cortex Agents、BigQuery Conversational Analytics、Hex Threads である。
 [README](../README.md#what-it-refuses) と
 [ROADMAP](../ROADMAP.md#considered-and-deliberately-not-doing) にあり、
 表面が小さいまま保たれる理由は [docs/surface.md](surface.md) にある。
-以下で使う語彙はその**八つの条件**である。
+以下で使う語彙はその**性質(P1〜P5)と目的(G1〜G5)**である。
 
 ## 一行で
 
@@ -172,10 +172,10 @@ Anthropic と Vercel は人が書いた層が効くと言い、過去のクエ�
 
 このページで最も重要な隣人である。理由は機能ではなく足場で、他のどの
 隣人とも違って**同じ Google Cloud の IAM の上に立つ**。ochakai の
-secret-zero(C2)は Cloud Run IAM と Cloud SQL IAM で無設定に買われて
+secret-zero(P5)は Cloud Run IAM と Cloud SQL IAM で無設定に買われて
 いるが、あちらは立てるものが何も無い — プロジェクトで API を有効にすれば
 済み、Cloud Run も Postgres も月 $10 も要らない。Claude Code から使える
-こと(C5)も、`https://dataplex.googleapis.com/mcp` のリモート MCP
+こと(G2)も、`https://dataplex.googleapis.com/mcp` のリモート MCP
 サーバー(OAuth 2.0 + IAM、read-only と read-write のスコープ)が同じ
 ように満たす。**失格要件で落とせない隣人はここだけである。**
 
@@ -210,13 +210,13 @@ Catalog から来た `verified` を ochakai は裁定として読まない。OKF
 起点は機械で、data steward の仕事はあちらの use case の言葉で「AI が
 生成したメタデータをレビューし、キュレーションし、昇格させる」ことで
 ある。ochakai の起点は人か、人の裁定を待つ draft を書くエージェントで
-あり、**却下は理由ごと履歴に残る**(C7、[ループ](loop.md)) — 次の
+あり、**却下は理由ごと履歴に残る**(G4、[ループ](loop.md)) — 次の
 書き手が読めるところに残るのであって、読ませる強制力は無い
 ([0135](design/0135-a-rejection-is-a-deletion.md) §3)。「誰がいつ確かめたか」は status ではなく別立ての
 台帳であって([0065](design/0065-identity-and-provenance.md))、監査ログは
 その代わりにならない。出口も向きが違う: メタデータは Cloud Storage へ
 export して BigQuery から読めるが、形式はカタログのものであって、丸ごと
-出て丸ごと戻る OKF v0.2 バンドルではない(C1・C3、
+出て丸ごと戻る OKF v0.2 バンドルではない(P2・P3、
 [0075](design/0075-the-bundle-is-the-address-space.md))。収集で
 はなくキュレーションであることの意味は、下の「コンテキスト層としての
 カタログ」と「OSS の『Palantir 代替』」の二節が言うとおりである。
@@ -289,7 +289,7 @@ revenue = `SUM(price)` の側で、ochakai が持つのは 100 が良いのか�
 いないから、両方置ける。
 
 **いま実装はしない。** これは立場の表明であって計画ではない。Ossie を
-読み書きすることは OKF の横に第二の形式を持つことであり、C3 がそれを
+読み書きすることは OKF の横に第二の形式を持つことであり、P3 がそれを
 断っている。ウェアハウス側の semantic model を ochakai の `Metric`
 concept に投影したいなら、その形は既にある — 自分のサービスアカウントで
 動く普通のクライアント([例](../examples/bigquery-catalog))であって、
@@ -498,7 +498,7 @@ concept として検証と provenance の下に置かれ、他の知識と同じ
 ([architecture](architecture.md))。残る建設対象は semantic の中核と
 kinetic の定義、それだけである。書き起こす労働は消えない — 担い手が
 FDE からエージェントに変わり、人には判断の要る中核の検証だけが残る
-(README の C4、[ループ](loop.md))。
+([surface.md](surface.md) の G1、[ループ](loop.md))。
 
 この意味で ochakai は**最小のオントロジー**と呼べる: concept とリンクが
 オブジェクトとリンクに、`verified` の台帳と provenance がガバナンスに
@@ -529,11 +529,11 @@ Source Palantir for AI Agents")は上の節の二つの支払いを両方とも�
 やるための ML を中に持ち、こちらは LLM(エージェント)が外にいる前提で
 抽出の実装を一行も持たない — 読む・割る・書き起こすのはエージェントの
 仕事で、ochakai は draft を受けて人の裁定を待つ。あちらの Decision
-Intelligence が記録するのはエージェントの決定の因果であり、C7 の中核で
+Intelligence が記録するのはエージェントの決定の因果であり、G4 の中核で
 ある人の verify / reject と trust tier に相当する段は、グラフ DB 節と
 同じく成熟の先にある。姿勢も同じ向きに割れる: ポリグロットなストレージ
 と環境変数に並ぶ資格情報に対して、Google Cloud 一択の secret-zero
-(C2)と OKF 一枚の往復(C3)である。
+(P5)と OKF 一枚の往復(P3)である。
 
 なお表面を数字で比べるなら、MCP だけは本数で語らないこと — ツール数は
 あちらが多いのに、実測の常駐バイトはツールが書き方を教えるこちらの方が
@@ -567,7 +567,7 @@ ochakai の前提はその逆側にある: 人を通った数千の concept(下�
 ([0136 §2](design/0136-a-concept-is-addressed-not-labelled.md))。
 書き込み時のスキーマ強制も同じ向きで断っている: 型は開いた語彙
 ([0038](design/0038-type-vocabulary-realignment.md))で、品質は制約では
-なく人の裁定で買う(C7)。
+なく人の裁定で買う(G4)。
 
 対比が最も鋭いのは成熟モデルの終点である。あちらの四段階の最終段 —
 AI が生んだ洞察を人が検証してオントロジーへ還流する閉ループ — は、
@@ -645,7 +645,7 @@ namespace による federation、`manifest.aix.yaml` を足す。この四つの
 観測だけである。#16 は型付きの関係で、上の aix と同じ穴であり
 ([0136](design/0136-a-concept-is-addressed-not-labelled.md) §2)、その上に
 #22 が `supersedes` と `contested_by` の query 時の意味を登録する提案を
-重ねている(2026-09-12)。**規格がここで別の答えを採れば C3 の綴りが動く
+重ねている(2026-09-12)。**規格がここで別の答えを採れば P3 の綴りが動く
 ので、この三つは追う。** 追うことと向こうで発言することは別で、後者は
 していない — 調査記録は
 [#849](https://github.com/na0fu3y/ochakai/issues/849)。
@@ -678,7 +678,7 @@ exactly as written, not asked for」)。**恒久 id を足すことは、
 
 **食い違いは三つ、どれも小さい。** `sources[0]` は `resource` ではなく
 `uri` を書くので(SPEC §5.1)、**索引からは落ちる** — `?source=` で
-引けない。**文書には残っている**ので C1 は無事で、落ちたのは向こうの
+引けない。**文書には残っている**ので P2 は無事で、落ちたのは向こうの
 非適合のほうである。`manifest.aix.yaml` は markdown でないので
 `OCHAKAI_GCS_BUCKET` の無いデプロイでは保存できない(0075 §1)。そして
 **AIX 自身の例が `stale_after: 2026-11-20` と裸の日付を書いている** —
@@ -700,7 +700,7 @@ export` のバンドルは YAML frontmatter を持つ markdown ファイルの
 53 concept のバンドルと、当時の `examples/demo` の十八文書を、okfcli v0.5.0 の
 `validate` と okf-skills の §11 conformance checker に通した。どちらも
 エラー 0 で、警告はバンドルの外のファイルを指すリンクと期限を過ぎた
-`stale_after` だけである。C3 は自分のテストではなく他人の検証器で守れる
+`stale_after` だけである。P3 は自分のテストではなく他人の検証器で守れる
 ようになった。
 
 **`kcmd push` に入れた。** 2026-09-05、`ochakai export` した
@@ -778,7 +778,7 @@ ochakai の過去のコードについては誤っている**。あの規則は�
 返し、瞬間で持っている `stale_after` の列だけを RFC 3339 で綴る。
 自分のバンドルの日付も規格の綴りにした(値は動かない)。**ただし
 他人の文書は正規化しない**(0139 §3.4): バイト列が持ち主のもので
-あることが C1 であり、規格は既に一度、版を動かさずに normative を
+あることが P2 であり、規格は既に一度、版を動かさずに normative を
 変えている。**だから push が落ちる条件は残る** — 日付で書かれた文書を
 取り込んだベースを export すれば、その三つの鍵は同じ 400 を受ける。
 直す口は書き手の側(`POST /api/v1/frontmatter`)にある。
@@ -805,7 +805,7 @@ ochakai の中核は人の裁定が台帳に載ることだが、その区別は
 扱うかは、渡した側が決められない**。
 
 **だから足すものは無い。** 出口が OKF v0.2 のバンドルであることが、
-そのまま Knowledge Catalog への入口になっている(C3 が買っていたものの
+そのまま Knowledge Catalog への入口になっている(P3 が買っていたものの
 一つがこれである)。上の二つは足すものの話ではなく、**バンドルを渡した
 先で何が読めるかの話**である。
 
@@ -816,7 +816,7 @@ README がそう書いており、[0131](design/0131-a-deployment-says-what-it-c
 ([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §4)に当たるものは
 向こうに無い。そして **`synonyms` は `extra` の JSON に入る** — ochakai では
 索引が読む鍵([0105](design/0105-a-concept-answers-to-its-other-names.md))
-だが、向こうでは検索できる欄ではなくなる。C8 の機構は、バンドルと一緒には
+だが、向こうでは検索できる欄ではなくなる。G5 の機構は、バンドルと一緒には
 旅をしない。
 
 **LLM Wiki にも入れた。** Karpathy が 2026-04 に gist で書いた LLM Wiki
@@ -892,7 +892,7 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   ファイルには観測者がいない。vault の中の何一つ、その台帳に追記も
   しなければ、そこから trust tier を導きも、それに反する書き込みを
   拒みも、最後の確認が古びた concept を浮かせもしない。
-- **ループ(C7)。** **この項は 2026-09 に狭くなった。** 大半には今も
+- **ループ(G4)。** **この項は 2026-09 に狭くなった。** 大半には今も
   対応するものが無いが、*no* の記憶は KL4A が rationale ごとバンドルに
   持ち、失敗から訂正へ戻す経路は remnic が人の承認付きで持つ — どちらも
   「これが最も鋭い違い」ではもう無い。残るのは**測る側**である: 利用回数、
@@ -910,14 +910,14 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   持つサーバーであり、人が裁定したものをエージェントが上書きできない
   という面の規則を持つ
   ([FAQ](faq.md#can-an-agent-overwrite-or-delete-knowledge-a-human-verified))。
-- **identity、そして secret が無いこと(C2)。** vault の MCP サーバーは
+- **identity、そして secret が無いこと(P5)。** vault の MCP サーバーは
   たいてい、クライアントの設定に API キーを書いたローカル REST API
   プラグインの後ろで動く — それこそ ochakai の設計が拒んでいる当の
   トークンである([0065](design/0065-identity-and-provenance.md) §1、
   [0003](design/0003-gcp-only.md))。そして呼び出し元には記録すべき
   identity が無い: 「これを書いたのは誰か」は「誰のノート PC だったか」
   である。
-- **到達(C5、C6)。** vault は一台のマシンの上にあり、その MCP サーバー
+- **到達(G2、G3)。** vault は一台のマシンの上にあり、その MCP サーバー
   も同じである。ホストされたエージェント、CI ジョブ、そして自分の Web
   サービスに埋め込める REST API は、そこには無い。
 - **検索。** 埋め込みを既定でオンにした hybrid search
@@ -952,7 +952,7 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   は立ち上げが一日だったと書く。ochakai のエージェントは空のベースから
   始まり、答えの根拠になるのは人が裁定したものである — 裁定が無ければ
   「人が確かめた」と言える答えも無い。空のベースからウェアハウスを読んで
-  draft を書くのは ROADMAP の三段目で、まだ無い。**C4(No FDE)が
+  draft を書くのは ROADMAP の三段目で、まだ無い。**G1(No FDE)が
   勝つか負けるかはここで決まる**と ROADMAP 自身が書いている。
 - **人の裁定が律速になる。** 自動で集める側は、人が追いつかない量でも
   文脈を増やせる。ochakai は配る中身を人の裁定でしか変えないので、裁定
@@ -979,7 +979,7 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
 - **インフラ。** vault を立てるのはただである。ochakai は Google Cloud
   プロジェクトと Postgres を要る — 月 $10 ほどだが、ゼロではないし、
   5 分でもない。
-- **Google Cloud 推奨、外は認証だけ。** C2 の secret-zero という性質は
+- **Google Cloud 推奨、外は認証だけ。** P5 の secret-zero という性質は
   Cloud Run IAM と Cloud SQL IAM で無設定に買われている
   ([0003](design/0003-gcp-only.md))。外で動かす道は認証には開いた —
   OIDC 発行者を名指せば ochakai が公開鍵で自分で検証し、secret は
@@ -1068,7 +1068,7 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   ベンダーの中の verified フラグは、その問いに答える台帳ではない。
 - **キュレーションした資産の置き場が不安になったとき。** 定義層の
   標準化([Ossie](https://github.com/apache/ossie))は provenance を
-  運ばないので、丸ごと出て丸ごと戻ること(C1・C3)がそのまま出口になる。
+  運ばないので、丸ごと出て丸ごと戻ること(P2・P3)がそのまま出口になる。
 
 どれも起きていないなら、上で選んだものを使い続けるのが正しい。
 

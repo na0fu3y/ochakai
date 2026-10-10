@@ -418,12 +418,15 @@ ochakai actually pays for — and `cmd/ochakai/surface_test.go` fails when
 the count and the build disagree, so an addition arrives as a heading
 moving from `(19)` to `(20)` rather than as a few lines buried in a spec.
 
-The same document opens with the eight conditions ochakai exists to
-satisfy. **A proposal that serves none of them is a no before the
-questions start**, and that is the cheapest place to find out. If it does
-serve one, saying which is where the description begins — serving a
-condition is necessary, not sufficient, since every condition has
-infinitely many mechanisms that would serve it.
+The same document opens with three layers: the properties ochakai keeps,
+the goals it exists for, and the means that serve them today. **A
+proposal that serves no property or goal is a no before the questions
+start**, and that is the cheapest place to find out. If it does serve
+one, saying which is where the description begins — serving a goal is
+necessary, not sufficient, since every goal has infinitely many
+mechanisms that would serve it. A means (no SQL on the server, Google
+Cloud, the agent off by default, …) is not a reason by itself: keeping
+one against a goal means naming the property it serves.
 
 From there a PR that widens a surface answers three questions: who
 actually got stuck and on what, whether an existing surface already
@@ -436,7 +439,7 @@ prose, because a ceiling that anyone can raise by one line stopped none
 of the scope that grew around the data agent — every raise came with its
 reasons. The fields are the gate:
 
-- **the condition** the change serves, C1–C8;
+- **the property or goal** the change serves, P1–P5 or G1–G5;
 - for anything an LLM or other automation does, **which person's ruling
   it makes cheaper** — never one it makes;
 - for a change that widens a surface, the three questions.
@@ -487,7 +490,7 @@ index and the checks that read them against each other were holding that
 tension together; with the roles split, they are retired.
 
 Write the spec and the decisions in Japanese, the maintainer's habit and
-C8's reason — or in English if that is what you think in; say so in the
+G5's reason — or in English if that is what you think in; say so in the
 PR. [docs/architecture.md](docs/architecture.md) (Japanese) summarizes
 the shape of the system for a first read.
 
@@ -507,7 +510,7 @@ Two decisions worth knowing before proposing features:
 
 ## Translating a manual page
 
-C8 (`docs/surface.md`) says ochakai should be one of the best choices
+G5 (`docs/surface.md`) says ochakai should be one of the best choices
 available to a Japanese-speaking team, and the manual it hands that team
 was written in English while the contributor material — `docs/surface.md`
 and the design records — is Japanese. The pages a person reads **to
@@ -539,7 +542,7 @@ the binary prints, so it stays as printed; that is what
 `docs/guides/operating.md` got wrong twice.
 
 **Translate the example prompts.** A page showing a curator what to type
-to their agent, in English, does not demonstrate the thing C8 claims.
+to their agent, in English, does not demonstrate the thing G5 claims.
 
 Two pieces of bookkeeping, both easy to forget:
 
@@ -574,7 +577,7 @@ Two pieces of bookkeeping, both easy to forget:
 ## The web UI's Japanese
 
 `internal/webui/static/` is the one surface a non-contributor reads
-whole, and it is Japanese (C8). It was translated once in a single pass
+whole, and it is Japanese (G5). It was translated once in a single pass
 and shipped 40-50 English strings behind a CHANGELOG line claiming every
 one of them was done — because nothing in this repository read the copy.
 `internal/webui/jstest/copy.test.js` reads it now, against the rules
@@ -671,7 +674,7 @@ time it takes to read.
   and the description says why.
 - A PR that widens a surface — a REST operation, an MCP tool, a CLI
   command, an environment variable — names which of
-  [docs/surface.md](docs/surface.md)'s eight conditions it serves, updates
+  [docs/surface.md](docs/surface.md)'s properties or goals it serves, updates
   the count there, and answers the three questions in the description.
 - The public wire surface is [api/openapi.yaml](api/openapi.yaml) — keep
   it, `internal/restapi`, `internal/mcpserver`, and `internal/apiclient`
