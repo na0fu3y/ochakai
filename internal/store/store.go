@@ -1087,7 +1087,7 @@ func (s *Store) SoftDelete(ctx context.Context, id string, actor domain.Actor, i
 // reclaiming them cannot be a side effect of one purge. SweepBlobs
 // (sweep.go) is the global answer, and the service runs it after this
 // commit — the bytes' erasure is part of what a purge promises (design
-// doc 0031, condition C1).
+// doc 0031, property P2).
 //
 // The purge itself is recorded in knowledge_purge (migration 0018), which
 // is the one table it does not touch: the entry is gone, but the fact

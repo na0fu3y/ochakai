@@ -3,7 +3,7 @@
 // 0156). Content is addressed by SHA-256 and immutable: Put is
 // create-only, and a blob leaves only through the store's sweep, once
 // nothing references its hash any more — a purge's promise that the
-// record is gone (design doc 0031, condition C1) reaches the bytes this
+// record is gone (design doc 0031, property P2) reaches the bytes this
 // way. The interface is for those two and for test fakes, not to grow
 // other backends (design doc 0003).
 package blob

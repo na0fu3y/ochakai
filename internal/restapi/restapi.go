@@ -64,7 +64,7 @@ const exportBatch = 100
 // This is the ASCII half of the name, and it is only half because an id
 // is any valid UTF-8 (domain.validSegment) — which for this product's
 // first audience means the subtree is usually spelled in Japanese
-// (C8). Folding those characters to hyphens the way the unsafe ASCII
+// (G5). Folding those characters to hyphens the way the unsafe ASCII
 // ones are folded is what design doc 0134 exists to prevent: "営業"
 // left nothing behind and came out as "ochakai-okf-.tar.gz", one
 // hyphen from the whole-base name, and "teams/成長" came out as

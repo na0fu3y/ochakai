@@ -14,9 +14,9 @@ the last section is the load-bearing one: knowing what ochakai will not do is
 more useful than a list of what it might.
 
 What those refusals are measured against is written down in
-[docs/surface.md](docs/surface.md): eight conditions ochakai exists to satisfy,
-and every surface that serves them, counted. A request that serves none of the
-eight is one this project will decline — it is fairer to say so up front than
+[docs/surface.md](docs/surface.md): the properties ochakai keeps and the goals
+it exists for, the means that serve them today, and every surface, counted. A
+request that serves no property or goal is one this project will decline — it is fairer to say so up front than
 to leave it open.
 
 Priorities are open to input. Say what you need in
@@ -50,13 +50,22 @@ ochakai competes on what they gave up:
 - the knowledge leaves whole, in OKF.
 
 **What does not move.** The goal changes what the agent does, not what the
-agent is allowed to do:
+agent is allowed to do. These are properties
+([docs/surface.md](docs/surface.md), P1–P5) and are not broken:
 
 - only a ruling changes what is served — a person's, or a confirmation
   job's that reads as `machine-confirmed` — and no LLM rules;
+- a query never exceeds the permissions of the person who asked;
+- no long-lived secret an operator has to store or rotate.
+
+**What is a means today.** These meet the properties now, and may be
+exchanged for a goal — No FDE (G1) first — when the side keeping them
+cannot name the property they serve or show that no cheaper means would
+do:
+
 - the server executes no SQL, and a query runs as the person who asked;
-- no secrets;
-- the agent is off by default;
+- the agent is off by default — and a deployment that turns it on should
+  reach its first confirmed answer in fewer steps than one that does not;
 - MCP does not carry an agent.
 
 **The stages.** Each stage is aimed at something a team currently builds
@@ -87,7 +96,7 @@ section says what the stages are for; it does not approve them in advance.
    person, and proposes the description, which the person applies. Asked
    what is used a lot, it reads the query history as that person and
    drafts the recurring aggregates. Nothing is harvested in bulk. This is
-   where No FDE (C4) is won or lost.
+   where No FDE (G1) is won or lost.
 4. **Where people already ask.** Assistant connectors: Claude, signed in
    with the person's Google Workspace account
    ([0151](docs/design/0151-claude-reaches-the-knowledge-through-the-persons-google-sign-in.md)).
@@ -191,6 +200,27 @@ release reviews rather than from a plan. If something you need is missing
 from this list, say so; its absence does not mean it was already
 considered.
 
+- **Revisit the means against No FDE (G1)**, in this order, each in its
+  own PR that answers docs/surface.md's three questions
+  ([0158](docs/decisions/0158-conditions-are-properties-goals-and-means.md)):
+  1. a deployment runbook a coding agent can execute, replacing the
+     manual schema bootstrap that sets a temporary `postgres` password;
+  2. drafting a base in bulk — from the schema, the team's query history
+     and an existing semantic layer — and ruling on it in bulk, with the
+     ruling recorded as a bulk one so the confirmed-grounding share is
+     not inflated;
+  3. a way to run a query as the person when there is no browser (a
+     schedule, a chat), by naming a broker the operator runs; ochakai
+     holds no refresh token;
+  4. what the agent adds once it is on, so that turning it on shortens
+     the road to a first confirmed answer — it stays off by default;
+  5. reading Apache Ossie, dbt and semantic views as draft material;
+  6. the reasons behind MCP's default of no and `MCP-BYTES`.
+
+  Before any of them, the steps and the time to a first confirmed answer
+  are walked by hand and written down, so each change has a number to
+  move.
+
 - **Spell the demand feed something other than `usage`, at 1.0.** The CLI reads
   `ochakai usage <id>` for one concept's totals and `ochakai list usage` for
   the feed ordered by them: one word, two commands, and the reader learns
@@ -237,8 +267,10 @@ it.
   Semantic Interchange).** Ossie standardizes the definition layer, and
   ochakai stands on the other side of that boundary: nothing in its core spec
   carries who wrote a definition, who confirmed it, or when it goes stale,
-  which is what OKF holds. Reading or writing it would be a second format
-  beside OKF, which C8's sibling condition C3 declines. The condition under
+  which is what OKF holds. Storing, serving or round-tripping it would be a
+  second format beside OKF, which property P3 declines. Reading its
+  definitions into drafts is not: what is stored and served stays OKF
+  (item 5 under Next). The condition under
   which this is revisited is written down
   ([docs/positioning.md](docs/positioning.md#ウェアハウス-native-の-semantic-layer)):
   Ossie leaving incubation with a place in its core for a human having

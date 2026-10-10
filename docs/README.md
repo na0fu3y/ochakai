@@ -7,7 +7,7 @@
 Japanese page holds, in what order to read them, and the names you would
 otherwise have to hunt for. Not a translation; a way in.
 
-**このマニュアルは日本語である**(C8、[surface.md](surface.md))。英語で
+**このマニュアルは日本語である**(G5、[surface.md](surface.md))。英語で
 残るのは玄関と契約だけで、それは決定である — [README](../README.md)
 (使うかどうかを決める場所であり、その読者は国際的である)、
 [api/openapi.yaml](../api/openapi.yaml)、[cli.md](cli.md)(バイナリの
@@ -109,7 +109,7 @@ otherwise have to hunt for. Not a translation; a way in.
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — ローカルのセットアップ、CI が
   走らせる正確なチェック、design doc の仕組み。
-- [表面](surface.md) — ochakai が存在する理由となる八つの条件、そして
+- [表面](surface.md) — ochakai の性質・目的・手段の三つの層、そして
   REST operation・クエリパラメータ・ヘッダ・MCP ツール・CLI コマンド・
   CLI フラグ・環境変数・語彙・このマニュアルのページを一箇所で数えた
   もの。表面を一つ足す変更が答えるべき三つの問いもここにある。既定の

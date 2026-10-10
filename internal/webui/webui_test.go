@@ -185,7 +185,7 @@ func TestFeedNamesDoNotCollideOnStale(t *testing.T) {
 // the queue stay full, so the page has to say it.
 func TestStaleFeedSaysVerifyingDoesNotClearIt(t *testing.T) {
 	page := wholePage(t)
-	// The page is Japanese (C8), so the sentence is checked in the
+	// The page is Japanese (G5), so the sentence is checked in the
 	// language a reader meets it in. The exact words are pinned because a
 	// substring is all a Go test can hold; when the copy is reworded, this
 	// moves with it. The wording rules themselves live in CONTRIBUTING.md

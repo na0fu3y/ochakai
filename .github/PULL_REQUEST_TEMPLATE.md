@@ -18,7 +18,7 @@ context, including the store integration test and the fuzz targets).
 
 Answer each in a line (CONTRIBUTING.md, "Proposing a feature").
 
-- **Condition** — which of `docs/surface.md`'s C1–C8 this serves, or "none:
+- **Condition** — which of `docs/surface.md`'s properties P1–P5 or goals G1–G5 this serves, or "none:
   internal / fix":
 - **Ruling made cheaper** — for anything an LLM or other automation does,
   which person's ruling it makes cheaper (never one it makes), or "n/a":
@@ -37,7 +37,7 @@ Answer each in a line (CONTRIBUTING.md, "Proposing a feature").
 - [ ] Widens a surface — a REST operation, an MCP tool, a CLI command, an
       environment variable? `docs/surface.md` is updated
       (`cmd/ochakai/surface_test.go` says so), the description names which of
-      its eight conditions the addition serves, and the three questions are
+      its properties or goals the addition serves, and the three questions are
       answered under *What and why*: who actually got stuck, why an existing
       surface does not already cover it, and what is folded away in exchange.
       The default answer is no

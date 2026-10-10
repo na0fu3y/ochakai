@@ -21,6 +21,22 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **The eight conditions are now three layers** ([docs/surface.md](docs/surface.md),
+  [0158](docs/decisions/0158-conditions-are-properties-goals-and-means.md)).
+  *Properties* P1–P5 are not broken: only a ruling changes what is
+  served and no LLM rules, the knowledge stays the user's, OKF, a query
+  never exceeds the asker's permissions, and no long-lived secret an
+  operator stores or rotates. *Goals* G1–G5 are checked by numbers, No
+  FDE first, now defined by the result — a team reaching its first
+  confirmed answer without outside help — rather than by whether it can
+  deploy. *Means* — Google Cloud, no SQL on the server, the agent off by
+  default, no connectors, MCP's default of no, the ceilings — may be
+  exchanged for a goal when the side keeping them cannot name the
+  property they serve. The old ids map one to one (C1→P2, C2→P5, C3→P3,
+  C4–C8→G1–G5). No surface moves, and nothing ochakai does changes.
+
 ### Security
 
 - **Built with Go 1.27.2 and `golang.org/x/net` v0.60.0.** The 1.27.0

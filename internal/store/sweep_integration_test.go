@@ -10,7 +10,7 @@ import (
 	"github.com/na0fu3y/ochakai/internal/testdb"
 )
 
-// A purge's promise reaches the bytes (design doc 0031, condition C1):
+// A purge's promise reaches the bytes (design doc 0031, property P2):
 // once nothing references a hash, SweepBlobs deletes the blob row and
 // the stored bytes — and while anything still references it, both stay,
 // because content-addressed bytes are shared and the last reference is

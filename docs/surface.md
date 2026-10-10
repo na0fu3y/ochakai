@@ -12,32 +12,74 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 ないと CI が通らない。**数がいつ・なぜ動いたかは、この文書ではなく、
 動かした PR と [CHANGELOG](../CHANGELOG.md) が持つ。**
 
-## 八つの条件
+## 三つの層
 
-数える前に、**何のための表面かを決めておく**。ochakai が満たそうと
-しているのは次の八つで、これで全部である。
+数える前に、**何のための表面かを決めておく**。ochakai の条件は、強さの
+違う三つの層に分かれる。性質は ochakai が何であるかを定め、破らない。
+目的は ochakai が何のためにあるかを定め、届いたかどうかを数で確かめる。
+手段は性質と目的をいまどう実現しているかであり、目的と比べて入れ替えて
+よい。層を分けるのは、衝突したときにどちらを取るかを決めるためである
+([0158](decisions/0158-conditions-are-properties-goals-and-means.md))。
 
-| id | 条件 |
+### 性質 — 破らない
+
+| id | 性質 |
 |---|---|
-| C1 | 資産は利用者のもの — 丸ごと出て、丸ごと戻り、求められれば消える([0009](design/0009-provenance-portability.md)・[0031](design/0031-purge.md)・[0075](design/0075-the-bundle-is-the-address-space.md)) |
-| C2 | secret を一つも置かないこと — その性質を Cloud Run IAM と Cloud SQL IAM が無設定で買う([0065](design/0065-identity-and-provenance.md)・[0003](design/0003-gcp-only.md))。**性質と買い方は同じではない**: OIDC 発行者を名指したデプロイは Google Cloud の外でも secret を増やさずに誰が呼んでいるかを答え([0086](design/0086-a-second-way-to-say-who-is-calling.md))、そこではデータベースの資格情報が運用者の仕事に戻る。**残りを撤回してよい条件は [0115](design/0115-the-second-footing-waits-for-search.md)** |
-| C3 | 形式は Open Knowledge Format — 保存もワイヤも往復も OKF で、その横に第二の形式を発明しない([0075](design/0075-the-bundle-is-the-address-space.md))。**「v0.2」は一つの文書を指さない**ので、留めるのは版ではなく**コミット**である(`open-knowledge-format@0b87c52`、[compatibility.md](compatibility.md) が正典): v0.2 は公開後に normative な規則を版番号を動かさずに変えており、綴りをどちらに合わせるかは [0139](design/0139-ochakai-does-not-choose-a-spelling.md) |
-| C4 | No FDE — デプロイは自分でできて、必要な操作には自分で打てるコマンドがある([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md))。**デプロイ自身のデータエージェント(既定 off)はこの条件のためにある** — チームが自前のエージェントを作らずに済み、空のベースを人の手で埋め切れない分を LLM が下書きする。LLM は人の裁定を安くするためにだけ使い、裁定はしない([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)・[ROADMAP](../ROADMAP.md)) |
-| C5 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §3) |
-| C6 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)・[0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §1) |
-| C7 | 人間の改善ループが測れる — 検証・結果報告・キューの長さ・答えの無かった問いを、推測ではなく数で持つ([0141](design/0141-a-miss-is-read-off-the-words.md)) |
-| C8 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — 二文字の日本語語が索引で引け(移行 `0036`)、書き手が与えた別名も索引に入り([0105](design/0105-a-concept-answers-to-its-other-names.md))、埋め込みとエージェントのモデルをデプロイのリージョンに留めることが変数一つで書ける — **既定では留まらない**: 新しいベースの埋め込みは `global`、前からあるベースはリージョンで([0147](design/0147-search-and-the-default-a-base-was-made-with.md) §1.2)、エージェントの推奨モデルは `global` にしか無い([configuration.md](configuration.md)) |
+| P1 | 配る内容を変えるのは裁定だけで、LLM は裁定しない。裁定は人の verify と却下、または確認ジョブが `process:` として残す確認(`machine-confirmed` と読まれる)であり、誰が裁定したかは台帳に残る([architecture](spec/architecture.md)・[loop](spec/loop.md)) |
+| P2 | 資産は利用者のもの — 丸ごと出て、丸ごと戻り、求められれば消える([0009](design/0009-provenance-portability.md)・[0031](design/0031-purge.md)・[0075](design/0075-the-bundle-is-the-address-space.md)) |
+| P3 | 形式は Open Knowledge Format — 保存もワイヤも往復も OKF で、その横に第二の形式を発明しない([0075](design/0075-the-bundle-is-the-address-space.md))。**「v0.2」は一つの文書を指さない**ので、留めるのは版ではなく**コミット**である(`open-knowledge-format@0b87c52`、[compatibility.md](compatibility.md) が正典): v0.2 は公開後に normative な規則を版番号を動かさずに変えており、綴りをどちらに合わせるかは [0139](design/0139-ochakai-does-not-choose-a-spelling.md)。他の形式の定義を読んで draft に写すことは第二の形式ではない — 保存とワイヤと往復が OKF のままだからである |
+| P4 | 問いは、問うた本人の権限を超えない。ochakai はウェアハウスの資格情報を常設しない([architecture](spec/architecture.md)) |
+| P5 | 運用者が保管し更新する長期の secret を、ochakai は持たない([identity](spec/identity.md)) |
 
-**どれにも当たらない提案は、三つの問いに進むまでもなく no である。**
-逆は成り立たない — 条件に当たることは必要条件であって十分条件では
-ない。「C7 に当たる」は足す理由にならず(C7 に当たる機構は無限にある)、
-落ちなかったものが次の三つの問いに進む。
+性質を変える提案は、表面を一つ足す提案とは別の種類の決定であり、そう扱う。
 
-八つは互いに独立ではない(C4 は C2 の secret-zero に支えられ、C5 と C6
-は同じナレッジを別の口から出す)。それでよい — これは分類ではなく、
-**「足さない」と言うための共通の物差し**である。九つめを足すのは製品を
-別のものにする決定であり、表面を一つ足すのとは桁が違う。ここに行を
-足す PR は、そう扱われる。
+### 目的 — 届いたかを数で確かめる
+
+| id | 目的 |
+|---|---|
+| G1 | **No FDE** — チームが ochakai の外の人の手を借りずに、最初の**人が確かめた答え**に届く。導入はその途中の一段にすぎない。届くまでの手作業の数と時間で確かめるが、いまは記録しておらず、まず手で歩いて値を残す。**デプロイ自身のデータエージェントを off のままでも届き、入れたデプロイでは、より少ない手数で届く** — エージェントは人の裁定を安くするためにだけ使い、裁定はしない([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)・[ROADMAP](../ROADMAP.md)) |
+| G2 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §3) |
+| G3 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)・[0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §1) |
+| G4 | 人間の改善ループが測れる — 検証・結果報告・キューの長さ・答えの無かった問いを、推測ではなく数で持つ([0141](design/0141-a-miss-is-read-off-the-words.md)) |
+| G5 | 日本語話者にとって、類似サービスと比較したときの最適な選択肢の一つであること — 二文字の日本語語が索引で引け(移行 `0036`)、書き手が与えた別名も索引に入り([0105](design/0105-a-concept-answers-to-its-other-names.md))、埋め込みとエージェントのモデルをデプロイのリージョンに留めることが変数一つで書ける — **既定では留まらない**: 新しいベースの埋め込みは `global`、前からあるベースはリージョンで([0147](design/0147-search-and-the-default-a-base-was-made-with.md) §1.2)、エージェントの推奨モデルは `global` にしか無い([configuration.md](configuration.md)) |
+
+### 手段 — 目的と比べて入れ替えてよい
+
+| id | 手段 | 何を実現しているか |
+|---|---|---|
+| M1 | Google Cloud を前提にする(Cloud Run IAM・Cloud SQL IAM)。撤回の条件は [0115](design/0115-the-second-footing-waits-for-search.md) | P5 を設定無しで満たす。OIDC 発行者を名指したデプロイは Google Cloud の外でも P5 を満たし([0086](design/0086-a-second-way-to-say-who-is-calling.md))、そこではデータベースの資格情報が運用者の仕事に戻る |
+| M2 | サーバーは SQL を実行しない | P4 |
+| M3 | デプロイ自身のデータエージェントは既定 off | 課金とデータの送り先(G5 のリージョン)について、運用者が自分で決めてから入れる |
+| M4 | コネクタと取り込みパイプラインを持たない | P1 — 集めたものが裁定無しに配られない |
+| M5 | MCP の既定は no で、`MCP-BYTES` に天井を置く | エージェントのコンテキストの消費(G2) |
+| M6 | 面ごとの上限(下の「上限」節) | 表面を増やすことを、声に出した決定にする |
+
+### 衝突したときの規則
+
+1. **性質は破らない。**
+2. **目的と手段が衝突したら、手段を保つ側が理由を書く。** 書くのは、その
+   手段がどの性質を実現しているかと、同じ性質をより少ない手数で満たす
+   別の手段が無いかである。どちらも示せなければ目的を取る。手段が性質に
+   結びついていても、同じ性質を満たす別の手段があれば入れ替えてよい —
+   P5 を M1 と OIDC の検証の二つが満たしているのがその例である。
+3. **目的どうしが衝突したら、G1 を先にする。** ほかの目的のあいだに順位は
+   置かない。順位を全部に付けると、衝突のたびに表を引くだけの判断になる。
+4. **どの性質にも目的にも当たらない提案は、三つの問いに進むまでもなく
+   no である。** 逆は成り立たない — 当たることは必要条件であって十分条件
+   ではない。「G4 に当たる」は足す理由にならず(G4 に当たる機構は無限に
+   ある)、落ちなかったものが次の三つの問いに進む。
+
+性質や目的を足すことは製品を別のものにする決定であり、表面を一つ足すの
+とは桁が違う。ここに行を足す PR は、そう扱われる。
+
+### 旧 id
+
+2026-10 より前の記録・CHANGELOG・決定ログは、性質と目的を区別しない
+八つの条件 C1〜C8 で書かれている。対応は一対一である。
+
+| 旧 | C1 | C2 | C3 | C4 | C5 | C6 | C7 | C8 |
+|---|---|---|---|---|---|---|---|---|
+| 新 | P2 | P5 | P3 | G1 | G2 | G3 | G4 | G5 |
 
 ## 足す前に答える三つの問い
 
@@ -255,7 +297,7 @@ JSON を入力・出力の両方のスキーマごとそのまま測ったもの
 非テストの Go ソースの `os.Getenv` の呼び出しから読み戻す — 数えるのは
 呼び出しであって `OCHAKAI_` という接頭辞ではない(Cloud Run が設定する
 `PORT` も入る)。OS が定義する変数(`XDG_CONFIG_HOME`・`AppData`)だけを
-除く。No FDE(C4)を掲げる以上、**設定の数は「自分で立ち上げられるか」に
+除く。No FDE(G1)を掲げる以上、**設定の数は「自分で立ち上げられるか」に
 直接効く**。名前と値の間違いを起動時に断る規則は
 [spec/deployment.md](spec/deployment.md)。
 

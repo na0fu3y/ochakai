@@ -19,7 +19,7 @@ generated:
 created_by: process:claude-code via human:anonymous using claude-code/1.0
 ---
 
-マニュアルの日本語化(C8)で分かった、直感に反する三つ:
+マニュアルの日本語化(G5)で分かった、直感に反する三つ:
 
 - **行数は増える。** 日本語は語間に空白が無いので一行が多くを運ぶと
   見込んでいたが、全角文字は同じ 70 桁ラップに半分しか入らない。

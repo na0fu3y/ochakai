@@ -1,11 +1,14 @@
 # CLAUDE.md
 
-ochakai is a knowledge store for data-analysis agents. Two decisions
-frame everything: nothing but a ruling changes what is served — a
-person's, or a confirmation job's recorded under its own `process:`
-identity and read as `machine-confirmed`, never as human-reviewed; no
-LLM rules — and the server executes no SQL (0142 — its own data agent is off by
-default and rules on nothing), and zero secrets — Cloud Run IAM + Cloud SQL IAM on Google Cloud,
+ochakai is a knowledge store for data-analysis agents. Its properties
+frame everything (docs/surface.md, P1–P5): nothing but a ruling changes
+what is served — a person's, or a confirmation job's recorded under its
+own `process:` identity and read as `machine-confirmed`, never as
+human-reviewed; no LLM rules — a query never exceeds the permissions of
+the person who asked, and ochakai keeps no long-lived secret an operator
+has to store or rotate. Today those are met by means that can change:
+the server executes no SQL (0142 — its own data agent is off by default
+and rules on nothing), and Cloud Run IAM + Cloud SQL IAM on Google Cloud,
 in-process OIDC verification off it (0086), never tokens or passwords
 (0065, 0003).
 
@@ -44,16 +47,23 @@ too**, in pages: adding one to the manual moves `DOC` from `(27)` to
 capped — those ceilings are retired and 上限 says why — so a page that
 grows without a new page appearing is caught by review, not by CI.
 
-That document opens with the **eight conditions** ochakai exists to
-satisfy — the knowledge stays the user's, secret-zero on Google Cloud,
-OKF v0.2, no forward-deployed engineer, usable from Claude Code, a small
-embeddable REST API, a measurable improvement loop, and being one of the
-best choices available to a Japanese-speaking user weighing similar
-services. Read them before proposing anything a user would touch. **A
-proposal that serves none of the eight is one to decline**, and saying so
-is the more useful answer; naming which one it serves is where a proposal
-that survives begins.
-Serving a condition is necessary and not sufficient — every condition has
+That document opens with **three layers**. *Properties* say what ochakai
+is and are not broken: only a ruling changes what is served, the
+knowledge stays the user's, OKF, a query within the asker's permissions,
+no long-lived secret. *Goals* say what it is for and are checked by
+numbers: no forward-deployed engineer (first), usable from Claude Code, a
+small embeddable REST API, a measurable improvement loop, and being one
+of the best choices available to a Japanese-speaking user weighing
+similar services. *Means* are how the properties and goals are met
+today — Google Cloud, no SQL on the server, the agent off by default, no
+connectors, MCP's default of no, the ceilings — and may be exchanged for
+a goal. Read them before proposing anything a user would touch. **A
+proposal that serves no property or goal is one to decline**, and saying
+so is the more useful answer; naming which one it serves is where a
+proposal that survives begins. When a means stands in a goal's way, the
+side keeping the means writes down which property it serves and why no
+cheaper means would do (docs/surface.md, 衝突したときの規則).
+Serving a goal is necessary and not sufficient — every goal has
 infinitely many mechanisms that would serve it.
 
 **The default answer to a new feature is no.** Before writing code that
@@ -90,7 +100,7 @@ fuzzing.
   (REST / MCP / CLI / Web UI — including deliberate omissions), and
   [docs/surface.md](docs/surface.md) has to stay true to what shipped.
 - Write commit messages and code comments in English.
-- **A new manual page under `docs/` is written in Japanese** — C8 is why,
+- **A new manual page under `docs/` is written in Japanese** — G5 is why,
   and the pages a person reads to operate and curate have all moved.
   English stays for the front door and the contract: `README.md`,
   `api/openapi.yaml`, the generated `docs/cli.md`,
