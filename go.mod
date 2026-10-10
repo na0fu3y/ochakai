@@ -18,7 +18,7 @@ go 1.27
 // preference the local setting may decline — which is the whole
 // difference between a patch, where any of them will do, and the minor
 // above, where they will not.
-toolchain go1.27.0
+toolchain go1.27.2
 
 // Pre-0.9.0 releases are unsupported: superseded by 0.9.0 (the first
 // release the deploy guide and docs are written against; earlier images
@@ -89,7 +89,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.45.0 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
 	golang.org/x/crypto v0.57.0 // indirect
-	golang.org/x/net v0.59.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/time v0.16.0 // indirect
 	google.golang.org/genproto v0.0.0-20260715232425-e75dac1f907d // indirect
