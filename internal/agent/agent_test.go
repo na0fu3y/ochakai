@@ -2,13 +2,16 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/na0fu3y/ochakai/internal/config"
+	"github.com/na0fu3y/ochakai/internal/domain"
 	"github.com/na0fu3y/ochakai/internal/llm"
 	"github.com/na0fu3y/ochakai/internal/service"
 )
@@ -129,6 +132,52 @@ func TestALoopingModelIsStopped(t *testing.T) {
 func TestCutKeepsCharactersWhole(t *testing.T) {
 	if got := cut("あいう", 4); got != "あ" {
 		t.Errorf("cut = %q", got)
+	}
+}
+
+// A wide table cut to fit still carries who confirmed it and what links
+// at it, ends on a whole row, and says that it was cut — the model that
+// saw only the first columns used to write joins on the ones it guessed.
+func TestAWideConceptIsCutAtALineAndSaysSo(t *testing.T) {
+	var doc strings.Builder
+	doc.WriteString("---\ntype: BigQuery Table\n---\n\n| Column | Type |\n|---|---|\n")
+	for i := range 2000 {
+		fmt.Fprintf(&doc, "| `col_%04d` | STRING |\n", i)
+	}
+	v := domain.View{ID: "tables/shop/wide", Document: doc.String(),
+		LinkedFrom: []domain.Backlink{{ID: "insights/wide-joins"}}}
+	out, whole := fitView(v, maxResultBytes)
+	if whole {
+		t.Fatal("a 2,000-column table fit whole")
+	}
+	b, _ := json.Marshal(out)
+	if len(b) > maxResultBytes {
+		t.Errorf("the fitted view is %d bytes, over %d", len(b), maxResultBytes)
+	}
+	m := out.(map[string]any)
+	got := m["concept"].(domain.View)
+	if !strings.HasSuffix(got.Document, "|\n") || m["shown_bytes"] != len(got.Document) || m["total_bytes"] != len(v.Document) {
+		t.Errorf("cut mid-line or miscounted: shown %v of %v, ends %q", m["shown_bytes"], m["total_bytes"], got.Document[max(0, len(got.Document)-20):])
+	}
+	if len(got.LinkedFrom) != 1 || !strings.Contains(m["note"].(string), "INFORMATION_SCHEMA") {
+		t.Errorf("lost linked_from or the note: %+v", m)
+	}
+
+	small := domain.View{ID: "tables/shop/orders", Document: "---\ntype: BigQuery Table\n---\n"}
+	if out, whole := fitView(small, maxResultBytes); !whole || out.(domain.View).Document != small.Document {
+		t.Errorf("a short concept was not handed back whole: %+v", out)
+	}
+}
+
+func TestARevisionMayNotDropAColumn(t *testing.T) {
+	cur := "Projected.\n\n| Column | Type |\n|---|---|\n| `id` | INT64 |\n| `user_id` | STRING |\n"
+	kept := "# 注意\n\nuser_id は STRING。\n\n| Column | Type |\n|:--|:--|\n| `id` | INT64 |\n|  `user_id` | STRING |  \n"
+	if lost := droppedRows(cur, kept); len(lost) != 0 {
+		t.Errorf("a revision that keeps every row lost %v", lost)
+	}
+	abridged := "| Column | Type |\n|---|---|\n| `id` | INT64 |\n| … | |\n"
+	if lost := droppedRows(cur, abridged); len(lost) != 1 || !strings.Contains(lost[0], "user_id") {
+		t.Errorf("lost = %v, want the user_id row", lost)
 	}
 }
 
