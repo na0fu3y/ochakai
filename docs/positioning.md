@@ -163,6 +163,7 @@ Anthropic と Vercel は人が書いた層が効くと言い、過去のクエ�
 | **データエージェント製品**([Genie One / Ontology / Agents](https://www.databricks.com/blog/introducing-genie-one-genie-ontology-and-genie-agents)、Cortex Agents + [Cortex Sense](https://www.snowflake.com/en/blog/enterprise-ai-agents-grounded-context/)、[BigQuery Conversational Analytics](https://docs.cloud.google.com/gemini/docs/conversational-analytics-api/data-agent-system-instructions)、[Hex Threads](https://learn.hex.tech/docs/explore-data/threads)) | 完成したエージェント — チャートと表、Slack / Teams / モバイル、スケジュールと行動、初日から答える自動収集の文脈、その中の検証済みクエリ | 人の裁定を台帳に残す根拠、却下の理由、OKF での丸ごとの出口、他のクライアントへ同じ中身を配ること | **正面から競合する**、そしていまは機能で負ける — 下記参照 |
 | FDE 型オントロジー([Palantir Foundry Ontology](https://www.palantir.com/docs/foundry/ontology/overview)) | 組織のデジタルツイン — オブジェクトとリンク、Action と write-back、ライブデータへの接続、プラットフォーム内のガバナンス | 出口(オントロジーはプラットフォームのもの)、FDE 無しの立ち上げ、テナントごとの安価なセルフホスト | 約束は同じ、買い方を拒む — 下記参照 |
 | OSS の「Palantir 代替」([semantica](https://github.com/semantica-agi/semantica)) | 数十ソースの取り込みと自動抽出、ポリグロットなグラフ・ベクトルストア、OWL/SHACL、PROV-O、エージェントの決定の因果記録、セルフホスト | 人の裁定が中核であること(decision の記録は verify ではない)、secret-zero、単一形式の往復、キュレーションが買う小ささ | 約束の語彙は重なる、軸が違う — 下記参照 |
+| ローカルファーストのデータワークスペース([helix-foundry](https://github.com/HelixDB/helix-foundry)) | コーディングエージェントに任せる導入、SaaS とデータベースのコネクタ、ソースをまたいで決定的に提案されるオントロジーと一度の確認、実行した SQL とスナップショットの引用つきの答え、ローカルのモデル | チームと、誰が確かめたかの記録(アカウントが無い)、secret を置かないこと、OKF での丸ごとの出口 | 同じ No FDE を狙い、払うものが違う — 下記参照 |
 | グラフ DB ネイティブのオントロジー基盤([NebulaGraph](https://nebula-graph.io/posts/ontology-and-graph-databases-enterprise-ai-from-theory-to-production-reality)、Neo4j + GraphRAG) | 型システムと書き込み時のスキーマ強制、型間のリレーション制約、数十億ノードへのスケール、多段トラバーサルとグラフアルゴリズム | 検証のループが中核であること(あちらでは成熟モデルの最終段)、markdown での出口、キュレーションされた規模が買う単純さ | 規模が前提から違う — 下記参照 |
 | **OKF ネイティブのローカルツール群と、MCP サーバー付きの markdown vault**([okf-skills](https://github.com/scaccogatto/okf-skills)、[okfcli](https://github.com/okfcli/okf)、[serradura/okf](https://github.com/serradura/okf)、[kaut](https://github.com/yurgeno/kaut)、LLM Wiki 系の [llm-wiki-compiler](https://github.com/atomicstrata/llm-wiki-compiler)、Obsidian、ノートの git リポジトリ) | 同じ OKF v0.2 の markdown + frontmatter、リンク、ローカルな所有、エージェントが読み書きすること、一部は draft キューと書き込みの門、**一部は rationale 付きの approve / reject の記録**([KL4A](https://github.com/CogniSwitch/KL4A)) | 認証された呼び出し元を**観測**する台帳としての検証(あちらの `verified` は誰かがタイプした一行である)、outcome と miss の計測 | 両立 — 下記参照 |
 
@@ -547,6 +548,42 @@ instructions の 1,037 を含む — [surface.md](surface.md) の `MCP-BYTES` �
 バイトである。断片化した生データから
 統治されたグラフを機械で建てたいならあちらを使う。人が確かめた少数の
 ナレッジをエージェントに小さな契約で配りたいなら、それがこの枠である。
+
+### ローカルファーストのデータワークスペース
+
+*同じ No FDE を狙い、払うものが違う。* このカテゴリの例は
+[helix-foundry](https://github.com/HelixDB/helix-foundry)(2026-10 公開、
+Apache 2.0)である。一人の人が自分のコンピュータの上で、会社のデータを
+一つのオントロジーにつないで問う。アカウントも、立てるサーバーも無い。
+最初の一時間の作りは、いまの ochakai よりはるかに短い。
+
+導入はコーディングエージェントに任せる。README は Claude Code などに
+貼るプロンプトを一つ載せていて、エージェントが手順書(`AGENTS.md`)を
+読んで Docker の構成を立て、健康診断が通るまで確かめる。立ち上がった
+ページは AI・データ・オントロジーの順に案内する。オントロジーは
+ソースをまたいで同じ顧客や記録を鍵で突き合わせて提案され、その提案は
+決定的である(モデルが書き直すのは説明と名前だけ)。人は名前を変えたり
+除いたりしてから一度だけ確かめ、そのあとはホームに主要な指標が並ぶ。
+問いへの答えは、実行した SQL とスナップショットの引用を伴う。モデルが
+出した定義は、スキーマの検査とデータでの実行を通ってからレビューに回る。
+
+この短さには代価があり、そのどれもが ochakai が性質か手段として断って
+いるものである。PostgreSQL・MySQL・Stripe・WorkOS・PostHog・REST・S3
+のコネクタと変更の取り込みを持ち(ochakai の M4 の反対)、生成した SQL を
+自分の DuckDB で実行する(M2 の反対)。コネクタとモデルの資格情報は
+暗号化して保存し、その鍵は `.env` に置く — 運用者が保管する長期の secret
+であり、P5 が持たないと決めたものである。そして一人のための設計なので、
+アカウントもサインインも無い。誰が確かめたかを区別する手段が無く、
+確かめることは「この人がそう思った」以上の記録にならない。helix-foundry
+自身も、検査に通ることは業務上の意味を証明しないと書いている。ochakai が
+P1 で持とうとしているのは、その意味を誰が確かめたかの台帳である。
+
+一人で、自分のコンピュータの上で、散らばった SaaS のデータを今日つないで
+眺めたいなら、あちらを使う。チームで同じ定義を使い、誰がそれを確かめた
+かをあとから問える必要があるなら、この枠である。ただし初日の手数の差は
+ochakai の側の課題であり、ROADMAP の *Next* が並べている見直し(エージェント
+が実行できるデプロイの手順書、一括での下書きと一括での裁定)はこの差を
+縮めるためにある。
 
 ### グラフ DB ネイティブのオントロジー基盤
 
@@ -949,11 +986,14 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   Slack もモバイルもスケジュールも無い。ダッシュボード — 保存し、ピン
   留めし、定期に走らせ、共有するボード — は、目標が動いても作らない。
 - **初日。** Genie Ontology はチームに hand-curate を求めず、Cortex Sense
-  は立ち上げが一日だったと書く。ochakai のエージェントは空のベースから
-  始まり、答えの根拠になるのは人が裁定したものである — 裁定が無ければ
-  「人が確かめた」と言える答えも無い。空のベースからウェアハウスを読んで
-  draft を書くのは ROADMAP の三段目で、まだ無い。**G1(No FDE)が
-  勝つか負けるかはここで決まる**と ROADMAP 自身が書いている。
+  は立ち上げが一日だったと書く。helix-foundry は導入をコーディング
+  エージェントに任せ、提案したオントロジーを人が一度確かめれば指標が
+  並ぶ。ochakai のエージェントは空のベースから始まり、答えの根拠になるのは
+  人が裁定したものである — 裁定が無ければ「人が確かめた」と言える答えも
+  無い。スキーマからテーブルごとの draft を作り、エージェントが説明を
+  提案するところまではある(ROADMAP の三段目、0.29.1)が、裁定は一件ずつで、
+  デプロイの手順は人が打つ。**G1(No FDE)が勝つか負けるかはここで
+  決まる**と ROADMAP 自身が書いている。
 - **人の裁定が律速になる。** 自動で集める側は、人が追いつかない量でも
   文脈を増やせる。ochakai は配る中身を人の裁定でしか変えないので、裁定
   する人の手がそのまま上限になる — エージェントを持つと決めた理由の一つ
@@ -1027,6 +1067,8 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   文脈 — なら → メモリ層。
 - 一人、一台、自分で書くノートなら → OKF ネイティブのローカルツールか
   vault と、その上の MCP サーバー。
+- 一人、一台で、散らばった SaaS とデータベースを今日つないで問いたい
+  なら → helix-foundry のようなローカルファーストのデータワークスペース。
 - オントロジーの約束には頷くが、プラットフォームと FDE という買い方を
   断りたい — そして kinetic の実行(Action、write-back)をエージェントに
   任せられるなら → semantic の中核と kinetic の定義を最小に持つ、それが
