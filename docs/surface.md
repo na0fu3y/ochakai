@@ -137,10 +137,10 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 ## 最初の確かめられた答えまで
 
 G1 の数である。チームの誰かが、人が確かめた concept を根拠にした答えを
-初めて受け取るまでに、誰が何を手でするかを数える。**ここにある段は文書
-(README・`deploy/terraform`・`deploy/cloudrun`)を読んで数えたもので、
-誰かが通しで歩いた記録ではない。** 時間はまだ測っていない。CI はこの節を
-読まないので、手順を変える PR が、ここも書き直す。
+初めて受け取るまでに、誰が何を手でするかを数える。**経路 1〜3 の段は文書
+(README・`deploy/terraform`・`deploy/cloudrun`)を読んで数えたものである。**
+経路 2 だけは一度通しで歩き、その記録を下の「経路 2 を歩いた記録」に置いた。
+CI はこの節を読まないので、手順を変える PR が、ここも書き直す。
 
 段は、それだけで一つの判断か一つの待ちになる手作業を一つと数える。
 一つの段に、続けて打つコマンドが複数入ることがある(スキーマの bootstrap
@@ -151,8 +151,8 @@ G1 の数である。チームの誰かが、人が確かめた concept を根�
 運用者が 8 段、問う人が 5 段、合わせて 13 段である。
 
 1. 運用者が `gcloud`・`terraform`・`cloud-sql-proxy`・`psql` を揃え、
-   `gcloud` で認証する。Terraform が使う資格情報の用意は、Terraform の
-   README に書かれていない。
+   `gcloud auth login` と `gcloud auth application-default login`
+   (Terraform が使う資格情報)をする。
 2. リポジトリを取得し、`terraform.tfvars` を書く(必須の三つ、
    `invoker_members`、`enable_webui` と `webui_iap_members`、`agent_model`、
    `agent_bigquery_project`)。
@@ -199,10 +199,42 @@ OAuth クライアントを作り、公開到達の MCP サービスを別に立
 Claude の組織設定に置かれる。draft を作って確かめる場所としては、
 経路 1 の 5・6 と serve-ui も要る。
 
+### 経路 2 を歩いた記録(2026-10-11)
+
+運用者と問う人を一人が兼ね、既存のデプロイを持つプロジェクトに、別の
+名前(`name = "ochakai-walk"`)で立てた。作業は
+コーディングエージェントが打ち、gcloud の再認証と verify の指示は人が
+した。このプロジェクトには組織ポリシー `constraints/sql.restrictPublicIp`
+が効いており、**文書どおりには段 3 も段 4 も通らなかった。** 通った手順と
+時間は次のとおりである。
+
+| 段 | 何をしたか | 時間 |
+|---|---|---|
+| 1 | 道具を揃える。terraform は Homebrew の本体に無く `hashicorp/tap/terraform` から入れた。`libpq` の `psql` は PATH に入らない | 約 1 分 |
+| 3 | 最初の `apply`。Cloud SQL が公開 IP を持てずに失敗した | 25 秒 |
+| 3a | 専用の VPC とサブネットを作る。`default` には既存のデプロイのピアリングがあり、そこに `enable_private_ip` を当てるとモジュールが同じ名前のアドレスと接続を作ろうとする | 23 秒 |
+| 3b | `enable_private_ip = true` と専用のネットワークで二度目の `apply`。Cloud SQL は 5 分 58 秒でできたが、最後に Cloud Run が起動できずに失敗した(bootstrap 前なので、マイグレーションが `permission denied for schema public` で止まる) | 7 分 40 秒 |
+| 4 | bootstrap。手元の `cloud-sql-proxy` はプライベート IP に届かないので、SQL を一時バケットに置き、`gcloud sql import sql --user=postgres` で流した。パスワードは一度も設定していない | 25 秒 |
+| 3c | 三度目の `apply`。失敗した Cloud Run を作り直す | 22 秒 |
+| 7 | CLI を入れ、`ochakai use` する | 14 秒 |
+| 9 | 公開データセット `thelook_ecommerce` のスキーマを `bq` で読み、`seed` と `import` に流す。7 テーブルの draft ができた | 3 秒 |
+| 10 | `orders` の説明を書いて保存する | 19 秒 |
+| 11 | `ochakai verify` する。draft は stable として公開された | 1 秒 |
+| 12 | 問う。`orders` が `--trust human-reviewed` で返った | 1 秒 |
+
+段 2(`terraform.tfvars`)と段 10 は作業者が書いたので、人が書く時間は
+測れていない。段 8(`claude mcp add`)は、作業者の Claude Code の設定を
+変えないために飛ばし、CLI で問うた。
+
+待ちの合計はおよそ 9 分で、ほとんどが段 3b の Cloud SQL である。残りの
+時間は、文書に無い失敗の原因を調べる時間だった。その調べた結果が、
+上の 3・3a・3b・4 の行である。
+
 ### この数から分かること
 
 - 三つの経路のどれでも、運用者の段のうち 1・3・4 は同じで、どれも
-  シェルと Google Cloud の権限を要る。[ROADMAP](../ROADMAP.md) の *Next* の
+  シェルと Google Cloud の権限を要る。公開 IP を禁じた組織では、3 と 4 は
+  文書どおりに通らない(上の記録)。[ROADMAP](../ROADMAP.md) の *Next* の
   一つ目(エージェントが実行できるデプロイの手順書)が縮める対象である。
 - 経路 1 には、コンソールでしか作れないものが二つある(5・6)。そのうえ
   serve-ui の URL が決まるまで作れないので、`apply` が二回になる。

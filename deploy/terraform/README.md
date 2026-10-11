@@ -79,6 +79,13 @@ private IP(§2b)、GCS files(§4b)、IAP 越しの web UI(§5b)。
 
 ## 使い方
 
+Terraform の Google provider は Application Default Credentials で認証する。
+`gcloud auth login` とは別に、一度だけ用意しておく:
+
+```sh
+gcloud auth application-default login
+```
+
 ```sh
 cd deploy/terraform
 cp terraform.tfvars.example terraform.tfvars   # edit: project, region, image tag, invokers
@@ -87,12 +94,50 @@ terraform plan
 terraform apply    # Cloud SQL instance creation takes 10-15 minutes
 ```
 
-そのあと手作業を一つ済ませれば、サービスの準備が整う:
+**最初の `apply` は、Cloud Run のサービスが起動できずにエラーで終わる。**
+スキーマの bootstrap(下)がまだなので、起動時のマイグレーションが
+`permission denied for schema public` で止まるからである。それ以外の
+リソースはできている。bootstrap を済ませてから、もう一度 `apply` する —
+Terraform は起動できなかったサービスを作り直す:
 
 ```sh
-terraform output -raw database_bootstrap_sql
+terraform output -raw database_bootstrap_sql   # 下の bootstrap で流す
+terraform apply
 terraform output -raw use_command
 ```
+
+### 公開 IP を禁じた組織では
+
+組織ポリシー `constraints/sql.restrictPublicIp` が効いたプロジェクトでは、
+既定の構成の Cloud SQL は作れない。`enable_private_ip = true` にするが、
+二つ注意がある。
+
+- **既存のデプロイが Service Networking のピアリングを持つネットワークに
+  当てない。** モジュールはピアリング用のアドレス
+  `google-managed-services-<network>` と接続を自分で作るので、同じ
+  ネットワークの既存のものとぶつかり、`terraform destroy` がそれを消す。
+  そのプロジェクトに先客がいるなら、専用の VPC とサブネットを作り、
+  `network` と `subnetwork` で名指す。
+- **下の bootstrap は手元からは流せない。** `cloud-sql-proxy` は手元から
+  プライベート IP に届かず、一時的な公開 IP も同じポリシーが禁じる。代わりに
+  SQL を GCS に置き、Cloud SQL 自身に import させる。こちらはパスワードを
+  一度も設定しない:
+
+```sh
+BUCKET=gs://<一時バケット>
+terraform output -raw database_bootstrap_sql > bootstrap.sql
+gcloud storage buckets create $BUCKET --location=<region> --uniform-bucket-level-access
+gcloud storage cp bootstrap.sql $BUCKET/
+gcloud storage buckets add-iam-policy-binding $BUCKET \
+  --member=serviceAccount:"$(gcloud sql instances describe <name> --format='value(serviceAccountEmailAddress)')" \
+  --role=roles/storage.objectViewer
+gcloud sql import sql <name> $BUCKET/bootstrap.sql --database=<name> --user=postgres
+gcloud storage rm -r $BUCKET
+```
+
+`<name>` は `var.name`(既定 `ochakai`)で、インスタンスとデータベースの
+両方の名前である。2026-10-11 に、この組織ポリシーを持つプロジェクトで
+この手順を通した(`docs/surface.md` の「経路 2 を歩いた記録」)。
 
 ### 唯一の手作業: スキーマの bootstrap
 
