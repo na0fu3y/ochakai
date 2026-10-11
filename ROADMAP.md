@@ -217,9 +217,12 @@ considered.
   5. reading Apache Ossie, dbt and semantic views as draft material;
   6. the reasons behind MCP's default of no and `MCP-BYTES`.
 
-  Before any of them, the steps and the time to a first confirmed answer
-  are walked by hand and written down, so each change has a number to
-  move.
+  The steps to a first confirmed answer are counted from the documents
+  in [docs/surface.md](docs/surface.md) (最初の確かめられた答えまで): 13
+  with the agent on and a browser, 12 with Claude Code and the agent off.
+  Turning the agent on adds a step today, where G1 asks for fewer. The
+  time is not measured yet; it needs somebody to walk a fresh project
+  through, and each change above moves the count in that section.
 
 - **Spell the demand feed something other than `usage`, at 1.0.** The CLI reads
   `ochakai usage <id>` for one concept's totals and `ochakai list usage` for

@@ -37,7 +37,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 
 | id | 目的 |
 |---|---|
-| G1 | **No FDE** — チームが ochakai の外の人の手を借りずに、最初の**人が確かめた答え**に届く。導入はその途中の一段にすぎない。届くまでの手作業の数と時間で確かめるが、いまは記録しておらず、まず手で歩いて値を残す。**デプロイ自身のデータエージェントを off のままでも届き、入れたデプロイでは、より少ない手数で届く** — エージェントは人の裁定を安くするためにだけ使い、裁定はしない([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)・[ROADMAP](../ROADMAP.md)) |
+| G1 | **No FDE** — チームが ochakai の外の人の手を借りずに、最初の**人が確かめた答え**に届く。導入はその途中の一段にすぎない。届くまでの手作業の数と時間で確かめる。いまの値は下の「最初の確かめられた答えまで」にある。**デプロイ自身のデータエージェントを off のままでも届き、入れたデプロイでは、より少ない手数で届く** — エージェントは人の裁定を安くするためにだけ使い、裁定はしない([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)・[ROADMAP](../ROADMAP.md)) |
 | G2 | Claude Code から使える — MCP over HTTP と、それを話せないクライアントのための stdio 橋([0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §3) |
 | G3 | 利用者が自分の Web サービスに埋められる小さな REST API — OpenAPI 一枚で、クライアントライブラリを要らなくする([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md)・[0145](design/0145-four-faces-and-an-answer-that-shows-its-result.md) §1) |
 | G4 | 人間の改善ループが測れる — 検証・結果報告・キューの長さ・答えの無かった問いを、推測ではなく数で持つ([0141](design/0141-a-miss-is-read-off-the-words.md)) |
@@ -133,6 +133,86 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 - **散文の量には天井を置かない。** 捕まえたい形(面を畳み、畳んだ説明を
   長く書く)より、正しい増加に鳴るほうが多かった。マニュアルが太ることへの
   歯止めは、ページの持ち主を一つに決める規則と、レビューである。
+
+## 最初の確かめられた答えまで
+
+G1 の数である。チームの誰かが、人が確かめた concept を根拠にした答えを
+初めて受け取るまでに、誰が何を手でするかを数える。**ここにある段は文書
+(README・`deploy/terraform`・`deploy/cloudrun`)を読んで数えたもので、
+誰かが通しで歩いた記録ではない。** 時間はまだ測っていない。CI はこの節を
+読まないので、手順を変える PR が、ここも書き直す。
+
+段は、それだけで一つの判断か一つの待ちになる手作業を一つと数える。
+一つの段に、続けて打つコマンドが複数入ることがある(スキーマの bootstrap
+は四つのコマンドで一段である)。
+
+### 経路 1: エージェントを入れ、問う人はブラウザだけ
+
+運用者が 8 段、問う人が 5 段、合わせて 13 段である。
+
+1. 運用者が `gcloud`・`terraform`・`cloud-sql-proxy`・`psql` を揃え、
+   `gcloud` で認証する。Terraform が使う資格情報の用意は、Terraform の
+   README に書かれていない。
+2. リポジトリを取得し、`terraform.tfvars` を書く(必須の三つ、
+   `invoker_members`、`enable_webui` と `webui_iap_members`、`agent_model`、
+   `agent_bigquery_project`)。
+3. `terraform init`・`plan`・`apply`。Cloud SQL の作成に 10〜15 分待つ。
+4. スキーマを bootstrap する: `postgres` に一時的なパスワードを設定し、
+   `cloud-sql-proxy` を張り、`psql` に SQL を貼り、パスワードを捨てる値に
+   変える。
+5. コンソールで OAuth の同意画面を作る。
+6. コンソールでウェブクライアントを作り、serve-ui のオリジンとリダイレクト
+   URI を登録する。serve-ui の URL は 3 が終わるまで決まらない。
+7. `agent_oauth_client_id` を `terraform.tfvars` に書き、もう一度 `apply`
+   する。
+8. serve-ui の URL を問う人に渡す。
+9. 問う人が serve-ui を開き、IAP で Google にサインインする。
+10. 「BigQuery から取り込む」に `project.dataset` を書き、初回は Google の
+    同意画面を通す。テーブルごとの draft ができる。
+11. draft を一つ選び、説明を書く(エージェントが提案した説明を採ってもよい)。
+12. ✓ で確かめる。
+13. エージェントに問い、提案された SQL の実行に、会話ごとに一度同意する。
+
+### 経路 2: エージェントを入れず、問う人が Claude Code を持つ
+
+運用者が 5 段、問う人が 7 段、合わせて 12 段である。
+
+1. 運用者が経路 1 の 1 を済ませる。
+2. `terraform.tfvars` を書く(必須の三つと `invoker_members`)。
+3. `terraform init`・`plan`・`apply`。
+4. スキーマを bootstrap する(経路 1 の 4 と同じ)。
+5. サービスの URL を問う人に渡す。
+6. 問う人が `gcloud` を入れ、`gcloud auth login` する。
+7. ochakai の CLI を入れ、`ochakai use <URL>` する。
+8. `claude mcp add ochakai -- ochakai mcp-stdio` で Claude Code に繋ぐ。
+9. `bq query` でスキーマを読み、`ochakai seed - | ochakai import -` に流す。
+10. draft を一つ選び、説明を書いて保存する(手元の `ochakai ui` でもよい)。
+11. `ochakai verify <id>` で確かめる。
+12. Claude Code に問う。
+
+### 経路 3: エージェントを入れず、問う人はブラウザだけ
+
+この組み合わせで問う人が答えに届く道は、Claude のコネクタ
+(`deploy/cloudrun` の §5e)だけである。経路 2 の運用者の段に加えて、
+OAuth クライアントを作り、公開到達の MCP サービスを別に立て、Claude の
+組織のオーナーがコネクタを足す。client secret は ochakai には置かないが、
+Claude の組織設定に置かれる。draft を作って確かめる場所としては、
+経路 1 の 5・6 と serve-ui も要る。
+
+### この数から分かること
+
+- 三つの経路のどれでも、運用者の段のうち 1・3・4 は同じで、どれも
+  シェルと Google Cloud の権限を要る。[ROADMAP](../ROADMAP.md) の *Next* の
+  一つ目(エージェントが実行できるデプロイの手順書)が縮める対象である。
+- 経路 1 には、コンソールでしか作れないものが二つある(5・6)。そのうえ
+  serve-ui の URL が決まるまで作れないので、`apply` が二回になる。
+- 裁定は一件ずつである(経路 1 の 12、経路 2 の 11)。最初の答えに要るのは
+  一件だが、使える量のベースになるまでの手数はここで決まる。*Next* の
+  二つ目(一括の下書きと一括の裁定)が縮める対象である。
+- エージェントを入れたデプロイ(経路 1)は、入れないデプロイ(経路 2)より
+  段が一つ多い。G1 は、入れたデプロイの方が少ない手数で届くことを求めて
+  いる。違いは、問う人の側の手作業が運用者の側に移ることにある(問う人の
+  段は 7 から 5 になり、運用者の段は 5 から 8 になる)。
 
 ## REST (18)
 
