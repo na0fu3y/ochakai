@@ -70,8 +70,14 @@ func TestRESTIntegrationServesTheBundleAsOKF(t *testing.T) {
 		if a.status != http.StatusOK || !strings.HasPrefix(a.contentType, "text/markdown") {
 			t.Errorf("GET %q = %d %s, want the directory's index.md", path, a.status, a.contentType)
 		}
+		// The root lists the whole shared database, which other packages'
+		// tests write to while this one runs, so the listing can move
+		// between two reads. Reading the directory again after its
+		// index.md brackets that read: with no write in between, the
+		// index matches one of the two.
 		_, index := get(path+"index.md", "")
-		if body != index {
+		_, again := get(path, "")
+		if index != body && index != again {
 			t.Errorf("GET %q and GET %qindex.md differ:\n%s\n---\n%s", path, path, body, index)
 		}
 	}
