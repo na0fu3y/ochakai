@@ -209,17 +209,13 @@ considered.
      where a person decides, and the bootstrap is a Cloud SQL import that
      sets no password; README carries the prompt that hands it to an
      agent. What is left is a walk of it on a fresh project;
-  2. drafting a base in bulk — from the schema, the team's query history
-     and an existing semantic layer — and ruling on it in bulk, with the
-     ruling recorded as a bulk one so the confirmed-grounding share is
-     not inflated;
-  3. a way to run a query as the person when there is no browser (a
+  2. a way to run a query as the person when there is no browser (a
      schedule, a chat), by naming a broker the operator runs; ochakai
      holds no refresh token;
-  4. what the agent adds once it is on, so that turning it on shortens
+  3. what the agent adds once it is on, so that turning it on shortens
      the road to a first confirmed answer — it stays off by default;
-  5. reading Apache Ossie, dbt and semantic views as draft material;
-  6. the reasons behind MCP's default of no and `MCP-BYTES`.
+  4. reading Apache Ossie, dbt and semantic views as draft material;
+  5. the reasons behind MCP's default of no and `MCP-BYTES`.
 
   The steps to a first confirmed answer are counted from the documents
   in [docs/surface.md](docs/surface.md) (最初の確かめられた答えまで): 13
@@ -319,6 +315,18 @@ it.
   client without the CLI that actually needs it
   ([0067 §5.2](docs/design/0067-four-faces-and-what-they-decline.md)). The same reasoning
   closed the `ochakai sync` / diff-only-import-from-CI request (issue #43).
+- **Ruling in bulk.** A ruling is made on one concept at a time, and there
+  is no operation, body key or screen that confirms several at once
+  ([0159](docs/decisions/0159-a-ruling-is-made-one-concept-at-a-time.md)).
+  `human-reviewed` says a person looked at the content; a path that lets
+  it be granted without looking would say less, whatever mark the ledger
+  kept. It was briefly on *Next* after a comparison with a workspace that
+  confirms a whole suggested ontology in one click; the walk of route 2
+  then found that the first answer needed one ruling, made in a second,
+  and that the time went into deployment. Somebody who wants to confirm
+  many loops `ochakai verify`. Revisited when a person reading each
+  concept is held up by the act of confirming rather than by the
+  judgment.
 - **A one-to-one MCP mirror of REST.** Tool schemas cost the agent's context,
   so the tool count is a budget: browse, revisions, the reverse-lookup
   filter, file writes, bulk export/import, purge, and reembed stay off MCP

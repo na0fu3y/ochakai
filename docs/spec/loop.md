@@ -23,6 +23,8 @@
   そのうえで検証を記録するので、検証はいまの内容に対して立つ。stable と
   deprecated への検証は文書にも ETag にも触れない — 再確認が、編集中の
   人の If-Match を無効にしない。
+- **裁定は一件ずつである。** 一度の操作で複数の concept を確かめる口は
+  持たない([0159](../decisions/0159-a-ruling-is-made-one-concept-at-a-time.md))。
 - **裁定するのは人か、人が置いた確認ジョブ**である。`process:` の身元で
   記録された検証(CI の canary など)は `machine-confirmed` と読まれる。
   LLM は裁定しない([architecture.md](architecture.md))。
