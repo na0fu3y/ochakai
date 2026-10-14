@@ -204,7 +204,11 @@ considered.
   own PR that answers docs/surface.md's three questions
   ([0158](docs/decisions/0158-conditions-are-properties-goals-and-means.md)):
   1. a deployment runbook a coding agent can execute, replacing the
-     manual schema bootstrap that sets a temporary `postgres` password;
+     manual schema bootstrap that sets a temporary `postgres` password.
+     The runbook is `deploy/terraform/README.md`'s 使い方, which stops
+     where a person decides, and the bootstrap is a Cloud SQL import that
+     sets no password; README carries the prompt that hands it to an
+     agent. What is left is a walk of it on a fresh project;
   2. drafting a base in bulk — from the schema, the team's query history
      and an existing semantic layer — and ruling on it in bulk, with the
      ruling recorded as a bulk one so the confirmed-grounding share is
@@ -219,10 +223,10 @@ considered.
 
   The steps to a first confirmed answer are counted from the documents
   in [docs/surface.md](docs/surface.md) (最初の確かめられた答えまで): 13
-  with the agent on and a browser, 12 with Claude Code and the agent off.
-  Turning the agent on adds a step today, where G1 asks for fewer. The
-  time is not measured yet; it needs somebody to walk a fresh project
-  through, and each change above moves the count in that section.
+  with the agent on and a browser, and 13 with Claude Code and the agent
+  off, where G1 asks for fewer with the agent on. Route 2 has been walked
+  once, on a project that forbids public IP on Cloud SQL, with its times
+  recorded there; each change above moves the count in that section.
 
 - **Spell the demand feed something other than `usage`, at 1.0.** The CLI reads
   `ochakai usage <id>` for one concept's totals and `ochakai list usage` for

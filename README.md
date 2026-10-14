@@ -214,6 +214,19 @@ you would rather see them one at a time. Your knowledge keeps going the
 other way too: `ochakai export` hands back the whole base as an OKF
 bundle, which is markdown you can commit.
 
+The Terraform guide is written as a runbook a coding agent can carry out
+top to bottom, stopping where a person has to decide — the bill, and who
+can reach the deployment. To hand it over, paste this into Claude Code or
+any agent that can run commands, from a clone of this repository:
+
+```text
+Deploy ochakai to my Google Cloud project <project-id> in <region>,
+following deploy/terraform/README.md, section 使い方, from step 0.
+Stop and ask me at every point marked 人に確かめる, and before anything
+that deletes or changes a resource that already exists in the project.
+When it is done, show me `ochakai whoami`.
+```
+
 ## Connect an agent
 
 For Claude Code — and anything else with a shell (headless agents, CI) —

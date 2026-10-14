@@ -230,8 +230,9 @@ resource "google_sql_database" "ochakai" {
 # does not create it, because a generated password would be the only stored
 # secret in an otherwise secret-zero system (guide §6 exists to retire it).
 # Direct database access for people goes through IAM logins instead, and the
-# one-time schema bootstrap uses a break-glass password minted by hand and
-# discarded — see the module README.
+# one-time schema bootstrap runs as a Cloud SQL import (`gcloud sql import
+# sql --user=postgres`), which sets no password at all — see the module
+# README.
 
 resource "google_sql_user" "maintenance" {
   for_each = toset(var.maintenance_users)

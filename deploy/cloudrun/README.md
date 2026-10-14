@@ -204,6 +204,13 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "ochakai-run@<P
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "ochakai-run@<PROJECT_ID>.iam";
 ```
 
+§2 の admin ユーザーを作らない場合や、組織が Cloud SQL の公開 IP を禁じて
+いて手元の `cloud-sql-proxy` が届かない場合は、同じ SQL をファイルにして
+GCS に置き、`gcloud sql import sql ochakai gs://… --database=ochakai --user=postgres`
+で Cloud SQL 自身に流させる。手元から接続せず、パスワードも使わない。手順は
+[Terraform モジュールの README](../terraform/README.md) の「使い方」の 3 に
+ある。
+
 専用の identity と `OCHAKAI_DB_IAM_AUTH`(パスワードレスなデータベー
 ス)で非公開にデプロイし、そのあと組織に invoke を許可する:
 

@@ -150,21 +150,22 @@ CI はこの節を読まないので、手順を変える PR が、ここも書�
 
 運用者が 8 段、問う人が 5 段、合わせて 13 段である。
 
-1. 運用者が `gcloud`・`terraform`・`cloud-sql-proxy`・`psql` を揃え、
-   `gcloud auth login` と `gcloud auth application-default login`
-   (Terraform が使う資格情報)をする。
+1. 運用者が `gcloud` と `terraform` を揃え、`gcloud auth login` と
+   `gcloud auth application-default login`(Terraform が使う資格情報)を
+   する。
 2. リポジトリを取得し、`terraform.tfvars` を書く(必須の三つ、
    `invoker_members`、`enable_webui` と `webui_iap_members`、`agent_model`、
    `agent_bigquery_project`)。
-3. `terraform init`・`plan`・`apply`。Cloud SQL の作成に 10〜15 分待つ。
-4. スキーマを bootstrap する: `postgres` に一時的なパスワードを設定し、
-   `cloud-sql-proxy` を張り、`psql` に SQL を貼り、パスワードを捨てる値に
-   変える。
+3. `terraform init`・`plan`・`apply`。Cloud SQL の作成に 6〜15 分待つ。
+   この `apply` は、bootstrap 前の Cloud Run が起動できずにエラーで終わる。
+4. スキーマを bootstrap する: SQL を一時バケットに置き、
+   `gcloud sql import sql --user=postgres` で流し、バケットを消す。
+   パスワードは使わない。
 5. コンソールで OAuth の同意画面を作る。
 6. コンソールでウェブクライアントを作り、serve-ui のオリジンとリダイレクト
    URI を登録する。serve-ui の URL は 3 が終わるまで決まらない。
 7. `agent_oauth_client_id` を `terraform.tfvars` に書き、もう一度 `apply`
-   する。
+   する。この `apply` が、3 で起動できなかったサービスも作り直す。
 8. serve-ui の URL を問う人に渡す。
 9. 問う人が serve-ui を開き、IAP で Google にサインインする。
 10. 「BigQuery から取り込む」に `project.dataset` を書き、初回は Google の
@@ -175,20 +176,21 @@ CI はこの節を読まないので、手順を変える PR が、ここも書�
 
 ### 経路 2: エージェントを入れず、問う人が Claude Code を持つ
 
-運用者が 5 段、問う人が 7 段、合わせて 12 段である。
+運用者が 6 段、問う人が 7 段、合わせて 13 段である。
 
 1. 運用者が経路 1 の 1 を済ませる。
 2. `terraform.tfvars` を書く(必須の三つと `invoker_members`)。
-3. `terraform init`・`plan`・`apply`。
+3. `terraform init`・`plan`・`apply`(経路 1 の 3 と同じく、エラーで終わる)。
 4. スキーマを bootstrap する(経路 1 の 4 と同じ)。
-5. サービスの URL を問う人に渡す。
-6. 問う人が `gcloud` を入れ、`gcloud auth login` する。
-7. ochakai の CLI を入れ、`ochakai use <URL>` する。
-8. `claude mcp add ochakai -- ochakai mcp-stdio` で Claude Code に繋ぐ。
-9. `bq query` でスキーマを読み、`ochakai seed - | ochakai import -` に流す。
-10. draft を一つ選び、説明を書いて保存する(手元の `ochakai ui` でもよい)。
-11. `ochakai verify <id>` で確かめる。
-12. Claude Code に問う。
+5. もう一度 `apply` し、起動できなかったサービスを作り直す。
+6. サービスの URL を問う人に渡す。
+7. 問う人が `gcloud` を入れ、`gcloud auth login` する。
+8. ochakai の CLI を入れ、`ochakai use <URL>` する。
+9. `claude mcp add ochakai -- ochakai mcp-stdio` で Claude Code に繋ぐ。
+10. `bq query` でスキーマを読み、`ochakai seed - | ochakai import -` に流す。
+11. draft を一つ選び、説明を書いて保存する(手元の `ochakai ui` でもよい)。
+12. `ochakai verify <id>` で確かめる。
+13. Claude Code に問う。
 
 ### 経路 3: エージェントを入れず、問う人はブラウザだけ
 
@@ -233,18 +235,20 @@ Claude の組織設定に置かれる。draft を作って確かめる場所と�
 ### この数から分かること
 
 - 三つの経路のどれでも、運用者の段のうち 1・3・4 は同じで、どれも
-  シェルと Google Cloud の権限を要る。公開 IP を禁じた組織では、3 と 4 は
-  文書どおりに通らない(上の記録)。[ROADMAP](../ROADMAP.md) の *Next* の
-  一つ目(エージェントが実行できるデプロイの手順書)が縮める対象である。
+  シェルと Google Cloud の権限を要る。`deploy/terraform` の「使い方」は、
+  この段をコーディングエージェントが実行できる手順書として書いてあり、人が
+  するのは課金と到達できる相手を決めることと、ブラウザでのサインインである
+  ([ROADMAP](../ROADMAP.md) の *Next* の一つ目)。段の数は変わらないが、
+  公開 IP を禁じた組織でも同じ手順で通る。
 - 経路 1 には、コンソールでしか作れないものが二つある(5・6)。そのうえ
   serve-ui の URL が決まるまで作れないので、`apply` が二回になる。
-- 裁定は一件ずつである(経路 1 の 12、経路 2 の 11)。最初の答えに要るのは
+- 裁定は一件ずつである(経路 1 の 12、経路 2 の 12)。最初の答えに要るのは
   一件だが、使える量のベースになるまでの手数はここで決まる。*Next* の
   二つ目(一括の下書きと一括の裁定)が縮める対象である。
-- エージェントを入れたデプロイ(経路 1)は、入れないデプロイ(経路 2)より
-  段が一つ多い。G1 は、入れたデプロイの方が少ない手数で届くことを求めて
-  いる。違いは、問う人の側の手作業が運用者の側に移ることにある(問う人の
-  段は 7 から 5 になり、運用者の段は 5 から 8 になる)。
+- エージェントを入れたデプロイ(経路 1)と入れないデプロイ(経路 2)は、
+  どちらも 13 段である。G1 は、入れたデプロイの方が少ない手数で届くことを
+  求めている。違いは、問う人の側の手作業が運用者の側に移ることにある
+  (問う人の段は 7 から 5 になり、運用者の段は 6 から 8 になる)。
 
 ## REST (18)
 
