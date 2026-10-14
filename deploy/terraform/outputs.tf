@@ -74,8 +74,8 @@ output "database_bootstrap_sql" {
     cloudsqlsuperuser member, before the first request. Extensions are
     pre-created here so the runtime never needs elevated rights — its startup
     migration only ever hits the privilege-free CREATE EXTENSION IF NOT
-    EXISTS skip path. See the module README for how to connect without
-    storing a password.
+    EXISTS skip path. The module README runs them as a Cloud SQL import,
+    which needs no password.
   EOT
   value       = <<-EOT
     CREATE EXTENSION IF NOT EXISTS pg_trgm;

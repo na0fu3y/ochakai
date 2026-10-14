@@ -5,7 +5,7 @@
 壊せるようにする。
 
 **このモジュールが ochakai を立ち上げる推奨の経路である** — `terraform
-apply` 一回と、下の手作業ひとつ(スキーマの bootstrap)で済み、gcloud
+apply` 二回と、そのあいだの手作業ひとつ(スキーマの bootstrap)で済み、gcloud
 ガイドを一手順ずつ辿るより短い。gcloud ガイドは引き続きリファレン
 スであり正とする情報源である: 各部分がなぜそう作られているかを説明し、この
 モジュールが省いているものすべてに触れている。それでも `terraform apply`
@@ -52,8 +52,9 @@ private IP(§2b)、GCS files(§4b)、IAP 越しの web UI(§5b)。
   になる — どのみち運用ガイドの hardening チェックリストが行き着く先でも
   ある。
 - したがって Terraform は一度きりのスキーマ bootstrap SQL を実行できない
-  — 実行するにはパスワードを持つ必要があるからである。そのステップは手作
-  業のまま残る。下を見よ。
+  — Terraform からデータベースに接続するにはパスワードが要るからである。
+  そのステップは手作業のまま残り、Cloud SQL の import として流す。下の
+  「使い方」の 3 を見よ。
 
 ### 公開呼び出しは不可、名指しの例外が二つだけ
 
@@ -79,22 +80,139 @@ private IP(§2b)、GCS files(§4b)、IAP 越しの web UI(§5b)。
 
 ## 使い方
 
+この節は上から順に実行する手順書である。コーディングエージェントに渡せば、
+そのまま実行できるように書いてある。**「人に確かめる」と書いた点では止まり、
+デプロイする人の返事を待つ。** そこで決めることは、課金と、誰が到達できるか
+である。
+
+初日に要る道具は `gcloud` と `terraform` の二つである。`cloud-sql-proxy` と
+`psql` は、あとで人が直接データベースに入るときにだけ要る(下の
+`maintenance_users`)。
+
+### 0. 前提を確かめる
+
+```sh
+export PROJECT_ID=<your-project> REGION=<region>
+gcloud auth list --filter=status:ACTIVE --format='value(account)'   # デプロイする本人か
+gcloud auth application-default print-access-token >/dev/null \
+  || gcloud auth application-default login                          # Terraform が使う資格情報
+gcloud projects describe $PROJECT_ID --format='value(lifecycleState)'          # ACTIVE
+gcloud billing projects describe $PROJECT_ID --format='value(billingEnabled)'  # True
+gcloud org-policies describe constraints/sql.restrictPublicIp --project=$PROJECT_ID \
+  --effective --format='value(spec.rules[0].enforce)'               # True なら下の「公開 IP を禁じた組織では」
+gcloud run services list --project=$PROJECT_ID --format='value(metadata.name)'
+gcloud sql instances list --project=$PROJECT_ID --format='value(name)'
+```
+
+最後の二つに `ochakai` が既にあれば、そのプロジェクトには先客がいる。
+`name` を別の値にして、同じ名前のリソースを作らないようにする。
+`gcloud auth application-default login` はブラウザでのサインインを求める
+ので、エージェントが実行しているなら、人に頼む。
+
+### 1. 変数を書く
+
 ```sh
 cd deploy/terraform
-cp terraform.tfvars.example terraform.tfvars   # edit: project, region, image tag, invokers
-terraform init
-terraform plan
-terraform apply    # Cloud SQL instance creation takes 10-15 minutes
+cp terraform.tfvars.example terraform.tfvars
 ```
 
-そのあと手作業を一つ済ませれば、サービスの準備が整う:
+`project_id`・`region`・`image_tag` と `invoker_members` を書く。**人に
+確かめる:** `invoker_members` に挙げた相手は、ナレッジのすべてを読み書き
+できる。`image_tag` は最新のリリースの番号を書く(`latest` は書かない)。
+
+### 2. 作る
 
 ```sh
-terraform output -raw database_bootstrap_sql
-terraform output -raw use_command
+terraform init
+terraform plan -out=ochakai.plan
 ```
 
-### 唯一の手作業: スキーマの bootstrap
+**人に確かめる:** plan の要約(`Plan: N to add, 0 to change, 0 to destroy`)と、
+これで月 $10 程度の課金が始まること。新しいプロジェクトで `change` や
+`destroy` が 0 でなければ、そこで止まって理由を調べる。
+
+```sh
+terraform apply ochakai.plan    # Cloud SQL の作成に 6〜15 分かかる
+```
+
+**この `apply` は、Cloud Run のサービスが起動できずにエラーで終わる。**
+スキーマがまだ無い権限を求めるので、起動時のマイグレーションが
+`permission denied for schema public` で止まるからである。それ以外の
+リソースはできている。次の 3 で権限を付け、4 でサービスを作り直す。
+
+### 3. スキーマを bootstrap する
+
+SQL を一時バケットに置き、Cloud SQL 自身に `postgres` として流させる。
+手元からデータベースに接続せず、パスワードを一度も設定しない。公開 IP の
+有無によらず、同じ手順である。`<name>` は `var.name`(既定 `ochakai`)で、
+インスタンスとデータベースの両方の名前である:
+
+```sh
+NAME=ochakai
+BUCKET=gs://$PROJECT_ID-$NAME-bootstrap
+terraform output -raw database_bootstrap_sql > bootstrap.sql
+gcloud storage buckets create $BUCKET --project=$PROJECT_ID --location=$REGION --uniform-bucket-level-access
+gcloud storage cp bootstrap.sql $BUCKET/
+gcloud storage buckets add-iam-policy-binding $BUCKET \
+  --member=serviceAccount:"$(gcloud sql instances describe $NAME --project=$PROJECT_ID --format='value(serviceAccountEmailAddress)')" \
+  --role=roles/storage.objectViewer
+gcloud sql import sql $NAME $BUCKET/bootstrap.sql --project=$PROJECT_ID --database=$NAME --user=postgres --quiet
+gcloud storage rm -r $BUCKET
+```
+
+`maintenance_users` に名前を挙げた相手がいれば、`bootstrap.sql` を流す前に、
+ランタイムが所有することになるテーブルを見せる一行を足しておく(起動時の
+マイグレーションはサービスアカウントとしてテーブルを作るので、所有権は
+デプロイした人ではなく書いた人に従う):
+
+```sql
+GRANT "<database_user output>" TO "you@your-org.example";
+```
+
+その相手はそれ以降、`cloud-sql-proxy --auto-iam-authn` と自分自身の identity
+で接続する — こちらの経路にもパスワードは無い。
+
+### 4. サービスを作り直し、確かめる
+
+```sh
+terraform apply                    # 起動できなかったサービスを作り直す
+terraform output -raw use_command  # ochakai use <URL>
+ochakai whoami                     # health: ok と、自分の名前
+```
+
+ここから先(ナレッジを入れる、エージェントを繋ぐ)は
+[README](../../README.md#connect-an-agent) と
+[最初のひと月](../../docs/guides/onboarding.md) にある。
+
+### 公開 IP を禁じた組織では
+
+0 の `sql.restrictPublicIp` が `True` なら、既定の構成の Cloud SQL は作れない。
+`terraform.tfvars` に `enable_private_ip = true` を足す。3 の bootstrap は
+そのまま使える。
+
+**既存のデプロイが Service Networking のピアリングを持つネットワークには
+当てない。** モジュールはピアリング用のアドレス
+`google-managed-services-<network>` と接続を自分で作るので、同じネットワークの
+既存のものとぶつかり、`terraform destroy` がそれを消す。次のコマンドが何かを
+返すなら、そのネットワークには先客がいる:
+
+```sh
+gcloud services vpc-peerings list --network=default --project=$PROJECT_ID
+```
+
+**人に確かめる:** 先客がいるなら、専用の VPC とサブネットを作り、
+`network` と `subnetwork` で名指してよいか。
+
+```sh
+gcloud compute networks create $NAME --project=$PROJECT_ID --subnet-mode=custom
+gcloud compute networks subnets create $NAME --project=$PROJECT_ID \
+  --network=$NAME --region=$REGION --range=10.90.0.0/24
+```
+
+2026-10-11 に、この組織ポリシーと先客のいるプロジェクトで、この節の手順を
+通した(`docs/surface.md` の「経路 2 を歩いた記録」)。
+
+### bootstrap が何をするか
 
 拡張は `cloudsqlsuperuser` 権限を持つメンバーが作らなければならない —
 Cloud SQL の pgvector は trusted extension ではない — そしてランタイムへ
@@ -104,30 +222,10 @@ Cloud SQL の pgvector は trusted extension ではない — そしてランタ
 `CREATE EXTENSION IF NOT EXISTS` のスキップ経路にしか触れない。
 
 IAM ログインが `cloudsqlsuperuser` になることは無いので、組み込みの
-`postgres` ユーザーを使い、保存せずその場で作って捨てる break-glass パス
-ワードを使う(運用ガイドの hardening チェックリスト):
-
-```sh
-gcloud sql users set-password postgres --instance=ochakai --prompt-for-password
-cloud-sql-proxy "$(terraform output -raw sql_connection_name)" --port 55432 &
-psql "host=localhost port=55432 dbname=ochakai user=postgres"
-# paste: terraform output -raw database_bootstrap_sql
-```
-
-そのあとパスワードを、また別の捨てる値に変えておく。何も保存されず、管理
-者アクセスは引き続き IAM でゲートされる。
-
-`maintenance_users` に名前を挙げた相手がいれば、同じセッションでランタイ
-ムが所有することになるテーブルを見せておく(起動時のマイグレーションはサ
-ービスアカウントとしてテーブルを作るので、所有権はデプロイした人ではなく
-書いた人に従う):
-
-```sql
-GRANT "<database_user output>" TO "you@your-org.example";
-```
-
-それ以降は `cloud-sql-proxy --auto-iam-authn` と自分自身の identity で接
-続する — こちらの経路にもパスワードは無い。
+`postgres` ユーザーとして流す。`gcloud sql import sql` は Cloud SQL の管理
+API の操作で、呼ぶ人の IAM(`cloudsql.instances.import`)で認可され、
+`postgres` のパスワードを要らない。何も保存されず、管理者アクセスは
+引き続き IAM でゲートされる。
 
 ## オプション
 
@@ -160,8 +258,8 @@ provider はどちらにせよ宣言されているので、UI が off のとき
 hardening とアップグレードは
 [運用ガイド](../../docs/guides/operating.md)にある。
 
-- **スキーマ bootstrap SQL**(ガイド §3)— データベースのパスワードが要
-  る。上を見よ。
+- **スキーマ bootstrap SQL**(ガイド §3)— Terraform からは接続できない。
+  上の「使い方」の 3 で、Cloud SQL の import として流す。
 - **ナレッジの読み込みと Claude Code の接続**(ガイド §5)— クライアント
   側の話で、CLI に必要な設定は `ochakai use` 以外に無い。
 - **自分のアプリケーションのための delegated provenance**(ガイド §5c)
