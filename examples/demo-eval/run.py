@@ -15,6 +15,12 @@ snapshot by the bundle's own attested computation (revenue-drivers): which
 month fell inside the usual swing, and which rose right after an outlier
 fell, change when the dataset regenerates.
 
+Each row keeps a trace of the run: the agent's text between tool calls and
+every call (search_concepts, get_concept, bq query, ...) with its input and
+the first TRACE_RESULT_CHARS of its result, so an answer can be replayed
+step by step without asking a model again. Rows written before the trace
+existed have none.
+
 The instance at OCHAKAI_URL should hold examples/demo and nothing else.
 The agent is given read tools only, so a run leaves the base unchanged.
 """
@@ -42,6 +48,7 @@ DENIED = [
     "WebSearch", "WebFetch", "Agent", "Task",
     "mcp__ochakai__put_concept", "mcp__ochakai__report_outcome",
 ]
+TRACE_RESULT_CHARS = 1000
 
 
 def warehouse_reachable(project):
@@ -109,8 +116,18 @@ def truth(sql, project):
     return next(iter(row.values()))
 
 
+def tool_text(content):
+    if isinstance(content, str):
+        return content
+    return "".join(c.get("text", "") for c in content or [] if isinstance(c, dict))
+
+
 def claude(prompt, workdir, model, mcp_config=None, tools=()):
-    cmd = ["claude", "-p", prompt, "--output-format", "json",
+    """Run one Claude Code call. The result is the final event of the
+    stream, plus a trace of what the agent did on the way: its text between
+    tool calls, and each call with its input and the start of its result,
+    so an answer can be replayed step by step without asking again."""
+    cmd = ["claude", "-p", prompt, "--output-format", "stream-json", "--verbose",
            "--model", model, "--setting-sources", "project",
            "--strict-mcp-config", "--disallowedTools", *DENIED]
     if tools:
@@ -119,10 +136,40 @@ def claude(prompt, workdir, model, mcp_config=None, tools=()):
         cmd += ["--mcp-config", mcp_config]
     done = subprocess.run(cmd, cwd=workdir, capture_output=True, text=True,
                           timeout=1800)
-    try:
-        return json.loads(done.stdout)
-    except json.JSONDecodeError:
-        return {"result": done.stdout + done.stderr, "is_error": True}
+    trace, calls, result = [], {}, None
+    for line in done.stdout.splitlines():
+        try:
+            ev = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if ev.get("type") == "result":
+            result = ev
+            continue
+        if ev.get("type") not in ("assistant", "user"):
+            continue
+        for block in ev.get("message", {}).get("content", []):
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "text" and block["text"].strip():
+                trace.append({"text": block["text"]})
+            elif block.get("type") == "tool_use":
+                step = {"tool": block["name"], "input": block.get("input", {})}
+                calls[block["id"]] = step
+                trace.append(step)
+            elif block.get("type") == "tool_result" and block.get("tool_use_id") in calls:
+                # The head is enough to show what came back; a get_concept
+                # body or a bq result in full would make the file mostly trace.
+                out = tool_text(block.get("content"))
+                calls[block["tool_use_id"]].update(
+                    result=out[:TRACE_RESULT_CHARS], result_chars=len(out),
+                    is_error=bool(block.get("is_error")))
+    if result is None:
+        return {"result": done.stdout[-2000:] + done.stderr, "is_error": True,
+                "trace": trace}
+    # The last text block is the answer itself, already in "result".
+    if trace and trace[-1].get("text", "").strip() == (result.get("result") or "").strip():
+        trace.pop()
+    return dict(result, trace=trace)
 
 
 def ask(q, condition, args, workdir, mcp_config):
@@ -223,13 +270,14 @@ def main():
                      else grade(q, answer, t, args, workdir))
                 row = {
                     "id": q["id"], "condition": condition, "run": n,
-                "question": q["question"],
+                    "question": q["question"],
                     "pass": bool(g.get("pass")), "error": g.get("error"),
                     "reason": g.get("reason") or g.get("error"),
                     "truth": t, "model": args.model,
                     "cost_usd": res.get("total_cost_usd"),
                     "seconds": (res.get("duration_ms") or 0) / 1000,
                     "turns": res.get("num_turns"), "answer": answer,
+                    "trace": res.get("trace", []),
                 }
                 rows.append(row)
                 with out.open("a") as f:
