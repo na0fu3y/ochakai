@@ -39,6 +39,17 @@ last entry.
 
 ### Security
 
+- **Built with Go 1.27.3, which refuses the eight compromised eMudhra
+  intermediates.** Their private keys were weak enough to be computed
+  from the public certificates, so anyone could forge a certificate for
+  any host. Go's `crypto/x509` now drops every chain through them
+  (CVE-2026-111943), whatever roots the system bundle still holds. That
+  matters to every outbound TLS connection ochakai makes: Google APIs,
+  the OIDC issuer and its JWKS, the embedding endpoint, and the CLI
+  talking to a server. The container's distroless base moves to a
+  digest carrying Debian's updated `ca-certificates`. An operator should
+  upgrade to the release that carries this entry rather than wait for
+  the next minor.
 - **Built with Go 1.27.2 and `golang.org/x/net` v0.60.0.** The 1.27.0
   standard library carries thirteen vulnerabilities this code reaches,
   most of them in the HTTP server the deployment runs: an HPACK encoder

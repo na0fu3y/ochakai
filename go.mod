@@ -18,7 +18,7 @@ go 1.27
 // preference the local setting may decline — which is the whole
 // difference between a patch, where any of them will do, and the minor
 // above, where they will not.
-toolchain go1.27.2
+toolchain go1.27.3
 
 // Pre-0.9.0 releases are unsupported: superseded by 0.9.0 (the first
 // release the deploy guide and docs are written against; earlier images
