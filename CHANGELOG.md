@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.31.3] - 2026-10-21
+
 ### Changed
 
 - **The eight conditions are now three layers** ([docs/surface.md](docs/surface.md),
@@ -8014,7 +8016,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.31.2...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.31.3...HEAD
+[0.31.3]: https://github.com/na0fu3y/ochakai/compare/v0.31.2...v0.31.3
 [0.31.2]: https://github.com/na0fu3y/ochakai/compare/v0.31.1...v0.31.2
 [0.31.1]: https://github.com/na0fu3y/ochakai/compare/v0.31.0...v0.31.1
 [0.31.0]: https://github.com/na0fu3y/ochakai/compare/v0.30.0...v0.31.0
