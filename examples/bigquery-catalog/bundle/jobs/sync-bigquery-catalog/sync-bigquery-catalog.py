@@ -6,9 +6,15 @@ This is the `computation` of the Attested Computation entry beside it
 parameter values and runs this file; per OKF SPEC §10.3 it must not author
 a projection of its own instead.
 
-ochakai has no connectors: a harvester inside the server would need
+ochakai has no connectors today: a harvester inside the server would need
 warehouse credentials it deliberately does not hold. This runs outside,
 under your own service account, against the same REST API the CLI uses.
+
+With --confirm the same file is the projection's confirmation job
+(confirm-bigquery-catalog.md): it projects again, writes nothing, and
+verifies the published entries that still say what BigQuery says. It
+runs under a different identity from the sync, because a writer
+confirming its own write says nothing (decision 0160).
 
 Reads BigQuery, writes ochakai, and holds no secret: BigQuery is reached
 with Application Default Credentials, and ochakai with a Google-minted ID
@@ -26,6 +32,7 @@ from __future__ import annotations
 import argparse
 import base64
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -44,8 +51,16 @@ TIMEOUT = 30
 # Ownership below is keyed to it rather than to an account, so any run of
 # this computation — the nightly service account, a person refreshing the
 # dataset they need this morning — recognizes every other run's writes as
-# the projection's. Bump the version when the documents change shape.
-PRODUCER = "sync-bigquery-catalog/2"
+# the projection's. Bump the version when the documents change shape; the
+# recognition is by family, so a bump does not orphan the last version's
+# entries.
+PRODUCER = "sync-bigquery-catalog/3"
+PRODUCER_FAMILY = "sync-bigquery-catalog/"
+
+# The stamp a --confirm run's verifications carry. It is another
+# computation's name on purpose: the ledger then says which job confirmed,
+# beside the account it ran as.
+CONFIRM_PRODUCER = "confirm-bigquery-catalog/1"
 
 
 # --------------------------------------------------------------- identity
@@ -154,7 +169,7 @@ def fold_shards(names: list[str]) -> list[tuple[str, list[str]]]:
 
 
 def build_body(table, columns: list[dict], usage: dict | None, window: tuple[str, str],
-               shards: list[str] | None = None) -> str:
+               shards: list[str] | None = None, observe: bool = True) -> str:
     lines = []
     if shards:
         stem = SHARD_NAME.match(shards[0])[1]
@@ -181,7 +196,7 @@ def build_body(table, columns: list[dict], usage: dict | None, window: tuple[str
         lines.append("- Not partitioned")
     if table.clustering_fields:
         lines.append("- **Clustered** by " + ", ".join(f"`{f}`" for f in table.clustering_fields))
-    if table.num_rows is not None:
+    if observe and table.num_rows is not None:
         lines.append(f"- Rows: {table.num_rows} (observed {window[1]})")
     if usage:
         lines.append(
@@ -196,11 +211,13 @@ def build_body(table, columns: list[dict], usage: dict | None, window: tuple[str
         "",
         "# Caveats",
         "",
-        "_Nothing recorded yet._ Write what an agent has to know before it",
-        "queries this table — the filter that is always required, the column",
-        "that lies, the timezone the timestamps are in. Then `ochakai verify`",
-        "this entry: the sync leaves verified entries alone, so your text will",
-        "not be overwritten tomorrow morning.",
+        "_Nothing recorded yet._ What an agent has to know before it queries",
+        "this table — the filter that is always required, the column that",
+        "lies, the timezone the timestamps are in — is best written as an",
+        "Insight that links here. Writing it here takes this entry out of the",
+        "sync for good, and its columns stop following the table. Verifying",
+        "it does not: the sync keeps the columns current, and when they",
+        "change the verification lapses until it is confirmed again.",
     ]
     return "\n".join(lines) + "\n"
 
@@ -224,7 +241,8 @@ def frontmatter(keys: dict) -> str:
 
 def build_document(table, fq: str, dataset: str, usage: dict | None,
                    window: tuple[str, str], frequent: int,
-                   shards: list[str] | None = None) -> str:
+                   shards: list[str] | None = None, *, status: str = "draft",
+                   observe: bool = True) -> str:
     """The entry as an OKF document: YAML frontmatter, then the body.
 
     A concept *is* the document (design doc 0075 §3) — there is no typed
@@ -240,10 +258,16 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
     never updated again, and the receipt calls that a clean night. The
     lifecycle is the writer's declaration, so the writer declares it.
 
-    Re-writing it costs nothing: the only entry this job ever replaces is
-    one the projection wrote, which was already a draft. A person's edit
-    takes the entry out through the producer check, and a verification
-    through the trust tier — neither is reached by way of `status`.
+    A published entry keeps the status it has: a person published it,
+    usually by verifying the draft (decision 0157), and a projection that
+    put it back to draft would be the job overruling that person. The
+    caller passes the standing status in.
+
+    With observe=False the document leaves out what the warehouse merely
+    observed today — row count, query counts, last modification — and
+    keeps what the table *is*: columns, layout, view, description. That
+    is the entry's shape (see `stamped`), and only a change in it is
+    worth lapsing a verification for.
 
     `title` is absent too — the
     id's last segment is the display name (design doc 0074 §1), and that
@@ -255,6 +279,8 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
     caller asserts (design doc 0009).
     """
     resource = f"bigquery://{fq}"
+    if not observe:
+        usage = None
     tags = ["bigquery", dataset]
     if table.view_query:
         tags.append("view")
@@ -265,7 +291,7 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
     # returns this entry together with every insight and computation
     # someone wrote citing the same table (design doc 0069 §2.3).
     source: dict = {"resource": resource, "title": fq}
-    if table.modified:
+    if observe and table.modified:
         source["last_modified"] = table.modified.date().isoformat()
     if usage:
         # Query counts belong here, never in ochakai's own usage
@@ -280,17 +306,18 @@ def build_document(table, fq: str, dataset: str, usage: dict | None,
         "title": fq.rsplit(".", 1)[1] if shards else "",
         "description": (table.description or "").split("\n")[0][:280],
         "tags": tags,
-        "status": "draft",
+        "status": status,
         "sources": [source],
     }
     if usage:
         keys["usage_window"] = {"from": window[0], "to": window[1]}
-    body = build_body(table, flatten(table.schema), usage, window, shards)
+    body = build_body(table, flatten(table.schema), usage, window, shards, observe)
     return f"---\n{frontmatter(keys)}---\n\n{body}"
 
 
 def build_dataset_document(ds, project: str, dataset: str,
-                           tables: list[tuple[str, str]], prefix: str) -> str:
+                           tables: list[tuple[str, str]], prefix: str,
+                           *, status: str = "draft") -> str:
     """The dataset as an entry: what it is, and which tables it holds.
 
     Written only by a run that enumerated the whole dataset. The table
@@ -311,7 +338,7 @@ def build_dataset_document(ds, project: str, dataset: str,
         "resource": resource,
         "description": (ds.description or "").split("\n")[0][:280],
         "tags": ["bigquery", dataset],
-        "status": "draft",
+        "status": status,
         "sources": [{"resource": resource, "title": f"{project}.{dataset}"}],
     }
     lines = ["# Tables", ""]
@@ -326,12 +353,95 @@ def build_dataset_document(ds, project: str, dataset: str,
         "",
         "# Caveats",
         "",
-        "_Nothing recorded yet._ Write what an agent has to know before it",
-        "works in this dataset — which table is the source of truth, which",
-        "ones are deprecated, where the bodies are buried. Then `ochakai",
-        "verify` this entry and the sync will leave your text alone.",
+        "_Nothing recorded yet._ What an agent has to know before it works",
+        "in this dataset — which table is the source of truth, which ones are",
+        "deprecated, where the bodies are buried — is best written as an",
+        "Insight that links here. Writing it here takes this entry out of the",
+        "sync for good; verifying it does not.",
     ]
     return f"---\n{frontmatter(keys)}---\n\n" + "\n".join(lines) + "\n"
+
+
+# ------------------------------------------------------------------ stamp
+
+
+def _frontmatter_lines(document: str) -> tuple[list[str], int]:
+    """The document's lines, and the index of the line closing its frontmatter."""
+    lines = document.split("\n")
+    if not lines or lines[0] != "---":
+        return lines, -1
+    for i in range(1, len(lines)):
+        if lines[i] == "---":
+            return lines, i
+    return lines, -1
+
+
+def frontmatter_value(document: str, key: str) -> str:
+    """The raw value of one top-level frontmatter key, or ""."""
+    lines, end = _frontmatter_lines(document)
+    for line in lines[1:end] if end > 0 else ():
+        if line.startswith(key + ":"):
+            return line[len(key) + 1:].strip()
+    return ""
+
+
+# The frontmatter keys a digest leaves out, each with its continuation
+# lines. `status`: verifying a draft rewrites that one line and keeps
+# every other byte (decision 0157), so a person who only verified an
+# entry has not written in it. `projection`: the stamp that carries the
+# digest. The rest are the instance's observations, which a read adds to
+# the document and a write strips again (docs/spec/okf.md, 主張と観測);
+# `received` is where a document's own claims to them are kept.
+UNSIGNED = ("status", "projection", "generated", "verified", "created_by", "received")
+
+
+def digest(document: str) -> str:
+    """A hash of the document as its writer wrote it.
+
+    Any byte that differs from what the projection wrote, outside the
+    UNSIGNED keys, is somebody's edit.
+    """
+    lines, end = _frontmatter_lines(document)
+    kept, skipping = [], False
+    for i, line in enumerate(lines):
+        if 0 < i < end:
+            if line[:1] not in (" ", "\t"):
+                skipping = line.split(":", 1)[0] in UNSIGNED
+            if skipping:
+                continue
+        kept.append(line)
+    return "sha256:" + hashlib.sha256("\n".join(kept).encode("utf-8")).hexdigest()
+
+
+def stamped(document: str, shape: str) -> str:
+    """The document with its `projection` stamp: whose text it is, and what it says.
+
+    `text` is the digest of the document as written, so the next run can
+    tell an entry nobody has written in — verified or not — from one a
+    person has edited. The producer stamp could not: verifying a draft is
+    an edit by the verifier, so after the first confirmation the last
+    writer is never the projection again. `shape` is the digest of the
+    same document without today's observations (build_document's
+    observe=False), so a row count moving does not count as the table
+    changing. Both are plain values in the document, which ochakai stores
+    byte for byte; it reads neither.
+    """
+    stamp = json.dumps({"text": digest(document), "shape": digest(shape)})
+    lines, end = _frontmatter_lines(document)
+    return "\n".join(lines[:end] + [f"projection: {stamp}"] + lines[end:])
+
+
+def stamp_of(document: str) -> dict | None:
+    try:
+        stamp = json.loads(frontmatter_value(document, "projection") or "null")
+    except ValueError:
+        return None
+    return stamp if isinstance(stamp, dict) else None
+
+
+def status_of(document: str) -> str:
+    """The lifecycle the document declares; absent reads as stable (SPEC §5.4)."""
+    return frontmatter_value(document, "status").strip("\"'") or "stable"
 
 
 # ----------------------------------------------------------------- upsert
@@ -346,13 +456,13 @@ class Ochakai:
     document rather than by which endpoint was called.
     """
 
-    def __init__(self, url: str, token: str):
+    def __init__(self, url: str, token: str, producer: str = PRODUCER):
         self.url = url.rstrip("/")
         # Every request names its software. The server records the value
         # beside the authenticated actor, never in place of it (design doc
         # 0052) — which is exactly what lets the next run tell a
         # projection from a person, whoever ran this one.
-        self.headers = {"Ochakai-Producer": PRODUCER}
+        self.headers = {"Ochakai-Producer": producer}
         if token:
             self.headers["Authorization"] = f"Bearer {token}"
 
@@ -374,6 +484,28 @@ class Ochakai:
             return None, ""
         r.raise_for_status()
         return r.json(), r.headers.get("ETag", "")
+
+    def document(self, entry_id: str) -> tuple[str, str]:
+        """The stored document, byte for byte, and its ETag.
+
+        The View does not carry the bytes, and the stamp is judged on the
+        bytes: ochakai stores a document exactly as it was written, so
+        what comes back is what the projection (or a person) sent.
+        """
+        r = requests.get(self._at(entry_id), headers=self.headers, timeout=TIMEOUT)
+        r.raise_for_status()
+        return r.content.decode("utf-8"), r.headers.get("ETag", "")
+
+    def verify(self, entry_id: str) -> None:
+        """Record the caller's verification of the entry as it stands.
+
+        There is no precondition on a ruling, so the caller reads the ETag
+        again afterwards to learn whether what it checked is what it
+        verified (see `confirm`).
+        """
+        r = requests.post(f"{self.url}/api/v1/review/{entry_id}",
+                          json={"ruling": "verified"}, headers=self.headers, timeout=TIMEOUT)
+        r.raise_for_status()
 
     def write(self, entry_id: str, document: str, *, if_match: str = "",
               only_if_absent: bool = False) -> bool:
@@ -398,20 +530,14 @@ class Ochakai:
 
 
 def ruled_on(view: dict) -> str:
-    """Why this entry is a person's now, or "" while it is still the sync's.
+    """Why an unstamped entry is a person's now, or "" while it is the sync's.
 
-    Two separate signals, because ochakai keeps them separate (design
-    doc 0075 §4.1): the **lifecycle** is what the writer declared, and the
-    **trust tier** is what the verification ledger derives. Verifying an
-    entry does not move its status — a ruling and a publication are
-    different acts — so a sync that watched `status` alone would go on
-    overwriting an entry somebody had just confirmed, which is the one
-    thing this guard exists to prevent.
-
-    A rejection is not a third signal: it is a deletion carrying a reason
-    (design doc 0135), so a rejected entry is gone rather than marked and
-    the next run projects it again. What takes an entry out for good is a
-    verification, an edit, or a status that is not `draft`.
+    The rule for entries written before the `projection` stamp existed,
+    and only for those. Without the stamp a verified entry cannot be told
+    from an edited one — verifying a draft is an edit by the verifier —
+    so both stay frozen, as they always were. The lifecycle and the trust
+    tier are read separately because ochakai keeps them separate (design
+    doc 0075 §4.1): verifying does not move a stable entry's status.
     """
     summary = view.get("summary", {})
     if summary.get("trust", "unverified") != "unverified":
@@ -420,56 +546,137 @@ def ruled_on(view: dict) -> str:
     return "" if status == "draft" else status
 
 
-def upsert(api: Ochakai, entry_id: str, document: str, identity: str, counts: dict) -> None:
-    """Write the projection, unless a person has taken it over.
+def upsert(api: Ochakai, entry_id: str, render, identity: str, counts: dict) -> None:
+    """Write the projection, unless a person has written in the entry.
 
-    The rule, in full: write only while nobody has ruled on the entry and
-    the standing text is the projection's own, and make the write
-    conditional so an edit landing between the read and the write loses
-    the race instead of being erased by it (design doc 0030). Verifying an
-    entry — or simply editing it — takes it out of the sync for good. That
-    is the same line design doc 0145 §6 draws for MCP, applied from
-    outside: a machine does not overwrite what a ruling stands on. ochakai
-    needs no owner field and no authorization for this; the projection and
-    provenance carry it.
+    `render(status)` returns the stamped document with that status.
 
-    "The projection's own" is keyed to the producer stamp, not to the
-    account. A catalog grown on demand is refreshed by whoever needed it —
-    A's run under A's account, B's under B's — and a rule keyed to one
-    account would have B skip every entry A projected, forever. Any run of
-    this computation names PRODUCER; a person's edit — CLI, web UI, an
-    agent — names a different producer or none, and that is what takes the
-    entry out. The last-writer identity survives only as a fallback for
-    entries written before the stamp existed.
+    The rule, in full: an entry is the projection's while the text
+    standing there is the text the projection wrote — the stamp's `text`
+    digest still matches. A person who **edits** it takes it over for
+    good. A person who only **verifies** it does not: the sync goes on
+    following the table, and when the table's shape changes the write
+    lapses the verification, the entry turns unverified, and it waits in
+    the edited queue for a person or the confirmation job (decision
+    0160). A published entry whose shape has not changed is left alone —
+    today's row count is not worth a lapsed verification — and keeps the
+    status a person gave it. Every write is conditional on the version it
+    read, so an edit landing between the read and the write loses the
+    race instead of being erased by it (design doc 0030).
     """
     view, etag = api.read(entry_id)
     if view is None:
-        api.write(entry_id, document, only_if_absent=True)
+        api.write(entry_id, render("draft"), only_if_absent=True)
         counts["written"] += 1
         print(f"create {entry_id}", file=sys.stderr)
         return
 
-    if verdict := ruled_on(view):
+    stored, stored_etag = api.document(entry_id)
+    if stored_etag != etag:
         counts["skipped"] += 1
-        print(f"skip   {entry_id} — {verdict}, a ruling stands on it", file=sys.stderr)
+        print(f"skip   {entry_id} — changed while being read; the next run looks again",
+              file=sys.stderr)
         return
+    stamp = stamp_of(stored)
+    trust = view.get("summary", {}).get("trust", "unverified")
 
-    # Who wrote the words that stand there now (design doc 0065 §4): under
-    # delegation the name is the end user's, which is exactly right — a
-    # person who edited through an application is a person who edited.
-    by = view.get("observed", {}).get("generated", {}).get("by", {})
-    ours = by.get("producer", "") == PRODUCER or not identity or by.get("name", "") == identity
-    if not ours:
-        counts["skipped"] += 1
-        print(f"skip   {entry_id} — last written by {by.get('name', '?')}", file=sys.stderr)
-        return
+    if stamp is None:
+        # Written before the stamp: the old rule decides, and a write it
+        # allows brings the stamp in, so the rule converges.
+        if verdict := ruled_on(view):
+            counts["skipped"] += 1
+            print(f"skip   {entry_id} — {verdict}, unstamped", file=sys.stderr)
+            return
+        by = view.get("observed", {}).get("generated", {}).get("by", {})
+        ours = (by.get("producer", "").startswith(PRODUCER_FAMILY)
+                or not identity or by.get("name", "") == identity)
+        if not ours:
+            counts["skipped"] += 1
+            print(f"skip   {entry_id} — last written by {by.get('name', '?')}", file=sys.stderr)
+            return
+        status = "draft"
+        document = render(status)
+    else:
+        if digest(stored) != stamp.get("text"):
+            counts["skipped"] += 1
+            print(f"skip   {entry_id} — a person has written in it", file=sys.stderr)
+            return
+        status = status_of(stored)
+        document = render(status)
+        if status != "draft" and stamp_of(document)["shape"] == stamp.get("shape"):
+            counts["unchanged"] += 1
+            print(f"same   {entry_id} — shape unchanged", file=sys.stderr)
+            return
 
     if api.write(entry_id, document, if_match=etag):
         counts["written"] += 1
-        print(f"sync   {entry_id}", file=sys.stderr)
+        if trust != "unverified":
+            counts["lapsed"] += 1
+            print(f"follow {entry_id} — the table changed; the {trust} verification lapses",
+                  file=sys.stderr)
+        else:
+            print(f"sync   {entry_id}", file=sys.stderr)
     else:
         counts["unchanged"] += 1
         print(f"same   {entry_id}", file=sys.stderr)
+
+
+def confirm(api: Ochakai, entry_id: str, render, identity: str, counts: dict) -> None:
+    """Verify the entry if it still says what BigQuery says. Writes nothing.
+
+    This is a confirmation job's ruling, recorded under its own
+    `process:` identity and read as `machine-confirmed` (decision 0160).
+    It confirms only what a person delegated it, and the delegation is
+    narrow on purpose:
+
+    - **published entries only.** Verifying a draft publishes it
+      (decision 0157); publishing is a person's call, so a draft waits.
+    - **the projection's own text only.** An entry a person has written
+      in holds their words, and a person confirms those.
+    - **never its own write.** The last writer is not this identity: a
+      writer confirming its own write says nothing.
+    - **what the source says now.** The shape projected from BigQuery
+      this minute matches the stamped shape. An entry that drifted is
+      left for the next sync, which corrects it.
+
+    A ruling takes no precondition, so the ETag is read again after the
+    verification; if it moved, a write landed in between and the
+    verification stands on content this run never checked. That is
+    reported as `raced`, for a person to look at.
+    """
+    view, etag = api.read(entry_id)
+    if view is None:
+        counts["missing"] += 1
+        print(f"gone   {entry_id} — no entry; the sync writes it first", file=sys.stderr)
+        return
+    if view.get("summary", {}).get("trust", "unverified") != "unverified":
+        counts["standing"] += 1
+        return
+    stored, stored_etag = api.document(entry_id)
+    stamp = stamp_of(stored)
+    by = view.get("observed", {}).get("generated", {}).get("by", {})
+    if stored_etag != etag:
+        reason, bucket = "changed while being read", "skipped"
+    elif status_of(stored) == "draft":
+        reason, bucket = "a draft; a person publishes it first", "drafts"
+    elif stamp is None or digest(stored) != stamp.get("text"):
+        reason, bucket = "a person has written in it; a person confirms it", "edited"
+    elif by.get("name", "") == identity:
+        reason, bucket = "this identity wrote it; the writer does not confirm", "own"
+    elif stamp_of(render(status_of(stored)))["shape"] != stamp.get("shape"):
+        reason, bucket = "no longer what BigQuery says; the next sync corrects it", "drifted"
+    else:
+        api.verify(entry_id)
+        _, after = api.read(entry_id)
+        if after != etag:
+            counts["raced"] += 1
+            print(f"RACED  {entry_id} — written while being confirmed; check it", file=sys.stderr)
+            return
+        counts["confirmed"] += 1
+        print(f"verify {entry_id}", file=sys.stderr)
+        return
+    counts[bucket] += 1
+    print(f"skip   {entry_id} — {reason}", file=sys.stderr)
 
 
 # -------------------------------------------------------------------- run
@@ -523,6 +730,9 @@ def main() -> int:
     p.add_argument("--prefix", default="catalog/bigquery", help="id prefix")
     p.add_argument("--sync-identity", default="",
                    help="the account this runs as (default: the ID token's email claim)")
+    p.add_argument("--confirm", action="store_true",
+                   help="write nothing; verify the published entries that still say what "
+                        "BigQuery says. Run it under a different identity from the sync")
     p.add_argument("--dry-run", action="store_true", help="print the documents instead of writing")
     args = p.parse_args()
 
@@ -531,17 +741,31 @@ def main() -> int:
 
     token = "" if args.dry_run else id_token_for(args.ochakai_url)
     identity = args.sync_identity or identity_from(token)
-    api = Ochakai(args.ochakai_url, token)
+    if args.confirm and not args.dry_run and not identity:
+        # Without its own name the job cannot tell its own writes from
+        # the sync's, and "never its own write" is the one rule it keeps
+        # by itself.
+        print("--confirm needs an identity: run it with an ID token for its own "
+              "service account, or name it with --sync-identity", file=sys.stderr)
+        return 2
+    api = Ochakai(args.ochakai_url, token, CONFIRM_PRODUCER if args.confirm else PRODUCER)
     client = bigquery.Client(project=args.project)
+    step = confirm if args.confirm else upsert
 
     usage = {}
-    if args.jobs_region:
+    # A confirmation compares shapes, which leave the query counts out.
+    if args.jobs_region and not args.confirm:
         print(f"reading job history for the last {args.usage_days} days "
               f"in region-{args.jobs_region}", file=sys.stderr)
         usage = usage_counts(client, args.project, args.jobs_region, args.usage_days)
 
-    counts = {"tables_seen": 0, "written": 0, "unchanged": 0,
-              "skipped": 0, "missing": 0, "failed": 0}
+    if args.confirm:
+        counts = {"tables_seen": 0, "confirmed": 0, "standing": 0, "drafts": 0,
+                  "edited": 0, "own": 0, "drifted": 0, "raced": 0,
+                  "skipped": 0, "missing": 0, "failed": 0}
+    else:
+        counts = {"tables_seen": 0, "written": 0, "unchanged": 0, "lapsed": 0,
+                  "skipped": 0, "missing": 0, "failed": 0}
     for dataset in args.datasets:
         # (name, first line of its description) for the dataset entry: the
         # tables this run actually read, which is the only list it may claim.
@@ -568,17 +792,24 @@ def main() -> int:
             try:
                 table = client.get_table(f"{args.project}.{dataset}.{members[-1]}")
                 tables.append((name, (table.description or "").split("\n")[0]))
-                document = build_document(table, fq, dataset, used, window,
-                                          args.frequent_threshold, shards)
+
+                def render(status, table=table, fq=fq, used=used, shards=shards):
+                    full = build_document(table, fq, dataset, used, window,
+                                          args.frequent_threshold, shards, status=status)
+                    shape = build_document(table, fq, dataset, used, window,
+                                           args.frequent_threshold, shards, status=status,
+                                           observe=False)
+                    return stamped(full, shape)
+
                 if args.dry_run:
                     # The document, exactly as it would be written: what
                     # goes over the wire is what an export brings back and
                     # what `ochakai get` prints, so a dry run is readable
                     # by the person who would have to review the entry.
                     print(f"=== {entry_id}.md")
-                    print(document)
+                    print(render("draft"))
                     continue
-                upsert(api, entry_id, document, identity, counts)
+                step(api, entry_id, render, identity, counts)
             except NotFound:
                 # Dropped between the listing and the read. Deletion is a
                 # warehouse's ordinary day, so it is an outcome, not a
@@ -597,14 +828,19 @@ def main() -> int:
         # whole dataset and can vouch for the list it writes.
         entry_id = f"{args.prefix}/{args.project}/{dataset}"
         try:
-            document = build_dataset_document(client.get_dataset(dataset),
-                                              args.project, dataset, tables,
-                                              args.prefix)
+            ds = client.get_dataset(dataset)
+
+            def render(status, ds=ds, tables=tables):
+                # A dataset entry observes nothing, so its shape is itself.
+                document = build_dataset_document(ds, args.project, dataset, tables,
+                                                  args.prefix, status=status)
+                return stamped(document, document)
+
             if args.dry_run:
                 print(f"=== {entry_id}.md")
-                print(document)
+                print(render("draft"))
             else:
-                upsert(api, entry_id, document, identity, counts)
+                step(api, entry_id, render, identity, counts)
         except NotFound:
             counts["missing"] += 1
             print(f"gone   {entry_id} — dropped between list and read", file=sys.stderr)
@@ -625,13 +861,13 @@ def main() -> int:
     # count, the way the reference bundle's sql_equality.py compares the
     # SQL that ran against the SQL that was sanctioned.
     print(json.dumps({
-        "sync_identity": identity,
+        ("confirm_identity" if args.confirm else "sync_identity"): identity,
         "project": args.project,
         "datasets": sorted(args.datasets),
         "prefix": args.prefix,
         **counts,
     }))
-    return 1 if counts["failed"] else 0
+    return 1 if counts["failed"] or counts.get("raced") else 0
 
 
 if __name__ == "__main__":

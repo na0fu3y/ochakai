@@ -95,8 +95,9 @@ that is missing one rather than guessing what it meant.
 | `prefix` | the `--prefix` the ids were built under |
 | `tables_seen` | tables and views considered, before any ownership check |
 | `written` | entries created or updated, dataset entries included |
-| `unchanged` | entries whose bytes already matched, so no revision was made |
-| `skipped` | entries left alone because a person had verified or edited them, or moved them off `draft` |
+| `unchanged` | entries whose bytes already matched, or published entries whose shape had not changed, so no revision was made |
+| `lapsed` | of `written`, the entries a verification stood on: the table changed, the sync followed it, and the entry now waits to be confirmed again |
+| `skipped` | entries left alone because a person had written in them (or, for entries from before the `projection` stamp, verified them or moved them off `draft`) |
 | `missing` | tables dropped between the listing and the read — the world changed, the run did not break, and the exit code stays 0 |
 | `failed` | tables that errored; the run's exit code is non-zero when this is not 0 |
 

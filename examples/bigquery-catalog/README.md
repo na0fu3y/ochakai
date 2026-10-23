@@ -6,14 +6,23 @@ BigQuery のテーブルメタデータを `BigQuery Table` concept として、
 カラムと、忘れてはいけないパーティションフィルタと、その後に人が下に
 書き足したことを見つけられるようにする。
 
-**これは例であって機能ではない。** ochakai はコネクタを持たず、今後も
-持たない: サーバーの中に住む収集器は、ochakai が意図して持たないウェア
-ハウスの資格情報を要るし、ここでのナレッジは収集ではなくキュレーション
-されるものだからである(README の「断るもの」の表、設計ドキュメント
-[0142](../../docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §2)。それは*あなたが*
-カタログを埋めることを何ら妨げない — このジョブは外で、CLI が使うのと
-同じ REST API の普通のクライアントとして、あなた自身のサービス
-アカウントで動く。
+人が verify した項目にも**追従する**。テーブルの形(カラム・型・
+パーティション・ビュー・説明)が変われば書き直し、立っていた検証は
+失効して、項目は `unverified` として確認を待つ。追従を止めるのは、人が
+項目に**書き込んだ**ときだけである。待っている項目は、人か、同じ
+ファイルを `--confirm` で走らせる**確認ジョブ**が確かめ直す。確認ジョブは
+同期とは別の身元で動き、BigQuery と形が合う公開済みの項目だけを
+`machine-confirmed` として確かめる — 人の確認を名乗ることはない
+(決定 [0160](../../docs/decisions/0160-ruling-is-a-tier-and-a-delegation.md))。
+
+**これは例であって機能ではない。** ochakai はいまコネクタを持たない:
+サーバーの中に住む収集器は、ochakai が意図して持たないウェアハウスの
+資格情報を要るからである(README の「断るもの」の表、設計ドキュメント
+[0142](../../docs/design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §2)。
+それは手段であって性質ではない — 追従した内容は段が落ちて配られるので、
+裁定を飛ばしてはいない(0160)。それは*あなたが*カタログを埋めることを
+何ら妨げない — このジョブは外で、CLI が使うのと同じ REST API の普通の
+クライアントとして、あなた自身のサービスアカウントで動く。
 
 ## その前に: 初日の一回なら `ochakai seed`
 
@@ -63,6 +72,7 @@ tar czf - -C examples/bigquery-catalog/bundle --exclude='*.py' . |
 |---|---|---|
 | [`skills/build-the-first-catalog`](bundle/skills/build-the-first-catalog.md) | Skill | **ここから** — day-one の順序: 小さく範囲を決め、住所を確定し、テーブルを投影し、一つ verify し、それからやっと computation を付ける |
 | [`jobs/sync-bigquery-catalog`](bundle/jobs/sync-bigquery-catalog.md) | Attested Computation | `runtime: python`、パラメータ、receipt、そして投影が下すすべての判断 |
+| [`jobs/confirm-bigquery-catalog`](bundle/jobs/confirm-bigquery-catalog.md) | Attested Computation | 同じファイルの `--confirm`。同期が追従して検証が失効した項目のうち、BigQuery と形が合うものを**別の身元で** `machine-confirmed` として確かめ直す |
 | [`jobs/draft-from-query-history`](bundle/jobs/draft-from-query-history.md) | Attested Computation | **コールドスタートのもう半分** — 何度も実行されているクエリを golden query の draft として書き戻す |
 | [`skills/run-a-python-job`](bundle/skills/run-a-python-job.md) | Skill | `executor` が指しているもの: どの identity で走らせるか、IAM ロール、receipt のフィールド |
 
