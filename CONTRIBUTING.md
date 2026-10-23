@@ -496,10 +496,12 @@ the shape of the system for a first read.
 
 Two decisions worth knowing before proposing features:
 
-- **Only a ruling changes what is served, no LLM rules, and the server
-  runs no SQL.** A ruling is a person's, or a confirmation job's (a CI
-  canary) recorded under its own `process:` identity, which readers see
-  as `machine-confirmed` rather than human-reviewed (0141 §2.4). ochakai
+- **Only a ruling raises trust, and the server runs no SQL.** A ruling
+  is a person's, or a confirmation job's a person delegated — a CI
+  canary, or an LLM run (0160) — recorded under its own `process:`
+  identity, which readers see as `machine-confirmed` rather than
+  human-reviewed (0141 §2.4). Content may change from anywhere; a change
+  drops the trust it had, and what is served always says its tier. ochakai
   stores and serves knowledge; its own data agent (off by default)
   answers and proposes but never verifies or rejects, and a query runs as
   the person asking, never as the server (0142).

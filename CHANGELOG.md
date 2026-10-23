@@ -21,6 +21,24 @@ last entry.
 
 ## [Unreleased]
 
+### Changed
+
+- **P1 is a tier, not a gate** ([docs/surface.md](docs/surface.md),
+  [0160](docs/decisions/0160-ruling-is-a-tier-and-a-delegation.md)).
+  It read "only a ruling changes what is served, and no LLM rules"; it
+  now reads: only a ruling raises a concept's trust, and everything
+  served carries its tier and provenance. Content may change from
+  anywhere — a writer, an agent's draft, a sync from a source — and a
+  meaningful change drops the verification that stood, as an edit
+  already does. A ruling is a person's, or a confirmation job's that a
+  person delegated by placing its `process:` identity and granting it
+  write over a prefix; the job may be an LLM run. Its verification
+  reads as `machine-confirmed` and never as `human-reviewed`. The
+  deployment's own agent still rules on nothing, ranking has no LLM in
+  it, and MCP carries no ruling. M4 (no connectors) no longer rests on
+  a property and may be exchanged for G1. No surface moves, and nothing
+  the server does changes.
+
 ## [0.31.3] - 2026-10-22
 
 ### Changed

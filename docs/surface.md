@@ -25,7 +25,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 
 | id | 性質 |
 |---|---|
-| P1 | 配る内容を変えるのは裁定だけで、LLM は裁定しない。裁定は人の verify と却下、または確認ジョブが `process:` として残す確認(`machine-confirmed` と読まれる)であり、誰が裁定したかは台帳に残る([architecture](spec/architecture.md)・[loop](spec/loop.md)) |
+| P1 | 信頼の段を上げるのは裁定だけで、配るものは必ずいまの段と来歴を連れる。内容はどこから変わってもよく、変われば立っていた検証は失効する。裁定は人の verify と却下、または人が委任した確認ジョブ(中身が LLM でもよい)が `process:` として残す確認であり、後者は `machine-confirmed` と読まれて `human-reviewed` には決してならない。誰が裁定したかは台帳に残る([0160](decisions/0160-ruling-is-a-tier-and-a-delegation.md)・[architecture](spec/architecture.md)・[loop](spec/loop.md)) |
 | P2 | 資産は利用者のもの — 丸ごと出て、丸ごと戻り、求められれば消える([0009](design/0009-provenance-portability.md)・[0031](design/0031-purge.md)・[0075](design/0075-the-bundle-is-the-address-space.md)) |
 | P3 | 形式は Open Knowledge Format — 保存もワイヤも往復も OKF で、その横に第二の形式を発明しない([0075](design/0075-the-bundle-is-the-address-space.md))。**「v0.2」は一つの文書を指さない**ので、留めるのは版ではなく**コミット**である(`open-knowledge-format@0b87c52`、[compatibility.md](compatibility.md) が正典): v0.2 は公開後に normative な規則を版番号を動かさずに変えており、綴りをどちらに合わせるかは [0139](design/0139-ochakai-does-not-choose-a-spelling.md)。他の形式の定義を読んで draft に写すことは第二の形式ではない — 保存とワイヤと往復が OKF のままだからである |
 | P4 | 問いは、問うた本人の権限を超えない。ochakai はウェアハウスの資格情報を常設しない([architecture](spec/architecture.md)) |
@@ -50,7 +50,7 @@ ochakai を使う人が払うのは実装の行数ではなく**表面**であ�
 | M1 | Google Cloud を前提にする(Cloud Run IAM・Cloud SQL IAM)。撤回の条件は [0115](design/0115-the-second-footing-waits-for-search.md) | P5 を設定無しで満たす。OIDC 発行者を名指したデプロイは Google Cloud の外でも P5 を満たし([0086](design/0086-a-second-way-to-say-who-is-calling.md))、そこではデータベースの資格情報が運用者の仕事に戻る |
 | M2 | サーバーは SQL を実行しない | P4 |
 | M3 | デプロイ自身のデータエージェントは既定 off | 課金とデータの送り先(G5 のリージョン)について、運用者が自分で決めてから入れる |
-| M4 | コネクタと取り込みパイプラインを持たない | P1 — 集めたものが裁定無しに配られない |
+| M4 | コネクタと取り込みパイプラインを持たない | 性質の根拠は無い — 追従した内容は段が落ちて配られるので、P1 は破らない([0160](decisions/0160-ruling-is-a-tier-and-a-delegation.md))。表面を増やさないこと(M6)だけで保ち、G1 と衝突したら入れ替える側にある |
 | M5 | MCP の既定は no で、`MCP-BYTES` に天井を置く | エージェントのコンテキストの消費(G2) |
 | M6 | 面ごとの上限(下の「上限」節) | 表面を増やすことを、声に出した決定にする |
 

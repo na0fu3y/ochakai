@@ -453,8 +453,10 @@ endorse し、Endorsed Mode ではエージェントが「endorse された資�
   それを人が確かめたかどうかを言う。確かめたことは status ではなく、
   認証された呼び出し元を名指す台帳の行である
   ([0065](design/0065-identity-and-provenance.md))。エージェントは裁定
-  しない — 提案するだけで、配る中身を変えるのは裁定だけである(人の
-  裁定か、CI の確認ジョブが `process:` として残す `machine-confirmed`)
+  しない — 提案するだけで、信頼の段を上げるのは裁定だけである(人の
+  裁定か、人が委任した確認ジョブが `process:` として残す
+  `machine-confirmed` — ジョブの中身は LLM でもよい、
+  [0160](decisions/0160-ruling-is-a-tier-and-a-delegation.md))
   ([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §3)。
   Genie の重みも Cortex Sense の順位も、どの読み方を採るかを機械が決める。
 - **却下が理由ごと残る。** 答えへの 👎 と一言は失敗の結果報告として
@@ -864,9 +866,10 @@ README がそう書いており、[0131](design/0131-a-deployment-says-what-it-c
 ページを拾う — は、この節が言う vault の中で最も速く増えた形であり、
 上の pi-llm-wiki と aws-samples/sample-okf-llm-wiki はその実装である。
 **前提が ochakai と正反対である**: 向こうは LLM が wiki を維持することが
-本体で、こちらは LLM に裁定させない — 自分のエージェントを入れた
-デプロイでも、そのエージェントは提案するだけで、配る中身を変えるのは人の
-裁定だけである([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md))。
+本体で、こちらは LLM が人の段を名乗らない — 自分のエージェントを入れた
+デプロイでも、そのエージェントは提案するだけで、`human-reviewed` を立てる
+のは人の裁定だけである(人が委任した LLM の確認は `machine-confirmed` に
+留まる、[0160](decisions/0160-ruling-is-a-tier-and-a-delegation.md))([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md))。
 その代表実装 [llm-wiki-compiler](https://github.com/atomicstrata/llm-wiki-compiler)
 (2.0k、MIT、OKF の producer と consumer、レビューキュー、MCP サーバー)
 の v1.1.0 に、2026-09-05、当時の `examples/demo` の十八文書と `kb/bundle` の

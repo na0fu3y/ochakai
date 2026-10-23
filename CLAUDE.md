@@ -1,11 +1,12 @@
 # CLAUDE.md
 
 ochakai is a knowledge store for data-analysis agents. Its properties
-frame everything (docs/surface.md, P1–P5): nothing but a ruling changes
-what is served — a person's, or a confirmation job's recorded under its
-own `process:` identity and read as `machine-confirmed`, never as
-human-reviewed; no LLM rules — a query never exceeds the permissions of
-the person who asked, and ochakai keeps no long-lived secret an operator
+frame everything (docs/surface.md, P1–P5): nothing but a ruling raises
+a concept's trust, and everything served carries its tier and
+provenance — a ruling is a person's, or a confirmation job's a person
+delegated (an LLM may be one, 0160), recorded under its own `process:`
+identity and read as `machine-confirmed`, never as human-reviewed — a
+query never exceeds the permissions of the person who asked, and ochakai keeps no long-lived secret an operator
 has to store or rotate. Today those are met by means that can change:
 the server executes no SQL (0142 — its own data agent is off by default
 and rules on nothing), and Cloud Run IAM + Cloud SQL IAM on Google Cloud,
@@ -48,8 +49,8 @@ capped — those ceilings are retired and 上限 says why — so a page that
 grows without a new page appearing is caught by review, not by CI.
 
 That document opens with **three layers**. *Properties* say what ochakai
-is and are not broken: only a ruling changes what is served, the
-knowledge stays the user's, OKF, a query within the asker's permissions,
+is and are not broken: only a ruling raises trust and what is served
+says its tier, the knowledge stays the user's, OKF, a query within the asker's permissions,
 no long-lived secret. *Goals* say what it is for and are checked by
 numbers: no forward-deployed engineer (first), usable from Claude Code, a
 small embeddable REST API, a measurable improvement loop, and being one
@@ -126,4 +127,5 @@ process identity, and that distinction is what keeps the trust tier
 honest about who reviewed what
 ([kb/bundle/policies/ai-human-identity.md](kb/bundle/policies/ai-human-identity.md)).
 Rulings — verify and reject — belong to the human; a `process:`
-verification is a confirmation job's (a CI canary), never an agent's.
+verification is a confirmation job's a person delegated (a CI canary),
+and nobody has delegated one to an agent working in this repository.

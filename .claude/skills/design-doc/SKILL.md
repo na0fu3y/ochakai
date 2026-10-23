@@ -32,9 +32,11 @@ those.
 Check any proposal against the properties first (docs/surface.md,
 P1–P5); they are not broken:
 
-- **Only a ruling changes what is served, and no LLM rules** (P1). A
-  ruling is a person's, or a confirmation job's recorded as `process:`
-  and read as `machine-confirmed`.
+- **Only a ruling raises trust, and what is served says its tier**
+  (P1, 0160). A ruling is a person's, or a confirmation job's a person
+  delegated — an LLM may be one — recorded as `process:` and read as
+  `machine-confirmed`, never `human-reviewed`. The deployment's own
+  agent rules on nothing.
 - **A query never exceeds the permissions of the person who asked**
   (P4), and ochakai keeps no standing warehouse credential.
 - **No long-lived secret an operator has to store or rotate** (P5).
