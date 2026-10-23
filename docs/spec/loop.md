@@ -25,9 +25,19 @@
   人の If-Match を無効にしない。
 - **裁定は一件ずつである。** 一度の操作で複数の concept を確かめる口は
   持たない([0159](../decisions/0159-a-ruling-is-made-one-concept-at-a-time.md))。
-- **裁定するのは人か、人が置いた確認ジョブ**である。`process:` の身元で
-  記録された検証(CI の canary など)は `machine-confirmed` と読まれる。
-  LLM は裁定しない([architecture.md](architecture.md))。
+- **裁定するのは人か、人が委任した確認ジョブ**である
+  ([0160](../decisions/0160-ruling-is-a-tier-and-a-delegation.md))。
+  委任とは、人がジョブの `process:` の身元を置き、付与表
+  ([identity.md](identity.md))でそれが書ける範囲を決めることで、検証には
+  編集と同じ書く付与が要るので、その範囲がジョブの確認できる範囲になる。
+  ジョブの中身は CI の canary でも LLM でもよく、どちらの検証も
+  `machine-confirmed` と読まれ、`human-reviewed` には決してならない。
+  `via` で人を名乗るジョブの検証はその人の検証として記録されるので、
+  委任には使わない。デプロイ自身のエージェントは裁定しない
+  ([architecture.md](architecture.md))。
+- **内容はどこから変わってもよく、段がそれを言う。** 書き手の編集でも、
+  エージェントの draft でも、ソースへの追従でも、意味のある変更は立って
+  いた検証を失効させる。配るものは常にいまの段と来歴を連れる。
 - **trust の段は、いまの内容に対して立っている検証から導く。** 立っている
   とは、台帳の行の `at` が内容の最後の意味のある変更(`generated.at`)以降
   であること。人の行があれば `human-reviewed`、他の行があれば

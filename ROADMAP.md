@@ -53,8 +53,9 @@ ochakai competes on what they gave up:
 agent is allowed to do. These are properties
 ([docs/surface.md](docs/surface.md), P1–P5) and are not broken:
 
-- only a ruling changes what is served — a person's, or a confirmation
-  job's that reads as `machine-confirmed` — and no LLM rules;
+- only a ruling raises trust, and what is served says its tier — a
+  ruling is a person's, or a confirmation job's a person delegated (an
+  LLM may be one, 0160), which reads as `machine-confirmed`;
 - a query never exceeds the permissions of the person who asked;
 - no long-lived secret an operator has to store or rotate.
 
