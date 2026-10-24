@@ -18,7 +18,7 @@ parameters:
 computation: /jobs/sync-bigquery-catalog/sync-bigquery-catalog.py
 executor:
   resource: /skills/run-a-python-job.md
-  receipt: [sync_identity, project, datasets, prefix, tables_seen, written, unchanged, skipped, missing, failed]
+  receipt: [sync_identity, project, datasets, prefix, tables_seen, written, unchanged, lapsed, skipped, missing, failed]
 attester:
   resource: /attesters/catalog-sync.py
 ---
@@ -31,11 +31,12 @@ is a few hundred lines of Python (SPEC §10.2), and the rule around it is
 the same either way: an agent supplies parameters and **must not author or
 edit the computation** (SPEC §10.3).
 
-ochakai has no connectors and is not getting any — a harvester inside the
-server would need warehouse credentials it deliberately does not hold, and
-knowledge here is curated rather than collected. This runs outside it, as
-an ordinary client of the same REST API the CLI uses, under your own
-service account. Nothing in it is privileged; treat it as a starting point
+ochakai has no connectors today — a harvester inside the server would
+need warehouse credentials it deliberately does not hold. That is a means
+rather than a property (decision 0160): what a sync writes is served at
+the trust it has, and a change lapses the verification that stood. This
+runs outside it, as an ordinary client of the same REST API the CLI uses,
+under your own service account. Nothing in it is privileged; treat it as a starting point
 and change it.
 
 # What lands
@@ -53,6 +54,7 @@ sources:
     last_modified: "2026-07-26T00:00:00Z"
     usage_count: 412
 usage_window: { from: "2026-06-27T00:00:00Z", to: "2026-07-27T00:00:00Z" }
+projection: {"text": "sha256:…", "shape": "sha256:…"}   # see "Who owns an entry"
 ```
 
 with a body holding the columns (nested `RECORD` fields flattened to
@@ -106,63 +108,67 @@ Three of those choices are load-bearing:
 # Who owns an entry
 
 The obvious failure mode of any sync is that it flattens what a person
-wrote, the next morning, silently. This one writes an entry only while
-**nobody has ruled on it and the standing text is the projection's own**,
-and the write is conditional on the version it read, so an edit landing
-between the read and the write loses the race instead of being erased by
-it.
+wrote, the next morning, silently. The opposite failure is quieter: an
+entry a person confirmed stops following the table, and a column added
+next month never appears in it. This one avoids both by telling apart
+the two things a person does to an entry.
 
-"The projection's own" is recognized by the `Ochakai-Producer` stamp
-every write here carries (`sync-bigquery-catalog/2`, design doc 0065 §4) —
-deliberately the stamp, not the account. A catalog grown on demand is
-refreshed by whoever needed it: A's morning run under A's account, B's
-under B's, the nightly one under the scheduler's. A rule keyed to one
-account would have B's run skip every entry A projected, forever. Keyed
-to the producer, every run of this computation recognizes every other
-run's writes as machine-owned, while a person's edit — through the CLI,
-the web UI, an agent — names a different producer or none, and that is
-what takes the entry out. The stamp is self-declared and recorded beside
-the authenticated actor, never in place of it, so this is a courtesy
-contract between runs rather than a lock — which is all a sync needs:
-the point was never to stop a person, only to notice one. (Entries
-written before the stamp existed carry no producer; for those, and only
-those, the last-writer account still decides, so the first run under the
-old identity re-stamps them and the rule converges.)
+- **Editing it** — the person's words are in it now. The sync leaves it
+  alone from then on, for good.
+- **Verifying it** — "I checked this and it is right." The words are
+  still the projection's, so the sync keeps following the table. When
+  the table's shape changes — a column, its type, the partitioning, the
+  view, the description — the sync writes the new shape, the
+  verification lapses (any meaningful change does, decision 0160), the
+  entry reads `unverified`, and it waits in the edited queue
+  (`ochakai list verified_at --trust unverified`) for a person, or for
+  [the confirmation job](/jobs/confirm-bigquery-catalog.md), to confirm
+  it again. A published entry whose shape has not changed is not
+  rewritten: today's row count is not worth a lapsed verification.
 
-"Nobody has ruled on it" is two separate questions, because ochakai keeps
-the two apart: the **lifecycle** is what the writer declared — `draft`,
-written into every projection, because a document that declares nothing
-reads as `stable` and this job would then skip its own work — and the
-**trust tier** is what the verification ledger derives. Verifying does not
-move the status — a ruling and a publication are different acts — so a
-sync watching `status` alone would go on overwriting an entry somebody had
-just confirmed. The job reads both.
+The difference is read off a stamp every projection carries in its
+frontmatter:
 
-A rejection is not a third question. It is a deletion carrying a reason
+```yaml
+projection: {"text": "sha256:…", "shape": "sha256:…"}
+```
+
+`text` is a digest of the document as the projection wrote it, leaving
+out `status` (verifying a draft rewrites that one line and keeps every
+other byte, decision 0157), the stamp itself, and the keys the instance
+adds on a read (`generated`, `verified`, `created_by`). If the standing
+document still digests to `text`, nobody has written in it. `shape` is
+the digest of the same document without the day's observations — row
+count, query counts, last modification — and is what "the table
+changed" means. ochakai stores a document byte for byte and reads
+neither value; they are a contract between runs of this file, not a
+lock. The point was never to stop a person, only to notice one.
+
+The status a person gave an entry stays: the sync writes a published
+entry back as published, because putting it back to `draft` would be the
+job overruling the person who published it. Every write is conditional
+on the version it read, so an edit landing between the read and the
+write loses the race instead of being erased by it.
+
+**Entries from before the stamp** (written by `sync-bigquery-catalog/2`
+or earlier) keep the old rule, because without the stamp a verified
+entry cannot be told from an edited one: the sync writes one only while
+it is still an unverified draft whose last write carries this job's
+producer family (`sync-bigquery-catalog/`), and that write brings the
+stamp in, so the rule converges. An unstamped entry a person already
+verified stays frozen; to bring it back under the sync, delete it and
+let the next run project it again, then verify the new one.
+
+If what you know is *about* the table rather than *of* it — a caveat, a
+baseline, the filter everyone forgets — the better home is a separate
+`Insight` that links to the catalog entry and cites the same source.
+Then the projection keeps following the table, your knowledge stays
+yours, and a read of the catalog entry names the insight in its
+`linked_from` rows, because links are one edge read from either end.
+
+A rejection is not a third case. It is a deletion carrying a reason
 (design doc 0135), so a rejected entry is gone rather than marked, and the
 next run projects it again.
-
-A human takes an entry out of the sync by touching it, two ways that mean
-different things:
-
-- **`ochakai verify`** — "I checked this and it is right." The entry stops
-  being a projection and becomes curated knowledge. Its status does not
-  change; its trust tier does, and that is what the sync sees.
-- **Editing the body** — enough on its own; the sync sees a write that
-  does not carry its producer and leaves the entry alone from then on.
-
-The cost is real: a frozen entry stops receiving schema changes, so a
-column added next month will not appear in it. If what you wrote is *about*
-the table rather than *of* it — a caveat, a baseline, the filter everyone
-forgets — the better home is a separate `Insight` that links to the catalog
-entry and cites the same source. Then the projection stays machine-owned
-and current, your knowledge stays yours, and a read of the catalog entry
-names the insight in its `linked_from` rows, because links are one edge
-read from either end.
-
-This is also the answer to "can an entry be locked to its owner?" — it can,
-with no owner field and no authorization anywhere in the server. Status and
-provenance carry the whole rule.
 
 # The receipt, and what would attest it
 

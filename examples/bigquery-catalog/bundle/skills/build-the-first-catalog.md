@@ -118,22 +118,26 @@ skipping a catalog that looks like a person wrote it.
 
 ### 5. Turn one table into knowledge
 
-Pick the table your agents get wrong most often. The entry is a document,
-so editing it is a round trip through one:
+Pick the table your agents get wrong most often. Read the entry, and if
+the columns and layout are right, verify it as it stands:
 
 ```sh
-ochakai get catalog/bigquery/my-project/shop/orders > orders.md
-$EDITOR orders.md          # fill in the empty `# Caveats` section
-ochakai put catalog/bigquery/my-project/shop/orders -f orders.md
+ochakai get catalog/bigquery/my-project/shop/orders
 ochakai verify catalog/bigquery/my-project/shop/orders
 ```
 
-Write what an agent has to know before it queries the table — the filter
-that is always required, the column that lies, the timezone the timestamps
-are in. Leave the rest of the document alone; the sync owns it and will
-keep it current. Two things then happen: the sync stops overwriting the
-entry, and its trust tier changes, so agents can tell it apart from the 83
-projections beside it.
+Then write what an agent has to know before it queries the table — the
+filter that is always required, the column that lies, the timezone the
+timestamps are in — as an `Insight` that links to the entry and cites
+`bigquery://my-project.shop.orders`, and verify that too. The catalog
+entry stays the projection's: the sync keeps its columns current, and
+when they change its verification lapses until a person or
+[the confirmation job](/jobs/confirm-bigquery-catalog.md) confirms it
+again. Your insight is yours, and a read of the entry names it in
+`linked_from`. Writing in the entry itself works too, but it takes the
+entry out of the sync for good and its columns stop following the table.
+Either way the trust tier changes, so agents can tell it apart from the
+83 projections beside it.
 
 **Do one.** The point of day one is not a verified catalog, it is a base
 that has one entry a person will vouch for and a procedure for making the

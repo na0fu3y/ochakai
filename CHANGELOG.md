@@ -23,6 +23,33 @@ last entry.
 
 ### Changed
 
+- **The BigQuery catalog sync follows entries a person verified**
+  (`examples/bigquery-catalog`, decision 0160). It used to freeze an
+  entry the moment anyone verified it, so a confirmed table stopped
+  receiving schema changes. It now stamps every projection with
+  `projection: {"text": …, "shape": …}` and freezes an entry only when a
+  person has **written** in it. When a verified entry's table changes
+  shape (columns, types, partitioning, view, description), the sync
+  writes it, the verification lapses, and the receipt counts it under the
+  new `lapsed` field. A published entry keeps its status, and one whose
+  shape has not changed is not rewritten for a new row count. Entries
+  written before the stamp keep the old rule until the sync can rewrite
+  them. The producer is now `sync-bigquery-catalog/3`, recognized by
+  family.
+
+### Added
+
+- **A confirmation job for the catalog**: the same script with
+  `--confirm`, described by `jobs/confirm-bigquery-catalog`. Run under its
+  own service account, it projects again, writes nothing, and verifies
+  the published entries whose text is still the projection's and whose
+  shape still matches BigQuery. Its rows read as `machine-confirmed`. It
+  never confirms a draft, a person's text, or its own write, and it
+  reports `raced` when a write lands between its check and its ruling. It
+  is the first delegated confirmation job the repository ships.
+
+### Changed
+
 - **P1 is a tier, not a gate** ([docs/surface.md](docs/surface.md),
   [0160](docs/decisions/0160-ruling-is-a-tier-and-a-delegation.md)).
   It read "only a ruling changes what is served, and no LLM rules"; it
