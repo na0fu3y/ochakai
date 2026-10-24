@@ -287,7 +287,7 @@ jobs:
       # new release failing CI here would mean a new audit, not a new
       # problem. `scripts/check actions` reads the version below out of
       # this file, so this is the one place it is written.
-      - uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+      - uses: zizmorcore/zizmor-action@85b2b9fb8e3325e7a23d7d0a9d7ba5ae0f999e3e # v0.7.1
         with:
           version: 1.29.0
           online-audits: false
