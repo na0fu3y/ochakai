@@ -56,7 +56,7 @@ JSON のキー名が違うだけなので、[その他のクライアント](#�
 | ツール | 説明 |
 |---|---|
 | `search_concepts` | 型をまたいだ検索。verified な concept が上位に来る。順位なので `limit` で終わり、二ページ目は無い。データの質問はここから始める |
-| `list_concepts` | レビューのフィードを端まで歩く(`verified_at` / `usage` / `failed` / `stale_after`)。`cursor` で続きを引く。検索ではないので `query` は取らない(設計ドキュメント [0096](../design/0096-a-listing-is-not-a-search-here-either.md)) |
+| `list_concepts` | レビューのフィードを端まで歩く(`verified_at` / `usage` / `failed` / `stale_after`)。`sort` を省き `prefixes` を渡すと、そのディレクトリの下を住所順に列挙する。`cursor` で続きを引く。検索ではないので `query` は取らない(設計ドキュメント [0096](../design/0096-a-listing-is-not-a-search-here-either.md)) |
 | `get_concept` | concept を一件、OKF ドキュメントとして取得する。ファイルのメタデータと、この concept を本文から指す concept の行(`linked_from` — metric の読み方を言う insight はここに出る)が付く |
 | `get_file` | concept に添付されたファイルを取得する(ダッシュボードのスクリーンショット、ER 図、seeds ファイルなど) |
 | `put_concept` | 学びを書き戻す — id が空いていれば作成し、埋まっていれば置き換える。変更はすべてリビジョンとして残る |

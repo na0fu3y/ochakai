@@ -627,6 +627,22 @@ func TestIntegrationListWalksAFeedAndSearchRefusesTo(t *testing.T) {
 		t.Errorf("the second page repeats the first: %s", next.Hits[0].ID)
 	}
 
+	// Without a feed, prefixes alone walk a directory: the subtree in
+	// address order, the set `ochakai list --prefix` answers, paged the
+	// same way.
+	byID := page(t, map[string]any{"prefixes": []string{run + "/metrics"}, "limit": 2})
+	if len(byID.Hits) != 2 || byID.Cursor == "" {
+		t.Fatalf("a page of two out of three: %d hits, cursor %q", len(byID.Hits), byID.Cursor)
+	}
+	rest := page(t, map[string]any{"prefixes": []string{run + "/metrics"}, "limit": 2, "cursor": byID.Cursor})
+	got := []string{}
+	for _, h := range append(byID.Hits, rest.Hits...) {
+		got = append(got, h.ID)
+	}
+	if strings.Join(got, " ") != strings.Join(ids, " ") {
+		t.Errorf("the directory was not walked in address order: %v", got)
+	}
+
 	// And the tool that ranks does not list. The refusal comes from
 	// schema validation rather than from the handler, which is what the
 	// split bought: the agent is told before the call costs anything.

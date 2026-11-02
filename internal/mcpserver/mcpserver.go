@@ -369,15 +369,10 @@ func newServer(svc *service.Service, version string) *mcp.Server {
 			"- failed: reported wrong via report_outcome, worst first — the re-verification feed.\n" +
 			"- stale_after: past the author's declared expiry, most overdue first — verifying " +
 			"alone does not clear this feed, since the date is the writer's own.\n" +
-			"Omit sort with source set to list what derives from that material instead.",
+			"Omit sort to list in address order instead: with source, what derives from that " +
+			"material; with prefixes, everything under those paths — a directory walked by id.",
 	}, tool(svc, func(ctx context.Context, _ domain.Actor, in listIn) (*mcp.CallToolResult, listOut, error) {
-		f := in.filter()
-		if in.Sort == "" && f.Source == "" {
-			return nil, listOut{}, service.Invalidf(
-				"list_concepts needs sort (%s) or source; to search by text, use search_concepts",
-				strings.Join(domain.ListSorts, ", "))
-		}
-		page, err := svc.SearchOrList(ctx, "", in.Sort, in.Cursor, f, in.Limit)
+		page, err := svc.SearchOrList(ctx, "", in.Sort, in.Cursor, in.filter(), in.Limit)
 		if err != nil {
 			return nil, listOut{}, err
 		}
@@ -647,9 +642,9 @@ type searchIn struct {
 }
 
 // listIn is the same filters with a feed and a position instead of a
-// query. sort is not required in the schema, because a source lookup is
-// a listing with no feed to name; the handler says so when neither is
-// there.
+// query. sort is not required, because a source lookup and the plain
+// enumeration under a prefix are listings with no feed to name — both
+// in address order, the same set `ochakai list --prefix` answers.
 type listIn struct {
 	Sort string `json:"sort,omitempty" jsonschema:"which feed: verified_at | usage | failed | stale_after (the description says what each is)"`
 	filters
