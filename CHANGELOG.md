@@ -36,6 +36,13 @@ last entry.
   written before the stamp keep the old rule until the sync can rewrite
   them. The producer is now `sync-bigquery-catalog/3`, recognized by
   family.
+- **MCP `list_concepts` walks a directory.** With no `sort` and no
+  `source`, it used to refuse; it now answers the plain enumeration the
+  REST listing and `ochakai list --prefix` already gave — the concepts
+  the filters match, in address order, paged by `cursor`. With
+  `prefixes`, that is everything under a directory, so an agent can go
+  down the tree by id instead of guessing at a search. No tool is added,
+  and a one-level browse with subdirectory counts stays off MCP.
 
 ### Added
 

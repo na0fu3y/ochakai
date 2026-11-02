@@ -105,7 +105,9 @@
 
 ### MCP に載せないもの
 
-ブラウズ・履歴・被リンクのツール(`linked_from` が運ぶ)、ファイルの書き込み、
+一階層のブラウズ(サブディレクトリと件数。ディレクトリを辿るのは
+`prefixes` だけを渡した `list_concepts` の住所順の一覧である)・履歴・
+被リンクのツール(`linked_from` が運ぶ)、ファイルの書き込み、
 バルク(export / import)、purge、reembed、`stats`、`fm.` のフィルタ、削除
 (削除は裁定である — 誤りなら `report_outcome` failed、良いものがあれば
 別 id の draft)、利用回数の合計、裁定、ポリシー、そしてデプロイ自身の

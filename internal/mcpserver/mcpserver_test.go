@@ -287,8 +287,8 @@ func TestArrayFiltersAreNamedInThePlural(t *testing.T) {
 
 // TestSortValidation mirrors the CLI and REST rules: an unknown sort is
 // rejected rather than guessed at, an empty search is a tool error and
-// not a Postgres 500, and a listing with neither a feed nor a reverse
-// lookup says which of the two it needed.
+// not a Postgres 500. A listing with neither a feed nor a reverse lookup
+// is no longer an error: it is the plain enumeration, in address order.
 //
 // The combination that used to be checked here — a query beside a sort —
 // cannot be expressed any more: the tools that take them are different
@@ -302,7 +302,6 @@ func TestSortValidation(t *testing.T) {
 		wantSubstr string
 	}{
 		{"invalid sort", "list_concepts", map[string]any{"sort": "created_at"}, "invalid sort"},
-		{"neither feed nor source", "list_concepts", map[string]any{}, "needs sort"},
 		{"empty query", "search_concepts", map[string]any{"query": ""}, "needs a query"},
 		{"whitespace query", "search_concepts", map[string]any{"query": " \t"}, "needs a query"},
 	}
