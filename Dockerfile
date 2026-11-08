@@ -26,7 +26,7 @@ RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags=
 # this image's base on a day nobody chose. debian13 is where that default
 # points today, and the digest holds it still even there — `nonroot` is
 # rebuilt in place, so the tag alone names a moving target.
-FROM gcr.io/distroless/static-debian13:nonroot@sha256:516757106de35205efb70b91ba03f6f1298424a0678c603255cf2852a7000087
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99
 COPY --from=build /ochakai /ochakai
 USER nonroot
 ENTRYPOINT ["/ochakai"]
