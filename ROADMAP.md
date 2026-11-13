@@ -19,6 +19,22 @@ it exists for, the means that serve them today, and every surface, counted. A
 request that serves no property or goal is one this project will decline — it is fairer to say so up front than
 to leave it open.
 
+The same intent is grouped on GitHub as
+[milestones](https://github.com/na0fu3y/ochakai/milestones), one per goal
+it serves. A milestone is defined by the number that says it is reached,
+never by a date, and placing an item in one approves nothing in advance:
+each item still answers docs/surface.md's three questions in its own PR.
+The survey behind the current set is
+[issue #997](https://github.com/na0fu3y/ochakai/issues/997) (2026-11-13).
+
+| Milestone | Serves | Reached when |
+|---|---|---|
+| M1 Four numbers from real use | G4 | one deployment has taken real questions for three weeks or more, and the four numbers below were read from it by hand |
+| M2 The first day | G1 | route 1 to a first confirmed answer takes fewer steps than its 13 today, walked on a fresh project and recorded in docs/surface.md |
+| M3 OKF v0.3 and the way out | P2, P3 | the published v0.3 is pinned by commit and round-trips, and an export has been walked into Knowledge Catalog with its verifications intact |
+| M4 Chosen in a Japanese comparison | G5 | [docs/positioning.md](docs/positioning.md) places the services a Japanese team compares against, a Japanese account of a real deployment exists, and the region default is decided again |
+| M5 The 1.0 bundle | — | [issue #597](https://github.com/na0fu3y/ochakai/issues/597) is emptied |
+
 Priorities are open to input. Say what you need in
 [Discussions](https://github.com/na0fu3y/ochakai/discussions), or open an issue
 if the proposal is concrete.
@@ -210,13 +226,23 @@ considered.
      where a person decides, and the bootstrap is a Cloud SQL import that
      sets no password; README carries the prompt that hands it to an
      agent. What is left is a walk of it on a fresh project;
-  2. a way to run a query as the person when there is no browser (a
+  2. reading Apache Ossie, dbt and semantic views as draft material.
+     Moved up from fourth on 2026-11-13: Ossie has become what tools
+     exchange definitions in — Hex reads it, WrenAI and NVIDIA Auto
+     Ontology write it — and Snowflake's Business Ontology chose the
+     same shape, imported definitions as drafts a person approves. It
+     is the shortest way to a base that is not empty on the first day,
+     and what is stored and served stays OKF;
+  3. a team that already keeps a Markdown glossary for Claude Code —
+     two Japanese companies have described running one by hand, one of
+     them with maturity tiers — loading it as drafts. The first question
+     is whether the existing `import` and a guide already cover it;
+  4. a way to run a query as the person when there is no browser (a
      schedule, a chat), by naming a broker the operator runs; ochakai
      holds no refresh token;
-  3. what the agent adds once it is on, so that turning it on shortens
+  5. what the agent adds once it is on, so that turning it on shortens
      the road to a first confirmed answer — it stays off by default;
-  4. reading Apache Ossie, dbt and semantic views as draft material;
-  5. the reasons behind MCP's default of no and `MCP-BYTES`.
+  6. the reasons behind MCP's default of no and `MCP-BYTES`.
 
   The steps to a first confirmed answer are counted from the documents
   in [docs/surface.md](docs/surface.md) (最初の確かめられた答えまで): 13
@@ -274,7 +300,7 @@ it.
   which is what OKF holds. Storing, serving or round-tripping it would be a
   second format beside OKF, which property P3 declines. Reading its
   definitions into drafts is not: what is stored and served stays OKF
-  (item 5 under Next). The condition under
+  (item 2 under Next). The condition under
   which this is revisited is written down
   ([docs/positioning.md](docs/positioning.md#ウェアハウス-native-の-semantic-layer)):
   Ossie leaving incubation with a place in its core for a human having

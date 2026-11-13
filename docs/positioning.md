@@ -165,6 +165,7 @@ Anthropic と Vercel は人が書いた層が効くと言い、過去のクエ�
 | OSS の「Palantir 代替」([semantica](https://github.com/semantica-agi/semantica)) | 数十ソースの取り込みと自動抽出、ポリグロットなグラフ・ベクトルストア、OWL/SHACL、PROV-O、エージェントの決定の因果記録、セルフホスト | 人の裁定が中核であること(decision の記録は verify ではない)、secret-zero、単一形式の往復、キュレーションが買う小ささ | 約束の語彙は重なる、軸が違う — 下記参照 |
 | ローカルファーストのデータワークスペース([helix-foundry](https://github.com/HelixDB/helix-foundry)) | コーディングエージェントに任せる導入、SaaS とデータベースのコネクタ、ソースをまたいで決定的に提案されるオントロジーと一度の確認、実行した SQL とスナップショットの引用つきの答え、ローカルのモデル | チームと、誰が確かめたかの記録(アカウントが無い)、secret を置かないこと、OKF での丸ごとの出口 | 同じ No FDE を狙い、払うものが違う — 下記参照 |
 | グラフ DB ネイティブのオントロジー基盤([NebulaGraph](https://nebula-graph.io/posts/ontology-and-graph-databases-enterprise-ai-from-theory-to-production-reality)、Neo4j + GraphRAG) | 型システムと書き込み時のスキーマ強制、型間のリレーション制約、数十億ノードへのスケール、多段トラバーサルとグラフアルゴリズム | 検証のループが中核であること(あちらでは成熟モデルの最終段)、markdown での出口、キュレーションされた規模が買う単純さ | 規模が前提から違う — 下記参照 |
+| **日本で比べられるもの**(BigQuery の会話型分析、primeNumber COMETA、Quollio、DataCurrent OwnSight Agent、Markdown 用語集を Claude Code に読ませる社内の運用) | 東京での保存と処理、承認した集計を「認証済み」にする流れ、国内の伴走と日本語の解説、立てるものが無いこと | 誰がいつ確かめたかの台帳、配るときの段、OKF での丸ごとの出口、セルフホストの OSS | 代替と需要の両方がある — 下記参照 |
 | **OKF ネイティブのローカルツール群と、MCP サーバー付きの markdown vault**([okf-skills](https://github.com/scaccogatto/okf-skills)、[okfcli](https://github.com/okfcli/okf)、[serradura/okf](https://github.com/serradura/okf)、[kaut](https://github.com/yurgeno/kaut)、LLM Wiki 系の [llm-wiki-compiler](https://github.com/atomicstrata/llm-wiki-compiler)、Obsidian、ノートの git リポジトリ) | 同じ OKF v0.2 の markdown + frontmatter、リンク、ローカルな所有、エージェントが読み書きすること、一部は draft キューと書き込みの門、**一部は rationale 付きの approve / reject の記録**([KL4A](https://github.com/CogniSwitch/KL4A)) | 認証された呼び出し元を**観測**する台帳としての検証(あちらの `verified` は誰かがタイプした一行である)、outcome と miss の計測 | 両立 — 下記参照 |
 
 ### Google Cloud Knowledge Catalog(旧 Dataplex)
@@ -327,9 +328,24 @@ layer に無いと書いていた「用語集」と「誰が確認したか」�
   semantic view を引ける)。
 
 逆に、**import した定義を draft として受け、人が承認して初めて効かせる**
-という形は、ROADMAP の Next が四番目に置いている「Ossie・dbt・semantic
+という形は、ROADMAP の Next が二番目に置いている「Ossie・dbt・semantic
 view を draft の材料として読む」と同じである。ベンダーが同じ形を選んだ
 ことは、その項目を進める理由になる。
+
+**そして Ossie は、道具どうしが定義を渡す形になった(2026-11-13)。**
+Hex の CLI は Ossie のモデルを Hex の semantic YAML に変換し
+([changelog](https://learn.hex.tech/changelog)、2026-10-22)、
+[WrenAI](https://github.com/Canner/WrenAI) は v0.17 で Ossie に書き出す。
+[NVIDIA Auto Ontology](https://github.com/NVIDIA/auto-ontology)
+(Apache-2.0、Postgres + pgvector)はウェアハウスを調べて draft を作り、
+人が名前・説明・SQL を certify し、Ossie で出し入れし、MCP は読み取り
+だけに絞っている — 形はこの枠に最も近い新顔だが、誰がいつ certify したか
+の記録はリポジトリに書かれていない。一方で規格そのものは動いていない —
+`spec.yaml` は `0.3.0.dev0` の draft、GitHub release は無く、owner・
+certified・provenance を運ぶ欄は ROADMAP の将来項目にとどまる。上の見直す
+条件は満たされていない。**読み手が増えたことが変えたのは、draft の材料と
+して読む価値のほうである** — ROADMAP はこの日、その項目を四番目から二番目
+に上げた。
 
 ### コンテキスト層としてのカタログ
 
@@ -360,6 +376,19 @@ LLM に知識を編纂させることとサーバーで SQL を実行するこ�
 中核に置く。ochakai が同じ
 問題に置いた答えは、編纂の出口を OKF で import すること
 (下の LLM Wiki の実測)であって、編纂そのものではない。
+
+**エージェントの痕跡を curator に返す形が、この棚に揃った(2026-11-13)。**
+Fivetran の Context Layer(2026-09-16 発表、限定プレビュー)は Notion・
+Confluence・Salesforce・dbt を取り込んでウェアハウスに表として書き、
+エージェントのセッションを答え・根拠の SQL や文書・置いた仮定ごと書き
+戻して、curator に自信の低い答えと穴を見せる
+([発表](https://www.fivetran.com/blog/announcing-fivetran-context-layer))。
+DataHub Cloud 2.3 は Context Evals を持ち、エージェントの変更は提案として
+出す一方、MCP の `save_document` / `update_document` で文書を直接書き
+換えもできる([release notes](https://docs.datahub.com/docs/managed-datahub/release-notes/v_2_3_0))。
+**痕跡を返す半分は ochakai の `report_outcome` と答えの無かった問いと
+同じ形であり、取り込みと直接編集の半分は ochakai が断っている側である** —
+エージェントの書き込みは draft のままで、裁定だけが段を上げる。
 
 ### エージェントのメモリ層
 
@@ -479,6 +508,22 @@ endorse し、Endorsed Mode ではエージェントが「endorse された資�
 のを既定にできる([docs](https://learn.hex.tech/docs/explore-data/threads))。
 **人が認めたものだけから答える、は ochakai だけのものではない。**
 
+**七週間後(2026-11-13)に確かめると、向きは変わっていなかった。**
+Genie は per-user の Memory を GA にし(09-29)、Ontology は dbt など外部の
+道具で走ったクエリからも断片を拾うようになった(10-22)。審査の門は
+足されていない([release notes](https://docs.databricks.com/gcp/en/ai-bi/release-notes/2026))。
+Snowflake の verified query suggestions は、どの verified query にも当たら
+なかったよくある問いから候補を作るが、**採るには人の承認が要る**
+([docs](https://docs.snowflake.com/en/user-guide/views-semantic/verified-query-suggestions))。
+Hex は Endorsed の先に Governed mode を置き、エージェントが使ってよい
+semantic model・テーブル・プロジェクトを管理者が列挙する(10-30、
+[changelog](https://learn.hex.tech/changelog))。Google は Looker の
+verified queries を GA にし(08-28)、Conversational Analytics の応答は
+verified query を使ったときにそれを `matchedQuery` で言う。**機械は提案し
+人が採る、と、認めたものだけから答える、はこの棚の表の掛け金になった。**
+誰もしていないのは、どの答えについても**誰が**いつ確かめたかを台帳で
+言うことと、人の確認と機械の確認を別の段として配ることである。
+
 **違いは三つある。** 自動収集へ動いた二つの発表は、三つのどれにも
 触れていない。
 
@@ -512,6 +557,60 @@ endorse し、Endorsed Mode ではエージェントが「endorse された資�
 を運ばない([ROADMAP](../ROADMAP.md#where-the-data-agent-is-going))。
 だからこの節の競合は、上の三つが持っているもののうち、この線の内側で
 作れるものだけに向いている。
+
+### 日本で比べられるもの
+
+*G5 は「日本語話者が類似サービスと比べたとき」と言うのに、このページは
+2026-11 まで日本のサービスを一つも名指していなかった。* 以下は 2026-11-13
+に調べた範囲である([調査記録](https://github.com/na0fu3y/ochakai/issues/997))。
+価格と、国産 SaaS の LLM の推論がどこで走るかは、どれも確かめられて
+いない。
+
+- **[BigQuery の会話型分析](https://docs.cloud.google.com/bigquery/docs/conversational-analytics?hl=ja)
+  が、日本では最大の代替である。** エージェントの保存と ML 処理を
+  asia-northeast1 に置け(2026-06-04 より前に作ったものは global のまま、
+  保存後に変えられない)、検証済みクエリが文脈の最優先で、問いに合えば
+  決定的に走る。立てるものが無く、国内の Google Cloud パートナーの日本語の
+  解説が厚い。ochakai と両立はする — 検証済みクエリの原本を ochakai に
+  置き、台帳ごと持つ — が、その三つが要らなければこちらで足りる。
+- **primeNumber の [COMETA](https://it.impress.co.jp/articles/-/29878)
+  が、考え方で最も近い。** 現場が AI で作った集計をシステム部門が承認
+  すると、その計算が「認証済み」としてセマンティックレイヤーに入り、
+  以後 AI もその定義で計算する(2026-10-08 の報道、同時に BI 機能)。
+  誰がいつ承認したかの履歴と、配るときに段を言うかは確かめていない。
+  SaaS で、専門スタッフの支援が付く。
+- **[Quollio](https://it.impress.co.jp/articles/-/29717)** は国内の
+  データカタログで、2026-08-26 に MCP サーバーを足し、Claude Code などから
+  メタデータを読み書きできる。上の「コンテキスト層としてのカタログ」と
+  同じ位置に立つ。
+- **DataCurrent の [OwnSight Agent](https://www.datacurrent.co.jp/releases/20260630/)**
+  (2026-06-30)は、**顧客の Google Cloud の中**に BigQuery と Looker に
+  つないで建て、セマンティックレイヤー・用語集・過去の分析知見を持たせる。
+  構成は ochakai に最も近く、買い方はコンサルティングとの組み合わせで
+  ある。人の承認の仕組みは発表に書かれていない。
+- **大手の汎用エージェント。** ChatGPT の Data agent は BigQuery などに
+  つないで接続アカウントの権限を引き継ぐ(2026-09 の報道)。
+  [ThoughtSpot](https://docs.thoughtspot.com/cloud/latest/spotter-localization)
+  は ja-JP を公式に持つ唯一の大手で、coaching は言語ごとに効く。
+  ソフトバンクの WithData、NTT データの対話型の可視化 AI など、SIer と
+  通信会社の製品は PoC と伴走を売る。
+
+**社内で作った二つの事例は、この枠の需要そのものだった。** ニーリーは
+Claude Code に Markdown と Git の用語集を読ませ、指標を Tier 1(重要
+KPI に使える)・Tier 2(レビュー済み)・Tier 3(作っただけ)に分けて
+運用している([2026-07-29 の登壇](https://speakerdeck.com/nealle/data-democratization-with-claude-code))。
+タイミーは約 4,400 行の Markdown を持つ Claude Code の skill が、分析系
+skill の利用の 95% を占めたと報告している(2026-08 の登壇、二次情報で
+読んだ)。どちらも、段と台帳を手で持っている形である — ochakai が製品と
+して持っているのはその段を上げる行為の記録で、移行の道は ROADMAP の Next
+に置いた。
+
+**日本の評価者が重く見るもの**は、正確さ(生成 AI の懸念の一位)、情報
+漏えい、**保存と推論の所在地を分けて**言えること、伴走、日本語の解説の
+厚さ、予測できる価格である。ochakai が言えるのは、自分の Google Cloud
+プロジェクトの中で完結し、長期の secret を持たず、ソースが読めることと、
+所在地を変数一つで東京に留められること — ただし既定では留まらない
+(G5)。言えないのは伴走と、日本語で書かれた導入事例である。
 
 ### FDE 型オントロジー
 
@@ -1093,6 +1192,10 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   からである。
 - **エコシステム。** 維持者は一人、バイナリは一つ、プラグインも
   マーケットプレイスも無い。
+- **日本での買いやすさ。** 国産のカタログと SIer の製品は伴走・契約・
+  導入支援を売り、BigQuery の会話型分析は東京で処理して立てるものが無い。
+  ochakai には伴走も日本語の導入事例も無く、手順はセルフである(上の
+  「日本で比べられるもの」)。
 
 ## 選ぶ
 
@@ -1118,6 +1221,10 @@ Wiki のコンパイルの出口を OKF で ochakai に入れる道は上の測�
   順位に任せてよいなら → そのプラットフォームのエージェント(Genie、
   Cortex Agents、Conversational Analytics)。いまの ochakai より完成して
   いる。
+- BigQuery だけを使う日本のチームで、検証済みクエリを東京で処理して
+  明日から問いたく、誰が確かめたかの記録も出口も要らないなら →
+  BigQuery の会話型分析。既に Markdown の用語集を Claude Code に読ませて
+  いて、段を手で付け始めたなら、それが下の行に入る合図である。
 - **エージェントと人が複数いて、足りないのが誰かが確かめたナレッジ** —
   どのクエリが sanctioned か、その数字が何を意味するか、何が既に試され
   却下されたか — であり、Google Cloud で動かせるなら → それがこれの
@@ -1168,4 +1275,6 @@ landscape は決定ではないので、代わりにここで追う。その後�
 記録は issue にある — 41 組織の事例調査が
 [#703](https://github.com/na0fu3y/ochakai/issues/703)(2026-08-19)、
 このページの 2026-09-12 の訂正の元になった三週間分の差分が
-[#849](https://github.com/na0fu3y/ochakai/issues/849)。
+[#849](https://github.com/na0fu3y/ochakai/issues/849)、日本の比較対象を
+初めて調べ、ROADMAP のマイルストーンの元になった 2026-11-13 の差分が
+[#997](https://github.com/na0fu3y/ochakai/issues/997)。
