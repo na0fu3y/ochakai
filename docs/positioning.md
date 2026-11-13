@@ -156,7 +156,7 @@ Anthropic と Vercel は人が書いた層が効くと言い、過去のクエ�
 | 比較対象 | あちらが持つもの | あちらが持たないもの | 判定 |
 |---|---|---|---|
 | **[Google Cloud Knowledge Catalog](https://cloud.google.com/products/knowledge-catalog)(旧 Dataplex)** | 同じ Google Cloud の IAM、立てるものが無いこと、自動収集、lineage、品質、用語集、Gemini が生成する説明と example query、Context API と remote MCP | 人の裁定が中核であること、却下の理由が履歴に残ること、OKF での丸ごとの出口、収集ではなくキュレーションであること、**一つのテーブルに二つ目の読み方を並べられること** | 同じ雲で正面から重なる — 下記参照 |
-| ウェアハウス native の semantic layer(dbt MCP、Cube、Lightdash、Snowflake Semantic Views、Databricks Metric Views)と、その標準([Apache Ossie](https://github.com/apache/ossie) — 旧 OSI) | メトリクス定義、ディメンション、コンパイルされた SQL | 解釈、用語集、書き戻し、ウェアハウスをまたぐもの、そして誰が確認したか | 両立 — 下記参照 |
+| ウェアハウス native の semantic layer(dbt MCP、Cube、Lightdash、Snowflake Semantic Views、Databricks Metric Views)と、その標準([Apache Ossie](https://github.com/apache/ossie) — 旧 OSI) | メトリクス定義、ディメンション、コンパイルされた SQL。Snowflake は上に Business Ontology(owner・承認状態・用語集、public preview 前)を置く | 解釈、書き戻し、ウェアハウスをまたぐもの、承認されていないものを段付きで配ること、誰がいつ確認したかの台帳 | 両立 — 下記参照 |
 | 「コンテキスト層」になったカタログ(OpenMetadata、DataHub、Atlan) | 技術メタデータ、リネージ、オーナーシップ、大規模な収集 | キュレーションされた側が OSS であること — 解釈とレビューループは商用ティアに置かれがち | 両立、あるいは既に運用しているなら ochakai の代わりになる |
 | エージェントのメモリ層(mem0、Zep / Graphiti、Letta、[MemPalace](https://github.com/mempalace/mempalace)、[remnic](https://github.com/joshuaswarren/remnic)) | ユーザーごと・エージェントごとの記憶、自動抽出・自動注入、チームで共有する形。**MemPalace は書き込みに LLM を使わず、Letta はメモリが git 管理の markdown + frontmatter、remnic は人の承認の門と provenance と訂正ループを持つ** | 認証された呼び出し元を観測する台帳としての裁定、secret を置かないこと(remnic は bearer token) | 両立 — 下記参照 |
 | 自分の文書に対する RAG | 他の理由で書かれた文書からの断片 | 単位としてのレビュー済みの主張、provenance、著者の向き | 両立 |
@@ -301,6 +301,36 @@ ochakai が持つコネクタではない([0142](design/0142-ochakai-carries-a-d
 提案は Discussion #267(モデルごとに `verified` / `inferred` / `proposed` の
 evidence grade を置く外部キット)が一つあるだけで、maintainer の返信は無い。
 
+**この層は、誰が確認したかを持ち始めた(2026-11-04)。** Snowflake は
+2026-11-03 に Business Ontology を発表した
+([発表](https://www.snowflake.com/en/blog/business-ontology-context/)、
+public preview は「soon」で、まだ触れない)。semantic view の上に置く
+定義の層で、用語ごとに **owner・承認状態・ドメインの範囲・同義語・
+関連する用語・意図した変種**を持ち、計算している semantic view の
+メトリクスへ結び付ける。AI の提案と import した用語集は draft で、
+owner が承認したものだけがエージェントに配られ、推論した文脈
+(Cortex Sense)と衝突すれば承認済みの定義が勝つ。上の表が semantic
+layer に無いと書いていた「用語集」と「誰が確認したか」は、Snowflake の
+中ではもう言えない。**違いとして残るのは四つである。**
+
+- **関門か、段か。** あちらは承認されていないものを配らない。ochakai は
+  全部を、いまの段と来歴を付けて配り、人の裁定と委任された確認ジョブを
+  `human-reviewed` と `machine-confirmed` に言い分ける
+  ([0160](decisions/0160-ruling-is-a-tier-and-a-delegation.md))。
+- **台帳と却下の理由。** 発表が言うのは owner と承認状態という**いまの
+  状態**までで、誰がいつ承認したかの履歴と、却下の理由には触れていない。
+- **出口に承認が乗るか。** Ossie と RDF で concept・定義・関係を出し入れ
+  できるが、owner と承認状態が載るかは書いていない。上の見直す条件は、
+  これでは満たされない。
+- **一つのプラットフォームの中。** 承認の権限は Horizon Catalog が決め、
+  配る先は Snowflake のエージェントである(外のエージェントは MCP で
+  semantic view を引ける)。
+
+逆に、**import した定義を draft として受け、人が承認して初めて効かせる**
+という形は、ROADMAP の Next が四番目に置いている「Ossie・dbt・semantic
+view を draft の材料として読む」と同じである。ベンダーが同じ形を選んだ
+ことは、その項目を進める理由になる。
+
 ### コンテキスト層としてのカタログ
 
 Google 純正のそれは上の節が単独で扱う。ここはそれ以外である。
@@ -432,7 +462,10 @@ ochakai をその下に置く置き場として扱ってきた。2026-09-25 に 
   掘り、衝突は Web 検索のように relevance・authority・popularity・
   freshness で順位を付ける(private preview、2026-06-30 の発表)。**ただし
   人を外してはいない** — 二つの定義が衝突すると builder に訊き、訂正は
-  会話で渡す。人は衝突を裁く役として残り、起点ではない。
+  会話で渡す。人は衝突を裁く役として残り、起点ではない。**2026-11-03
+  には、その上に人が承認する定義の層(Business Ontology)を足すと発表した**
+  — 承認済みの定義があれば推論より先に効く(上の「ウェアハウス native の
+  semantic layer」)。定義については、人が起点の側へ一歩戻ったことになる。
 - **Google** の Conversational Analytics は逆に、テーブルと列の説明・
   同義語・example query・system instructions を**開発者が書く** authored
   context を持ち、staging と published の版を分けて戻せる
@@ -458,7 +491,9 @@ endorse し、Endorsed Mode ではエージェントが「endorse された資�
   `machine-confirmed` — ジョブの中身は LLM でもよい、
   [0160](decisions/0160-ruling-is-a-tier-and-a-delegation.md))
   ([0142](design/0142-ochakai-carries-a-data-agent-that-does-not-rule.md) §3)。
-  Genie の重みも Cortex Sense の順位も、どの読み方を採るかを機械が決める。
+  Genie の重みも Cortex Sense の順位も、どの読み方を採るかを機械が決める
+  — Business Ontology で承認された定義がある用語を除けば、であり、その
+  承認は配るかどうかの関門であって、台帳から導く段ではない。
 - **却下が理由ごと残る。** 答えへの 👎 と一言は失敗の結果報告として
   棚卸しに届き、それから書かれた draft を人が却下すれば、理由ごと履歴に
   残る([ループ](loop.md))。👎 を診断にして draft まで運ぶのは、まだ
