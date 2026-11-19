@@ -749,6 +749,9 @@ mark { background: var(--mark-bg); color: var(--mark-fg); border-radius: 3px; pa
 input[type=checkbox].check { width: auto; height: 1.15rem; margin: .5rem 0 0; }
 
 .section-title { font-size: 1.25rem; font-weight: 700; margin: .2rem 0 1rem; }
+/* A directory page holding more than one type: one heading per type. */
+.type-group { display: flex; align-items: baseline; gap: .4rem; font-size: 1rem; margin: 1.2rem 0 .5rem; }
+.type-group .count { margin-left: .2rem; }
 /* The home page's shortcuts. Each entry is a flex item so a line breaks
    between entries rather than inside one — as a run of text separated by
    middots, a narrow window put the separator at the head of a line and

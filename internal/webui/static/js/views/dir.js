@@ -7,18 +7,25 @@ import { $, view } from '../dom.js';
 import { esc } from '../escape.js';
 import { crumbTrail, idPath } from '../format.js';
 import { browse, revealInTree } from '../tree.js';
+import { groupByType, icon } from '../vocab.js';
 import { explore } from './explore.js';
 
 // loadDirIndex fetches one browse level and renders it into container
 // (which the caller seeded with a placeholder). Concept cards reuse the
 // search result card — browse concepts carry no attrs/files, so
-// they render as title, status, and description.
+// they render as title, status, and description. A level holding more
+// than one type groups its concepts under a heading per type; a level
+// of one type stays a plain list.
 export async function loadDirIndex(container, prefix, emptyText) {
   try {
     const res = await api(prefix ? `/api/v1/bundle/${idPath(prefix)}/index.md` : '/api/v1/bundle/index.md');
     if (!container.isConnected) return; // navigated away while loading
     const dirs = (res.dirs || []).map(d => dirCard(prefix, d)).join('');
-    const concepts = (res.concepts || []).map(hitCard).join('');
+    const groups = groupByType(res.concepts || []);
+    const concepts = groups.length > 1
+      ? groups.map(g => `<h3 class="type-group"><span class="type-ico">${icon(g.type)}</span> ${esc(g.type)} <span class="count">${g.concepts.length} 件</span></h3>`
+        + g.concepts.map(hitCard).join('')).join('')
+      : (res.concepts || []).map(hitCard).join('');
     const files = (res.files || []).map(fileCard).join('');
     const note = res.truncated
       ? `<div class="truncation-note">この階層の先頭 1000 件を表示しています。これだけ広いディレクトリは、サブディレクトリに分けることをおすすめします。</div>` : '';
