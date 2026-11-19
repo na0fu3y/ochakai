@@ -23,6 +23,12 @@ last entry.
 
 ### Changed
 
+- **The web UI's directory page groups concepts by type** when a level
+  holds more than one: recommended types in the order the product
+  teaches them, then free types by name, each under a heading with its
+  count. A team's prefix then reads as its hub — its metrics together,
+  its terms together. The generated `index.md`, the browse JSON and the
+  export are unchanged.
 - **The BigQuery catalog sync follows entries a person verified**
   (`examples/bigquery-catalog`, decision 0160). It used to freeze an
   entry the moment anyone verified it, so a confirmed table stopped
