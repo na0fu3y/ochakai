@@ -306,6 +306,8 @@ components/schemas/Status type=string enum=["draft" "stable" "deprecated"]
 components/schemas/Summary type=object
 components/schemas/Summary.content_hash required=true type=string
 components/schemas/Summary.created_at required=true type=string format="date-time"
+components/schemas/Summary.created_by required=true
+components/schemas/Summary.created_by/allOf/0 ref=Actor
 components/schemas/Summary.description required=false type=string
 components/schemas/Summary.id required=true type=string pattern="^[^./][^/]{0,127}(/[^./][^/]{0,127})*$"
 components/schemas/Summary.links required=false type=array
