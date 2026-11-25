@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"os"
 	"reflect"
 	"slices"
@@ -69,7 +70,7 @@ func verifiedHit(id string) domain.SearchHit {
 func TestRRFFuseMergesAndRanks(t *testing.T) {
 	lexical := []domain.SearchHit{hit("a", domain.StatusDraft), hit("b", domain.StatusDraft)}
 	vector := []domain.SearchHit{hit("b", domain.StatusDraft), hit("c", domain.StatusDraft)}
-	out := rrfFuse("q", 10, lexical, vector)
+	out := rrfFuse("q", lexical, vector)
 	if len(out) != 3 {
 		t.Fatalf("want 3 fused hits, got %d", len(out))
 	}
@@ -83,7 +84,7 @@ func TestRRFFuseBoostsVerified(t *testing.T) {
 	// Same single-list rank; verified must win the tie.
 	lexical := []domain.SearchHit{hit("draft-doc", domain.StatusDraft)}
 	vector := []domain.SearchHit{verifiedHit("verified-doc")}
-	out := rrfFuse("q", 10, lexical, vector)
+	out := rrfFuse("q", lexical, vector)
 	if out[0].ID != "verified-doc" {
 		t.Errorf("verified concept should outrank draft at equal RRF score, got %s first", out[0].ID)
 	}
@@ -98,7 +99,7 @@ func TestRRFFuseBoostsVerified(t *testing.T) {
 func TestVerifiedBoostIsWorthOneRank(t *testing.T) {
 	first := hit("words-put-me-first", domain.StatusDraft)
 	third := verifiedHit("checked-but-third")
-	out := rrfFuse("q", 10, []domain.SearchHit{
+	out := rrfFuse("q", []domain.SearchHit{
 		first, hit("second", domain.StatusDraft), third,
 	})
 	if out[0].ID != first.ID {
@@ -135,7 +136,7 @@ func TestRRFFuseKeepsTheNamedConceptFirst(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// The named concept tops the lexical list alone; the other
 			// concept places in all three, and is verified besides.
-			out := rrfFuse("売上", 10,
+			out := rrfFuse("売上",
 				[]domain.SearchHit{tc.named, popular},
 				[]domain.SearchHit{popular},
 				[]domain.SearchHit{popular})
@@ -148,7 +149,7 @@ func TestRRFFuseKeepsTheNamedConceptFirst(t *testing.T) {
 
 	// Merely containing the query is not being named by it, or every
 	// report about 売上 would claim the top of the list.
-	out := rrfFuse("売上", 10, []domain.SearchHit{popular, titled})
+	out := rrfFuse("売上", []domain.SearchHit{popular, titled})
 	if out[0].ID != titled.ID {
 		t.Errorf("fused ranking put %s first, want the concept named 売上", out[0].ID)
 	}
@@ -167,7 +168,7 @@ func TestRRFFuseKeepsTermNamedConceptsFirst(t *testing.T) {
 
 	// The report places in all three lists and is verified besides; each
 	// definition surfaces in the lexical list alone.
-	out := rrfFuse("アクティブ会員の継続率を計算して", 10,
+	out := rrfFuse("アクティブ会員の継続率を計算して",
 		[]domain.SearchHit{report, keizoku, kaiin},
 		[]domain.SearchHit{report},
 		[]domain.SearchHit{report})
@@ -198,7 +199,7 @@ func TestRRFFuseBreaksTiesByTheStoresScore(t *testing.T) {
 	weak := hit("aa-weak", domain.StatusDraft)
 	weak.Score = 0.3
 
-	out := rrfFuse("q", 10,
+	out := rrfFuse("q",
 		[]domain.SearchHit{strong, weak}, // the store's ranking
 		[]domain.SearchHit{weak, strong}) // the vectors', reversed
 	if out[0].Score != out[1].Score {
@@ -210,13 +211,77 @@ func TestRRFFuseBreaksTiesByTheStoresScore(t *testing.T) {
 	}
 }
 
-func TestRRFFuseLimit(t *testing.T) {
+func TestCutHits(t *testing.T) {
 	var list []domain.SearchHit
 	for _, id := range []string{"a", "b", "c", "d"} {
 		list = append(list, hit(id, domain.StatusDraft))
 	}
-	if got := len(rrfFuse("q", 2, list)); got != 2 {
+	if got := len(cutHits(rrfFuse("q", list), 2)); got != 2 {
 		t.Errorf("want limit 2, got %d", got)
+	}
+	if got := len(cutHits(list, 10)); got != 4 {
+		t.Errorf("a list shorter than the limit was cut to %d, want all 4", got)
+	}
+}
+
+// TestSearchOrderDoesNotDependOnLimit pins what a caller is promised:
+// search(limit=k) is the first k of search(limit=50). The service holds
+// two halves of that. The lists are read at searchDepth whatever the
+// limit, so the inputs to the fusion do not move with it; and the fusion
+// is a total order cut only at the end, so the same inputs give the same
+// ranking every time — Go's map iteration, which the fusion walks, is
+// randomized per run, and an order that left a tie to it would change
+// between two calls with nothing else changed. The store's half — that a
+// list read at one depth is the same list every time — is pinned by
+// TestSearchOrderDoesNotDependOnLimitIntegration.
+func TestSearchOrderDoesNotDependOnLimit(t *testing.T) {
+	if searchDepth < 2*maxSearchLimit {
+		t.Fatalf("searchDepth %d is shallower than twice the largest limit (%d)", searchDepth, maxSearchLimit)
+	}
+
+	// Three lists at full depth over an overlapping pool of ids, built to
+	// tie: few distinct store scores, a share of confirmed concepts, some
+	// confirmed at the same instant, and one concept the query names.
+	rng := rand.New(rand.NewPCG(1, 2))
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	pool := make([]domain.SearchHit, 3*searchDepth)
+	for i := range pool {
+		h := hit(fmt.Sprintf("tables/t%03d", i), domain.StatusDraft)
+		h.Score = float64(rng.IntN(3))
+		if rng.IntN(4) == 0 {
+			h.Trust = domain.TrustHuman
+			v := at.Add(time.Duration(rng.IntN(2)) * time.Hour)
+			h.VerifiedAt = &v
+		}
+		pool[i] = h
+	}
+	pool[7].Title = "q"
+	list := func() []domain.SearchHit {
+		out := make([]domain.SearchHit, 0, searchDepth)
+		for _, i := range rng.Perm(len(pool))[:searchDepth] {
+			out = append(out, pool[i])
+		}
+		return out
+	}
+	lexical, vector, attachments := list(), list(), list()
+
+	ids := func(hits []domain.SearchHit) []string {
+		out := make([]string, len(hits))
+		for i, h := range hits {
+			out[i] = h.ID
+		}
+		return out
+	}
+	deepest := ids(cutHits(rrfFuse("q", lexical, vector, attachments), maxSearchLimit))
+	if len(deepest) != maxSearchLimit {
+		t.Fatalf("the fixture fused to %d hits, want %d", len(deepest), maxSearchLimit)
+	}
+	for k := 1; k <= maxSearchLimit; k++ {
+		got := ids(cutHits(rrfFuse("q", lexical, vector, attachments), k))
+		if !slices.Equal(got, deepest[:k]) {
+			t.Fatalf("limit %d answered %v, want the first %d at limit %d: %v",
+				k, got, k, maxSearchLimit, deepest[:k])
+		}
 	}
 }
 

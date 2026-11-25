@@ -1086,7 +1086,7 @@ func scoreFusedGoldenSet(t *testing.T, ctx context.Context, svc *Service, prefix
 		if err != nil {
 			t.Fatal(err)
 		}
-		return rrfFuse(query, evalK, lexical, nearest(corpus, vectors[0], evalK*2))
+		return cutHits(rrfFuse(query, lexical, nearest(corpus, vectors[0], evalK*2)), evalK)
 	})
 }
 

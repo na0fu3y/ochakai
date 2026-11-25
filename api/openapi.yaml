@@ -312,7 +312,9 @@ paths:
             value (design doc 0064).
 
             For a listing this bounds the page, not the answer — walk the
-            rest with cursor.
+            rest with cursor. For a search it cuts the ranking and does not
+            change it: the first k hits of any search are the first k of
+            the same search at limit 50.
           schema: { type: integer }
         - name: cursor
           in: query
