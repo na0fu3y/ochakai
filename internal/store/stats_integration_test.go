@@ -60,7 +60,7 @@ func TestIntegrationStatsAndMisses(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.Verify(ctx, confirmed.ID, actor); err != nil {
+	if _, err := s.Verify(ctx, confirmed.ID, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	// A second ruling three days back. It belongs in the trend's newest

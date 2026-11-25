@@ -2047,6 +2047,20 @@ paths:
         after the verification — so the draft came out stable and
         unverified.
 
+        **`If-Match` is honored** (the same precondition PUT and DELETE
+        take, design doc 0030): the ruling is recorded only if the concept
+        still has the version the caller read, so a verification never
+        lands on content its verifier did not see. A stale version is a
+        412 and nothing is recorded; `*` is a 400; absent, the ruling
+        stands on the concept as it is now. On a draft the version is the
+        precondition of the publishing edit, and the verification is then
+        recorded against what that edit stored. It also makes a retry
+        safe: a ruling does not move a stable or deprecated concept's
+        version, so the same request again appends one more row by the
+        same caller and changes no tier, while a draft's first
+        verification publishes it and the retry is a 412 telling the
+        client to read again.
+
         Not an MCP tool: rulings stay off that surface (design doc 0076),
         and a person's ruling is the judgment the write-back loop turns
         on. An agent that finds a verified concept wrong reports the
@@ -2069,6 +2083,7 @@ paths:
       parameters:
         - $ref: "#/components/parameters/OnBehalfOf"
         - $ref: "#/components/parameters/Producer"
+        - $ref: "#/components/parameters/IfMatch"
       requestBody:
         required: true
         description: A key outside ruling/note is a 400 naming it (design doc 0064).
@@ -2200,6 +2215,20 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/Error" }
+        "412":
+          description: >
+            If-Match named a version the concept no longer has (design doc
+            0030) — nothing was recorded, and a draft was not published.
+          headers:
+            Ochakai-Read-Only: { $ref: "#/components/headers/ReadOnly" }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  code: { type: string, enum: [precondition_failed] }
+                required: [error, code]
         "413": { $ref: "#/components/responses/Error" }
         "405": { $ref: "#/components/responses/Error" }
         "500": { $ref: "#/components/responses/Error" }

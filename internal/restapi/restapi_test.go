@@ -540,6 +540,24 @@ func TestRepeatedBodyFieldIsRejected(t *testing.T) {
 	}
 }
 
+// TestReviewRefusesIfMatchStar pins that the review face reads If-Match
+// the way PUT and DELETE do: "*" is a precondition ochakai does not
+// implement, so it is a 400 naming the header before anything is
+// recorded, rather than a verification with no precondition at all.
+func TestReviewRefusesIfMatchStar(t *testing.T) {
+	h := Handler(&service.Service{})
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/review/metrics/revenue", strings.NewReader(`{"ruling":"verified"}`))
+	req.Header.Set("If-Match", "*")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST review with If-Match: * = %d, want 400 (body: %s)", rec.Code, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), "If-Match") {
+		t.Errorf("the 400 does not name If-Match: %s", rec.Body)
+	}
+}
+
 // TestTrailingBodyContentIsRejected pins the other half of readJSON's
 // strictness: content after the JSON value is a 400, not silently
 // discarded.

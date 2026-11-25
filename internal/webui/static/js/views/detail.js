@@ -131,7 +131,7 @@ export async function viewMissing(id) {
 export async function viewDetail(id, heading = '') {
   revealInTree(id); // in parallel with the entry fetch; harmless on 404
   view.innerHTML = '<div class="empty">…</div>';
-  let entry, observed, document_;
+  let entry, observed, document_, version;
   try {
     // A read is {id, document, summary, observed, files} (design
     // doc 0043 §3.5). The summary is flattened onto entry so the header
@@ -140,6 +140,7 @@ export async function viewDetail(id, heading = '') {
     entry = Object.assign({ id: v.id, files: v.files || [] }, v.summary);
     observed = v.observed || {};
     document_ = v.document || '';
+    version = v.etag || ''; // the ETag of this read, for the ruling to stand on
   } catch (e) {
     // A concept that is not there is not an error the reader caused, and
     // an error banner is what a page says when something went wrong.
@@ -813,10 +814,19 @@ export async function viewDetail(id, heading = '') {
   $('#act-verify')?.addEventListener('click', async () => {
     closeMenu();
     try {
-      await verifyEntry(entry.id);
+      // The version this page shows, so the ruling stands on what the
+      // person read and not on an edit that landed while it was open.
+      await verifyEntry(entry.id, version);
       toast(isVerified(entry) ? '再検証しました。' : entry.status === 'draft' ? '検証し、stable にしました。' : '検証しました。');
       viewDetail(entry.id);
-    } catch (e) { toast('検証できませんでした: ' + e.message); }
+    } catch (e) {
+      if (e.code === 'precondition_failed') {
+        toast('この画面を開いてから内容が変わったため、検証していません。新しい版を表示したので、読み直してから検証してください。');
+        viewDetail(entry.id);
+        return;
+      }
+      toast('検証できませんでした: ' + e.message);
+    }
   });
   $('#act-reject')?.addEventListener('click', async () => {
     closeMenu();

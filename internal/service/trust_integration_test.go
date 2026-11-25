@@ -59,7 +59,7 @@ func TestVerificationStandsUntilTheContentMovesIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.Verify(ctx, id, human); err != nil {
+	if _, err := svc.Verify(ctx, id, human, nil); err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
 	if got := trust(id); got != domain.TrustHuman {
@@ -117,7 +117,7 @@ func TestVerificationStandsUntilTheContentMovesIntegration(t *testing.T) {
 
 	// Re-verifying the current content restores the tier and empties the
 	// queue — the loop's exit.
-	if _, err := svc.Verify(ctx, id, human); err != nil {
+	if _, err := svc.Verify(ctx, id, human, nil); err != nil {
 		t.Fatalf("re-verify: %v", err)
 	}
 	if got := trust(id); got != domain.TrustHuman {
@@ -149,7 +149,7 @@ func TestMoveLapsesVerificationsIntegration(t *testing.T) {
 		}
 	}
 	for _, id := range []string{metric, referrer} {
-		if _, err := svc.Verify(ctx, id, human); err != nil {
+		if _, err := svc.Verify(ctx, id, human, nil); err != nil {
 			t.Fatalf("Verify(%s): %v", id, err)
 		}
 	}
@@ -206,7 +206,7 @@ func TestVerifyStandsOnSkewedClocksIntegration(t *testing.T) {
 		`UPDATE object SET content_changed_at = now() + interval '2 seconds' WHERE id = $1`, id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Verify(ctx, id, human); err != nil {
+	if _, err := svc.Verify(ctx, id, human, nil); err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
 	k, err := svc.Get(ctx, id)
@@ -244,7 +244,7 @@ func TestVerifyPublishesADraftIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := svc.Verify(ctx, id, human)
+	got, err := svc.Verify(ctx, id, human, nil)
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -266,7 +266,7 @@ func TestVerifyPublishesADraftIntegration(t *testing.T) {
 	}
 
 	// A re-check of a stable concept edits nothing: the ETag stays put.
-	again, err := svc.Verify(ctx, id, human)
+	again, err := svc.Verify(ctx, id, human, nil)
 	if err != nil {
 		t.Fatalf("re-verify: %v", err)
 	}

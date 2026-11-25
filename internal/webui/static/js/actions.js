@@ -167,8 +167,15 @@ export async function applyStatus(id, status) {
 // an append, so the first confirmation and the tenth re-check are the
 // same call; on a draft the server publishes it as stable first
 // (decision 0157), and a stable or deprecated entry is not edited.
-export async function verifyEntry(id) {
-  await api('/api/v1/review/' + idPath(id), { method: 'POST', body: { ruling: 'verified' } });
+//
+// version is the ETag of the read the person is looking at, sent as
+// If-Match so the ruling stands on what they read: an edit that landed
+// since is a 412 (err.code 'precondition_failed') and nothing is
+// recorded, rather than a verification of text nobody here saw.
+export async function verifyEntry(id, version) {
+  await api('/api/v1/review/' + idPath(id), {
+    method: 'POST', body: { ruling: 'verified' }, ifMatch: version || undefined,
+  });
   refreshQueues();
   return true;
 }

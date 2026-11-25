@@ -845,7 +845,7 @@ func TestSearchEvalIntegration(t *testing.T) {
 			t.Fatalf("put %s: %v", id, err)
 		}
 	}
-	if _, err := svc.Verify(ctx, prefix+"/"+evalVerified, actor); err != nil {
+	if _, err := svc.Verify(ctx, prefix+"/"+evalVerified, actor, nil); err != nil {
 		t.Fatalf("verify %s: %v", evalVerified, err)
 	}
 

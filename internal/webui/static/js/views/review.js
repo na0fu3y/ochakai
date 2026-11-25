@@ -298,7 +298,7 @@ export function reviewCard(h) {
     usageBits,
     outcomeBits,
   ].filter(Boolean).join(' · ');
-  return `<article class="card" data-id="${esc(h.id)}" data-href="${entryHash(h)}">
+  return `<article class="card" data-id="${esc(h.id)}" data-version="${esc(h.content_hash || '')}" data-href="${entryHash(h)}">
     <div class="head">
       <span class="type-ico" title="${esc(h.type)}">${icon(h.type)}</span>
       <a class="title" href="${entryHash(h)}" title="ochakai://${esc(h.id)}">${esc(displayTitle(h))}</a>
@@ -325,8 +325,10 @@ export function wireReviewActions(container) {
         // Verifying a draft publishes it as stable on the server, before
         // the verification is recorded (decision 0157). The queue used
         // to set the status itself afterwards, which unseated the
-        // verification it had just made.
-        await verifyEntry(id);
+        // verification it had just made. The card's version goes with
+        // it, so an edit that landed since the queue was read is refused
+        // rather than published unread.
+        await verifyEntry(id, card.dataset.version && `"${card.dataset.version}"`);
         toast('検証し、stable にしました。');
       } else {
         const note = await askRejectNote(id);
@@ -338,6 +340,11 @@ export function wireReviewActions(container) {
       runReview();
       loadLoopStats(); // the band and the strip count what the ruling moved
     } catch (e) {
+      if (btn.dataset.act === 'verify' && e.code === 'precondition_failed') {
+        toast('キューを読み込んでから内容が変わったため、検証していません。キューを読み直したので、開いて確かめてから検証してください。');
+        runReview();
+        return;
+      }
       toast((btn.dataset.act === 'verify' ? '検証' : '却下') + 'できませんでした: ' + e.message);
     }
   }));

@@ -36,9 +36,9 @@ func isUniqueViolation(err error) bool {
 var ErrNotFound = errors.New("knowledge not found")
 var ErrAlreadyExists = errors.New("knowledge already exists")
 
-// ErrConflict is returned by Update when an If-Match precondition does not
-// match the stored revision: the entry changed since the caller read it
-// (design doc 0030). The entry exists — a missing entry is ErrNotFound.
+// ErrConflict is returned by Update, SoftDelete and Verify when an
+// If-Match precondition does not match the stored revision: the entry
+// changed since the caller read it (design doc 0030). The entry exists — a missing entry is ErrNotFound.
 var ErrConflict = errors.New("knowledge changed since it was read")
 
 // ErrCuratedTombstone is returned by Create when the id holds a
@@ -974,21 +974,46 @@ func (s *Store) Update(ctx context.Context, k *domain.Knowledge, actor domain.Ac
 // verification that answers a report always clears it from the feed.
 // RecordOutcome clamps the other way round, so on one entry's
 // timeline the order of the acts is the order they happened.
-func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+//
+// ifMatch is the same optional optimistic-concurrency precondition Update
+// and SoftDelete take: non-nil, the verification is recorded only if the
+// stored content_hash still equals it, so a ruling never lands on content
+// the verifier did not read. A mismatch is ErrConflict and nothing is
+// appended; a missing entry is still ErrNotFound.
+func (s *Store) Verify(ctx context.Context, id string, actor domain.Actor, ifMatch *string) (*domain.Knowledge, error) {
 	var k *domain.Knowledge
 	err := s.withTx(ctx, func(tx pgx.Tx) error {
 		var at time.Time
-		// The EXISTS guard makes the insert and the liveness check one
-		// statement, closing the race with a concurrent delete.
+		cond, args := "", []any{id, actor.Kind, actor.Name, actor.Via, actor.Producer}
+		if ifMatch != nil {
+			args = append(args, *ifMatch)
+			cond = fmt.Sprintf(" AND content_hash=$%d", len(args))
+		}
+		// The WHERE clause makes the insert, the liveness check and the
+		// precondition one statement, closing the race with a concurrent
+		// delete or edit.
 		err := tx.QueryRow(ctx, `INSERT INTO knowledge_verification (id, seq, by_kind, by_name, by_via, by_producer, at)
 			SELECT $1, COALESCE((SELECT MAX(seq) FROM knowledge_verification WHERE id=$1), 0) + 1,
 				$2, $3, $4, $5, GREATEST(now(), content_changed_at,
 					(SELECT MAX(at) FROM knowledge_verification WHERE id=$1) + interval '1 microsecond',
 					(SELECT last_at FROM knowledge_usage WHERE knowledge_id=$1 AND event='failed') + interval '1 microsecond')
-			FROM object WHERE id=$1 AND deleted_at IS NULL
-			RETURNING at`,
-			id, actor.Kind, actor.Name, actor.Via, actor.Producer).Scan(&at)
+			FROM object WHERE id=$1 AND deleted_at IS NULL`+cond+`
+			RETURNING at`, args...).Scan(&at)
 		if errors.Is(err, pgx.ErrNoRows) {
+			// No row matched. With a precondition, tell a live-but-changed
+			// entry (ErrConflict) apart from a missing one (ErrNotFound) —
+			// the same distinction Update and SoftDelete make.
+			if ifMatch != nil {
+				var live bool
+				if err := tx.QueryRow(ctx,
+					`SELECT EXISTS (SELECT 1 FROM object WHERE id=$1 AND deleted_at IS NULL)`,
+					id).Scan(&live); err != nil {
+					return err
+				}
+				if live {
+					return ErrConflict
+				}
+			}
 			return ErrNotFound
 		}
 		if err != nil {

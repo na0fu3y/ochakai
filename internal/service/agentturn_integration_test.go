@@ -257,7 +257,7 @@ func TestAProposedRevisionIsAppliedByWhoAskedIntegration(t *testing.T) {
 	}
 
 	// A ruling closes the draft to proposals.
-	if _, err := svc.Verify(ctx, id, asker); err != nil {
+	if _, err := svc.Verify(ctx, id, asker, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.RevisableDraft(askerCtx, id, doc); err == nil {

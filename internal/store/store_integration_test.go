@@ -1653,7 +1653,7 @@ func TestIntegrationDelegatedProvenance(t *testing.T) {
 	if err := s.Update(ctx, k, verifier, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Verify(ctx, id, verifier); err != nil {
+	if _, err := s.Verify(ctx, id, verifier, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := s.Get(ctx, id)
@@ -2031,7 +2031,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	verified, err := s.Verify(ctx, id, human)
+	verified, err := s.Verify(ctx, id, human, nil)
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -2072,7 +2072,7 @@ func TestIntegrationVerifyClearsTheReviewFeed(t *testing.T) {
 	}
 
 	// Re-verifying does.
-	again, err := s.Verify(ctx, id, human)
+	again, err := s.Verify(ctx, id, human, nil)
 	if err != nil {
 		t.Fatalf("re-Verify: %v", err)
 	}
@@ -2162,11 +2162,11 @@ func TestIntegrationVerifyOrdersActsUnderClockSkew(t *testing.T) {
 		return slices.ContainsFunc(hits, func(h domain.SearchHit) bool { return h.ID == id })
 	}
 
-	first, err := s.Verify(ctx, id, human)
+	first, err := s.Verify(ctx, id, human, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := s.Verify(ctx, id, human)
+	second, err := s.Verify(ctx, id, human, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2180,7 +2180,7 @@ func TestIntegrationVerifyOrdersActsUnderClockSkew(t *testing.T) {
 	if !inFeed() {
 		t.Fatal("a failure reported after the verification must put the entry in the feed")
 	}
-	if _, err := s.Verify(ctx, id, human); err != nil {
+	if _, err := s.Verify(ctx, id, human, nil); err != nil {
 		t.Fatal(err)
 	}
 	if inFeed() {
@@ -2226,7 +2226,7 @@ func TestIntegrationContentChangeUnseatsVerificationUnderClockSkew(t *testing.T)
 	}
 	verifyAhead := func(id string) {
 		t.Helper()
-		if _, err := s.Verify(ctx, id, human); err != nil {
+		if _, err := s.Verify(ctx, id, human, nil); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := s.pool.Exec(ctx, `UPDATE knowledge_verification SET at = now() + interval '1 minute'
@@ -2594,7 +2594,7 @@ func TestIntegrationCreateKeepsCuratedTombstones(t *testing.T) {
 		note   string
 	}{
 		{domain.RulingVerified, func(id string) {
-			if _, err := s.Verify(ctx, id, actor); err != nil {
+			if _, err := s.Verify(ctx, id, actor, nil); err != nil {
 				t.Fatal(err)
 			}
 		}, ""},
@@ -2900,7 +2900,7 @@ func TestIntegrationMoveAndPurgeCarryTheLedgers(t *testing.T) {
 	}, false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Verify(ctx, from, actor); err != nil {
+	if _, err := s.Verify(ctx, from, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	moved, err := s.Move(ctx, from, to, actor, nil)
@@ -2962,7 +2962,7 @@ func TestIntegrationContentHashMovesOnlyWithContent(t *testing.T) {
 		what string
 		do   func() error
 	}{
-		{"verifying", func() error { _, err := s.Verify(ctx, id, actor); return err }},
+		{"verifying", func() error { _, err := s.Verify(ctx, id, actor, nil); return err }},
 	} {
 		if err := tc.do(); err != nil {
 			t.Fatalf("%s: %v", tc.what, err)
@@ -3004,6 +3004,61 @@ func TestIntegrationContentHashMovesOnlyWithContent(t *testing.T) {
 	}
 	if twin.ContentHash != original {
 		t.Errorf("identical content hashed differently: %q vs %q", twin.ContentHash, original)
+	}
+}
+
+// Verify takes the If-Match precondition Update and SoftDelete take, in
+// the same statement that appends the row: a stale version is
+// ErrConflict with nothing appended, a current one records, and a
+// missing entry stays ErrNotFound rather than reading as a conflict.
+func TestIntegrationVerifyIfMatch(t *testing.T) {
+	dbURL := testdb.URL(t)
+	ctx := context.Background()
+	s, err := New(ctx, dbURL, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if err := s.Migrate(ctx, 0); err != nil {
+		t.Fatal(err)
+	}
+	actor := domain.Actor{Kind: domain.ActorHuman, Name: "test"}
+	id := testdb.Unique(t, "it-verify-ifmatch-")
+	k := &domain.Knowledge{Type: domain.TypeTerms, ID: id, Title: "first",
+		Status: domain.StatusStable, Body: "One.", CreatedBy: actor}
+	if err := s.Create(ctx, k, false); err != nil {
+		t.Fatal(err)
+	}
+	current := k.ContentHash
+	stale := "0000000000000000000000000000000000000000000000000000000000000000"
+
+	if _, err := s.Verify(ctx, id, actor, &stale); !errors.Is(err, ErrConflict) {
+		t.Fatalf("verify with a stale version = %v, want ErrConflict", err)
+	}
+	read, err := s.Get(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := len(read.Verifications); n != 0 {
+		t.Fatalf("a failed precondition appended %d verification(s)", n)
+	}
+	got, err := s.Verify(ctx, id, actor, &current)
+	if err != nil {
+		t.Fatalf("verify against the current version: %v", err)
+	}
+	if len(got.Verifications) != 1 || got.ContentHash != current {
+		t.Errorf("verify = %d row(s), version %q; want 1 row and the version unmoved", len(got.Verifications), got.ContentHash)
+	}
+	// The version did not move, so the same precondition holds again.
+	if _, err := s.Verify(ctx, id, actor, &current); err != nil {
+		t.Errorf("a repeated verify against the unmoved version: %v", err)
+	}
+
+	if err := s.SoftDelete(ctx, id, actor, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Verify(ctx, id, actor, &current); !errors.Is(err, ErrNotFound) {
+		t.Errorf("verify of a deleted entry with If-Match = %v, want ErrNotFound", err)
 	}
 }
 
@@ -3491,7 +3546,7 @@ func TestIntegrationProducerRidesEveryActor(t *testing.T) {
 	}
 
 	human := domain.Actor{Kind: domain.ActorHuman, Name: "na0@example.co.jp"}
-	if _, err := s.Verify(ctx, id, human); err != nil {
+	if _, err := s.Verify(ctx, id, human, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err = s.Get(ctx, id)
@@ -3667,7 +3722,7 @@ func TestIntegrationQueueCounts(t *testing.T) {
 	// The answer to a failure report is a verification, and it must land
 	// after the report to count as one: this is the entry that proves the
 	// failed count is a queue and not a ledger.
-	if _, err := s.Verify(ctx, answered, actor); err != nil {
+	if _, err := s.Verify(ctx, answered, actor, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -3767,7 +3822,7 @@ func TestIntegrationLexicalSearchBreaksTiesByVerification(t *testing.T) {
 			hits[0].ID, hits[1].ID, hits[2].ID)
 	}
 	// Confirm the one the id order puts last: recency outranks the id.
-	if _, err := s.Verify(ctx, run+"/gamma", actor); err != nil {
+	if _, err := s.Verify(ctx, run+"/gamma", actor, nil); err != nil {
 		t.Fatal(err)
 	}
 	hits, err = s.SearchLexical(ctx, "粗利", mine, 50)

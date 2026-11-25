@@ -1370,8 +1370,9 @@ func (t *noteTally) report() {
 func cmdVerify(ctx context.Context, args []string) error {
 	fs, url := newFlagSet(
 		"verify",
-		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the concept as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes a concept out of\nboth review feeds (`ochakai list verified_at`, `ochakai list failed`).\nA draft is published first: its status becomes stable, as an edit by\nyou, and the verification is recorded against that. A stable or\ndeprecated concept is not edited, so its status and ETag stay put.",
-		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'\n")
+		"Usage: ochakai verify [flags] <id>\n\nAppend a verification against the concept as it stands: you and the time\nare added to its ledger. The first confirmation and the tenth re-check\nare the same command, and re-checking is what takes a concept out of\nboth review feeds (`ochakai list verified_at`, `ochakai list failed`).\nA draft is published first: its status becomes stable, as an edit by\nyou, and the verification is recorded against that. A stable or\ndeprecated concept is not edited, so its status and ETag stay put.\nWith --if-match the verification is recorded only if the concept still\nhas the version you read, and fails instead of vouching for an edit\nyou never saw.",
+		"  ochakai verify metrics/revenue\n  ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'\n  ochakai verify metrics/revenue --if-match \"$(ochakai get metrics/revenue --json | jq -r .summary.content_hash)\"\n")
+	ifMatch := fs.String("if-match", "", "verify only if the concept still has this `version` — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of verifying content you did not read")
 	asJSON := fs.Bool("json", false, "print the verified concept as JSON")
 	id, _, err := idArgs(fs, args, 1)
 	if err != nil {
@@ -1381,8 +1382,12 @@ func cmdVerify(ctx context.Context, args []string) error {
 	if err != nil {
 		return err
 	}
-	k, err := c.Verify(ctx, id)
+	k, err := c.Verify(ctx, id, *ifMatch)
 	if err != nil {
+		var apiErr *apiclient.APIError
+		if *ifMatch != "" && errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusPreconditionFailed {
+			return fmt.Errorf("conflict: ochakai://%s changed since the version in --if-match — `ochakai get %s` again, re-read it, and retry with the new content_hash", id, id)
+		}
 		return err
 	}
 	if *asJSON {
