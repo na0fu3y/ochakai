@@ -1629,6 +1629,24 @@ func TestIntegrationDelegatedProvenance(t *testing.T) {
 		t.Errorf("rendered = %q, want %q", k.CreatedBy.String(), want)
 	}
 
+	// A row carries the creator too: a search hit and a feed row are
+	// scanned by their own queries, and neither may arrive without it.
+	only := Filter{Prefixes: []string{id}}
+	hits, err := s.SearchLexical(ctx, "delegated", only, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].CreatedBy != delegated {
+		t.Errorf("search row created_by = %+v, want one row by %+v", hits, delegated)
+	}
+	feed, err := s.ListByUsage(ctx, only, nil, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(feed) != 1 || feed[0].CreatedBy != delegated {
+		t.Errorf("draft feed row created_by = %+v, want one row by %+v", feed, delegated)
+	}
+
 	// A verification carries its own delegation, independent of creation.
 	verifier := domain.Actor{Kind: domain.ActorHuman, Name: "na0@example.co.jp"}
 	k.Status = domain.StatusStable

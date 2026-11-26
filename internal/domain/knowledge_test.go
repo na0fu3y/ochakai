@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -576,5 +577,35 @@ func TestTrustOfCountsOnlyStandingVerifications(t *testing.T) {
 		if got := TrustOf(tc.vs, edit); got != tc.want {
 			t.Errorf("%s: TrustOf = %s, want %s", tc.name, got, tc.want)
 		}
+	}
+}
+
+// TestSummaryOfFillsEveryField guards the one projection every listing
+// and search row goes through: the store, the service and the bundle
+// view all build rows with SummaryOf, so a Summary field it leaves unset
+// is a field every row on every face reads as empty. An entry with every
+// source value present must come out with every field present.
+func TestSummaryOfFillsEveryField(t *testing.T) {
+	at := time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)
+	k := &Knowledge{
+		ID: "metrics/revenue", Type: TypeMetrics, Title: "Revenue", Description: "Net revenue",
+		Resource: "bigquery://p/d/t", Tags: []string{"finance"}, Status: StatusStable,
+		StaleAfter: "2027-01-01T00:00:00Z",
+		CreatedBy:  Actor{Kind: "process", Name: "loader@example.iam.gserviceaccount.com"},
+		Verifications: []Verification{
+			{By: Actor{Kind: "human", Name: "tanaka@example.co.jp"}, At: at.Add(time.Hour)},
+		},
+		Links:       []Link{{Target: "metrics/orders"}},
+		ContentHash: "sha256:x", CreatedAt: at, UpdatedAt: at, ContentChangedAt: at,
+	}
+	s := SummaryOf(k)
+	v := reflect.ValueOf(s)
+	for i := range v.NumField() {
+		if v.Field(i).IsZero() {
+			t.Errorf("SummaryOf left %s unset", v.Type().Field(i).Name)
+		}
+	}
+	if s.CreatedBy != k.CreatedBy {
+		t.Errorf("created_by = %v, want %v", s.CreatedBy, k.CreatedBy)
 	}
 }

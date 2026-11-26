@@ -46,6 +46,17 @@ last entry.
 
 ### Added
 
+- **Every listing and search row carries `created_by`.** The `Summary`
+  shape — a search hit, a listing or feed row on REST, MCP
+  `search_concepts` / `list_concepts`, `ochakai search --json` /
+  `ochakai list --json`, and the `summary` beside a single read — now
+  includes the actor this instance recorded as creating the concept,
+  the same value as `observed.created_by` and the one the `created_by`
+  filter matches. Among `unverified` rows the trust tier draws no
+  distinction, so telling a person's draft from one a `process:`
+  identity wrote used to take a read per row. A response-only addition;
+  the stored form and the export are unchanged.
+
 - **A confirmation job for the catalog**: the same script with
   `--confirm`, described by `jobs/confirm-bigquery-catalog`. Run under its
   own service account, it projects again, writes nothing, and verifies

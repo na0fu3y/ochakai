@@ -400,6 +400,7 @@ paths:
                         status: stable
                         trust: human-reviewed
                         verified_at: "2026-07-10T01:52:16.774301Z"
+                        created_by: { kind: human, name: tanaka@example.co.jp }
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         content_hash: 4d1f0a86c3b25e97d0a41f6b8c2e5307ab9d4f61c8e30257ba9f1d6c4e820b73
@@ -416,6 +417,7 @@ paths:
                         stale_after: "2026-12-31T00:00:00Z"
                         trust: human-reviewed
                         verified_at: "2026-07-14T02:33:41.019778Z"
+                        created_by: { kind: human, name: tanaka@example.co.jp }
                         links:
                           - { target: glossary/completed-order, text: completed order }
                           - { target: tables/shop-orders, text: shop.orders }
@@ -438,6 +440,7 @@ paths:
                         status: draft
                         stale_after: "2027-01-31T00:00:00Z"
                         trust: unverified
+                        created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
@@ -460,6 +463,7 @@ paths:
                         status: draft
                         stale_after: "2027-01-31T00:00:00Z"
                         trust: unverified
+                        created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                         links:
                           - { target: metrics/revenue, text: Revenue }
                         content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
@@ -477,6 +481,7 @@ paths:
                         description: An order that shipped and was not refunded within the return window.
                         status: draft
                         trust: unverified
+                        created_by: { kind: human, name: tanaka@example.co.jp }
                         content_hash: c07b4e19a35d8f206b1c94e73da508f2b6c31d9047ea825bf1c6d03b95a7e412
                         created_at: "2026-06-02T04:09:12.774903Z"
                         updated_at: "2026-06-02T04:09:12.774903Z"
@@ -1985,6 +1990,7 @@ paths:
                       stale_after: "2026-12-31T00:00:00Z"
                       trust: human-reviewed
                       verified_at: "2026-07-14T02:33:41.019778Z"
+                      created_by: { kind: human, name: tanaka@example.co.jp }
                       links:
                         - { target: glossary/completed-order, text: completed order }
                         - { target: tables/shop-orders, text: shop.orders }
@@ -2151,6 +2157,7 @@ paths:
                       stale_after: "2027-01-31T00:00:00Z"
                       trust: human-reviewed
                       verified_at: "2026-07-27T00:41:12.905337Z"
+                      created_by: { kind: process, name: analyst@example.iam.gserviceaccount.com }
                       links:
                         - { target: metrics/revenue, text: Revenue }
                       content_hash: 15c8e3097b6d2a41f0c85b3ed729a4f6108c5d3b7e2a094f6c1b8d503a7e2f94
@@ -3231,7 +3238,7 @@ components:
         the concept says, and this is an index over it. A client that needs
         a key not listed here reads the document; the projection carries
         what listing surfaces sort and filter by, and stops there.
-      required: [id, type, status, trust, content_hash, created_at, updated_at]
+      required: [id, type, status, trust, created_by, content_hash, created_at, updated_at]
       properties:
         id:
           type: string
@@ -3304,6 +3311,15 @@ components:
             When the newest confirmation was recorded, absent when there
             is none. A row carries it because it is what sort=verified_at
             ranks by — a reviewer reading that feed is reading these times.
+        created_by:
+          allOf: [{ $ref: "#/components/schemas/Actor" }]
+          description: >
+            Who this instance recorded as creating the concept — the same
+            value as observed.created_by, and what the created_by filter
+            matches. A row carries it because among unverified concepts
+            the trust tier draws no distinction, and whether a person or a
+            process wrote a draft is what a reader choosing which row to
+            open needs.
         links:
           type: array
           items: { $ref: "#/components/schemas/Link" }

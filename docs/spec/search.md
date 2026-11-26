@@ -9,8 +9,11 @@
 `GET /api/v1/search?q=…`(MCP `search_concepts`、CLI `ochakai search`、
 Web UI の検索)は、**問いに答える concept の順位**を返す。
 
-- ヒットが運ぶのは id・型・title・description・status・trust・score などの
-  **ポインタ**で、本文は運ばない。読むかどうかを決めて `GET` で取る
+- ヒットが運ぶのは id・型・title・description・status・trust・作成者
+  (`created_by`)・score などの**ポインタ**で、本文は運ばない。作成者を
+  行に載せるのは、`unverified` のあいだは段が何も区別しないからで、人が
+  書いた下書きか `process:` が書いた下書きかは、一件ずつ読まずに行で
+  見分けられる。一覧の行も同じものを運ぶ。読むかどうかを決めて `GET` で取る
   (search → get)。取った concept は、それを指す concept を
   `linked_from` で運ぶ — 指標の読み方を書いた insight はそこにある。
 - **本文で一致したときだけ `snippet`** を付ける(140 文字前後、切った端に

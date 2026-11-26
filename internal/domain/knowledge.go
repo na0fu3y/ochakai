@@ -1403,6 +1403,11 @@ func ToStatuses(ss []string) []Status {
 // wants, and who and when is a question about one entry. There is no
 // rejected flag, because a rejected concept is a deleted one and no
 // listing carries it (design doc 0135).
+//
+// CreatedBy is the one piece of the provenance a row does carry. Among
+// unverified rows the tier draws no distinction, and whether a person or
+// a process wrote a draft is what a reader choosing which one to open
+// needs; without it on the row, the only way to tell is to read each.
 type Summary struct {
 	ID   string `json:"id"`
 	Type Type   `json:"type"`
@@ -1426,11 +1431,14 @@ type Summary struct {
 	// VerifiedAt is the newest verification's time, absent when there is
 	// none. A row carries it because it is what the verification-age feed
 	// ranks by — a reviewer reading that feed is reading these times.
-	VerifiedAt  *time.Time `json:"verified_at,omitempty"`
-	Links       []Link     `json:"links,omitempty"`
-	ContentHash string     `json:"content_hash"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	VerifiedAt *time.Time `json:"verified_at,omitempty"`
+	// CreatedBy is who this instance recorded as creating the concept —
+	// Observed's value, the same one the created_by filter matches.
+	CreatedBy   Actor     `json:"created_by"`
+	Links       []Link    `json:"links,omitempty"`
+	ContentHash string    `json:"content_hash"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // SummaryOf projects an entry. Title travels raw — absent when the
@@ -1441,7 +1449,7 @@ func SummaryOf(k *Knowledge) Summary {
 	s := Summary{
 		ID: k.ID, Type: k.Type, Title: k.Title, Description: k.Description,
 		Resource: k.Resource, Tags: k.Tags, Status: k.Lifecycle(), StaleAfter: k.StaleAfter,
-		Trust: TrustOf(k.Verifications, k.ContentChangedAt), Links: k.Links,
+		Trust: TrustOf(k.Verifications, k.ContentChangedAt), CreatedBy: k.CreatedBy, Links: k.Links,
 		ContentHash: k.ContentHash, CreatedAt: k.CreatedAt, UpdatedAt: k.UpdatedAt,
 	}
 	if v := k.LastVerified(); v != nil {
