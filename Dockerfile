@@ -11,7 +11,7 @@
 # recognises, and because dependabot's docker ecosystem reads the pair and
 # opens the pull request that moves both — the digest below is a value
 # somebody has to bump, and the point is that bumping it is a commit.
-FROM --platform=$BUILDPLATFORM golang:1.27.3@sha256:f24164268fc1e741bbdc0066dbadcf1c8426c5a8489f0729c02c3905a53032fd AS build
+FROM --platform=$BUILDPLATFORM golang:1.27.4@sha256:5f1b98fa02fe396ebce2a0227a0e08309e11792915b9dd2e1f71053d7e7e6666 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download

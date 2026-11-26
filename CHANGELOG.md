@@ -73,6 +73,20 @@ last entry.
   a property and may be exchanged for G1. No surface moves, and nothing
   the server does changes.
 
+### Security
+
+- **Built with Go 1.27.4 and OpenTelemetry v1.47.0.** Go 1.27.3's
+  `net/http` can crash an HTTP/1 server through a race on the headers
+  `MaxBytesReader` touches (CVE-2026-97054) — the server the deployment
+  runs. The OpenTelemetry SDK lets an attribute past its length limit
+  through when it carries U+FFFD runes (CVE-2026-128085). Both are
+  reached from this code and fixed upstream. `golang.org/x/net` (two
+  HTTP/2 advisories), `golang.org/x/crypto` and the OpenTelemetry API
+  move past advisories this code does not reach, and the remaining
+  modules move to their latest releases at least a week old. The
+  `toolchain` line and the build image move together; the `go`
+  directive stays `1.27`.
+
 ## [0.31.3] - 2026-10-22
 
 ### Changed
