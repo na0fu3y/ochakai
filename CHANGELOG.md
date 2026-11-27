@@ -62,6 +62,20 @@ last entry.
   distinction, so telling a person's draft from one a `process:`
   identity wrote used to take a read per row. A response-only addition;
   the stored form and the export are unchanged.
+- **`POST /api/v1/review/{id}` honors `If-Match`**, with the semantics
+  PUT and DELETE already have
+  ([docs/spec/concurrency.md](docs/spec/concurrency.md)): the
+  verification is recorded only if the concept still has the version
+  the caller read, a stale one is a 412 `precondition_failed` with
+  nothing recorded, and `*` is a 400. Absent, nothing changes. On a
+  draft the version is the precondition of the publishing edit, and the
+  verification is recorded against what it stored. A ruling still does
+  not move a stable or deprecated concept's ETag, so a retry with the
+  same `If-Match` appends one more row by the same caller; a retried
+  draft verification is a 412. `ochakai verify --if-match` sends it, and
+  the web UI's Verify buttons (the concept page and the review queue)
+  send the version they showed, so a verification no longer lands on an
+  edit the person never read. No new header, flag or parameter name.
 
 - **A confirmation job for the catalog**: the same script with
   `--confirm`, described by `jobs/confirm-bigquery-catalog`. Run under its

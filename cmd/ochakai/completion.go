@@ -187,7 +187,7 @@ _ochakai() {
       _arguments '-f[input file]:file:_files' '--only-if-new[write only if the id is free]' '--if-match[write only if the concept still has this version]:version:' '--json[print the written object as JSON]' '--url[server URL]:url:'
       ;;
     verify)
-      _arguments '--json[print the concept as JSON]' '--url[server URL]:url:'
+      _arguments '--if-match[verify only if the concept still has this version]:version:' '--json[print the concept as JSON]' '--url[server URL]:url:'
       ;;
     delete)
       _arguments '--if-match[delete only if the concept still has this version]:version:' '--note[why it was not accepted]:note:' '--url[server URL]:url:'
@@ -281,7 +281,7 @@ _ochakai() {
       fi
       opts="--note --json --url" ;;
     put)           opts="-f --only-if-new --if-match --json --url" ;;
-    verify)        opts="--json --url" ;;
+    verify)        opts="--if-match --json --url" ;;
     delete)        opts="--if-match --note --url" ;;
     purge)         opts="--url" ;;
     move)          opts="--directory --url" ;;
@@ -381,6 +381,7 @@ complete -c ochakai -n '__fish_seen_subcommand_from put' -s f -r -F -d 'input fi
 complete -c ochakai -n '__fish_seen_subcommand_from put' -l only-if-new -d 'write only if the id is free'
 complete -c ochakai -n '__fish_seen_subcommand_from put' -l if-match -x -d 'write only if the concept still has this version'
 complete -c ochakai -n '__fish_seen_subcommand_from delete' -l if-match -x -d 'delete only if the concept still has this version'
+complete -c ochakai -n '__fish_seen_subcommand_from verify' -l if-match -x -d 'verify only if the concept still has this version'
 complete -c ochakai -n '__fish_seen_subcommand_from access' -l if-match -x -d 'replace only if the policy still has this version'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -l name -x -d 'name to save the URL under'
 complete -c ochakai -n '__fish_seen_subcommand_from use' -a '(ochakai use 2>/dev/null | cut -c3- | cut -f1)'

@@ -564,13 +564,25 @@ func (c *Client) Delete(ctx context.Context, path, ifMatch, note string) error {
 // 0157); any other entry's document and ETag stay put.
 // The other ruling a curator makes is a Delete carrying a note (design
 // doc 0135).
-func (c *Client) review(ctx context.Context, id, ruling, note string) (*domain.View, error) {
-	var k domain.View
-	body := struct {
+func (c *Client) review(ctx context.Context, id, ruling, note, ifMatch string) (*domain.View, error) {
+	body, err := json.Marshal(struct {
 		Ruling string `json:"ruling"`
 		Note   string `json:"note,omitempty"`
-	}{Ruling: ruling, Note: note}
-	if err := c.doJSON(ctx, http.MethodPost, escapedPath("/api/v1/review/", id), nil, body, &k); err != nil {
+	}{Ruling: ruling, Note: note})
+	if err != nil {
+		return nil, err
+	}
+	hdr := http.Header{"Accept": []string{"application/json"}}
+	if ifMatch != "" {
+		hdr.Set("If-Match", etagValue(ifMatch))
+	}
+	resp, err := c.doRaw(ctx, http.MethodPost, escapedPath("/api/v1/review/", id), nil, "application/json", hdr, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var k domain.View
+	if err := json.NewDecoder(resp.Body).Decode(&k); err != nil {
 		return nil, err
 	}
 	return &k, nil
@@ -580,8 +592,16 @@ func (c *Client) review(ctx context.Context, id, ruling, note string) (*domain.V
 // confirmation and the tenth re-check are the same call — the re-check is
 // what takes an entry out of the review feeds (design doc 0025 §6), and
 // Update cannot do it.
-func (c *Client) Verify(ctx context.Context, id string) (*domain.View, error) {
-	return c.review(ctx, id, "verified", "")
+//
+// A non-empty ifMatch is sent as If-Match, the same precondition Put and
+// Delete take: the verification is recorded only if the entry still has
+// that version, and a stale one is a 412 APIError with nothing recorded.
+// It also makes a retry safe — verifying a stable or deprecated entry
+// does not move its version, so a repeat appends one more row by the same
+// caller, while a draft's first verification publishes it and a repeat
+// fails. "" means unconditional.
+func (c *Client) Verify(ctx context.Context, id, ifMatch string) (*domain.View, error) {
+	return c.review(ctx, id, "verified", "", ifMatch)
 }
 
 // Purge hard-deletes an entry that is already soft-deleted, freeing its

@@ -505,3 +505,50 @@ func TestPutSendsIfMatchAndMapsConflict(t *testing.T) {
 		t.Errorf("Message = %q", apiErr.Message)
 	}
 }
+
+// Verify's ifMatch travels the way Put's does: absent when "", quoted
+// when bare, verbatim when already an ETag, with the ruling in the body;
+// a stale version surfaces as a 412 APIError.
+func TestVerifySendsIfMatchAndMapsConflict(t *testing.T) {
+	const stale = "0000000000000000000000000000000000000000000000000000000000000000"
+	var got []string
+	c := newTestPair(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/v1/review/metrics/revenue" {
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+		}
+		var body struct{ Ruling string }
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Ruling != "verified" {
+			t.Errorf("body ruling = %q, %v; want verified", body.Ruling, err)
+		}
+		v, sent := r.Header["If-Match"]
+		if !sent {
+			v = []string{"(absent)"}
+		}
+		got = append(got, v[0])
+		if v[0] == `"`+stale+`"` {
+			w.WriteHeader(http.StatusPreconditionFailed)
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "knowledge changed since it was read", "code": "precondition_failed"})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(domain.View{ID: "metrics/revenue"})
+	})
+	for _, ifMatch := range []string{"", "abc123", `"abc123"`} {
+		v, err := c.Verify(context.Background(), "metrics/revenue", ifMatch)
+		if err != nil {
+			t.Fatalf("Verify(ifMatch=%q): %v", ifMatch, err)
+		}
+		if v.ID != "metrics/revenue" {
+			t.Errorf("Verify returned %q", v.ID)
+		}
+	}
+	want := []string{"(absent)", `"abc123"`, `"abc123"`}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("If-Match on the wire = %q, want %q", got, want)
+	}
+
+	_, err := c.Verify(context.Background(), "metrics/revenue", stale)
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusPreconditionFailed {
+		t.Fatalf("stale version: err = %v, want a 412 *APIError", err)
+	}
+}

@@ -973,8 +973,13 @@ both review feeds (`ochakai list verified_at`, `ochakai list failed`).
 A draft is published first: its status becomes stable, as an edit by
 you, and the verification is recorded against that. A stable or
 deprecated concept is not edited, so its status and ETag stay put.
+With --if-match the verification is recorded only if the concept still
+has the version you read, and fails instead of vouching for an edit
+you never saw.
 
 Flags:
+  -if-match version
+    	verify only if the concept still has this version — its content hash (`ochakai get <id> --json` prints it as .summary.content_hash; a REST GET returns it as the ETag header); a stale version fails with a conflict instead of verifying content you did not read
   -json
     	print the verified concept as JSON
   -url string
@@ -983,6 +988,7 @@ Flags:
 Examples:
   ochakai verify metrics/revenue
   ochakai verify metrics/revenue --json | jq -r '.observed.verified[-1].at'
+  ochakai verify metrics/revenue --if-match "$(ochakai get metrics/revenue --json | jq -r .summary.content_hash)"
 ```
 
 ## ochakai whoami

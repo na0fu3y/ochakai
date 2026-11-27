@@ -137,7 +137,7 @@ func TestScopeHidesWhatItRefusesIntegration(t *testing.T) {
 // — it tells the caller nothing they did not already know.
 func TestScopeRefusesAWriteItAllowsAReadOfIntegration(t *testing.T) {
 	f := newAccessFixture(t)
-	if _, err := f.svc.Verify(f.readCt, f.mine, f.reader); err != nil {
+	if _, err := f.svc.Verify(f.readCt, f.mine, f.reader, nil); err != nil {
 		t.Fatalf("verifying inside the write grant: %v", err)
 	}
 	// The glossary is granted read-only to everybody.
@@ -145,7 +145,7 @@ func TestScopeRefusesAWriteItAllowsAReadOfIntegration(t *testing.T) {
 		name string
 		call func() error
 	}{
-		{"Verify", func() error { _, err := f.svc.Verify(f.readCt, f.shared, f.reader); return err }},
+		{"Verify", func() error { _, err := f.svc.Verify(f.readCt, f.shared, f.reader, nil); return err }},
 		{"Delete", func() error { return f.svc.Delete(f.readCt, f.shared, f.reader, nil, "") }},
 		{"Reject", func() error { return f.svc.Delete(f.readCt, f.shared, f.reader, nil, "no") }},
 	} {
@@ -163,7 +163,7 @@ func TestScopeRefusesAWriteItAllowsAReadOfIntegration(t *testing.T) {
 // ruling stands on it — which is the read 0109 §4 answers with a 404.
 func TestScopeHidesARulingOutsideItIntegration(t *testing.T) {
 	f := newAccessFixture(t)
-	if _, err := f.svc.Verify(f.adminCtx, f.theirs, f.admin); err != nil {
+	if _, err := f.svc.Verify(f.adminCtx, f.theirs, f.admin, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.svc.RefuseIfCurated(f.readCt, f.theirs, "replace"); !errors.Is(err, store.ErrNotFound) {
@@ -262,7 +262,7 @@ func TestScopeNarrowsEveryListingIntegration(t *testing.T) {
 func TestScopeHoldsUnderRepeatedTrustIntegration(t *testing.T) {
 	f := newAccessFixture(t)
 	for _, id := range []string{f.mine, f.theirs} {
-		if _, err := f.svc.Verify(f.adminCtx, id, f.admin); err != nil {
+		if _, err := f.svc.Verify(f.adminCtx, id, f.admin, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1164,10 +1164,10 @@ func TestRootGrantIsNotAdministrationIntegration(t *testing.T) {
 
 	// The reader may not write; the editor granted may_write at the same
 	// prefix may.
-	if _, err := f.svc.Verify(f.viewCtx, f.id, f.viewer); !errors.Is(err, ErrForbidden) {
+	if _, err := f.svc.Verify(f.viewCtx, f.id, f.viewer, nil); !errors.Is(err, ErrForbidden) {
 		t.Errorf("a read-only grant wrote: %v", err)
 	}
-	if _, err := f.svc.Verify(f.editCtx, f.id, f.editor); err != nil {
+	if _, err := f.svc.Verify(f.editCtx, f.id, f.editor, nil); err != nil {
 		t.Errorf("a may_write grant at the root could not write: %v", err)
 	}
 }

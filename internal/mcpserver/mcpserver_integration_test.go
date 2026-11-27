@@ -245,7 +245,7 @@ func TestIntegrationPutKnowledgeCreatesThenReplaces(t *testing.T) {
 
 	// A human ruling still stops the replace half, with the advice the
 	// two tools used to carry between them.
-	if _, err := svc.Verify(ctx, id, domain.Actor{Kind: domain.ActorHuman, Name: "na0"}); err != nil {
+	if _, err := svc.Verify(ctx, id, domain.Actor{Kind: domain.ActorHuman, Name: "na0"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	res, err := cs.CallTool(ctx, &mcp.CallToolParams{
@@ -406,7 +406,7 @@ func TestIntegrationMCPAgentSeesTheRulingOnItsDraft(t *testing.T) {
 	}, human, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Verify(ctx, original, human); err != nil {
+	if _, err := svc.Verify(ctx, original, human, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -467,7 +467,7 @@ func TestIntegrationMCPAgentSeesTheRulingOnItsDraft(t *testing.T) {
 
 	// The human rules. Confirming is not on this surface (design doc
 	// 0076) — that is the point of the split, not a missing tool.
-	if _, err := svc.Verify(ctx, replacement, human); err != nil {
+	if _, err := svc.Verify(ctx, replacement, human, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -594,7 +594,7 @@ func TestIntegrationListWalksAFeedAndSearchRefusesTo(t *testing.T) {
 		}, human, nil); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := svc.Verify(ctx, id, human); err != nil {
+		if _, err := svc.Verify(ctx, id, human, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -638,7 +638,18 @@ func (s *Service) Delete(ctx context.Context, id string, actor domain.Actor, ifM
 // Not an MCP tool. Verification is the human ruling the write-back loop
 // turns on; an agent that finds a concept wrong reports the outcome or
 // drafts a replacement (design docs 0015 §3.1, 0025).
-func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*domain.Knowledge, error) {
+//
+// ifMatch is the same optional If-Match precondition Update and Delete
+// take: non-nil, the ruling lands only on the version the caller read,
+// and anything else is store.ErrConflict with nothing recorded. On a
+// draft it is the precondition of the publishing edit, and the
+// verification that follows is conditioned on the content that edit
+// stored, so both halves stand on what the caller read. A ruling does
+// not move a stable or deprecated concept's version, so a retried
+// request carrying the same If-Match appends one more row by the same
+// caller and changes no tier; a retried draft verification meets the
+// version its first attempt published and fails.
+func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor, ifMatch *string) (*domain.Knowledge, error) {
 	if err := s.readOnly(); err != nil {
 		return nil, err
 	}
@@ -646,10 +657,14 @@ func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*d
 	if err := s.mayWrite(ctx, id); err != nil {
 		return nil, err
 	}
-	if err := s.publishDraft(ctx, id, actor); err != nil {
+	published, err := s.publishDraft(ctx, id, actor, ifMatch)
+	if err != nil {
 		return nil, err
 	}
-	k, err := s.Store.Verify(ctx, id, actor)
+	if ifMatch != nil && published != nil {
+		ifMatch = published
+	}
+	k, err := s.Store.Verify(ctx, id, actor, ifMatch)
 	if err != nil {
 		return nil, err
 	}
@@ -663,31 +678,45 @@ func (s *Service) Verify(ctx context.Context, id string, actor domain.Actor) (*d
 // layout, comments and every other key survive (okf.SetFrontmatterKeys),
 // and the write is conditional on the content hash it read: an edit
 // landing in between fails the ruling rather than being overwritten.
-func (s *Service) publishDraft(ctx context.Context, id string, actor domain.Actor) error {
+//
+// A non-nil ifMatch is the caller's version, and the publish is
+// conditional on it rather than on the hash read here: a draft edited
+// since the caller read it is store.ErrConflict before anything is
+// written. published is the version the edit stored, nil when the
+// concept was not a draft.
+func (s *Service) publishDraft(ctx context.Context, id string, actor domain.Actor, ifMatch *string) (published *string, err error) {
 	cur, err := s.Store.Get(ctx, id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if cur.Lifecycle() != domain.StatusDraft {
-		return nil
+		return nil, nil
+	}
+	// The caller's version and the one read here must agree before the
+	// conditional write below takes the latter as its precondition.
+	hash := cur.ContentHash
+	if ifMatch != nil && *ifMatch != hash {
+		return nil, store.ErrConflict
 	}
 	doc, _, err := store.StoredDocument(cur)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	out, err := okf.SetFrontmatterKeys([]byte(doc), map[string]json.RawMessage{"status": json.RawMessage(`"stable"`)}, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	d, _, err := okf.Parse(out)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	k := d.Knowledge
 	k.ID = id
-	hash := cur.ContentHash
-	_, _, err = s.Update(ctx, &k, actor, &hash)
-	return err
+	updated, _, err := s.Update(ctx, &k, actor, &hash)
+	if err != nil {
+		return nil, err
+	}
+	return &updated.ContentHash, nil
 }
 
 // Purge hard-deletes an already soft-deleted concept, freeing its id for a

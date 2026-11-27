@@ -949,7 +949,15 @@ func Handler(svc *service.Service) http.Handler {
 					in.Ruling))
 				return
 			}
-			k, err = svc.Verify(r.Context(), id, actor)
+			// The same opt-in precondition PUT and DELETE take: a
+			// verification lands only on the version the caller read,
+			// and a stale one is a 412 with nothing recorded.
+			ifMatch, perr := parseIfMatch(r)
+			if perr != nil {
+				writeError(w, perr)
+				return
+			}
+			k, err = svc.Verify(r.Context(), id, actor, ifMatch)
 		default:
 			// The arm above is the vocabulary; domain.Rulings is what
 			// every surface quotes it as, so the refusal cannot name a

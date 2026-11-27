@@ -67,7 +67,7 @@ func TestListingsWalkToTheEndIntegration(t *testing.T) {
 	// unverified: the verification-age order ends in a NULL tail, which is
 	// the position a cursor cannot express as a value.
 	for _, id := range ids[:3] {
-		if _, err := svc.Verify(ctx, id, actor); err != nil {
+		if _, err := svc.Verify(ctx, id, actor, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -839,6 +839,120 @@ func TestRESTIntegrationVerify(t *testing.T) {
 	}
 }
 
+// TestRESTIntegrationVerifyIfMatch covers the review face's If-Match,
+// the same opt-in precondition PUT and DELETE take: a verification lands
+// only on the version the caller read, a stale one is a 412 with nothing
+// recorded, and a retry is safe — on a stable concept the ETag does not
+// move, so the retry appends a row, and on a draft the first verification
+// publishes it, so the retry meets a new version and fails.
+func TestRESTIntegrationVerifyIfMatch(t *testing.T) {
+	srv, _ := newIntegrationServer(t)
+	typ := testdb.Unique(t, "restit")
+
+	create := func(id string, status domain.Status) string {
+		t.Helper()
+		resp := putDoc(t, srv.URL, id, docFrom(t, map[string]any{
+			"type": typ, "id": id, "title": "verify " + string(status), "status": status,
+		}), true)
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create %s = %d", id, resp.StatusCode)
+		}
+		t.Cleanup(func() {
+			req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/v1/bundle/"+id+".md", nil)
+			if resp, err := http.DefaultClient.Do(req); err == nil {
+				resp.Body.Close()
+			}
+		})
+		return strings.Trim(resp.Header.Get("ETag"), `"`)
+	}
+	verify := func(id, ifMatch string) (int, domain.View, string) {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/v1/review/"+id, strings.NewReader(`{"ruling":"verified"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("If-Match", ifMatch)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		var v domain.View
+		if resp.StatusCode == http.StatusOK {
+			if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+				t.Fatal(err)
+			}
+			return resp.StatusCode, v, resp.Header.Get("ETag")
+		}
+		var e struct{ Code string }
+		_ = json.NewDecoder(resp.Body).Decode(&e)
+		return resp.StatusCode, v, e.Code
+	}
+	verifications := func(id string) int {
+		t.Helper()
+		var v domain.View
+		getJSON(t, srv.URL+"/api/v1/bundle/"+id+".md", &v)
+		return len(v.Observed.Verified)
+	}
+
+	stable := typ + "/stable"
+	hash := create(stable, domain.StatusStable)
+	const stale = "0000000000000000000000000000000000000000000000000000000000000000"
+	if code, _, errCode := verify(stable, `"`+stale+`"`); code != http.StatusPreconditionFailed || errCode != domain.CodePreconditionFailed {
+		t.Fatalf("stale If-Match = %d %s, want 412 precondition_failed", code, errCode)
+	}
+	if n := verifications(stable); n != 0 {
+		t.Fatalf("a failed precondition recorded %d verifications", n)
+	}
+	code, first, etag := verify(stable, `"`+hash+`"`)
+	if code != http.StatusOK || len(first.Observed.Verified) != 1 {
+		t.Fatalf("current If-Match = %d, ledger %+v", code, first.Observed.Verified)
+	}
+	if etag != `"`+hash+`"` {
+		t.Errorf("verifying a stable concept moved the ETag: %q -> %s", hash, etag)
+	}
+	// The retry a client makes after losing the response: the version
+	// did not move, so it lands again — one more row by the same caller.
+	if code, again, _ := verify(stable, hash); code != http.StatusOK || len(again.Observed.Verified) != 2 {
+		t.Fatalf("retried verify = %d, ledger %+v", code, again.Observed.Verified)
+	}
+
+	draft := typ + "/draft"
+	draftHash := create(draft, domain.StatusDraft)
+	code, published, etag := verify(draft, `"`+draftHash+`"`)
+	if code != http.StatusOK || published.Summary.Status != domain.StatusStable || len(published.Observed.Verified) != 1 {
+		t.Fatalf("verify of a draft = %d, status %q, ledger %+v", code, published.Summary.Status, published.Observed.Verified)
+	}
+	if published.Summary.Trust == domain.TrustUnverified {
+		t.Errorf("the verification does not stand for the published content: trust %q", published.Summary.Trust)
+	}
+	if etag == `"`+draftHash+`"` {
+		t.Errorf("publishing the draft left the ETag at %s", etag)
+	}
+	// The retry meets the version the first attempt published.
+	if code, _, errCode := verify(draft, draftHash); code != http.StatusPreconditionFailed || errCode != domain.CodePreconditionFailed {
+		t.Fatalf("retried draft verify = %d %s, want 412 precondition_failed", code, errCode)
+	}
+	if n := verifications(draft); n != 1 {
+		t.Errorf("the failed retry recorded a verification: %d rows", n)
+	}
+
+	// A stale version on a draft publishes nothing.
+	other := typ + "/draft-stale"
+	create(other, domain.StatusDraft)
+	if code, _, _ := verify(other, stale); code != http.StatusPreconditionFailed {
+		t.Fatalf("stale If-Match on a draft = %d, want 412", code)
+	}
+	var still domain.View
+	getJSON(t, srv.URL+"/api/v1/bundle/"+other+".md", &still)
+	if still.Summary.Status != domain.StatusDraft {
+		t.Errorf("a failed precondition published the draft: status %q", still.Summary.Status)
+	}
+
+	if code, _, _ := verify(typ+"/missing", stale); code != http.StatusNotFound {
+		t.Errorf("If-Match on a missing concept = %d, want 404", code)
+	}
+}
+
 // TestRESTIntegrationConceptConditionalGET covers a concept's own GET
 // answering If-None-Match with 304, the same way both file branches on
 // this address already did (design doc 0064 §14.2, issue #470): the
@@ -935,6 +1049,7 @@ func TestUnimplementedPreconditionsAreNamed(t *testing.T) {
 		// it to avoid creating anything created (§20.1).
 		{"If-Match * on a write", http.MethodPut, concept, "If-Match", "*"},
 		{"If-Match * on a delete", http.MethodDelete, concept, "If-Match", "*"},
+		{"If-Match * on a review", http.MethodPost, srv.URL + "/api/v1/review/" + id, "If-Match", "*"},
 		// An entity-tag here means "write only if it is *not* this
 		// version", which a knowledge store has no use for (§20.4).
 		{"If-None-Match version on a write", http.MethodPut, concept, "If-None-Match", `"deadbeef"`},
@@ -951,12 +1066,18 @@ func TestUnimplementedPreconditionsAreNamed(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			var body io.Reader
-			if c.method == http.MethodPut {
+			switch c.method {
+			case http.MethodPut:
 				body = strings.NewReader(string(payload))
+			case http.MethodPost:
+				body = strings.NewReader(`{"ruling":"verified"}`)
 			}
 			req, _ := http.NewRequest(c.method, c.url, body)
-			if c.method == http.MethodPut {
+			switch c.method {
+			case http.MethodPut:
 				req.Header.Set("Content-Type", "text/markdown")
+			case http.MethodPost:
+				req.Header.Set("Content-Type", "application/json")
 			}
 			req.Header.Set(c.header, c.value)
 			resp, err := http.DefaultClient.Do(req)
