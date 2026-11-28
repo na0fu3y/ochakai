@@ -1850,7 +1850,7 @@ func TestImportSendsTheIndexForItsDescriptions(t *testing.T) {
 	if len(indexes) != 1 || !strings.Contains(indexes[0], "Revenue by channel") {
 		t.Errorf("the index was not sent: %q", indexes)
 	}
-	if !strings.Contains(out, "described the subdirectories index.md lists") {
+	if !strings.Contains(out, "kept what index.md says about the bundle and its subdirectories") {
 		t.Errorf("the import did not say it kept the descriptions:\n%s", out)
 	}
 	if strings.Contains(errOut, "index.md is a filename OKF reserves") {

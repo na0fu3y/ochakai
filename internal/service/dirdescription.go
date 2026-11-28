@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
+	"github.com/na0fu3y/ochakai/internal/okf"
 )
 
 // indexEntryRe is one SPEC §8 line: "* [Title](target) - description".
@@ -19,10 +20,19 @@ var indexEntryRe = regexp.MustCompile(`^\s*[*+-]\s+\[([^\]]*)\]\(([^)\s]+)\)\s*(
 var generatedCountRe = regexp.MustCompile(`^\d+ concepts?$`)
 
 // DescribeDirectories reads a directory's index.md as a producer wrote
-// it and keeps the one thing in it ochakai does not generate: what each
-// subdirectory is for (decision 0154). The listing itself is not read —
+// it and keeps what in it ochakai does not generate: what each
+// subdirectory is for (decision 0154), and, in the bundle-root index.md,
+// the frontmatter that says what the bundle is — title, description,
+// license, any extension key (OKF SPEC §8.1, which requires a producer
+// that regenerates index.md to keep it). The listing itself is not read —
 // ochakai generates it from what the directory holds — and neither are
 // the concept lines, whose descriptions live in the concepts.
+//
+// The root's frontmatter is the whole of what the writer says about the
+// bundle: a root index.md without one (or with okf_version alone) clears
+// what was kept. A frontmatter that is not one is a 400. Below the root
+// an index.md has no frontmatter (SPEC §8), and one written there is not
+// read.
 //
 // A subdirectory the document lists with no description, or with the
 // count ochakai writes for one nobody described, has its description
@@ -47,6 +57,20 @@ func (s *Service) DescribeDirectories(ctx context.Context, dir string, doc []byt
 	if err := s.mayWrite(ctx, dir); err != nil {
 		return "", err
 	}
+	var meta *string
+	if dir == "" {
+		m, err := okf.BundleMetadata(doc)
+		if err != nil {
+			return "", Invalidf("index.md: %v", err)
+		}
+		have, err := s.Store.BundleMetadata(ctx)
+		if err != nil {
+			return "", err
+		}
+		if m != have {
+			meta = &m
+		}
+	}
 	want := map[string]string{}
 	for line := range strings.SplitSeq(domain.Normalize(string(doc)), "\n") {
 		m := indexEntryRe.FindStringSubmatch(line)
@@ -63,8 +87,25 @@ func (s *Service) DescribeDirectories(ctx context.Context, dir string, doc []byt
 		}
 		want[child] = desc
 	}
-	if len(want) == 0 {
+	changes, err := s.descriptionChanges(ctx, want)
+	if err != nil {
+		return "", err
+	}
+	if len(changes) == 0 && meta == nil {
 		return domain.PlanUnchanged, nil
+	}
+	if !dry {
+		if err := s.Store.KeepIndex(ctx, changes, meta, actor); err != nil {
+			return "", err
+		}
+	}
+	return domain.PlanUpdated, nil
+}
+
+// descriptionChanges is the part of want that differs from what is kept.
+func (s *Service) descriptionChanges(ctx context.Context, want map[string]string) (map[string]string, error) {
+	if len(want) == 0 {
+		return nil, nil
 	}
 	paths := make([]string, 0, len(want))
 	for p := range want {
@@ -72,7 +113,7 @@ func (s *Service) DescribeDirectories(ctx context.Context, dir string, doc []byt
 	}
 	have, err := s.Store.DirectoryDescriptions(ctx, paths)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	changes := map[string]string{}
 	for p, d := range want {
@@ -80,15 +121,7 @@ func (s *Service) DescribeDirectories(ctx context.Context, dir string, doc []byt
 			changes[p] = d
 		}
 	}
-	if len(changes) == 0 {
-		return domain.PlanUnchanged, nil
-	}
-	if !dry {
-		if err := s.Store.SetDirectoryDescriptions(ctx, changes, actor); err != nil {
-			return "", err
-		}
-	}
-	return domain.PlanUpdated, nil
+	return changes, nil
 }
 
 // subdirectoryOf resolves an index.md link target against dir and says

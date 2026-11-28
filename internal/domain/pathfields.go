@@ -7,11 +7,17 @@ import (
 
 // PathFieldKeys are the top-level frontmatter keys whose values name a
 // path (OKF SPEC §6.2): resource, sources[].resource, computation,
-// executor.resource and attester.resource. A value there is an absolute
+// executor.resource, attester.resource and superseded_by (§5.4). A value there is an absolute
 // URL, a bundle-relative path beginning with "/", or a path relative to
 // the concept's own directory — the same three forms a body link takes,
 // read by the same rules.
-var PathFieldKeys = []string{"resource", "sources", "computation", "executor", "attester"}
+var PathFieldKeys = []string{"resource", "sources", "computation", "executor", "attester", SupersededByKey}
+
+// SupersededByKey is the path from a deprecated concept to the one that
+// replaces it (OKF SPEC §5.4). ochakai keeps it among the document's own
+// keys rather than in a column of its own: it is read, rewritten by a
+// move and asked by fm., and nothing else here acts on it.
+const SupersededByKey = "superseded_by"
 
 // PathMove is one rename a move performs, as bundle paths: either one
 // object (Old "metrics/revenue.md") or everything under a directory (Old

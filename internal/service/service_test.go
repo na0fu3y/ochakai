@@ -758,19 +758,20 @@ func TestCheckedFilterRefusesKeysOKFDoesNotDefine(t *testing.T) {
 	}
 }
 
-// Every askable key is an OKF envelope key, and no key with a filter of
-// its own is askable. The two lists are derived from one, so this holds
-// the derivation rather than a transcription of it — the day OKF adds a
-// key, EnvelopeKeys is the only place that has to learn the spelling
-// (design doc 0046 §3.11).
+// Every askable key is a key OKF defines — an envelope key, or one kept
+// among the document's own keys (OKFAttrKeys) — and no key with a filter
+// of its own is askable. The lists are derived, so this holds the
+// derivation rather than a transcription of it — the day OKF adds a key,
+// one of those two lists is the only place that has to learn the
+// spelling (design doc 0046 §3.11).
 func TestAskableKeysAreTheOKFKeysWithNoFilterOfTheirOwn(t *testing.T) {
 	askable := domain.AskableFrontmatterKeys()
 	if !slices.IsSorted(askable) {
 		t.Errorf("askable keys = %v, want them sorted", askable)
 	}
 	for _, key := range askable {
-		if !slices.Contains(domain.EnvelopeKeys, key) {
-			t.Errorf("askable key %q is not an OKF envelope key", key)
+		if !slices.Contains(domain.EnvelopeKeys, key) && !slices.Contains(domain.OKFAttrKeys, key) {
+			t.Errorf("askable key %q is not a key OKF defines", key)
 		}
 		if use, ok := domain.FilterOwnedKeys[key]; ok {
 			t.Errorf("askable key %q is already asked by %s", key, use)
@@ -782,7 +783,7 @@ func TestAskableKeysAreTheOKFKeysWithNoFilterOfTheirOwn(t *testing.T) {
 			t.Errorf("askable key %q is ochakai's own, not OKF's", key)
 		}
 	}
-	if got, want := len(askable), len(domain.EnvelopeKeys)-len(domain.FilterOwnedKeys)-len(domain.OchakaiEnvelopeKeys); got != want {
+	if got, want := len(askable), len(domain.EnvelopeKeys)+len(domain.OKFAttrKeys)-len(domain.FilterOwnedKeys)-len(domain.OchakaiEnvelopeKeys); got != want {
 		t.Errorf("askable keys = %d, want %d", got, want)
 	}
 }

@@ -1,5 +1,5 @@
 // Package okf exports the knowledge base as an Open Knowledge Format
-// bundle (https://github.com/GoogleCloudPlatform/open-knowledge-format):
+// bundle (https://github.com/open-knowledge-format/open-knowledge-format):
 // a directory of markdown files with YAML frontmatter, one concept per
 // knowledge entry at its id's path (the layout is the user's, design doc
 // 0017), with index.md files for progressive disclosure. Your knowledge
@@ -30,7 +30,7 @@ import (
 
 // Version is the OKF spec version ochakai produces, declared in the
 // bundle-root index.md (SPEC §12).
-const Version = "0.2"
+const Version = "0.3"
 
 // frontmatter is the OKF frontmatter for one concept: the required "type",
 // the recommended keys, the v0.2 trust and lifecycle families (SPEC §5),
@@ -281,8 +281,12 @@ var reservedKeys = func() map[string]bool {
 // Indexes generates the index.md of every directory in the bundle.
 //
 // scope names the subtree when this is an archive of one, so the root
-// index can say so (design doc 0134); "" is a whole base.
-func Indexes(entries []domain.Knowledge, files []domain.File, scope string) map[string][]byte {
+// index can say so (design doc 0134); "" is a whole base. meta is the
+// bundle's metadata for the root index's frontmatter (BundleMetadata),
+// and described what somebody wrote each directory is for, by bundle path
+// (decision 0154) — the same two things the index at an address carries,
+// so an archive's index.md says what the address's does.
+func Indexes(entries []domain.Knowledge, files []domain.File, scope, meta string, described map[string]string) map[string][]byte {
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 	root := &dir{}
 	for _, k := range entries {
@@ -294,7 +298,7 @@ func Indexes(entries []domain.Knowledge, files []domain.File, scope string) map[
 		root.insertFile(strings.Split(f.Path, "/"), f)
 	}
 	out := map[string][]byte{}
-	root.writeIndexes(out, "", scope)
+	root.writeIndexes(out, "", indexInputs{scope: scope, meta: meta, described: described})
 	return out
 }
 
@@ -355,20 +359,33 @@ func (d *dir) subdirNames() []string {
 	return names
 }
 
+// indexInputs is what an archive's index.md files say beyond what the
+// tree holds: the subtree it is (scope), the bundle's metadata (meta) and
+// the directory descriptions (described).
+type indexInputs struct {
+	scope, meta string
+	described   map[string]string
+}
+
 // writeIndexes emits index.md for this directory and recurses. prefix is
 // the bundle-relative directory path, "" for the root or "a/b/" below it.
-// Index files carry no frontmatter (SPEC §6) — except the bundle root,
-// where an okf_version declaration is the one permitted block (§11) — and
-// list their entries with relative links, as in the spec's examples.
-func (d *dir) writeIndexes(files map[string][]byte, prefix, scope string) {
+// Index files carry no frontmatter (SPEC §8) — except the bundle root,
+// which carries the bundle's metadata (§8.1) — and list their entries
+// with relative links, as in the spec's examples.
+func (d *dir) writeIndexes(files map[string][]byte, prefix string, in indexInputs) {
 	var dirs, concepts []IndexLine
 	for _, name := range d.subdirNames() {
-		noun := "concepts"
-		if d.subdirs[name].count == 1 {
-			noun = "concept"
+		// What somebody wrote the directory is for, when anybody has
+		// (decision 0154); otherwise how much is in it.
+		desc := in.described[prefix+name]
+		if desc == "" {
+			noun := "concepts"
+			if d.subdirs[name].count == 1 {
+				noun = "concept"
+			}
+			desc = fmt.Sprintf("%d %s", d.subdirs[name].count, noun)
 		}
-		dirs = append(dirs, IndexLine{Text: name + "/", Target: name + "/index.md",
-			Description: fmt.Sprintf("%d %s", d.subdirs[name].count, noun)})
+		dirs = append(dirs, IndexLine{Text: name + "/", Target: name + "/index.md", Description: desc})
 	}
 	for _, e := range d.entries {
 		title := e.k.Title
@@ -386,13 +403,13 @@ func (d *dir) writeIndexes(files map[string][]byte, prefix, scope string) {
 		fileLines = append(fileLines, FileIndexLine(f.Name, f.MediaType, f.Size))
 	}
 	sections := []IndexSection{{Lines: dirs}, {Lines: concepts}, {Heading: FileSection, Lines: fileLines}}
-	if prefix == "" && scope != "" {
-		files["index.md"] = SubtreeIndexDocument(scope, sections)
+	if prefix == "" && in.scope != "" {
+		files["index.md"] = SubtreeIndexDocument(in.scope, in.meta, sections)
 	} else {
-		files[prefix+"index.md"] = IndexDocument(strings.TrimSuffix(prefix, "/"), sections)
+		files[prefix+"index.md"] = IndexDocument(strings.TrimSuffix(prefix, "/"), in.meta, sections)
 	}
 	for name, sub := range d.subdirs {
-		sub.writeIndexes(files, prefix+name+"/", scope)
+		sub.writeIndexes(files, prefix+name+"/", in)
 	}
 }
 

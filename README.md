@@ -357,7 +357,7 @@ for what they still don't do:
   claim typed into a file; the agent proposes and never rules. A rejected
   draft keeps its reason. And the knowledge leaves whole: the base
   round-trips through
-  [OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format)
+  [OKF v0.3](https://github.com/open-knowledge-format/open-knowledge-format)
   bundles — plain markdown + YAML frontmatter that lives happily in git,
   with trust in the spec's own keys — and the same content serves Claude
   Code, hosted MCP agents and CI jobs over the same contract, whether or

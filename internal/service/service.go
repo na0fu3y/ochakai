@@ -871,7 +871,7 @@ func validate(k *domain.Knowledge) error {
 	return validateOKF(k)
 }
 
-// validateOKF holds the write path to the shape OKF v0.2 defines for its
+// validateOKF holds the write path to the shape OKF defines for its
 // provenance (SPEC §5.1) and Attested Computation (SPEC §10.2) families.
 //
 // Only the write path. Bundle import is deliberately more forgiving: SPEC's

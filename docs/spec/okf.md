@@ -6,10 +6,14 @@ Format で、その横に第二の形式を発明しない**(P3)。資産は丸�
 
 ## どの OKF か
 
-「v0.2」は一つの文書を指さない — v0.2 は公開後に normative な規則を版番号を
-動かさずに変えている。ochakai が合わせているのは**コミット**
-`open-knowledge-format@0b87c52` で、正典は [compatibility.md](../compatibility.md)
-である。
+ochakai が合わせているのは **OKF v0.3** で、留めているのは**コミット**
+`open-knowledge-format@527e81a` である。正典は
+[compatibility.md](../compatibility.md)。v0.2 は公開後に normative な規則を
+版番号を動かさずに変えたので、版ではなくコミットを留めてきた。v0.3 の
+SPEC §12 は公開後の normative な変更に新しい版を要求するので、いまは版と
+コミットが同じものを指す。それでもコミットを留めるのは、同期が diff を取る
+起点だからである。export はルートの `index.md` で `okf_version: "0.3"` を
+名乗る。
 
 ## バンドルとオブジェクト
 
@@ -62,9 +66,18 @@ ochakai が持つのは**一つのバンドル — パスからオブジェク�
   `receipt` は要求しない。
 - `status_note` は ochakai が書き、読み戻す唯一の独自キーである。
 - **リンクは本文から導出する。** 本文中の markdown リンク(バンドル絶対
-  `/path.md` と相対 `./x.md`)が関係である。`http(s)://` とコードの中は
+  `/path.md` と、そのファイルのディレクトリからの相対 `x.md`・`./x.md`・
+  `../x.md` — SPEC §6 の解決規則)が関係である。`http(s)://` とコードの中は
   抽出しない。関係の型は持たない(SPEC がリンクテキストを関係名と定めて
   いない)。存在しない concept へのリンクは許し、後で作られれば繋がる。
+- **パス項目**(`resource`・`sources[].resource`・`computation`・
+  `executor.resource`・`attester.resource`・`superseded_by` — SPEC §6.2)も
+  同じ規則で解決する。move はこれらを本文のリンクと同じく書き換える。
+  `superseded_by`(SPEC §5.4、非推奨の concept から後継へのパス)は列を
+  持たず、文書のキーとして保ち、`fm.` で引ける。
+- **リストの位置に値が一つなら、要素一つのリストである**(SPEC §11.2)。
+  `tags: sales, orders` は一つのタグ `sales, orders` で、カンマで割らない —
+  SPEC がそう禁じている。カンマを含むときは note を出す。
 - **鍵として比較される文字列は NFC に正規化する** — id、リンクの target、
   ファイルのパス、取り込みのパス、検索クエリ。macOS で再 tar した NFD の
   パスが別の concept として二重化しないためである。本文・title・description
@@ -109,8 +122,9 @@ ochakai が持つのは**一つのバンドル — パスからオブジェク�
 
 `stale_after`・`sources[].last_modified`・`usage_window` の `from`/`to` は、
 **RFC 3339 の datetime か `YYYY-MM-DD` の日付**を取る。日付はそれが開く
-UTC の真夜中である。offset の無い datetime は取らない。二つの状態の v0.2 で
-書かれたバンドルが両方ある以上、両方を読むことが SPEC §11 の寛容である。
+UTC の真夜中である。offset の無い datetime は取らない。これは SPEC §5 が
+定める二つの形そのものである(v0.2 は公開後に日付を取らなくなり、v0.3 が
+意味を固定して戻した)。
 
 **出口では、ochakai は綴りを選ばない。** 手元にテキストがあればそのテキストを
 返す(frontmatter はタイムスタンプのノードを decode 前に文字列として保つ)。
@@ -124,7 +138,22 @@ RFC 3339 で書く。
 情報の OKF が定めた表現で、住所を読むと生成される。
 
 - `index.md` の節は「サブディレクトリ」「概念」「ファイル」。frontmatter を
-  持つのはルートの `okf_version` だけである。
+  持つのはルートだけで、ochakai が書く `okf_version` の後に、バンドルの
+  メタデータ(下)を書かれたとおりに続ける。アドレスで読む `index.md` も
+  tar の中の `index.md` も同じものを運ぶ — ディレクトリの説明も含めて。
+- **ルートの `index.md` の frontmatter は、バンドルが自分について言うこと
+  である**(SPEC §8.1: `title`・`description`・`license`・拡張キー)。SPEC は
+  `index.md` を生成し直す producer にそれを保つことを要求する。ルートの
+  `index.md` への PUT(と取り込み)は、`okf_version` を除いた frontmatter を
+  行のまま — コメントとクォートごと — 保つ。行で扱えない形(flow の
+  mapping など)だけは、キーと値を保って書き直す。frontmatter が無い、
+  または `okf_version` だけのルートの `index.md` は、保ったものを消す — その
+  文書が書き手の言うことの全部だからである。閉じていない・YAML でない・
+  mapping でない・同じキーを二度書いた frontmatter は 400 である。書けるのは
+  バンドル全体に書ける人で、ルートより下の `index.md` の frontmatter は
+  読まない(SPEC §8 はそこに frontmatter を置かない)。subtree の tar も
+  メタデータを運ぶ — 一部のライセンスは全体のライセンスで、どの一部かは
+  見出しが言う。
 - `log.md` は新しい順に日付でまとめ、一行一リビジョン。リンクはその
   `log.md` のディレクトリからの相対である。**却下の理由はここで運ぶ**
   (`**Rejection**` の行と一言)— OKF の信号は単調で、否定をどのキーに
@@ -187,8 +216,9 @@ frontmatter は索引され、`fm.<key>=<value>` で引ける(完全一致と包
   `fm.status=stable` は当たらない)からである。
 - **OKF が定義しないキー**(producer の拡張キー、`id` を含む)は引けず、
   400 で引けるキーの一覧を返す。保存と往復には一切触れない。
-- 引ける集合は `domain.EnvelopeKeys` から導出する — OKF がキーを足し、
-  この一覧が覚えた日に、マイグレーション無しで引ける。
+- 引ける集合は `domain.EnvelopeKeys` と、OKF が定義し列を持たないキー
+  (`domain.OKFAttrKeys`: `superseded_by`)から導出する — OKF がキーを足し、
+  どちらかの一覧が覚えた日に、マイグレーション無しで引ける。
 - `fm.` は REST と CLI にあり、MCP と Web UI には載せない。
 
 ## やらないこと
@@ -201,6 +231,8 @@ frontmatter は索引され、`fm.<key>=<value>` で引ける(完全一致と包
   フィルタ。
 - export に `id:` を書くこと(住所の横に第二の綴りを置く)。
 - 他人の文書の日付を正規化すること。
+- `superseded_by` をたどって、検索や一覧の結果を後継に差し替えること
+  (SPEC §5.4 の SHOULD)。後継は文書が言い、`fm.` で引ける。
 - 第二の形式(Apache Ossie など)の読み書き。戻す条件は
   [positioning](../positioning.md) にある。
 

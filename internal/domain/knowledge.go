@@ -1066,8 +1066,14 @@ var EnvelopeKeys = []string{
 	"runtime", "parameters", "computation", "executor", "attester",
 }
 
+// OKFAttrKeys names the keys OKF defines that ochakai keeps among a
+// document's own keys rather than in the envelope: read from the stored
+// document like a producer's extension key, but in OKF's vocabulary, so a
+// frontmatter filter may ask for them.
+var OKFAttrKeys = []string{SupersededByKey}
+
 // OchakaiEnvelopeKeys names the envelope key that is ochakai's own rather
-// than OKF's: SPEC v0.2 defines no `status_note`. It is read into a column
+// than OKF's: the SPEC defines no `status_note`. It is read into a column
 // and written back into bundles, so it stays an envelope key — but the
 // frontmatter filter's vocabulary is OKF's (design doc 0136 §5.2), and
 // when ochakai is the producer its own extension keys are refused the same
@@ -1111,12 +1117,13 @@ var FilterOwnedKeys = map[string]string{
 // §3.11). Every surface describes itself from this, so no help text can
 // promise a key the server refuses.
 func AskableFrontmatterKeys() []string {
-	out := make([]string, 0, len(EnvelopeKeys))
+	out := make([]string, 0, len(EnvelopeKeys)+len(OKFAttrKeys))
 	for _, k := range EnvelopeKeys {
 		if FilterOwnedKeys[k] == "" && !slices.Contains(OchakaiEnvelopeKeys, k) {
 			out = append(out, k)
 		}
 	}
+	out = append(out, OKFAttrKeys...)
 	slices.Sort(out)
 	return out
 }

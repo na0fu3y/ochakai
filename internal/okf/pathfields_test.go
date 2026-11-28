@@ -82,3 +82,19 @@ func TestRewritePathFieldsRendersWhatItCannotSwap(t *testing.T) {
 		t.Errorf("more than the computation block moved:\n%s", out)
 	}
 }
+
+// superseded_by is a path field (OKF SPEC §5.4, §6.2): a move of the
+// concept it names repairs it the way it repairs a resource, so the
+// pointer from a deprecated concept to its replacement survives the
+// replacement being moved.
+func TestRewritePathFieldsFollowsSupersededBy(t *testing.T) {
+	doc := "---\ntype: Metric\nstatus: deprecated\nsuperseded_by: ../computations/revenue.md\n---\n\nRetired.\n"
+	out, changed, err := RewritePathFields([]byte(doc), movedTo("metrics/revenue-legacy"))
+	if err != nil || !changed {
+		t.Fatalf("changed=%v err=%v", changed, err)
+	}
+	want := strings.Replace(doc, "superseded_by: ../computations/revenue.md", "superseded_by: /finance/revenue.md", 1)
+	if string(out) != want {
+		t.Errorf("got:\n%s\nwant:\n%s", out, want)
+	}
+}

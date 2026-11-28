@@ -300,19 +300,21 @@ func parseDoc(doc []byte) (*Doc, string, []string, error) {
 				notes = append(notes, fmt.Sprintf("tags[%d] is not a tag; dropped", i))
 			}
 		default:
-			// The knowledge-catalog reference bundles sometimes write tags as
-			// one comma-separated string ("tags: sales, orders"); OKF's
-			// permissive consumption model (SPEC §11) says take it, not
-			// reject the document. A bare scalar of any other kind is read
-			// the same way, for the same reason.
+			// One value where a list was expected is a list of one
+			// (SPEC §11.2), and the spec says in so many words not to
+			// split it at commas: "tags: sales, orders" is one tag. A
+			// bundle written for a reader that did split it says so in
+			// a note, since its tags arrive as one string.
 			s, ok := scalarText(v)
 			if !ok {
 				notes = append(notes, "tags is neither a list nor a scalar; dropped")
 				break
 			}
-			for t := range strings.SplitSeq(s, ",") {
-				if t = strings.TrimSpace(t); t != "" {
-					tags = append(tags, t)
+			if s = strings.TrimSpace(s); s != "" {
+				tags = append(tags, s)
+				if strings.Contains(s, ",") {
+					notes = append(notes, fmt.Sprintf("tags is one string, read as the one tag %q: "+
+						"OKF does not split it at commas (SPEC §11.2); write a list for several", s))
 				}
 			}
 		}

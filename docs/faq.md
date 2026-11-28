@@ -209,7 +209,7 @@ concept の id を名指していれば、その id は本文の中に現れる�
 
 ### ochakai を使うのをやめたら、ナレッジはどうなるか
 
-`ochakai export ./knowledge` がベース全体を、git に置ける OKF v0.2 の
+`ochakai export ./knowledge` がベース全体を、git に置ける OKF v0.3 の
 バンドルとして書き出す — ochakai の存在を知らない他の OKF consumer が
 読める形である。`ochakai import` はその逆で、どの producer のバンドル
 でも受け取る。往復で何が残り何が残らないか — provenance は残らない —

@@ -1,10 +1,13 @@
 package okf
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
+
+	"go.yaml.in/yaml/v3"
 
 	"github.com/na0fu3y/ochakai/internal/domain"
 )
@@ -34,13 +37,15 @@ type IndexLine struct {
 
 // IndexDocument renders one directory's index.md (SPEC §8). dir is the
 // bundle-relative directory, "" for the root — the one index that may
-// carry frontmatter, and then only okf_version (SPEC §12).
+// carry frontmatter (SPEC §8.1): okf_version, then meta, the rest of the
+// bundle's metadata as BundleMetadata kept it. meta is ignored below the
+// root, where an index.md has no frontmatter.
 //
 // notes are rendered as a trailing line rather than dropped: a listing
 // cut off at a limit that says nothing is a listing that lies about what
 // the directory holds (design doc 0014's cut-off, kept and made visible).
-func IndexDocument(dir string, sections []IndexSection, notes ...string) []byte {
-	return indexDocument(dir, "", sections, notes...)
+func IndexDocument(dir, meta string, sections []IndexSection, notes ...string) []byte {
+	return indexDocument(dir, "", meta, sections, notes...)
 }
 
 // SubtreeIndexDocument is IndexDocument for the root of an archive that
@@ -49,30 +54,28 @@ func IndexDocument(dir string, sections []IndexSection, notes ...string) []byte 
 // person who unpacked it months later and is deciding whether this is the
 // backup they were looking for.
 //
-// It used to be a frontmatter key beside okf_version as well, and SPEC §8
-// does not have room for one: "Index files contain no frontmatter, with
-// one exception: a bundle-root index.md MAY carry an okf_version key",
-// and §11's third conformance rule holds a reserved filename to §8. A
-// bundle_scope key there made every --prefix archive non-conformant to
-// say a third time what the heading, the body and the archive's own
-// filename already said (design doc 0134 §2).
+// It used to be a frontmatter key beside okf_version as well, and a
+// bundle_scope key there said a third time what the heading, the body and
+// the archive's own filename already said (design doc 0134 §2). The
+// bundle's own metadata does travel: the licence of a part is the licence
+// of the whole, and the heading already says which part this is.
 //
 // Only the root says it. Every deeper index.md is the same document a
 // whole-base archive would carry at that path, because it *is* that
 // document — what the archive is missing is above them, not below.
-func SubtreeIndexDocument(scope string, sections []IndexSection, notes ...string) []byte {
-	return indexDocument("", scope, sections, notes...)
+func SubtreeIndexDocument(scope, meta string, sections []IndexSection, notes ...string) []byte {
+	return indexDocument("", scope, meta, sections, notes...)
 }
 
-func indexDocument(dir, scope string, sections []IndexSection, notes ...string) []byte {
+func indexDocument(dir, scope, meta string, sections []IndexSection, notes ...string) []byte {
 	var b strings.Builder
 	switch {
 	case dir == "" && scope != "":
-		fmt.Fprintf(&b, "---\nokf_version: %q\n---\n\n# ochakai knowledge bundle: %s\n\n"+
+		fmt.Fprintf(&b, "%s# ochakai knowledge bundle: %s\n\n"+
 			"This bundle is the **%s** subtree of a larger knowledge base, not a whole-base backup: "+
-			"everything outside %s is missing from it by design.\n\n", Version, scope, scope, scope)
+			"everything outside %s is missing from it by design.\n\n", rootFrontmatter(meta), scope, scope, scope)
 	case dir == "":
-		fmt.Fprintf(&b, "---\nokf_version: %q\n---\n\n# ochakai knowledge bundle\n\n", Version)
+		fmt.Fprintf(&b, "%s# ochakai knowledge bundle\n\n", rootFrontmatter(meta))
 	default:
 		fmt.Fprintf(&b, "# %s\n\n", dir)
 	}
@@ -96,6 +99,83 @@ func indexDocument(dir, scope string, sections []IndexSection, notes ...string) 
 		fmt.Fprintf(&b, "%s\n", n)
 	}
 	return []byte(strings.TrimRight(b.String(), "\n") + "\n")
+}
+
+// rootFrontmatter is the frontmatter of a bundle-root index.md: the
+// version ochakai writes the bundle in, then what a producer said about
+// the bundle (SPEC §8.1). okf_version is ochakai's to write, because the
+// bundle it describes is the one ochakai is producing; every other key is
+// the producer's, kept as it was written.
+func rootFrontmatter(meta string) string {
+	return fmt.Sprintf("---\nokf_version: %q\n%s---\n\n", Version, meta)
+}
+
+// BundleMetadata reads the frontmatter of a bundle-root index.md as a
+// producer wrote it — title, description, license, extension keys, any
+// key at all (SPEC §8.1) — and returns it as the text to keep, without
+// okf_version (rootFrontmatter writes that one). "" means the document
+// says nothing about the bundle: no frontmatter, or only okf_version.
+//
+// The text is kept line for line, comments and quoting with it, because
+// SPEC §8.1 says a producer that regenerates index.md MUST keep that
+// frontmatter, and SPEC §4 that it SHOULD NOT re-serialize what it did not
+// change. Only a block the line surgery cannot address (mappingKeys: a
+// flow mapping, say) is rendered again from its parse — every key and
+// value kept, its spelling not.
+//
+// An error is a frontmatter that is not one: unclosed, not YAML, not a
+// mapping, or a key written twice (SPEC §4 forbids duplicate keys, and a
+// consumer may refuse them — keeping one would be choosing for the
+// writer).
+func BundleMetadata(doc []byte) (string, error) {
+	s := string(NormalizeText(doc))
+	if !strings.HasPrefix(s, "---\n") {
+		return "", nil
+	}
+	fm, _, ok := splitFrontmatter(s)
+	if !ok {
+		return "", errors.New("its frontmatter has no closing --- line")
+	}
+	var root yaml.Node
+	if err := yaml.Unmarshal([]byte(fm), &root); err != nil {
+		return "", fmt.Errorf("its frontmatter is not YAML: %w", err)
+	}
+	if len(root.Content) == 0 {
+		return "", nil
+	}
+	m := root.Content[0]
+	if m.Kind != yaml.MappingNode {
+		return "", errors.New("its frontmatter is not a mapping")
+	}
+	var dup map[string]any
+	if err := yaml.Unmarshal([]byte(fm), &dup); err != nil {
+		return "", fmt.Errorf("its frontmatter is not a mapping OKF reads: %w", err)
+	}
+	isVersion := func(key string) bool { return key == "okf_version" }
+	if _, ok := mappingKeys(fm); ok {
+		fm, _, _ = splitFrontmatter(string(stripKeys([]byte("---\n"+fm+"---\n"), isVersion)))
+	} else {
+		kept := make([]*yaml.Node, 0, len(m.Content))
+		for i := 0; i+1 < len(m.Content); i += 2 {
+			if !isVersion(m.Content[i].Value) {
+				kept = append(kept, m.Content[i], m.Content[i+1])
+			}
+		}
+		m.Content, m.Style = kept, 0
+		out, err := yaml.Marshal(m)
+		if err != nil {
+			return "", err
+		}
+		fm = string(out)
+	}
+	var rest map[string]any
+	if err := yaml.Unmarshal([]byte(fm), &rest); err != nil {
+		return "", fmt.Errorf("its frontmatter without okf_version is not YAML: %w", err)
+	}
+	if len(rest) == 0 {
+		return "", nil
+	}
+	return strings.TrimRight(fm, "\n") + "\n", nil
 }
 
 // IndexSection is a group of lines under an optional heading. SPEC §8
