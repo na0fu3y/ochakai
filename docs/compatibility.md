@@ -121,6 +121,16 @@ moves:
   and a directory's address answers its `index.md` — a `.md` address that
   answers something other than the document is not serving OKF, and the
   JSON is still there for a client that names `Accept: application/json`.
+  The fourth and fifth came with OKF v0.3 (0.32.0), both on the same
+  second reason. A PUT of the bundle-root `index.md` reads its
+  frontmatter now, because SPEC §8.1 requires a producer that
+  regenerates `index.md` to keep it — so a root frontmatter that does
+  not parse as a YAML mapping, or writes a key twice, is a 400 where the
+  frontmatter used to be ignored. And a single `tags` string is one tag
+  (SPEC §11.2 forbids splitting it at commas), so the same document
+  answers `tags: ["sales, orders"]` where it used to answer two. Neither
+  moves a line of the fingerprint, and ochakai never writes either
+  shape itself: its own index.md parses and its own `tags` is a list.
 - **The rest of `/api/v1` is unstable** — the ruling
   (`POST /api/v1/review/{id}`), the usage totals and outcome reports
   (`/api/v1/usage/{id}`), `stats`, `move` and `reembed`
