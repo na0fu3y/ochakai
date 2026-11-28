@@ -21,6 +21,8 @@ last entry.
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-11-29
+
 ### Changed
 
 - **ochakai follows OKF v0.3**, and the bundle-root `index.md` declares
@@ -43,6 +45,13 @@ last entry.
   at its replacement after the replacement moves, and `fm.superseded_by`
   is askable on REST and the CLI. ochakai does not follow it to replace
   search results.
+- **BREAKING: a malformed bundle-root `index.md` frontmatter is a 400.**
+  A PUT of the root `index.md` used to ignore its frontmatter; it now
+  keeps it (below), so one that is unclosed, not YAML, not a mapping, or
+  writes a key twice is refused instead of answering 200. `ochakai
+  import` reports it as a skip and imports every concept (`--strict`
+  fails on it). Fix the frontmatter, or leave it out. ochakai's own
+  `index.md` always parses.
 
 - **The web UI's directory page groups concepts by type** when a level
   holds more than one: recommended types in the order the product
@@ -8151,7 +8160,8 @@ worth naming: SQL injection in `compile_sql` through undeclared field
 pass-through, fixed in 0.8.0 — v0.7.0 and earlier are affected. Details
 are in git history.
 
-[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.31.3...HEAD
+[Unreleased]: https://github.com/na0fu3y/ochakai/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/na0fu3y/ochakai/compare/v0.31.3...v0.32.0
 [0.31.3]: https://github.com/na0fu3y/ochakai/compare/v0.31.2...v0.31.3
 [0.31.2]: https://github.com/na0fu3y/ochakai/compare/v0.31.1...v0.31.2
 [0.31.1]: https://github.com/na0fu3y/ochakai/compare/v0.31.0...v0.31.1
