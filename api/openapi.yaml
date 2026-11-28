@@ -618,7 +618,9 @@ paths:
         folds away to `ochakai-okf-.tar.gz` or to a wider subtree's.
         Deeper `index.md` files are unchanged — what a subtree archive
         lacks is above them, not below. A whole-base archive is exactly
-        what it was.
+        what it was. Either root `index.md` carries the bundle's
+        metadata (SPEC §8.1), and every `index.md` the directory
+        descriptions (decision 0154), as the index at its address does.
 
 
         **Who may take it**: the whole bundle (the root) is an
@@ -1003,12 +1005,19 @@ paths:
         log.md is 409: it is generated from the bundle, so a write there
         is a conflict with what the address is. **A PUT of a directory's
         index.md keeps what it says about each subdirectory it lists** —
-        the line `* [sales](sales/) - Revenue by channel` — and nothing
-        else: the listing is generated from what the directory holds, and
-        SPEC §8 gives a directory's description no other place (decision
-        0154). A subdirectory listed with no description, or with the
-        `N concepts` count ochakai writes for one nobody described, has
-        its description cleared. The caller must be able to write the
+        the line `* [sales](sales/) - Revenue by channel` — and, at the
+        bundle root, **the frontmatter that says what the bundle is**
+        (`title`, `description`, `license`, any extension key; SPEC §8.1),
+        kept as written and served in every root `index.md` after the
+        `okf_version` ochakai writes. Nothing else is read: the listing is
+        generated from what the directory holds, and SPEC §8 gives a
+        directory's description no other place (decision 0154). A
+        subdirectory listed with no description, or with the `N concepts`
+        count ochakai writes for one nobody described, has its description
+        cleared; a root index.md with no frontmatter, or with
+        `okf_version` alone, clears the bundle's metadata; a root
+        frontmatter that does not parse as a YAML mapping, or writes a key
+        twice, is a 400. The caller must be able to write the
         directory. The answer is 200 with the index as it now reads and
         `Ochakai-Plan` (`updated` or `unchanged`); with `dry_run=true`
         nothing is kept.

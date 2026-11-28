@@ -13,7 +13,7 @@ import (
 
 // RewritePathFields passes every path a document's frontmatter names
 // (domain.PathFieldKeys: resource, sources[].resource, computation,
-// executor.resource, attester.resource — OKF SPEC §6.2) through rewrite,
+// executor.resource, attester.resource, superseded_by — OKF SPEC §6.2) through rewrite,
 // and returns the document with the ones rewrite changed. The bool says
 // whether any did.
 //
@@ -64,7 +64,7 @@ type pathEdit struct {
 }
 
 // pathEdits finds the path scalars under one path-valued key that rewrite
-// changes: the value itself for resource and computation, the resource of
+// changes: the value itself for resource, computation and superseded_by, the resource of
 // the mapping for executor and attester, and the resource of each entry
 // for sources. A shape other than the one SPEC gives the key is left
 // alone — a pointer is only rewritten where it is unambiguously one.
@@ -88,7 +88,7 @@ func pathEdits(key string, value *yaml.Node, rewrite func(string) (string, bool)
 // document order.
 func pathScalars(key string, value *yaml.Node) []*yaml.Node {
 	switch key {
-	case "resource", "computation":
+	case "resource", "computation", domain.SupersededByKey:
 		return []*yaml.Node{value}
 	case "executor", "attester":
 		return []*yaml.Node{mappingValue(value, "resource")}

@@ -168,25 +168,37 @@ moves:
   they are one-way. There is no downgrade path.
 
 The OKF export format is the one part with an external anchor: it follows
-[OKF v0.2](https://github.com/GoogleCloudPlatform/open-knowledge-format),
+[OKF v0.3](https://github.com/open-knowledge-format/open-knowledge-format),
 so it changes when the spec does or when ochakai's reading of it does —
 `0.14.0` changed the key order in exported frontmatter, which is a diff in
 anything that stores bundles in git.
 
-**"v0.2" does not name one document, so the anchor is a commit.** OKF v0.2
-was published on 2026-07-24 and changed a *normative* rule on 2026-08-21
-without moving its version: SPEC §5 had defined `stale_after`,
+**The anchor is a commit, not a version string.** OKF v0.2 was published
+on 2026-07-24 and changed a *normative* rule on 2026-08-21 without moving
+its version: SPEC §5 had defined `stale_after`,
 `sources[].last_modified` and `usage_window` as `YYYY-MM-DD` dates, and
-now fixes every timestamp-valued key as "an ISO 8601 datetime with an
-explicit UTC offset". Values that were valid stopped being valid, which
-SPEC §12 calls neither a minor nor a major change — and both the heading
-and the filename still say v0.2. So a version string cannot say which
-spec a release was built against, and this is the pin instead:
+then fixed every timestamp-valued key as "an ISO 8601 datetime with an
+explicit UTC offset". Values that were valid stopped being valid, and
+both the heading and the filename still said v0.2, so a version string
+could not say which spec a release was built against. v0.3 closes that
+gap — its §12 says a change to released normative text needs a new
+version — and the pin stays a commit anyway, because a commit is what a
+sync diffs from:
 
-    OKF SPEC: GoogleCloudPlatform/open-knowledge-format@0b87c52
-              (SPEC.md as of 2026-08-21; the same bytes as
-              knowledge-catalog's okf/SPEC.md, which is now a frozen
-              snapshot and no longer the format's home)
+    OKF SPEC: open-knowledge-format/open-knowledge-format@527e81a
+              (SPEC.md v0.3, released 2026-11-19; the project moved
+              out of the GoogleCloudPlatform organization, and the
+              v0.2 pin was GoogleCloudPlatform/open-knowledge-format@0b87c52)
+
+v0.3 names two breaking changes, and ochakai already read both ways:
+a trust tier comes only from verifications at or after the content's
+last meaningful change (SPEC §5.3; ochakai's tier and export have done
+so since [0155](decisions/0155-export-the-verifications-that-stand.md)),
+and a path without a leading `/` resolves from the directory of the file
+that holds it (SPEC §6). What moved with this pin is in the changelog:
+the bundle-root `index.md` keeps the frontmatter a producer wrote
+(SPEC §8.1), a single `tags` string is one tag (SPEC §11.2), and
+`superseded_by` is a path field (SPEC §5.4).
 
 **Moving this line is a change with a release note**, the same as any
 other entry above. It is prose rather than a check: verifying it means

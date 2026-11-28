@@ -226,7 +226,14 @@ func (s *Service) IndexDocument(ctx context.Context, prefix string) ([]byte, err
 		// the file rather than only to whoever read the JSON).
 		notes = append(notes, fmt.Sprintf("_This listing was cut off at %d concepts._", store.MaxBrowseEntries))
 	}
-	return okf.IndexDocument(dir, []okf.IndexSection{
+	// The root carries what the bundle says about itself (SPEC §8.1).
+	var meta string
+	if dir == "" {
+		if meta, err = s.Store.BundleMetadata(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return okf.IndexDocument(dir, meta, []okf.IndexSection{
 		{Lines: dirs}, {Lines: concepts}, {Heading: okf.FileSection, Lines: files},
 	}, notes...), nil
 }

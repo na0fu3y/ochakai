@@ -137,8 +137,8 @@ verified・deprecated — を上書き・変更することを
 
 ## データモデル
 
-**concept とは [OKF](https://github.com/GoogleCloudPlatform/open-knowledge-format)
-v0.2 文書である** — YAML の frontmatter の後に markdown 本文が続く —
+**concept とは [OKF](https://github.com/open-knowledge-format/open-knowledge-format)
+v0.3 文書である** — YAML の frontmatter の後に markdown 本文が続く —
 そしてそれが保存形式であり、ワイヤ形式であり、export 形式でもある
 (設計ドキュメント [0075](design/0075-the-bundle-is-the-address-space.md) §3。
 *文書だけが真実*をバイトレベルまで落とし込んでいる:
@@ -258,7 +258,7 @@ model でも、画像と PDF は `gemini-embedding-2` で。ヒットは常に
 それを持つ concept であって、ファイル自身がヒットすることは無い
 (設計ドキュメント [0147](design/0147-search-and-the-default-a-base-was-made-with.md) §4)。
 
-**trust はナレッジと一緒に旅をする。** OKF v0.2 のスキーマは
+**trust はナレッジと一緒に旅をする。** OKF v0.3 のスキーマは
 ochakai のスキーマでもある: spec が定義するキーはすべて第一級の
 フィールドなので、export された concept は provenance と trust と
 lifecycle(SPEC §5)を、ochakai を聞いたことも無い consumer が探す

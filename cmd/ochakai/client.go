@@ -2069,8 +2069,9 @@ func isInvalid(err error) bool {
 }
 
 // sendIndexes sends each index.md the bundle carried, so the server
-// keeps what it says about the subdirectories it lists (decision 0154);
-// the listings themselves ochakai generates. A 4xx is a verdict on that
+// keeps what it says about the subdirectories it lists (decision 0154)
+// and, at the root, about the bundle (OKF SPEC §8.1); the listings
+// themselves ochakai generates. A 4xx is a verdict on that
 // one index — a server older than 0154 answers 409, a scoped caller 403 —
 // and is reported as a skip, which --strict counts.
 func sendIndexes(ctx context.Context, c *apiclient.Client, indexes map[string][]byte, dry bool) ([]string, error) {
@@ -2083,16 +2084,20 @@ func sendIndexes(ctx context.Context, c *apiclient.Client, indexes map[string][]
 			if !errors.As(err, &apiErr) || apiErr.StatusCode < 400 || apiErr.StatusCode >= 500 {
 				return nil, fmt.Errorf("write %s: %w", p, err)
 			}
-			skipped = append(skipped, p+": the directory descriptions in it were not kept: "+err.Error())
+			skipped = append(skipped, p+": what it says about the bundle and its directories was not kept: "+err.Error())
 			fmt.Fprintln(os.Stderr, "skip:", skipped[len(skipped)-1])
 			continue
 		}
 		if plan == apiclient.PlanUpdated {
-			verb := "described"
+			verb := "kept"
 			if dry {
-				verb = "would describe"
+				verb = "would keep"
 			}
-			fmt.Printf("%s the subdirectories %s lists\n", verb, p)
+			what := "its subdirectories"
+			if !strings.Contains(p, "/") { // the bundle root's
+				what = "the bundle and its subdirectories"
+			}
+			fmt.Printf("%s what %s says about %s\n", verb, p, what)
 		}
 	}
 	return skipped, nil

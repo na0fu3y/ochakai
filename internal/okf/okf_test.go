@@ -250,7 +250,7 @@ func TestBundleLayoutAndIndexes(t *testing.T) {
 	if !strings.Contains(root, "[insights/](insights/index.md)") {
 		t.Errorf("root index missing type link:\n%s", root)
 	}
-	if !strings.HasPrefix(root, "---\nokf_version: \"0.2\"\n---\n") {
+	if !strings.HasPrefix(root, "---\nokf_version: \"0.3\"\n---\n") {
 		t.Errorf("root index must declare okf_version:\n%s", root)
 	}
 }
@@ -676,7 +676,7 @@ func TestIndexesListFilesBesideTheConcepts(t *testing.T) {
 		{Name: "chart.png", Path: "insights/chart.png", MediaType: "image/png", Size: 2048},
 		{Name: "orders.csv", Path: "seeds/orders.csv", MediaType: "text/csv", Size: 12},
 	}
-	idx := Indexes(entries, files, "")
+	idx := Indexes(entries, files, "", "", nil)
 
 	got := string(idx["insights/index.md"])
 	if !strings.Contains(got, "## Files") {
@@ -695,7 +695,7 @@ func TestIndexesListFilesBesideTheConcepts(t *testing.T) {
 
 	// A bundle with no loose files renders exactly as it did before the
 	// section existed: no heading, no blank section.
-	for path, doc := range Indexes(entries, nil, "") {
+	for path, doc := range Indexes(entries, nil, "", "", nil) {
 		if strings.Contains(string(doc), "Files") {
 			t.Errorf("%s carries a Files section with no files:\n%s", path, doc)
 		}

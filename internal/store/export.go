@@ -78,6 +78,34 @@ func (e *ExportSnapshot) IndexRows(ctx context.Context, prefix string) ([]domain
 	})
 }
 
+// BundleMetadata is Store.BundleMetadata as of the snapshot: what the
+// archive's root index.md says about the bundle.
+func (e *ExportSnapshot) BundleMetadata(ctx context.Context) (string, error) {
+	return bundleMetadata(ctx, e.tx)
+}
+
+// DirectoryDescriptions returns every directory description as of the
+// snapshot, by bundle path (decision 0154) — every one, not the ones
+// under the archive's prefix, because the root index of a subtree
+// archive lists the subtree's own directory as well. There is one row
+// per described directory, which is a number people write by hand.
+func (e *ExportSnapshot) DirectoryDescriptions(ctx context.Context) (map[string]string, error) {
+	rows, err := e.tx.Query(ctx, `SELECT prefix, description FROM directory_description`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var p, d string
+		if err := rows.Scan(&p, &d); err != nil {
+			return nil, err
+		}
+		out[p] = d
+	}
+	return out, rows.Err()
+}
+
 // ListByIDs returns the named live entries in id order. The exporter walks
 // the id list in batches so the whole knowledge base is never held in
 // memory at once.

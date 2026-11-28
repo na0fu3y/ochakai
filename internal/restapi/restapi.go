@@ -192,7 +192,20 @@ func writeBundleArchive(w http.ResponseWriter, r *http.Request, svc *service.Ser
 	// sit beside them (design doc 0046 §3.7). With ?files=false
 	// there are no file bytes to carry, and an index naming files the
 	// archive does not contain would describe a bundle nobody received.
-	indexes := okf.Indexes(rows, atts, prefix) // also sorts rows by id
+	// What the bundle says about itself and what its directories are
+	// for travel too (SPEC §8.1, decision 0154): an archive's index.md
+	// says what the one at its address says.
+	meta, err := snap.BundleMetadata(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	described, err := snap.DirectoryDescriptions(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	indexes := okf.Indexes(rows, atts, prefix, meta, described) // also sorts rows by id
 	ids := make([]string, len(rows))
 	for i := range rows {
 		ids[i] = rows[i].ID

@@ -1,6 +1,6 @@
 # kb/ — ochakai 自身のナレッジベース
 
-ochakai の開発・運用ナレッジを OKF v0.2 バンドルとして持つ、この
+ochakai の開発・運用ナレッジを OKF v0.3 バンドルとして持つ、この
 プロジェクト自身の dogfooding である。スクリプトの入ったフォルダでは
 なくナレッジとして出荷される点は
 [examples/bigquery-catalog](../examples/bigquery-catalog) と同じで、

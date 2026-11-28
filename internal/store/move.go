@@ -384,6 +384,12 @@ func repairReferences(r *domain.Knowledge, from string, absolutize bool, moves [
 		doc = out
 		r.Resource, r.Sources, r.Computation = d.Resource, d.Sources, d.Computation
 		r.Executor, r.Attester = d.Executor, d.Attester
+		if v, ok := d.Attrs[domain.SupersededByKey]; ok {
+			if r.Attrs == nil {
+				r.Attrs = domain.Extra{}
+			}
+			r.Attrs[domain.SupersededByKey] = v
+		}
 		changed = true
 	}
 	if m, ok := r.Attrs["model"].(string); ok {

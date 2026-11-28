@@ -3954,9 +3954,10 @@ func TestRESTIntegrationASubtreeArchiveSaysItIsOne(t *testing.T) {
 	}
 
 	// A subtree names itself twice — in the heading and in the body of
-	// the root index.md, and in the filename. Not in frontmatter: SPEC §8
-	// lets a bundle-root index.md carry okf_version and nothing else, and
-	// §11's third rule holds a reserved filename to §8 (design doc 0135).
+	// the root index.md, and in the filename. Not in frontmatter: the
+	// keys SPEC §8.1 gives a bundle-root index.md describe the bundle,
+	// and a scope key would say a third time what the heading and the
+	// filename already say (design doc 0134).
 	sub := root + "/teams/growth"
 	disp, index, paths := read(t, "/"+sub)
 	if !strings.Contains(disp, "ochakai-okf-"+strings.ReplaceAll(sub, "/", "-")+".tar.gz") {

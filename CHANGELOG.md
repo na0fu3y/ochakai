@@ -23,6 +23,27 @@ last entry.
 
 ### Changed
 
+- **ochakai follows OKF v0.3**, and the bundle-root `index.md` declares
+  `okf_version: "0.3"`. The pin moves to
+  `open-knowledge-format/open-knowledge-format@527e81a` (the project has
+  left the GoogleCloudPlatform organization). v0.3's two breaking
+  changes need nothing here: ochakai already computes the trust tier
+  only from verifications at or after the last meaningful change
+  (SPEC §5.3), and already resolves a path without a leading `/` from
+  the directory of its file (SPEC §6).
+- **BREAKING: a single `tags` string is one tag.** `tags: sales, orders`
+  used to be read as two tags, a tolerance kept for the knowledge-catalog
+  reference bundles. OKF v0.3 says not to split it at commas
+  (SPEC §11.2), so it is now the one tag `sales, orders`, and the read
+  says so in a note (`--strict` fails on it). Write a list —
+  `tags: [sales, orders]` — for several. A concept already stored keeps
+  the tags it was indexed with until it is written again.
+- **`superseded_by` is a path field** (SPEC §5.4). A `move` rewrites it
+  the way it rewrites `resource`, so a deprecated concept keeps pointing
+  at its replacement after the replacement moves, and `fm.superseded_by`
+  is askable on REST and the CLI. ochakai does not follow it to replace
+  search results.
+
 - **The web UI's directory page groups concepts by type** when a level
   holds more than one: recommended types in the order the product
   teaches them, then free types by name, each under a heading with its
@@ -51,6 +72,15 @@ last entry.
   and a one-level browse with subdirectory counts stays off MCP.
 
 ### Added
+
+- **The bundle-root `index.md` keeps what a bundle says about itself**
+  (OKF SPEC §8.1). A PUT of the root `index.md` — which `ochakai import`
+  sends — keeps its frontmatter (`title`, `description`, `license`,
+  extension keys) as written, and every root `index.md` served after
+  carries it after `okf_version`. A root `index.md` with no frontmatter
+  clears it, and a frontmatter that does not parse as a YAML mapping, or
+  writes a key twice, is a 400. A migration adds the one-row table it
+  lives in. No endpoint, tool, command or variable is added.
 
 - **Every listing and search row carries `created_by`.** The `Summary`
   shape — a search hit, a listing or feed row on REST, MCP
@@ -103,6 +133,14 @@ last entry.
   it, and MCP carries no ruling. M4 (no connectors) no longer rests on
   a property and may be exchanged for G1. No surface moves, and nothing
   the server does changes.
+
+### Fixed
+
+- **The export archive carries directory descriptions.** Since 0154 the
+  `index.md` at a directory's address said what each subdirectory is for,
+  and the `index.md` files in the tar still wrote `N concepts`, so an
+  export → import lost them. The archive now carries what the addresses
+  carry.
 
 ### Security
 

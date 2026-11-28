@@ -258,16 +258,26 @@ func TestParseKeepsLinksSectionAsBody(t *testing.T) {
 	}
 }
 
-// The knowledge-catalog reference bundles sometimes write tags as one
-// comma-separated string; permissive consumption (SPEC §9) accepts it.
+// One tag where a list was expected is a list of one, and OKF v0.3 says
+// not to split it at commas (SPEC §11.2) — which ochakai used to do for
+// the knowledge-catalog reference bundles. A comma in it is noted.
 func TestParseScalarTags(t *testing.T) {
-	k, _, err := Parse([]byte("---\ntype: Dataset\ntitle: SO\ntags: Stack Overflow, public data, community, Q&A\n---\n"))
+	k, notes, err := Parse([]byte("---\ntype: Dataset\ntitle: SO\ntags: Stack Overflow, public data\n---\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"Stack Overflow", "public data", "community", "Q&A"}
-	if !reflect.DeepEqual(k.Tags, want) {
+	if want := []string{"Stack Overflow, public data"}; !reflect.DeepEqual(k.Tags, want) {
 		t.Errorf("tags = %v, want %v", k.Tags, want)
+	}
+	if !slices.ContainsFunc(notes, func(n string) bool { return strings.Contains(n, "SPEC §11.2") }) {
+		t.Errorf("no note about the comma: %v", notes)
+	}
+	k, notes, err = Parse([]byte("---\ntype: Dataset\ntags: finance\n---\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"finance"}; !reflect.DeepEqual(k.Tags, want) || len(notes) != 0 {
+		t.Errorf("tags = %v notes %v, want %v and no note", k.Tags, notes, want)
 	}
 }
 
