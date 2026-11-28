@@ -108,7 +108,7 @@ var queryEmbedDeadline = 2 * time.Second
 // words (the lexical list was non-empty — what a miss is read off), and
 // whether the ranking degraded.
 func (s *Service) search(ctx context.Context, query string, f store.Filter, limit int) ([]domain.SearchHit, bool, bool, error) {
-	limit, err := checkedLimit(limit, 10, 50)
+	limit, err := checkedLimit(limit, 10, maxSearchLimit)
 	if err != nil {
 		return nil, false, false, err
 	}
@@ -117,7 +117,7 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	// every response would say nothing about any of them (design doc
 	// 0114 §2).
 	if s.Embedder == nil {
-		lexical, err := s.Store.SearchLexical(ctx, query, f, limit*2)
+		lexical, err := s.Store.SearchLexical(ctx, query, f, searchDepth)
 		if err != nil {
 			return nil, false, false, err
 		}
@@ -139,7 +139,7 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
 		var err error
-		lexical, err = s.Store.SearchLexical(gctx, query, f, limit*2)
+		lexical, err = s.Store.SearchLexical(gctx, query, f, searchDepth)
 		return err
 	})
 	g.Go(func() error {
@@ -149,7 +149,7 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 		vecs, embedErr = s.Embedder.Embed(ectx, embed.TaskQuery, []string{query})
 		var err error
 		if embedErr == nil {
-			vector, attachments, err = s.vectorLists(gctx, vecs[0], f, limit*2)
+			vector, attachments, err = s.vectorLists(gctx, vecs[0], f, searchDepth)
 		}
 		return err
 	})
@@ -167,8 +167,7 @@ func (s *Service) search(ctx context.Context, query string, f store.Filter, limi
 		s.Log.Warn("query embedding failed; falling back to lexical-only", "error", err)
 		return cutHits(lexical, limit), worded, true, nil
 	}
-	fused := rrfFuse(query, limit, lexical, vector, attachments)
-	return fused, worded, false, nil
+	return cutHits(rrfFuse(query, lexical, vector, attachments), limit), worded, false, nil
 }
 
 // vectorLists asks both vector lists for one embedding. Concepts whose
@@ -194,9 +193,34 @@ func (s *Service) vectorLists(ctx context.Context, vec []float32, f store.Filter
 	return vector, attachments, nil
 }
 
-// cutHits is the lexical list at the answer's length: it is fetched at
-// twice the limit so fusion has depth to draw on, and served alone it
-// has none to use.
+// maxSearchLimit is the most hits one search answers with.
+const maxSearchLimit = 50
+
+// searchDepth is how deep each candidate list — lexical, concept vector,
+// file vector — is read, whatever the limit: twice the largest limit, so
+// fusion has depth to draw on at every length a caller can ask for.
+//
+// It does not move with the limit, and that is the point. Read at twice
+// the limit, as it was, the lists that met in the fusion were different
+// lists at limit 5 and at limit 50 — a concept third in the vectors and
+// eleventh in the words scored for one list at limit 5, where the lists
+// were ten deep, and for both at limit 50 — so the same question asked
+// for five answers and for fifty could order its first five differently,
+// and a caller wanting the short answer and a deep list to re-rank had
+// to ask twice. Read at one depth, every search is the same ranking
+// computed once and cut at the end: the first k hits of any search are
+// the first k at limit 50. Every step past the store is a total order —
+// RRF's score, then the store's, then verification recency, then the id
+// — so cutting the one ranking is the whole of what limit does.
+//
+// A small search pays for it: the store reads a hundred candidates per
+// list where it read twenty, and the vector half sizes its HNSW
+// ef_search from the depth (efSearch), not from the limit.
+const searchDepth = 2 * maxSearchLimit
+
+// cutHits is a ranking at the answer's length. Every list is read at
+// searchDepth, and limit is applied here, last, so the answer is a prefix
+// of the ranking whatever the limit is.
 func cutHits(hits []domain.SearchHit, limit int) []domain.SearchHit {
 	if len(hits) > limit {
 		return hits[:limit]
@@ -290,7 +314,11 @@ func sameTime(a, b *time.Time) bool {
 // discarded number now settles only what RRF left undecided.** A concept
 // the words never reached scores zero here and loses those ties, which is
 // the same sentence read the other way.
-func rrfFuse(query string, limit int, primary []domain.SearchHit, others ...[]domain.SearchHit) []domain.SearchHit {
+//
+// It returns the whole fused ranking and cuts nothing: the caller cuts
+// it to the limit (cutHits), so a short answer is the head of the long
+// one rather than a ranking of its own.
+func rrfFuse(query string, primary []domain.SearchHit, others ...[]domain.SearchHit) []domain.SearchHit {
 	type entry struct {
 		hit     domain.SearchHit
 		score   float64
@@ -359,9 +387,6 @@ func rrfFuse(query string, limit int, primary []domain.SearchHit, others ...[]do
 	out := make([]domain.SearchHit, 0, len(ranked))
 	for _, e := range ranked {
 		out = append(out, e.hit)
-	}
-	if len(out) > limit {
-		out = out[:limit]
 	}
 	return out
 }

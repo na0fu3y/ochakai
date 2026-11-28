@@ -70,6 +70,14 @@ last entry.
   `prefixes`, that is everything under a directory, so an agent can go
   down the tree by id instead of guessing at a search. No tool is added,
   and a one-level browse with subdirectory counts stays off MCP.
+- **A search's order no longer depends on `limit`.** Each candidate list
+  (words, concept vectors, file vectors) was read at twice the limit, so
+  the same question at limit 5 and at limit 50 could order its first five
+  differently. Every list is now read 100 deep whatever the limit, and the
+  fused ranking is cut to the limit last: the first k hits of any search
+  are the first k at limit 50, on every surface. A caller that sent a
+  short and a deep search to get both needs one. A small search reads
+  more candidates than it did; no parameter is added.
 
 ### Added
 
